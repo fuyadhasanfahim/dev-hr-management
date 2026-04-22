@@ -6,7 +6,6 @@ import express, {
 import cors from "cors";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
-import mongoSanitize from "express-mongo-sanitize";
 import envConfig from "./config/env.config.js";
 import { toNodeHandler } from "better-auth/node";
 import { auth } from "./lib/auth.js";
@@ -19,18 +18,27 @@ const { trusted_origins } = envConfig;
 
 const app: Application = express();
 
-// SECURITY: Add security headers
-app.use(helmet());
-
-// SECURITY: Data Sanitization against NoSQL query injection
-app.use(mongoSanitize());
-
 app.use(
     cors({
-        origin: trusted_origins.split(","),
+        origin: (origin, callback) => {
+            if (!origin) return callback(null, true);
+            const origins = trusted_origins.split(",");
+            if (origins.includes(origin)) {
+                callback(null, true);
+            } else {
+                callback(null, false);
+            }
+        },
         credentials: true,
+        methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+        allowedHeaders: ["Content-Type", "Authorization", "Cookie"],
     }),
 );
+
+app.all("/api/auth/:path*", toNodeHandler(auth));
+
+// SECURITY: Add security headers
+app.use(helmet());
 
 // SECURITY: Global rate limiter
 const globalLimiter = rateLimit({
@@ -49,7 +57,7 @@ app.use(globalLimiter);
 app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), stripeWebhook);
 app.post('/api/webhooks/paypal', express.json(), paypalWebhook);
 
-app.all("/api/auth/{*any}", toNodeHandler(auth));
+
 
 app.use(express.json());
 
