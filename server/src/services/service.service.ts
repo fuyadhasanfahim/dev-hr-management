@@ -1,4 +1,4 @@
-import ServiceModel, { IService } from '../models/service.model.js';
+import ServiceModel, { type IService } from '../models/service.model.js';
 
 async function createServiceInDB(payload: Partial<IService>) {
     const result = await ServiceModel.create(payload);

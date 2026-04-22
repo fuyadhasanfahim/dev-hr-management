@@ -120,7 +120,7 @@ const invoiceSchema = new Schema<IInvoice>(
 );
 
 // Auto-calculate total and dueAmount before saving
-invoiceSchema.pre('save', function (next) {
+invoiceSchema.pre('save', function (next: any) {
     this.total = this.subtotal + this.tax - this.discount;
     this.dueAmount = Math.max(0, this.total - this.paidAmount);
     

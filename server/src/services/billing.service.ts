@@ -1,12 +1,12 @@
-import InvoiceModel, { IInvoice, InvoiceStatus } from '../models/invoice.model.js';
+import InvoiceModel from '../models/invoice.model.js';
 import OrderModel from '../models/order.model.js';
 import ProjectModel from '../models/project.model.js';
 import mongoose from 'mongoose';
 
 async function generateInvoiceNumber(): Promise<string> {
     const lastInvoice = await InvoiceModel.findOne().sort({ createdAt: -1 });
-    const nextNumber = lastInvoice 
-        ? parseInt(lastInvoice.invoiceNumber.split('-')[1]) + 1 
+    const nextNumber = lastInvoice && lastInvoice.invoiceNumber
+        ? parseInt(lastInvoice.invoiceNumber.split('-')[1] || '0') + 1 
         : 1001;
     return `INV-${nextNumber}`;
 }
@@ -45,7 +45,7 @@ async function createInvoiceFromMilestone(projectId: string, milestoneId: string
     const project = await ProjectModel.findById(projectId);
     if (!project) throw new Error('Project not found');
 
-    const milestone = project.milestones.id(milestoneId);
+    const milestone = project.milestones.find((m: any) => m._id?.toString() === milestoneId);
     if (!milestone) throw new Error('Milestone not found');
 
     const invoiceNumber = await generateInvoiceNumber();

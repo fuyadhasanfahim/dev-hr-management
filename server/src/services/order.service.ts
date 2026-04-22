@@ -1,7 +1,7 @@
 import mongoose from 'mongoose';
-import OrderModel, { IOrder, OrderType, OrderStatus } from '../models/order.model.js';
+import OrderModel, { type IOrder, OrderType, OrderStatus } from '../models/order.model.js';
 import ProjectModel from '../models/project.model.js';
-import ServiceModel from '../models/service.model.js';
+
 
 async function createOrderInDB(payload: Partial<IOrder>) {
     const session = await mongoose.startSession();
@@ -12,7 +12,7 @@ async function createOrderInDB(payload: Partial<IOrder>) {
         const [newOrder] = await OrderModel.create([payload], { session });
 
         // 2. If Order is a Project, initialize the Project
-        if (newOrder.orderType === OrderType.PROJECT) {
+        if (newOrder && newOrder.orderType === OrderType.PROJECT) {
             await ProjectModel.create(
                 [
                     {

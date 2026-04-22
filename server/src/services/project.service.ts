@@ -1,5 +1,4 @@
-import ProjectModel, { IProject, MilestoneStatus } from '../models/project.model.js';
-import mongoose from 'mongoose';
+import ProjectModel, { MilestoneStatus } from '../models/project.model.js';
 
 async function getAllProjectsFromDB(query: any) {
     const { status, clientId } = query;
