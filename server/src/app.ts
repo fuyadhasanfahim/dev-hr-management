@@ -35,7 +35,7 @@ app.use(
     }),
 );
 
-app.all("/api/auth/:path*", toNodeHandler(auth));
+app.all("/api/auth/{*any}", toNodeHandler(auth));
 
 // SECURITY: Add security headers
 app.use(helmet());
