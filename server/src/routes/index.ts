@@ -12,13 +12,12 @@ import { analyticsRoute } from "./analytics.route.js";
 import { notificationRoute } from "./notification.route.js";
 import { expenseRoute } from "./expense.route.js";
 import { clientRoute } from "./client.route.js";
-import { orderRoute } from "./order.route.js";
-import { serviceRoute } from "./service.route.js";
-import { returnFileFormatRoute } from "./return-file-format.route.js";
-import { earningRoute } from "./earning.route.js";
+import { OrderRoutes } from "./order.route.js";
+import { ServiceRoutes } from "./service.route.js";
+import { ProjectRoutes } from "./project.route.js";
 import { profitShareRoute } from "./profit-share.route.js";
 import { debitRoute } from "./debit.route.js";
-import invoiceRoute from "./invoice.route.js";
+import { BillingRoutes } from "./billing.route.js";
 import { leaveRoute } from "./leave.route.js";
 import { noticeRoute } from "./notice.route.js";
 import externalBusinessRoute from "./external-business.routes.js";
@@ -27,7 +26,7 @@ import { currencyRateRoute } from "./currency-rate.route.js";
 import { payrollRoute } from "./payroll.routes.js";
 import shiftOffDateRoute from "./shift-off-date.route.js";
 import payrollBankSettingsRoute from "./payroll-bank-settings.route.js";
-import paymentRoute from "./payment.route.js";
+import { PaymentRoutes } from "./payment.route.js";
 import { policyRoute } from "./policy.route.js";
 
 const router: Router = Router();
@@ -95,19 +94,15 @@ const moduleRoutes = [
     },
     {
         path: "/orders",
-        route: orderRoute,
+        route: OrderRoutes,
     },
     {
         path: "/services",
-        route: serviceRoute,
+        route: ServiceRoutes,
     },
     {
-        path: "/return-file-formats",
-        route: returnFileFormatRoute,
-    },
-    {
-        path: "/earnings",
-        route: earningRoute,
+        path: "/projects",
+        route: ProjectRoutes,
     },
     {
         path: "/profit-share",
@@ -119,7 +114,7 @@ const moduleRoutes = [
     },
     {
         path: "/invoices",
-        route: invoiceRoute,
+        route: BillingRoutes,
     },
     {
         path: "/leave",
@@ -147,7 +142,7 @@ const moduleRoutes = [
     },
     {
         path: "/payments",
-        route: paymentRoute,
+        route: PaymentRoutes,
     },
     {
         path: "/policies",
@@ -160,3 +155,4 @@ moduleRoutes.forEach(({ path, route }) => {
 });
 
 export default router;
+

@@ -1,27 +1,64 @@
-import { model, Schema } from 'mongoose';
-import type { IService } from '../types/service.type.js';
+import { Schema, model, Document } from 'mongoose';
+
+export enum PricingModel {
+    FIXED = 'fixed',
+    HOURLY = 'hourly',
+    MILESTONE = 'milestone'
+}
+
+export enum ServiceCategory {
+    WEB_DESIGN = 'web-design',
+    WEB_DEV = 'web-dev',
+    MAINTENANCE = 'maintenance',
+    SEO = 'seo',
+    CUSTOM = 'custom'
+}
+
+export interface IService extends Document {
+    name: string;
+    category: ServiceCategory;
+    pricingModel: PricingModel;
+    basePrice: number;
+    currency: string;
+    description?: string;
+    isActive: boolean;
+}
 
 const serviceSchema = new Schema<IService>(
     {
         name: {
             type: String,
             required: true,
-            unique: true,
             trim: true,
+            unique: true,
+        },
+        category: {
+            type: String,
+            enum: Object.values(ServiceCategory),
+            required: true,
+            index: true,
+        },
+        pricingModel: {
+            type: String,
+            enum: Object.values(PricingModel),
+            required: true,
+        },
+        basePrice: {
+            type: Number,
+            default: 0,
+        },
+        currency: {
+            type: String,
+            default: 'USD',
+            uppercase: true,
         },
         description: {
             type: String,
-            trim: true,
         },
         isActive: {
             type: Boolean,
             default: true,
             index: true,
-        },
-        createdBy: {
-            type: Schema.Types.ObjectId,
-            ref: 'User',
-            required: true,
         },
     },
     { timestamps: true },

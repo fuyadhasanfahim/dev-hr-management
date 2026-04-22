@@ -1,196 +1,159 @@
-import { model, Schema } from 'mongoose';
-import type { IOrder } from '../types/order.type.js';
+import { Schema, model, Document, Types } from 'mongoose';
+import { PricingModel } from './service.model.js';
 
-const revisionInstructionSchema = new Schema(
+export enum OrderStatus {
+    PENDING = 'pending',
+    ACTIVE = 'active',
+    COMPLETED = 'completed',
+    CANCELLED = 'cancelled'
+}
+
+export enum OrderType {
+    PROJECT = 'project',
+    SERVICE = 'service',
+    SUBSCRIPTION = 'subscription'
+}
+
+export interface IOrderItem {
+    serviceId?: Types.ObjectId;
+    name: string;
+    pricingModel: PricingModel;
+    quantity?: number;
+    hours?: number;
+    unitPrice: number;
+    totalPrice: number;
+}
+
+export interface IStatusHistory {
+    status: OrderStatus;
+    changedBy: Types.ObjectId;
+    updatedAt: Date;
+    note?: string;
+}
+
+export interface IOrder extends Document {
+    clientId: Types.ObjectId;
+    title: string;
+    description?: string;
+    orderType: OrderType;
+    status: OrderStatus;
+    currency: string;
+    totalAmount: number;
+    items: IOrderItem[];
+    statusHistory: IStatusHistory[];
+    createdBy: Types.ObjectId;
+}
+
+const orderItemSchema = new Schema<IOrderItem>(
     {
-        instruction: {
+        serviceId: {
+            type: Schema.Types.ObjectId,
+            ref: 'Service',
+        },
+        name: {
             type: String,
             required: true,
         },
-        createdAt: {
-            type: Date,
-            default: Date.now,
+        pricingModel: {
+            type: String,
+            enum: Object.values(PricingModel),
+            required: true,
         },
-        createdBy: {
-            type: Schema.Types.ObjectId,
-            ref: 'User',
+        quantity: {
+            type: Number,
+            min: 1,
+        },
+        hours: {
+            type: Number,
+            min: 0.1,
+        },
+        unitPrice: {
+            type: Number,
+            required: true,
+        },
+        totalPrice: {
+            type: Number,
             required: true,
         },
     },
-    { _id: false }
-);
-
-const timelineEntrySchema = new Schema(
-    {
-        status: {
-            type: String,
-            enum: [
-                'pending',
-                'in_progress',
-                'quality_check',
-                'revision',
-                'completed',
-                'delivered',
-                'cancelled',
-            ],
-            required: true,
-        },
-        timestamp: {
-            type: Date,
-            default: Date.now,
-        },
-        changedBy: {
-            type: Schema.Types.ObjectId,
-            ref: 'User',
-            required: true,
-        },
-        note: {
-            type: String,
-        },
-    },
-    { _id: false }
+    { _id: false },
 );
 
 const orderSchema = new Schema<IOrder>(
     {
-        orderName: {
-            type: String,
-            required: true,
-            trim: true,
-            index: true,
-        },
         clientId: {
             type: Schema.Types.ObjectId,
             ref: 'Client',
             required: true,
             index: true,
         },
-        orderDate: {
-            type: Date,
-            required: true,
-            index: true,
-        },
-        deadline: {
-            type: Date,
-            required: true,
-            index: true,
-        },
-        originalDeadline: {
-            type: Date,
-        },
-        imageQuantity: {
-            type: Number,
-            required: true,
-            min: 1,
-        },
-        perImagePrice: {
-            type: Number,
-            required: true,
-            min: 0,
-        },
-        totalPrice: {
-            type: Number,
-            required: true,
-            min: 0,
-        },
-        services: [
-            {
-                type: Schema.Types.ObjectId,
-                ref: 'Service',
-                required: true,
-            },
-        ],
-        returnFileFormat: {
-            type: Schema.Types.ObjectId,
-            ref: 'ReturnFileFormat',
-            required: true,
-        },
-        instruction: {
+        title: {
             type: String,
+            required: true,
             trim: true,
+        },
+        description: {
+            type: String,
+        },
+        orderType: {
+            type: String,
+            enum: Object.values(OrderType),
+            required: true,
+            index: true,
         },
         status: {
             type: String,
-            enum: [
-                'pending',
-                'in_progress',
-                'quality_check',
-                'revision',
-                'completed',
-                'delivered',
-                'cancelled',
-            ],
-            default: 'pending',
+            enum: Object.values(OrderStatus),
+            default: OrderStatus.PENDING,
             index: true,
         },
-        priority: {
+        currency: {
             type: String,
-            enum: ['low', 'normal', 'high', 'urgent'],
-            default: 'normal',
-            index: true,
+            default: 'USD',
+            required: true,
+            uppercase: true,
         },
-        contactPersonId: {
-            type: Schema.Types.ObjectId,
-            index: true,
-        },
-        notes: {
-            type: String,
-            trim: true,
-        },
-        revisionCount: {
+        totalAmount: {
             type: Number,
             default: 0,
         },
-        isLegacy: {
-            type: Boolean,
-            default: false,
-            index: true,
-        },
-        revisionInstructions: [revisionInstructionSchema],
-        timeline: [timelineEntrySchema],
-        completedAt: {
-            type: Date,
-        },
-        deliveredAt: {
-            type: Date,
-        },
-        invoiceNumber: {
-            type: String,
-            index: true,
-        },
-        isPaid: {
-            type: Boolean,
-            default: false,
-            index: true,
-        },
+        items: [orderItemSchema],
+        statusHistory: [
+            {
+                status: { type: String, enum: Object.values(OrderStatus) },
+                changedBy: { type: Schema.Types.ObjectId, ref: 'User' },
+                updatedAt: { type: Date, default: Date.now },
+                note: String,
+            },
+        ],
         createdBy: {
             type: Schema.Types.ObjectId,
             ref: 'User',
             required: true,
         },
     },
-    {
-        timestamps: true,
-        toJSON: { virtuals: true },
-        toObject: { virtuals: true },
-    }
+    { timestamps: true },
 );
 
-// Virtual for Earning
-orderSchema.virtual('earning', {
-    ref: 'Earning',
-    localField: '_id',
-    foreignField: 'orderId',
-    justOne: true,
+// Auto-calculate totalAmount before saving
+orderSchema.pre('save', function (next) {
+    if (this.items && this.items.length > 0) {
+        this.totalAmount = this.items.reduce((sum, item) => {
+            // Re-calculate totalPrice to ensure integrity
+            const qty = item.quantity || 1;
+            const hours = item.hours || 1;
+            
+            // If it's hourly, use hours, otherwise use quantity
+            const multiplier = item.pricingModel === PricingModel.HOURLY ? hours : qty;
+            item.totalPrice = item.unitPrice * multiplier;
+            
+            return sum + item.totalPrice;
+        }, 0);
+    } else {
+        this.totalAmount = 0;
+    }
+    next();
 });
-
-// Compound indexes for common queries
-orderSchema.index({ clientId: 1, orderDate: -1 });
-orderSchema.index({ status: 1, deadline: 1 });
-orderSchema.index({ status: 1 });
-
-// Text search index
-orderSchema.index({ orderName: 'text' });
 
 const OrderModel = model<IOrder>('Order', orderSchema);
 export default OrderModel;

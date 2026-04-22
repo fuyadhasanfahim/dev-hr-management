@@ -6,18 +6,24 @@ import express, {
 import cors from "cors";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
+import mongoSanitize from "express-mongo-sanitize";
 import envConfig from "./config/env.config.js";
 import { toNodeHandler } from "better-auth/node";
 import { auth } from "./lib/auth.js";
 import { requireAuth } from "./middlewares/auth.middleware.js";
 import router from "./routes/index.js";
+import { stripeWebhook, paypalWebhook } from "./controllers/webhook.controller.js";
+import { globalErrorHandler } from "./middlewares/globalErrorHandler.js";
 
 const { trusted_origins } = envConfig;
 
 const app: Application = express();
 
-// SECURITY: Add security headers (XSS, clickjacking, MIME-sniffing protection)
+// SECURITY: Add security headers
 app.use(helmet());
+
+// SECURITY: Data Sanitization against NoSQL query injection
+app.use(mongoSanitize());
 
 app.use(
     cors({
@@ -26,7 +32,7 @@ app.use(
     }),
 );
 
-// SECURITY: Global rate limiter — 1000 requests per 5 minutes per IP
+// SECURITY: Global rate limiter
 const globalLimiter = rateLimit({
     windowMs: 5 * 60 * 1000, // 5 minutes
     max: 1000,
@@ -38,6 +44,10 @@ const globalLimiter = rateLimit({
     },
 });
 app.use(globalLimiter);
+
+// ⚠️ WEBHOOKS MUST BE BEFORE express.json()
+app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), stripeWebhook);
+app.post('/api/webhooks/paypal', express.json(), paypalWebhook);
 
 app.all("/api/auth/{*any}", toNodeHandler(auth));
 
@@ -53,7 +63,7 @@ app.use(
             (req.method === "POST" &&
                 /^\/invitations\/[^/]+\/accept$/.test(req.path));
 
-        // Allow public access to metadata type routes (for invite dialog dropdowns)
+        // Allow public access to metadata type routes
         const isPublicMetadataRoute =
             req.method === "GET" &&
             /^\/metadata\/type\/(department|designation)$/.test(req.path);
@@ -66,21 +76,14 @@ app.use(
                 req.path === "/careers/applications/public");
 
         // Allow public access to read invoice data (for payment portal)
-        // SECURITY: Removed POST /invoices/record from public routes — it now requires auth
         const isPublicInvoiceRoute =
             req.method === "GET" && /^\/invoices\/public\//.test(req.path);
-
-        // Allow public access to create/confirm payments
-        const isPublicPaymentRoute =
-            req.method === "POST" &&
-            /^\/payments\/(create-intent|confirm)$/.test(req.path);
 
         if (
             isPublicInvitationRoute ||
             isPublicMetadataRoute ||
             isPublicCareerRoute ||
-            isPublicInvoiceRoute ||
-            isPublicPaymentRoute
+            isPublicInvoiceRoute
         ) {
             return next();
         }
@@ -91,24 +94,10 @@ app.use(
 );
 
 app.get("/", (_req: Request, res: Response) => {
-    res.send("Hello World!");
+    res.send("Agency SaaS API Running!");
 });
 
-// Centralized error handler — catches unhandled errors from all routes.
-// Logs the full error server-side, returns a sanitized message to the client.
-app.use((err: Error, _req: Request, res: Response, _next: any) => {
-    console.error("[Unhandled Error]", err);
-
-    const statusCode = (err as any).statusCode || 500;
-    const message =
-        envConfig.node_env === "production"
-            ? "An internal server error occurred."
-            : err.message || "Internal Server Error";
-
-    res.status(statusCode).json({
-        success: false,
-        message,
-    });
-});
+// Centralized error handler
+app.use(globalErrorHandler);
 
 export default app;

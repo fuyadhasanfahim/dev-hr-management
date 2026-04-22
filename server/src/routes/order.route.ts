@@ -1,35 +1,11 @@
-import { Router } from 'express';
-import {
-    createOrder,
-    getAllOrders,
-    getOrderById,
-    updateOrder,
-    deleteOrder,
-    updateOrderStatus,
-    extendDeadline,
-    addRevision,
-    getOrderStats,
-    getOrdersByClient,
-    getOrderYears,
-} from '../controllers/order.controller.js';
-import { authorizeTelemarketer } from '../middlewares/authorizeTelemarketer.js';
-import { authorize } from '../middlewares/authorize.js';
-import { Role } from '../constants/role.js';
+import express from 'express';
+import OrderController from '../controllers/order.controller.js';
 
-const router = Router();
+const router = express.Router();
 
-const adminRoles = [Role.SUPER_ADMIN, Role.ADMIN, Role.HR_MANAGER];
+router.post('/', OrderController.createOrder);
+router.get('/', OrderController.getAllOrders);
+router.get('/:id', OrderController.getOrderById);
+router.patch('/:id/status', OrderController.updateOrderStatus);
 
-router.post('/', authorizeTelemarketer, createOrder);
-router.get('/', authorizeTelemarketer, getAllOrders);
-router.get('/stats', authorizeTelemarketer, getOrderStats);
-router.get('/years', authorizeTelemarketer, getOrderYears);
-router.get('/client/:clientId', authorizeTelemarketer, getOrdersByClient);
-router.get('/:id', authorizeTelemarketer, getOrderById);
-router.patch('/:id', authorizeTelemarketer, updateOrder);
-router.patch('/:id/status', authorizeTelemarketer, updateOrderStatus);
-router.patch('/:id/extend-deadline', authorizeTelemarketer, extendDeadline);
-router.post('/:id/revision', authorizeTelemarketer, addRevision);
-router.delete('/:id', authorize(...adminRoles), deleteOrder);
-
-export { router as orderRoute };
+export const OrderRoutes = router;

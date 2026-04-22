@@ -70,5 +70,12 @@ const envConfig = {
     monthly_report_day: Number(process.env.MONTHLY_REPORT_DAY) || 10,
     monthly_report_hour: Number(process.env.MONTHLY_REPORT_HOUR) || 10,
     monthly_report_minute: Number(process.env.MONTHLY_REPORT_MINUTE) || 0,
+
+    // Advanced SaaS Integrations
+    redis_url: process.env.REDIS_URL || 'redis://localhost:6379',
+    stripe_secret_key: process.env.STRIPE_SECRET_KEY,
+    stripe_webhook_secret: process.env.STRIPE_WEBHOOK_SECRET,
+    paypal_client_id: process.env.PAYPAL_CLIENT_ID,
+    paypal_client_secret: process.env.PAYPAL_CLIENT_SECRET,
 };
 export default envConfig;

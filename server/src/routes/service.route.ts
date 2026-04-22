@@ -1,20 +1,11 @@
-import { Router } from 'express';
-import {
-    createService,
-    getAllServices,
-    getServiceById,
-    updateService,
-    deleteService,
-    checkServiceUsage,
-} from '../controllers/service.controller.js';
+import express from 'express';
+import ServiceController from '../controllers/service.controller.js';
 
-const router = Router();
+const router = express.Router();
 
-router.post('/', createService);
-router.get('/', getAllServices);
-router.get('/:id', getServiceById);
-router.get('/:id/usage', checkServiceUsage);
-router.patch('/:id', updateService);
-router.delete('/:id', deleteService);
+router.post('/', ServiceController.createService);
+router.get('/', ServiceController.getAllServices);
+router.get('/:id', ServiceController.getServiceById);
+router.patch('/:id', ServiceController.updateService);
 
-export { router as serviceRoute };
+export const ServiceRoutes = router;
