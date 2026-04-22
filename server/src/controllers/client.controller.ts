@@ -1,0 +1,424 @@
+import type { Request, Response } from 'express';
+import ClientServices, {
+    ClientIdExistsError,
+} from '../services/client.service.js';
+import type { ClientQueryParams } from '../types/client.type.js';
+import {
+    createClientSchema,
+    updateClientSchema,
+} from '../validators/client.validation.js';
+import { isTelemarketer } from '../utils/telemarketer.util.js';
+import { Role } from '../constants/role.js';
+
+const getAllClients = async (req: Request, res: Response) => {
+    try {
+        const userId = req.user?.id;
+        const params: ClientQueryParams = {
+            page: req.query.page ? parseInt(req.query.page as string) : 1,
+            limit: req.query.limit ? parseInt(req.query.limit as string) : 10,
+            search: req.query.search as string,
+            sortBy: req.query.sortBy as string,
+            sortOrder: req.query.sortOrder as 'asc' | 'desc',
+            status: req.query.status as string,
+        };
+
+        // Ownership filtering: Telemarketers only see their own clients
+        if (
+            userId &&
+            req.user &&
+            [Role.STAFF, Role.TEAM_LEADER].includes(req.user.role as Role)
+        ) {
+            const isTM = await isTelemarketer(userId);
+            if (isTM) {
+                params.createdBy = userId;
+            }
+        }
+
+        const result = await ClientServices.getAllClientsFromDB(params);
+        res.status(200).json({
+            success: true,
+            data: result,
+        });
+    } catch (error: unknown) {
+        const err = error as Error;
+        res.status(500).json({
+            success: false,
+            message: err.message || 'Failed to fetch clients',
+        });
+    }
+};
+
+const getClientById = async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+        if (!id) throw new Error('ID is required');
+
+        const result = await ClientServices.getClientByIdFromDB(id);
+        if (!result) {
+            res.status(404).json({
+                success: false,
+                message: 'Client not found',
+            });
+            return;
+        }
+
+        // Ownership enforcement for telemarketers
+        const userId = req.user?.id;
+        if (
+            userId &&
+            req.user &&
+            [Role.STAFF, Role.TEAM_LEADER].includes(req.user.role as Role)
+        ) {
+            const isTM = await isTelemarketer(userId);
+            if (isTM && result.createdBy?._id?.toString() !== userId) {
+                res.status(403).json({
+                    success: false,
+                    message:
+                        'Forbidden: You do not have permission to view this client',
+                });
+                return;
+            }
+        }
+
+        res.status(200).json({
+            success: true,
+            data: result,
+        });
+    } catch (error: unknown) {
+        const err = error as Error;
+        res.status(500).json({
+            success: false,
+            message: err.message || 'Failed to fetch client',
+        });
+    }
+};
+
+const createClient = async (req: Request, res: Response) => {
+    try {
+        const userId = req.user?.id;
+        if (!userId) throw new Error('Unauthorized');
+
+        // Validate request body with Zod
+        const validationResult = createClientSchema.safeParse(req.body);
+        if (!validationResult.success) {
+            res.status(400).json({
+                success: false,
+                message: 'Validation failed',
+                errors: validationResult.error.flatten().fieldErrors,
+            });
+            return;
+        }
+
+        const result = await ClientServices.createClientInDB({
+            ...validationResult.data,
+            createdBy: userId,
+        });
+
+        res.status(201).json({
+            success: true,
+            message: 'Client created successfully',
+            data: result,
+        });
+    } catch (error: unknown) {
+        // Handle ClientIdExistsError specifically - return as field error with suggestions
+        if (error instanceof ClientIdExistsError) {
+            res.status(400).json({
+                success: false,
+                message: 'Validation failed',
+                errors: {
+                    clientId: [
+                        `${error.message}. Try: ${error.suggestions.join(
+                            ', ',
+                        )}`,
+                    ],
+                },
+                suggestions: error.suggestions,
+            });
+            return;
+        }
+
+        const err = error as Error;
+        res.status(500).json({
+            success: false,
+            message: err.message || 'Failed to create client',
+        });
+    }
+};
+
+const updateClient = async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+        if (!id) throw new Error('ID is required');
+
+        // Validate request body with Zod
+        const validationResult = updateClientSchema.safeParse(req.body);
+        if (!validationResult.success) {
+            res.status(400).json({
+                success: false,
+                message: 'Validation failed',
+                errors: validationResult.error.flatten().fieldErrors,
+            });
+            return;
+        }
+
+        const existingClient = await ClientServices.getClientByIdFromDB(id);
+        if (!existingClient) {
+            res.status(404).json({
+                success: false,
+                message: 'Client not found',
+            });
+            return;
+        }
+
+        // Ownership enforcement for telemarketers
+        const userId = req.user?.id;
+        if (
+            userId &&
+            req.user &&
+            [Role.STAFF, Role.TEAM_LEADER].includes(req.user.role as Role)
+        ) {
+            const isTM = await isTelemarketer(userId);
+            if (isTM && existingClient.createdBy?._id?.toString() !== userId) {
+                res.status(403).json({
+                    success: false,
+                    message:
+                        'Forbidden: You do not have permission to update this client',
+                });
+                return;
+            }
+        }
+
+        const result = await ClientServices.updateClientInDB(
+            id,
+            validationResult.data,
+        );
+
+        res.status(200).json({
+            success: true,
+            message: 'Client updated successfully',
+            data: result,
+        });
+    } catch (error: unknown) {
+        // Handle ClientIdExistsError specifically - return as field error with suggestions
+        if (error instanceof ClientIdExistsError) {
+            res.status(400).json({
+                success: false,
+                message: 'Validation failed',
+                errors: {
+                    clientId: [
+                        `${error.message}. Try: ${error.suggestions.join(
+                            ', ',
+                        )}`,
+                    ],
+                },
+                suggestions: error.suggestions,
+            });
+            return;
+        }
+
+        const err = error as Error;
+        res.status(500).json({
+            success: false,
+            message: err.message || 'Failed to update client',
+        });
+    }
+};
+
+const checkClientId = async (req: Request, res: Response) => {
+    try {
+        const { clientId } = req.params;
+        if (!clientId) {
+            res.status(400).json({
+                success: false,
+                message: 'Client ID is required',
+            });
+            return;
+        }
+
+        const result = await ClientServices.checkClientIdAvailability(clientId);
+        res.status(200).json({
+            success: true,
+            data: result,
+        });
+    } catch (error: unknown) {
+        const err = error as Error;
+        res.status(500).json({
+            success: false,
+            message: err.message || 'Failed to check client ID',
+        });
+    }
+};
+
+const getClientStats = async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+        if (!id) throw new Error('Client ID is required');
+
+        // Extract filter parameters from query
+        const filters = {
+            month: req.query.month
+                ? parseInt(req.query.month as string)
+                : undefined,
+            year: req.query.year
+                ? parseInt(req.query.year as string)
+                : undefined,
+            status: req.query.status as string | undefined,
+            priority: req.query.priority as string | undefined,
+            search: req.query.search as string | undefined,
+        };
+
+        const client = await ClientServices.getClientByIdFromDB(id);
+        if (!client) {
+            res.status(404).json({
+                success: false,
+                message: 'Client not found',
+            });
+            return;
+        }
+
+        // Ownership enforcement for telemarketers
+        const userId = req.user?.id;
+        if (
+            userId &&
+            req.user &&
+            [Role.STAFF, Role.TEAM_LEADER].includes(req.user.role as Role)
+        ) {
+            const isTM = await isTelemarketer(userId);
+            if (isTM && client.createdBy?._id?.toString() !== userId) {
+                res.status(403).json({
+                    success: false,
+                    message:
+                        'Forbidden: You do not have permission to view stats for this client',
+                });
+                return;
+            }
+        }
+
+        const result = await ClientServices.getClientStatsFromDB(id, filters);
+        res.status(200).json({
+            success: true,
+            data: result,
+        });
+    } catch (error: unknown) {
+        const err = error as Error;
+        res.status(500).json({
+            success: false,
+            message: err.message || 'Failed to fetch client stats',
+        });
+    }
+};
+
+const getAssignedServices = async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+        if (!id) throw new Error('Client ID is required');
+
+        const client = await ClientServices.getClientByIdFromDB(id);
+        if (!client) {
+            res.status(404).json({
+                success: false,
+                message: 'Client not found',
+            });
+            return;
+        }
+
+        // If client has assigned services, return those (already populated via lookup)
+        if (
+            client.assignedServicesDetails &&
+            client.assignedServicesDetails.length > 0
+        ) {
+            res.status(200).json({
+                success: true,
+                data: client.assignedServicesDetails,
+            });
+            return;
+        }
+
+        // Fallback: return all active services
+        const { default: ServiceModel } = await import(
+            '../models/service.model.js'
+        );
+        const allServices = await ServiceModel.find({ isActive: true })
+            .select('name description')
+            .lean();
+        res.status(200).json({
+            success: true,
+            data: allServices,
+        });
+    } catch (error: unknown) {
+        const err = error as Error;
+        res.status(500).json({
+            success: false,
+            message: err.message || 'Failed to fetch assigned services',
+        });
+    }
+};
+
+// Get all emails (client + team members) for a client
+const getClientEmails = async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+        if (!id) throw new Error('Client ID is required');
+
+        const client = await ClientServices.getClientByIdFromDB(id);
+        if (!client) {
+            res.status(404).json({
+                success: false,
+                message: 'Client not found',
+            });
+            return;
+        }
+
+        // Combine client emails and team member emails
+        const emails: { email: string; label: string; type: string }[] = [];
+
+        // Add client's own emails
+        if (client.emails) {
+            client.emails.forEach((email: string, index: number) => {
+                emails.push({
+                    email,
+                    label:
+                        index === 0
+                            ? `${client.name} (Primary)`
+                            : `${client.name} (${email})`,
+                    type: 'client',
+                });
+            });
+        }
+
+        // Add team member emails
+        if (client.teamMembers) {
+            client.teamMembers.forEach(
+                (member: { name: string; email: string; designation?: string }) => {
+                    emails.push({
+                        email: member.email,
+                        label: `${member.name}${member.designation ? ` (${member.designation})` : ''} — Team`,
+                        type: 'team_member',
+                    });
+                },
+            );
+        }
+
+        res.status(200).json({
+            success: true,
+            data: emails,
+        });
+    } catch (error: unknown) {
+        const err = error as Error;
+        res.status(500).json({
+            success: false,
+            message: err.message || 'Failed to fetch client emails',
+        });
+    }
+};
+
+export default {
+    getAllClients,
+    getClientById,
+    createClient,
+    updateClient,
+    checkClientId,
+    getClientStats,
+    getAssignedServices,
+    getClientEmails,
+};

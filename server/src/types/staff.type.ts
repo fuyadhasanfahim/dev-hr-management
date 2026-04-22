@@ -1,0 +1,50 @@
+import type { Types } from "mongoose";
+
+export default interface IStaff {
+    userId: Types.ObjectId;
+    staffId: string;
+
+    phone: string;
+
+    branchId?: Types.ObjectId;
+    department?: string;
+    designation: string; // Keep as string for flexibility but we can use Designation enum in logic
+    joinDate: Date;
+    status: "active" | "inactive" | "terminated";
+
+    dateOfBirth?: Date;
+    nationalId?: string;
+    bloodGroup?: "A+" | "A-" | "B+" | "B-" | "AB+" | "AB-" | "O+" | "O-";
+    address?: string;
+
+    emergencyContact?: {
+        name: string;
+        relation: string;
+        phone: string;
+    };
+
+    fathersName?: string;
+    mothersName?: string;
+    spouseName?: string;
+
+    bank?: {
+        bankName?: string;
+        accountNumber?: string;
+        accountHolderName?: string;
+        branch?: string;
+        routingNumber?: string;
+    };
+
+    salary: number;
+    salaryVisibleToEmployee: boolean;
+    salaryPin?: string;
+    salaryPinResetToken?: string;
+    salaryPinResetExpires?: Date;
+
+    profileCompleted: boolean;
+    balance: number;
+    exitDate?: Date;
+
+    createdAt: Date;
+    updatedAt: Date;
+}

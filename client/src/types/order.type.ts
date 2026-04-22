@@ -1,0 +1,185 @@
+export type OrderStatus =
+    | "pending"
+    | "in_progress"
+    | "quality_check"
+    | "revision"
+    | "completed"
+    | "delivered"
+    | "cancelled";
+
+export type OrderPriority = "low" | "normal" | "high" | "urgent";
+
+export interface IService {
+    _id: string;
+    name: string;
+    description?: string;
+    isActive: boolean;
+    createdBy: string;
+    createdAt: string;
+    updatedAt: string;
+}
+
+export interface IReturnFileFormat {
+    _id: string;
+    name: string;
+    extension: string;
+    description?: string;
+    isActive: boolean;
+    createdBy: string;
+    createdAt: string;
+    updatedAt: string;
+}
+
+// Revision instruction entry
+export interface IRevisionInstruction {
+    instruction: string;
+    createdAt: string;
+    createdBy: string; // User ID (not populated)
+}
+
+// Timeline entry for tracking order history
+export interface ITimelineEntry {
+    status: OrderStatus;
+    timestamp: string;
+    changedBy: string; // User ID (not populated)
+    note?: string;
+}
+
+export interface IOrder {
+    _id: string;
+    orderName: string;
+    clientId: {
+        _id: string;
+        clientId: string;
+        name: string;
+        email: string;
+        emails: string[];
+        currency?: string;
+        address?: string;
+        officeAddress?: string;
+        createdBy?: string;
+        teamMembers?: import('./client.type').TeamMember[];
+    };
+    orderDate: string;
+    deadline: string;
+    originalDeadline?: string;
+    imageQuantity: number;
+    perImagePrice: number;
+    totalPrice: number;
+    services: {
+        _id: string;
+        name: string;
+    }[];
+    returnFileFormat: {
+        _id: string;
+        name: string;
+        extension: string;
+    };
+    instruction?: string;
+    status: OrderStatus;
+    priority: OrderPriority;
+    contactPersonId?: string;
+    notes?: string;
+    revisionCount: number;
+    isLegacy?: boolean; // Flag for migrated orders
+    earning?: {
+        status: "paid" | "unpaid";
+    };
+    revisionInstructions: IRevisionInstruction[];
+    timeline: ITimelineEntry[];
+    completedAt?: string;
+    deliveredAt?: string;
+    invoiceNumber?: string;
+    isPaid?: boolean;
+    createdBy: string;
+    createdAt: string;
+    updatedAt: string;
+}
+
+export interface IOrderStats {
+    total: number;
+    pending: number;
+    inProgress: number;
+    qualityCheck: number;
+    revision: number;
+    completed: number;
+    delivered: number;
+    overdue: number;
+}
+
+export interface CreateOrderInput {
+    orderName: string;
+    clientId: string;
+    orderDate: string;
+    deadline: string;
+    imageQuantity: number;
+    perImagePrice: number;
+    totalPrice: number;
+    services: string[];
+    returnFileFormat: string;
+    instruction?: string;
+    priority?: OrderPriority;
+    contactPersonId?: string;
+    notes?: string;
+}
+
+export interface UpdateOrderInput extends Partial<CreateOrderInput> {
+    status?: OrderStatus;
+}
+
+export interface UpdateStatusInput {
+    status: OrderStatus;
+    note?: string;
+    customEmailMessage?: string;
+    downloadLink?: string;
+    sendEmail?: boolean;
+    selectedEmail?: string;
+    selectedEmails?: string[];
+}
+
+export interface ExtendDeadlineInput {
+    newDeadline: string;
+    reason?: string;
+}
+
+export interface AddRevisionInput {
+    instruction: string;
+}
+
+export interface CreateServiceInput {
+    name: string;
+    description?: string;
+}
+
+export interface UpdateServiceInput {
+    name?: string;
+    description?: string;
+    isActive?: boolean;
+}
+
+export interface CreateReturnFileFormatInput {
+    name: string;
+    extension: string;
+    description?: string;
+}
+
+export interface UpdateReturnFileFormatInput {
+    name?: string;
+    extension?: string;
+    description?: string;
+    isActive?: boolean;
+}
+
+export interface OrderFilters {
+    clientId?: string;
+    status?: OrderStatus;
+    priority?: OrderPriority;
+    startDate?: string;
+    endDate?: string;
+    month?: number;
+    year?: number;
+    search?: string;
+    page?: number;
+    limit?: number;
+}
+// Labels and other constants moved to @/lib/constants.ts

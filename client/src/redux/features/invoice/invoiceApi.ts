@@ -1,0 +1,78 @@
+import { apiSlice } from "../../api/apiSlice";
+import type { InvoicesResponse } from "@/types/invoice.type";
+
+interface InvoiceNumberResponse {
+    success: boolean;
+    invoiceNumber: number;
+    formattedInvoiceNumber: string;
+}
+
+interface SendEmailResponse {
+    success: boolean;
+    message: string;
+}
+interface RecordInvoiceData {
+    invoiceNumber: string;
+    clientName: string;
+    clientId: string;
+    clientAddress: string;
+    totalAmount: number;
+    currency: string;
+    dueDate: string; // ISO string
+    month: number;
+    year: number;
+    totalImages?: number;
+    dateFrom?: string;
+    dateTo?: string;
+    totalOrders?: number;
+    companyName?: string;
+    clientEmail?: string;
+    items: Array<{ name: string; price: number; quantity: number }>;
+    orderIds?: string[];
+}
+
+interface RecordInvoiceResponse {
+    success: boolean;
+    invoice: Record<string, unknown>;
+}
+
+export const invoiceApi = apiSlice.injectEndpoints({
+    endpoints: (builder) => ({
+        getNextInvoiceNumber: builder.query<InvoiceNumberResponse, void>({
+            query: () => "/invoices/next-number",
+            keepUnusedDataFor: 0, // Always refetch
+        }),
+        sendInvoiceEmail: builder.mutation<SendEmailResponse, FormData>({
+            query: (formData) => ({
+                url: "/invoices/send-email",
+                method: "POST",
+                body: formData,
+                // Don't set Content-Type header - browser will set it with boundary for FormData
+                formData: true,
+            }),
+        }),
+        recordInvoice: builder.mutation<
+            RecordInvoiceResponse,
+            RecordInvoiceData
+        >({
+            query: (data) => ({
+                url: "/invoices/record",
+                method: "POST",
+                body: data,
+            }),
+        }),
+        getInvoices: builder.query<InvoicesResponse, { clientId?: string; month?: number; year?: number; status?: string }>({
+            query: (params) => ({
+                url: "/invoices",
+                params,
+            }),
+        }),
+    }),
+});
+
+export const {
+    useLazyGetNextInvoiceNumberQuery,
+    useSendInvoiceEmailMutation,
+    useRecordInvoiceMutation,
+    useGetInvoicesQuery,
+} = invoiceApi;

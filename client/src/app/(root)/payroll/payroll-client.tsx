@@ -1,0 +1,586 @@
+"use client";
+
+import { useState } from "react";
+import {
+    useGetPayrollPreviewQuery,
+    useGetLockStatusQuery,
+    useLockMonthMutation,
+    useUnlockMonthMutation,
+} from "@/redux/features/payroll/payrollApi";
+import { useGetAllBranchesQuery } from "@/redux/features/branch/branchApi";
+import { format } from "date-fns";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuLabel,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Progress } from "@/components/ui/progress";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import PayrollTable from "../../../components/payroll/payroll-table";
+import OvertimeTable from "../../../components/payroll/overtime-table";
+import ExportPdfDialog from "../../../components/payroll/export-pdf-dialog";
+import {
+    DollarSign,
+    Users,
+    Download,
+    Filter,
+    Wallet,
+    CheckCircle2,
+    Clock,
+    Building2,
+    Lock,
+    Unlock,
+    FileSpreadsheet,
+    FileText,
+    ShieldCheck,
+} from "lucide-react";
+import * as XLSX from "xlsx";
+import { IPayrollItem } from "@/types/payroll.type";
+import { IBranch } from "@/types/branch.type";
+import { toast } from "sonner";
+import { useSession } from "@/lib/auth-client";
+import { cn } from "@/lib/utils";
+
+const MONTHS = [
+    { value: 1, label: "January" },
+    { value: 2, label: "February" },
+    { value: 3, label: "March" },
+    { value: 4, label: "April" },
+    { value: 5, label: "May" },
+    { value: 6, label: "June" },
+    { value: 7, label: "July" },
+    { value: 8, label: "August" },
+    { value: 9, label: "September" },
+    { value: 10, label: "October" },
+    { value: 11, label: "November" },
+    { value: 12, label: "December" },
+];
+
+const currentYear = new Date().getFullYear();
+const YEARS = Array.from({ length: 5 }, (_, i) => currentYear - i);
+
+const TableSkeleton = () => (
+    <div className="space-y-3 p-4">
+        {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="flex items-center gap-4">
+                <Skeleton className="h-12 w-12 rounded-full" />
+                <div className="space-y-2">
+                    <Skeleton className="h-4 w-[200px]" />
+                    <Skeleton className="h-4 w-[150px]" />
+                </div>
+                <div className="ml-auto w-1/2 flex gap-4">
+                    <Skeleton className="h-8 w-full" />
+                    <Skeleton className="h-8 w-full" />
+                </div>
+            </div>
+        ))}
+    </div>
+);
+
+export default function PayrollPage() {
+    const router = useRouter();
+    const pathname = usePathname();
+    const searchParams = useSearchParams();
+
+    // parsed URL params
+    const tabParam = searchParams.get("tab") || "salary";
+    const monthParam = searchParams.get("month");
+    const yearParam = searchParams.get("year");
+    const branchParam = searchParams.get("branch") || "all";
+
+    // State (Synced with URL)
+    // Default to current month/year if not in URL
+    const selectedMonth = monthParam
+        ? parseInt(monthParam)
+        : new Date().getMonth() + 1;
+    const selectedYear = yearParam ? parseInt(yearParam) : currentYear;
+    const branchId = branchParam;
+    const activeTab = tabParam;
+
+    const [isSelectMode, setIsSelectMode] = useState(false);
+    const [showPdfDialog, setShowPdfDialog] = useState(false);
+
+    const { data: session } = useSession();
+    const userRole = session?.user?.role;
+    const canWrite = ["super_admin", "admin", "hr_manager"].includes(
+        userRole || "",
+    );
+
+    // Update URL Helper
+    const updateUrl = (key: string, value: string) => {
+        const params = new URLSearchParams(searchParams.toString());
+        params.set(key, value);
+        router.push(`${pathname}?${params.toString()}`);
+    };
+
+    // Derived Date for API
+    const formattedMonth = `${selectedYear}-${selectedMonth.toString().padStart(2, "0")}`;
+
+    // Queries
+    const { data: branchesData } = useGetAllBranchesQuery({});
+    const branches: IBranch[] = branchesData?.branches || [];
+
+    const { data, isLoading } = useGetPayrollPreviewQuery({
+        month: formattedMonth,
+        branchId,
+    });
+
+    const payrollData = (data?.data?.staffs || []) as IPayrollItem[];
+    const alerts = data?.data?.alerts || [];
+    const suggestLock = data?.data?.suggestLock || false;
+
+    // Lock status
+    const { data: lockData } = useGetLockStatusQuery({
+        month: formattedMonth,
+    });
+    const [lockMonth, { isLoading: isLocking }] = useLockMonthMutation();
+    const [unlockMonth, { isLoading: isUnlocking }] = useUnlockMonthMutation();
+    const isLocked = lockData?.data?.isLocked ?? false;
+
+    const handleToggleLock = async () => {
+        try {
+            if (isLocked) {
+                await unlockMonth({ month: formattedMonth }).unwrap();
+                toast.success("Payroll unlocked");
+            } else {
+                await lockMonth({ month: formattedMonth }).unwrap();
+                toast.success("Payroll locked — no further changes allowed");
+            }
+        } catch (error) {
+            toast.error(
+                (error as Error)?.message || "Failed to update lock status",
+            );
+        }
+    };
+
+    // --- Stats Calculation (Context Aware) ---
+    // Salary Stats
+    const totalSalary = payrollData.reduce(
+        (acc, curr) => acc + (curr.payableSalary || 0),
+        0,
+    );
+    const salaryPaid = payrollData
+        .filter((i) => i.status === "paid")
+        .reduce((acc, curr) => acc + (curr.payableSalary || 0), 0);
+    const salaryPending = totalSalary - salaryPaid;
+    const salaryPaidCount = payrollData.filter(
+        (i) => i.status === "paid",
+    ).length;
+    const salaryPendingCount = payrollData.length - salaryPaidCount;
+
+    // Overtime Stats
+    const totalOvertime = payrollData.reduce(
+        (acc, curr) => acc + (curr.otPayable || 0),
+        0,
+    );
+    const overtimePaid = payrollData
+        .filter((i) => i.otStatus === "paid")
+        .reduce((acc, curr) => acc + (curr.otPaidAmount || 0), 0); // Use otPaidAmount for accuracy
+    const overtimePending = totalOvertime - overtimePaid;
+    const overtimePaidCount = payrollData.filter(
+        (i) => i.otStatus === "paid",
+    ).length;
+    const overtimePendingCount = payrollData.filter(
+        (i) => i.otPayable > 0 && i.otStatus !== "paid",
+    ).length;
+
+    // Active Display Stats
+    const isOvertimeTab = activeTab === "overtime";
+
+    const displayTotal = isOvertimeTab ? totalOvertime : totalSalary;
+    const displayPaid = isOvertimeTab ? overtimePaid : salaryPaid;
+    const displayPending = isOvertimeTab ? overtimePending : salaryPending;
+    const displayTotalStaff = payrollData.length; // Total staff remains same, or could filter by those having OT
+
+    const formatCurrency = (amount: number) => {
+        return new Intl.NumberFormat("bn-BD", {
+            style: "currency",
+            currency: "BDT",
+            maximumFractionDigits: 0,
+        }).format(amount);
+    };
+
+    // --- Export Handlers ---
+    const handleExportExcel = () => {
+        if (!payrollData.length) return;
+
+        const [year, monthNum] = formattedMonth.split("-");
+        const monthName = format(
+            new Date(parseInt(year!), parseInt(monthNum!) - 1, 1),
+            "MMMM",
+        );
+
+        let dataToExport: Record<string, string | number>[] = [];
+        let sheetName = "";
+
+        if (isOvertimeTab) {
+            sheetName = "Overtime";
+            dataToExport = payrollData
+                .filter((row) => row.otMinutes > 0) // Only export staff with OT
+                .map((row, index) => ({
+                    "Sl No": index + 1,
+                    Name: row.name || "",
+                    Designation: row.designation || "",
+                    "Bank Name": row.bank?.bankName || "N/A",
+                    "Account NO": row.bank?.accountNumber || "N/A",
+                    "Routing NO": row.bank?.routingNumber || "N/A",
+                    "OT Hours":
+                        Math.floor(row.otMinutes / 60) +
+                        "h " +
+                        (row.otMinutes % 60) +
+                        "m",
+                    "OT Rate":
+                        row.otMinutes > 0
+                            ? (row.otPayable / (row.otMinutes / 60)).toFixed(2)
+                            : "0.00",
+                    "Total OT Amount": row.otPayable || 0,
+                    Status: row.otStatus === "paid" ? "Paid" : "Pending",
+                }));
+        } else {
+            sheetName = "Salary";
+            dataToExport = payrollData.map((row, index) => ({
+                "Sl No": index + 1,
+                Name: row.name || "",
+                Designation: row.designation || "",
+                "Bank Name": row.bank?.bankName || "N/A",
+                "Account NO": row.bank?.accountNumber || "N/A",
+                "Routing NO": row.bank?.routingNumber || "N/A",
+                "Basic Salary": row.salary || 0,
+                "Payable Amount": row.payableSalary || 0,
+                Status: row.status === "paid" ? "Paid" : "Pending",
+            }));
+        }
+
+        if (dataToExport.length === 0) {
+            toast.error("No data to export for " + sheetName);
+            return;
+        }
+
+        const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
+
+        // Auto-width columns
+        const max_width = dataToExport.reduce(
+            (w, r) => Math.max(w, (r.Name as string)?.length || 0),
+            10,
+        );
+        worksheet["!cols"] = [
+            { wch: 8 },
+            { wch: max_width + 5 },
+            { wch: 20 },
+            { wch: 20 },
+            { wch: 15 },
+            { wch: 15 },
+            { wch: 10 },
+        ];
+
+        XLSX.writeFile(
+            workbook,
+            `${monthName} ${year.slice(-2)} ${sheetName}.xlsx`,
+        );
+    };
+
+    const handleExportPDF = () => {
+        if (!payrollData.length) return;
+        // Currently only supports salary, could be extended later
+        setShowPdfDialog(true);
+    };
+
+    const completionRate = displayTotal > 0 ? (displayPaid / displayTotal) * 100 : 0;
+
+    return (
+        <div className="space-y-6 animate-in fade-in duration-500">
+            {/* Header & Stats Overview */}
+
+            <div className="flex flex-col gap-8">
+                <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+                    <div className="flex flex-col gap-1">
+                        <h1 className="text-3xl font-bold tracking-tight">Payroll Operations</h1>
+                        <p className="text-sm text-muted-foreground font-medium">Manage and audit institutional disbursements</p>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                        <div className="px-4 py-2 bg-card border rounded-xl shadow-sm flex items-center gap-3">
+                            <div className="flex flex-col items-end">
+                                <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Payroll Status</span>
+                                <span className={cn(
+                                    "text-sm font-bold",
+                                    isLocked ? "text-amber-500" : "text-green-500"
+                                )}>
+                                    {isLocked ? "Locked" : "Editable"}
+                                </span>
+                            </div>
+                            <div className={cn(
+                                "h-10 w-10 flex items-center justify-center rounded-lg",
+                                isLocked ? "bg-amber-500/10 text-amber-500" : "bg-green-500/10 text-green-500"
+                            )}>
+                                {isLocked ? <Lock className="h-5 w-5" /> : <ShieldCheck className="h-5 w-5" />}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                    {/* Gross Liability Card */}
+                    <Card className="shadow-sm">
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                            <CardTitle className="text-sm font-medium">Gross Liability</CardTitle>
+                            <DollarSign className="h-4 w-4 text-muted-foreground" />
+                        </CardHeader>
+                        <CardContent>
+                            <div className="text-2xl font-bold">৳{displayTotal.toLocaleString()}</div>
+                            <p className="text-xs text-muted-foreground mt-1">Total payroll cost for this month</p>
+                        </CardContent>
+                    </Card>
+
+                    {/* Disbursement Card */}
+                    <Card className="shadow-sm">
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                            <CardTitle className="text-sm font-medium">Disbursed Volume</CardTitle>
+                            <Wallet className="h-4 w-4 text-muted-foreground" />
+                        </CardHeader>
+                        <CardContent>
+                            <div className="text-2xl font-bold text-green-600">৳{displayPaid.toLocaleString()}</div>
+                            <div className="mt-4 flex flex-col gap-2">
+                                <div className="flex justify-between text-[10px] font-bold">
+                                    <span>Allocation Progress</span>
+                                    <span>{Math.round(completionRate)}%</span>
+                                </div>
+                                <Progress value={completionRate} className="h-1.5" />
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    {/* Pending Settlement Card */}
+                    <Card className="shadow-sm">
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                            <CardTitle className="text-sm font-medium">Pending Settlement</CardTitle>
+                            <Clock className="h-4 w-4 text-muted-foreground" />
+                        </CardHeader>
+                        <CardContent>
+                            <div className="text-2xl font-bold text-amber-600">৳{displayPending.toLocaleString()}</div>
+                            <p className="text-xs text-muted-foreground mt-1">Outstanding liability</p>
+                        </CardContent>
+                    </Card>
+
+                    {/* Personnel Engagement Card */}
+                    <Card className="shadow-sm">
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                            <CardTitle className="text-sm font-medium">Personnel Engagement</CardTitle>
+                            <Users className="h-4 w-4 text-muted-foreground" />
+                        </CardHeader>
+                        <CardContent>
+                            <div className="text-2xl font-bold">{displayTotalStaff} Members</div>
+                            <p className="text-xs text-muted-foreground mt-1">Active staff in current preview</p>
+                        </CardContent>
+                    </Card>
+                </div>
+            </div>
+
+            {/* Main Content Area Simplified */}
+            <Card className="shadow-sm border-none bg-card">
+                {isLocked && (
+                    <div className="flex items-center gap-3 px-6 py-3 bg-amber-50 text-amber-800 border-b border-amber-100">
+                        <Lock className="h-4 w-4" />
+                        <div className="flex-1">
+                            <p className="text-sm font-semibold">Payroll Archived</p>
+                            <p className="text-xs opacity-80">This billing period is locked for data integrity.</p>
+                        </div>
+                        {canWrite && (
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-8 border-amber-200 hover:bg-amber-100"
+                                onClick={handleToggleLock}
+                                disabled={isUnlocking}
+                            >
+                                <Unlock className="h-3.5 w-3.5 mr-2" />
+                                Unlock Preview
+                            </Button>
+                        )}
+                    </div>
+                )}
+
+                <div className="p-6">
+                    <Tabs
+                        value={activeTab}
+                        onValueChange={(val) => updateUrl("tab", val)}
+                        className="w-full"
+                    >
+                        <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4 border-b pb-4">
+                            <TabsList className="bg-muted/50 p-1 rounded-lg">
+                                <TabsTrigger value="salary" className="font-semibold px-6">
+                                    Salary Preview
+                                </TabsTrigger>
+                                <TabsTrigger value="overtime" className="font-semibold px-6">
+                                    Overtime Balance
+                                </TabsTrigger>
+                            </TabsList>
+
+                            <div className="flex items-center gap-3">
+                                {activeTab === "salary" && (
+                                    <Button
+                                        variant={isSelectMode ? "default" : "outline"}
+                                        size="sm"
+                                        onClick={() => setIsSelectMode(!isSelectMode)}
+                                        className="gap-2 h-9"
+                                    >
+                                        <CheckCircle2 className="h-4 w-4" />
+                                        {isSelectMode ? "Cancel Selection" : "Bulk Pay"}
+                                    </Button>
+                                )}
+
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                        <Button
+                                            size="sm"
+                                            className="h-9 gap-2"
+                                            variant="secondary"
+                                        >
+                                            <Download className="h-4 w-4" />
+                                            Export
+                                        </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end">
+                                        <DropdownMenuItem onClick={handleExportExcel} className="cursor-pointer gap-2">
+                                            <FileSpreadsheet className="h-4 w-4" />
+                                            Export to Excel
+                                        </DropdownMenuItem>
+                                        {!isOvertimeTab && (
+                                            <DropdownMenuItem onClick={handleExportPDF} className="cursor-pointer gap-2">
+                                                <FileText className="h-4 w-4" />
+                                                Export to PDF
+                                            </DropdownMenuItem>
+                                        )}
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
+                            </div>
+                        </div>
+
+                        {/* Filter Toolbar Simplified */}
+                        <div className="flex flex-wrap items-center gap-4 mb-6 p-4 bg-muted/20 border rounded-lg">
+                            <div className="flex items-center gap-2">
+                                <Filter className="h-4 w-4 text-muted-foreground" />
+                                <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Filters</span>
+                            </div>
+
+                            <div className="flex gap-2">
+                                <Select
+                                    value={selectedMonth.toString()}
+                                    onValueChange={(v) => updateUrl("month", v)}
+                                >
+                                    <SelectTrigger className="h-9 w-[140px] bg-background">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {MONTHS.map((m) => (
+                                            <SelectItem key={m.value} value={m.value.toString()}>{m.label}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+
+                                <Select
+                                    value={selectedYear.toString()}
+                                    onValueChange={(v) => updateUrl("year", v)}
+                                >
+                                    <SelectTrigger className="h-9 w-[100px] bg-background">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {YEARS.map((y) => (
+                                            <SelectItem key={y} value={y.toString()}>{y}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+
+                            <div className="flex-1">
+                                <Select
+                                    value={branchId}
+                                    onValueChange={(v) => updateUrl("branch", v)}
+                                >
+                                    <SelectTrigger className="h-9 w-full md:w-[240px] bg-background">
+                                        <div className="flex items-center gap-2">
+                                            <Building2 className="h-4 w-4 text-muted-foreground" />
+                                            <SelectValue placeholder="All Branches" />
+                                        </div>
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">Everywhere (All)</SelectItem>
+                                        {branches.map((branch) => (
+                                            <SelectItem key={branch._id} value={branch._id}>{branch.name}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+
+                            {!isLocked && suggestLock && (
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={handleToggleLock}
+                                    className="gap-2 border-primary text-primary hover:bg-primary/10"
+                                >
+                                    <Lock className="h-3.5 w-3.5" />
+                                    Archive Month
+                                </Button>
+                            )}
+                        </div>
+
+                        <TabsContent value="salary" className="mt-0">
+                            <div className="border rounded-lg overflow-hidden bg-background">
+                                {isLoading ? (
+                                    <TableSkeleton />
+                                ) : (
+                                    <PayrollTable
+                                        data={payrollData}
+                                        month={formattedMonth}
+                                        isSelectMode={isSelectMode}
+                                        isLocked={isLocked}
+                                        branchId={branchId}
+                                    />
+                                )}
+                            </div>
+                        </TabsContent>
+
+                        <TabsContent value="overtime" className="mt-0">
+                            <div className="border rounded-lg overflow-hidden bg-background">
+                                {isLoading ? (
+                                    <TableSkeleton />
+                                ) : (
+                                    <OvertimeTable
+                                        data={payrollData}
+                                        month={formattedMonth}
+                                        isLocked={isLocked}
+                                    />
+                                )}
+                            </div>
+                        </TabsContent>
+                    </Tabs>
+                </div>
+            </Card>
+
+            <ExportPdfDialog
+                open={showPdfDialog}
+                onOpenChange={setShowPdfDialog}
+                payrollData={payrollData}
+                month={formattedMonth}
+            />
+        </div>
+    );
+}

@@ -1,0 +1,894 @@
+import AttendanceEventModel from "../models/attendance-event.model.js";
+import ShiftAssignmentModel from "../models/shift-assignment.model.js";
+import AttendanceDayModel from "../models/attendance-day.model.js";
+import type { IShift } from "../types/shift.type.js";
+import StaffModel from "../models/staff.model.js";
+import ShiftOffDateService from "./shift-off-date.service.js";
+import { escapeRegex } from "../lib/sanitize.js";
+import {
+  getBDNow,
+  getBDStartOfDay,
+  formatBD,
+  getBDEndOfDay,
+  getBDMonthRange,
+  getBDWeekDay,
+} from "../utils/date.util.js";
+import auditService from "./audit.service.js";
+
+function requireShiftTimes<T extends IShift>(
+  shift: T,
+): T & { startTime: string; endTime: string } {
+  if (!shift.startTime || !shift.endTime) {
+    throw new Error(`Shift "${shift.name}" is missing start or end time.`);
+  }
+
+  return shift as T & { startTime: string; endTime: string };
+}
+
+const checkInInDB = async ({
+  userId,
+  ip,
+  userAgent,
+  source = "web",
+}: {
+  userId: string;
+  ip: string;
+  userAgent: string;
+  source?: "web" | "mobile" | "manual";
+}) => {
+  const now = getBDNow();
+  // Debug log
+  console.log(`[CheckIn] Attempt for user ${userId} at ${formatBD(now)}`);
+
+  const dayStart = getBDStartOfDay(now);
+  const dayEnd = getBDEndOfDay(now);
+
+
+  const staff = await StaffModel.findOne({ userId }).lean();
+  if (!staff) {
+    console.error(`[CheckIn] Staff not found for user ${userId}`);
+    throw new Error("Staff not found for the user.");
+  }
+
+  const staffId = staff._id;
+
+  const lastEvent = await AttendanceEventModel.findOne({
+    staffId,
+    at: { $gte: dayStart, $lte: dayEnd },
+  })
+    .sort({ at: -1 })
+    .lean();
+
+  if (lastEvent?.type === "check_in") {
+    throw new Error("You are already checked in.");
+  }
+
+  const shiftAssignment = await ShiftAssignmentModel.findOne({
+    staffId,
+    startDate: { $lte: now },
+    $or: [{ endDate: null }, { endDate: { $gte: now } }],
+    isActive: true,
+  })
+    .populate("shiftId")
+    .lean();
+
+  if (!shiftAssignment || !shiftAssignment.shiftId) {
+    console.error(`[CheckIn] No active shift for staff ${staffId}`);
+    throw new Error("No active shift assignment found.");
+  }
+
+  const shift = requireShiftTimes(shiftAssignment.shiftId as unknown as IShift);
+  console.log(
+    `[CheckIn] Found shift: ${shift.name} (${shift.startTime} - ${shift.endTime})`,
+  );
+
+  const todayDay = getBDWeekDay(now);
+  if (!shift.workDays.includes(todayDay as any)) {
+    console.error(
+      `[CheckIn] Not a working day. Today: ${todayDay}, WorkDays: ${shift.workDays}`,
+    );
+    throw new Error("Today is not a working day for your shift.");
+  }
+
+  // Check if today is a shift off date
+  const isOffDay = await ShiftOffDateService.isDateOff(shift._id, now);
+  if (isOffDay) {
+    console.error(`[CheckIn] Today is a shift off date for shift ${shift._id}`);
+    throw new Error("আজ আপনার shift বন্ধ আছে। Check-in করা সম্ভব নয়।");
+  }
+
+  const shiftStart = new Date(now);
+  const [h, m] = shift.startTime.split(":");
+  shiftStart.setHours(Number(h), Number(m), 0, 0);
+
+  const shiftEnd = new Date(shiftStart);
+  const [eh, em] = shift.endTime.split(":");
+  shiftEnd.setHours(Number(eh), Number(em), 0, 0);
+
+  if (shiftEnd <= shiftStart) {
+    shiftEnd.setDate(shiftEnd.getDate() + 1);
+  }
+
+  // Allow 15 minutes buffer before shift start
+  const EARLY_BUFFER_MINUTES = 15;
+  const earliestCheckIn = new Date(
+    shiftStart.getTime() - EARLY_BUFFER_MINUTES * 60000,
+  );
+
+  console.log(
+    `[CheckIn] Time check: Now=${now.toLocaleTimeString()}, Start=${shiftStart.toLocaleTimeString()}, Window=${earliestCheckIn.toLocaleTimeString()}`,
+  );
+
+  if (now < earliestCheckIn) {
+    throw new Error(
+      `Shift has not started yet. You can check in from ${earliestCheckIn.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`,
+    );
+  }
+
+  if (now > shiftEnd) {
+    throw new Error("Shift time is over. You can no longer check in.");
+  }
+
+  const event = await AttendanceEventModel.create({
+    staffId,
+    shiftId: shift._id,
+    type: "check_in",
+    at: now,
+    source,
+    ip,
+    userAgent,
+    isManual: false,
+    remarks: null,
+  });
+
+  // Logic: If checking in early OR within strict grace period (5 mins), snap to Shift Start.
+  // This handles Time Sync issues (Client vs Server) and ensures "Check In Now" counts from start.
+  const TOLERANCE_MINUTES = 5;
+  const diffFromStartMinutes = (now.getTime() - shiftStart.getTime()) / 60000;
+
+  // Snap if early (< 0) OR within tolerance (<= 5)
+  const officialCheckInTime =
+    diffFromStartMinutes <= TOLERANCE_MINUTES ? shiftStart : now;
+
+  let attendanceDay = await AttendanceDayModel.findOne({
+    staffId,
+    date: dayStart,
+  });
+
+  if (!attendanceDay) {
+    attendanceDay = new AttendanceDayModel({
+      staffId,
+      shiftId: shift._id,
+      date: dayStart,
+      status: "present",
+      checkInAt: officialCheckInTime,
+      totalMinutes: 0,
+      lateMinutes: 0,
+      earlyExitMinutes: 0,
+      otMinutes: 0,
+      isAutoAbsent: false,
+      isManual: false,
+      notes: null,
+    });
+  } else {
+    attendanceDay.status = "present";
+    attendanceDay.shiftId = shift._id;
+    if (!attendanceDay.checkInAt) {
+      attendanceDay.checkInAt = officialCheckInTime;
+    }
+  }
+
+  // Calculate late minutes based on actual shift start vs official check-in
+  // Since we snap to shiftStart if early, diff will be 0.
+  const diffMinutes = Math.round(
+    (officialCheckInTime.getTime() - shiftStart.getTime()) / 60000,
+  );
+
+  if (diffMinutes > 0) {
+    attendanceDay.lateMinutes = diffMinutes;
+
+    if (diffMinutes >= shift.halfDayAfterMinutes) {
+      attendanceDay.status = "half_day";
+    } else if (diffMinutes >= shift.lateAfterMinutes) {
+      attendanceDay.status = "late";
+    } else if (diffMinutes <= shift.gracePeriodMinutes) {
+      attendanceDay.status = "present";
+      attendanceDay.lateMinutes = 0;
+    }
+  } else {
+    // Early check-in or on time
+    attendanceDay.lateMinutes = 0;
+    attendanceDay.status = "present";
+  }
+
+  await attendanceDay.save();
+
+  console.log(
+    `[CheckIn] Success for user ${userId}. Time snapped to ${officialCheckInTime.toLocaleTimeString()}`,
+  );
+
+  return {
+    event,
+    attendanceDay,
+    shift,
+  };
+};
+
+async function checkOutInDB({
+  userId,
+  ip,
+  userAgent,
+  source = "web",
+}: {
+  userId: string;
+  ip: string;
+  userAgent: string;
+  source?: "web" | "mobile" | "manual";
+}) {
+  const now = getBDNow();
+
+  const dayStart = getBDStartOfDay(now);
+  const dayEnd = getBDEndOfDay(now);
+
+
+  const staff = await StaffModel.findOne({ userId }).lean();
+  if (!staff) {
+    throw new Error("Staff not found for the user.");
+  }
+
+  const staffId = staff._id;
+
+  const lastEvent = await AttendanceEventModel.findOne({
+    staffId,
+    at: { $gte: dayStart, $lte: dayEnd },
+  })
+    .sort({ at: -1 })
+    .lean();
+
+  if (!lastEvent || lastEvent.type !== "check_in") {
+    throw new Error("You must check in before checking out.");
+  }
+
+  let attendanceDay = await AttendanceDayModel.findOne({
+    staffId,
+    date: dayStart,
+  });
+
+  // Handle Overnight Shift: If checking out in the morning (e.g. 7:30 AM) for a shift started yesterday (e.g. 10 PM)
+  if (!attendanceDay) {
+    const yesterdayStart = new Date(dayStart);
+    yesterdayStart.setDate(yesterdayStart.getDate() - 1);
+
+    attendanceDay = await AttendanceDayModel.findOne({
+      staffId,
+      date: yesterdayStart,
+      checkOutAt: null, // Look for open session
+    });
+  }
+
+  if (!attendanceDay) {
+    throw new Error("No check-in record found.");
+  }
+
+  if (!attendanceDay.checkInAt) {
+    throw new Error("No valid check-in found for today.");
+  }
+
+  const event = await AttendanceEventModel.create({
+    staffId,
+    shiftId: attendanceDay.shiftId,
+    type: "check_out",
+    at: now,
+    source,
+    ip,
+    userAgent,
+    isManual: false,
+    remarks: null,
+  });
+
+  attendanceDay.checkOutAt = now;
+
+  const shiftAssignment = await ShiftAssignmentModel.findOne({
+    staffId,
+    startDate: { $lte: now },
+    $or: [{ endDate: null }, { endDate: { $gte: now } }],
+    isActive: true,
+  })
+    .populate("shiftId")
+    .lean();
+
+  if (shiftAssignment?.shiftId) {
+    const shiftData = requireShiftTimes(
+      shiftAssignment.shiftId as unknown as IShift,
+    );
+
+    const baseDate = new Date(attendanceDay.date);
+
+    const shiftStart = new Date(baseDate);
+    const [sh, sm] = shiftData.startTime.split(":");
+    shiftStart.setHours(Number(sh), Number(sm), 0, 0);
+
+    const shiftEnd = new Date(baseDate);
+    const [eh, em] = shiftData.endTime.split(":");
+    shiftEnd.setHours(Number(eh), Number(em), 0, 0);
+
+    if (shiftEnd <= shiftStart) {
+      shiftEnd.setDate(shiftEnd.getDate() + 1);
+    }
+
+    if (now > shiftEnd) {
+      const otMinutes = Math.round(
+        (now.getTime() - shiftEnd.getTime()) / 60000,
+      );
+      attendanceDay.otMinutes = otMinutes;
+    } else {
+      const earlyExitMinutes = Math.round(
+        (shiftEnd.getTime() - now.getTime()) / 60000,
+      );
+      attendanceDay.earlyExitMinutes = earlyExitMinutes;
+
+      if (earlyExitMinutes >= shiftData.halfDayAfterMinutes) {
+        attendanceDay.status = "half_day";
+      } else if (earlyExitMinutes > 0) {
+        if (
+          attendanceDay.status === "present" ||
+          attendanceDay.status === "late"
+        ) {
+          attendanceDay.status = "early_exit";
+        }
+      }
+    }
+  }
+
+  const totalMinutes = Math.round(
+    (now.getTime() - attendanceDay.checkInAt.getTime()) / 60000,
+  );
+  attendanceDay.totalMinutes = totalMinutes;
+
+  await attendanceDay.save();
+
+  return {
+    event,
+    attendanceDay,
+  };
+}
+
+async function getTodayAttendanceFromDB(userId: string) {
+  const now = getBDNow();
+
+  const dayStart = getBDStartOfDay(now);
+  const dayEnd = getBDEndOfDay(now);
+
+
+  const staff = await StaffModel.findOne({ userId }).lean();
+  if (!staff) {
+    throw new Error("Staff not found for the user.");
+  }
+
+  const staffId = staff._id;
+
+  const attendanceDay = await AttendanceDayModel.findOne({
+    staffId,
+    date: dayStart,
+  }).lean();
+
+  const attendanceEvents = await AttendanceEventModel.find({
+    staffId,
+    at: { $gte: dayStart, $lte: dayEnd },
+  })
+    .sort({ at: 1 })
+    .lean();
+
+  return {
+    attendanceDay,
+    attendanceEvents,
+  };
+}
+
+//     };
+// }
+
+async function getMonthlyStatsInDB(userId: string) {
+  const now = getBDNow();
+
+  // Actually, let's just use getBDMonthRange with a helper to format now
+  const bdParts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Dhaka",
+    year: "numeric",
+    month: "2-digit",
+  }).formatToParts(now);
+  const bdYear = bdParts.find((p) => p.type === "year")?.value;
+  const bdMonth = bdParts.find((p) => p.type === "month")?.value;
+  const { startDate, endDate } = getBDMonthRange(`${bdYear}-${bdMonth}`);
+
+  const staff = await StaffModel.findOne({ userId }).lean();
+  if (!staff) {
+    throw new Error("Staff not found for the user.");
+  }
+  const staffId = staff._id;
+
+  // Get Attendance Stats
+  const attendanceStats = await AttendanceDayModel.aggregate([
+    {
+      $match: {
+        staffId: staffId,
+        date: { $gte: startDate, $lte: endDate },
+      },
+    },
+    {
+      $group: {
+        _id: null,
+        presentCount: { $sum: 1 },
+        lateCount: {
+          $sum: {
+            $cond: [{ $gt: ["$lateMinutes", 0] }, 1, 0],
+          },
+        },
+      },
+    },
+  ]);
+
+  const { default: OvertimeModel } =
+    await import("../models/overtime.model.js");
+
+  // Get Overtime Stats
+  const overtimeStats = await OvertimeModel.aggregate([
+    {
+      $match: {
+        staffId: staffId,
+        date: { $gte: startDate, $lte: endDate },
+        // status: 'approved' // Should we only count approved? Or all? User just said dynamic.
+        // Usually "Total OT" implies verified or at least completed.
+        // Let's include all for now or maybe just those with endTime?
+        // Let's stick to simple sum of durationMinutes.
+      },
+    },
+    {
+      $group: {
+        _id: null,
+        totalMinutes: { $sum: "$durationMinutes" },
+      },
+    },
+  ]);
+
+  const present = attendanceStats[0]?.presentCount || 0;
+  const late = attendanceStats[0]?.lateCount || 0;
+  const totalOvertimeMinutes = overtimeStats[0]?.totalMinutes || 0;
+
+  const monthNames = [
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+  ];
+  const month = monthNames[now.getMonth()];
+
+  return {
+    month,
+    present,
+    late,
+    totalOvertimeMinutes,
+  };
+}
+
+async function getMyAttendanceHistoryInDB(userId: string, days: number = 7) {
+  const staff = await StaffModel.findOne({ userId }).lean();
+  if (!staff) {
+    throw new Error("Staff not found for the user.");
+  }
+
+  const staffId = staff._id;
+
+  // Calculate date range
+  // Calculate date range in UTC midnights
+  const nowForHistory = getBDNow();
+  const endDate = getBDEndOfDay(nowForHistory);
+
+  const startDate = getBDStartOfDay(nowForHistory);
+  startDate.setUTCDate(startDate.getUTCDate() - (days - 1));
+
+  // Find attendance days with shift details
+  const attendanceDays = await AttendanceDayModel.find({
+    staffId,
+    date: {
+      $gte: startDate,
+      $lte: endDate,
+    },
+  })
+    .populate("shiftId", "name")
+    .sort({ date: -1 })
+    .lean();
+
+  return attendanceDays;
+}
+
+async function getAllAttendanceFromDB({
+  startDate,
+  endDate,
+  staffId,
+  status,
+  branchId,
+  page = 1,
+  limit = 50,
+  search,
+}: {
+  startDate?: string;
+  endDate?: string;
+  staffId?: string;
+  status?: string;
+  branchId?: string;
+  page?: number;
+  limit?: number;
+  search?: string;
+}) {
+  const query: any = {};
+  const { default: UserModel } = await import("../models/user.model.js");
+
+  // Search filter: Find users matching name, then find staff, then filter attendance
+  if (search) {
+    const matchingUsers = await UserModel.find({
+      name: { $regex: escapeRegex(search), $options: "i" },
+    })
+      .project({ _id: 1 })
+      .toArray();
+
+    const matchingUserIds = matchingUsers.map((u) => u._id);
+
+    const matchingStaff = await StaffModel.find({
+      userId: { $in: matchingUserIds },
+    }).select("_id");
+
+    const matchingStaffIds = matchingStaff.map((s) => s._id);
+
+    // If staffId is also provided, intersect the lists
+    if (staffId) {
+      query.staffId = {
+        $in: matchingStaffIds.filter((id) => id.toString() === staffId),
+      };
+    } else {
+      query.staffId = { $in: matchingStaffIds };
+    }
+  } else if (staffId) {
+    // Staff filter (if no search)
+    query.staffId = staffId;
+  }
+
+  // Date filter
+  if (startDate || endDate) {
+    query.date = {};
+    if (startDate) {
+      const startStr = startDate.includes("T")
+        ? startDate
+        : `${startDate}T00:00:00`;
+      const sDate = new Date(startStr);
+      query.date.$gte = getBDStartOfDay(sDate);
+    }
+    if (endDate) {
+      const endStr = endDate.includes("T") ? endDate : `${endDate}T00:00:00`;
+      const eDate = new Date(endStr);
+      query.date.$lte = getBDEndOfDay(eDate);
+    }
+  }
+
+  // Status filter
+  if (status) {
+    query.status = status;
+  }
+
+  const skip = (page - 1) * limit;
+
+  // Get attendance records with populated staff and shift details
+  let attendanceRecords = await AttendanceDayModel.find(query)
+    .populate({
+      path: "staffId",
+      select: "staffId designation department branchId userId", // Include userId for manual population
+      populate: {
+        path: "branchId",
+        select: "name",
+      },
+    })
+    .populate("shiftId", "name startTime endTime")
+    .sort({ date: -1 })
+    .skip(skip)
+    .limit(limit)
+    .lean();
+
+  // Apply branch filter if needed (after population)
+  if (branchId) {
+    attendanceRecords = attendanceRecords.filter(
+      (record: any) => record.staffId?.branchId?.toString() === branchId,
+    );
+  }
+
+  // Manual Population of User Names
+  const userIdsToFetch = attendanceRecords
+    .map((r: any) => r.staffId?.userId)
+    .filter((id) => id);
+
+  if (userIdsToFetch.length > 0) {
+    const users = await UserModel.find({
+      _id: { $in: userIdsToFetch },
+    })
+      .project({ _id: 1, name: 1, email: 1 })
+      .toArray();
+
+    const userMap = new Map(users.map((u) => [u._id.toString(), u]));
+
+    attendanceRecords = attendanceRecords.map((record: any) => {
+      if (record.staffId?.userId) {
+        const user = userMap.get(record.staffId.userId.toString());
+        if (user) {
+          record.staffId.name = user.name;
+          record.staffId.email = user.email;
+        }
+      }
+      return record;
+    });
+  }
+
+  // --- Calculate Statistics (Ignoring the 'status' filter for tabs) ---
+  // We clone the query but remove 'status' so tabs show total available in that date/search range
+  const statsQuery = { ...query };
+  delete statsQuery.status;
+
+  // We can use an aggregation pipeline to get counts per status efficiently
+  const statsAggregation = await AttendanceDayModel.aggregate([
+    { $match: statsQuery },
+    {
+      $group: {
+        _id: "$status",
+        count: { $sum: 1 },
+      },
+    },
+  ]);
+
+  // Format the stats array into a usable object mapping
+  const statsMap: Record<string, number> = {
+    total: 0,
+    present: 0,
+    absent: 0,
+    late: 0,
+    on_leave: 0,
+    half_day: 0,
+    early_exit: 0,
+    weekend: 0,
+    holiday: 0,
+  };
+
+  statsAggregation.forEach((stat) => {
+    const s = stat._id as string;
+    statsMap[s] = stat.count;
+    statsMap.total += stat.count;
+  });
+  // --- End Statistics Calculation ---
+
+  const total = await AttendanceDayModel.countDocuments(query);
+
+  return {
+    records: attendanceRecords,
+    stats: statsMap,
+    pagination: {
+      page,
+      limit,
+      total,
+      pages: Math.ceil(total / limit),
+    },
+  };
+}
+
+async function updateAttendanceStatusInDB({
+  attendanceId,
+  status,
+  notes,
+  updatedBy,
+  ipAddress,
+  userAgent,
+}: {
+  attendanceId: string;
+  status: string;
+  notes?: string;
+  updatedBy: string;
+  ipAddress?: string | undefined;
+  userAgent?: string | undefined;
+}) {
+  const validStatuses = [
+    "present",
+    "absent",
+    "on_leave",
+    "weekend",
+    "holiday",
+    "half_day",
+    "late",
+    "early_exit",
+  ];
+
+  if (!validStatuses.includes(status)) {
+    throw new Error(
+      `Invalid status. Must be one of: ${validStatuses.join(", ")}`,
+    );
+  }
+
+  const attendanceDay = await AttendanceDayModel.findById(attendanceId);
+
+  if (!attendanceDay) {
+    throw new Error("Attendance record not found");
+  }
+
+  const oldStatus = attendanceDay.status;
+
+  // Update attendance
+  attendanceDay.status = status as any;
+  attendanceDay.isManual = true;
+  if (notes) {
+    attendanceDay.notes = notes;
+  }
+
+  await attendanceDay.save();
+
+  // Log audit trail
+  await auditService.createLog({
+      userId: updatedBy,
+      action: 'ATTENDANCE_UPDATE',
+      entity: 'AttendanceDay',
+      entityId: attendanceId,
+      ipAddress,
+      userAgent,
+      details: {
+          from: oldStatus,
+          to: status,
+          notes
+      }
+  });
+
+  return attendanceDay;
+}
+
+async function bulkUpdateAttendanceStatusInDB({
+  staffIds,
+  date,
+  status,
+  notes,
+  shiftId,
+  updatedBy,
+  ipAddress,
+  userAgent,
+}: {
+  staffIds: string[];
+  date: string;
+  status: string;
+  notes?: string;
+  shiftId?: string;
+  updatedBy: string;
+  ipAddress?: string | undefined;
+  userAgent?: string | undefined;
+}) {
+  const validStatuses = [
+    "present",
+    "absent",
+    "on_leave",
+    "weekend",
+    "holiday",
+    "half_day",
+    "late",
+    "early_exit",
+  ];
+
+  if (!validStatuses.includes(status)) {
+    throw new Error(
+      `Invalid status. Must be one of: ${validStatuses.join(", ")}`,
+    );
+  }
+
+  const targetDate = new Date(date);
+  const dayStart = getBDStartOfDay(targetDate);
+
+  const results = [];
+
+  for (const staffId of staffIds) {
+    let attendanceDay = await AttendanceDayModel.findOne({
+      staffId,
+      date: dayStart,
+    });
+
+    let oldStatus = "none";
+    let isNew = false;
+
+    if (attendanceDay) {
+      oldStatus = attendanceDay.status;
+      attendanceDay.status = status as any;
+      attendanceDay.isManual = true;
+      if (notes) attendanceDay.notes = notes;
+    } else {
+      let shiftDataToUse = null;
+
+      if (shiftId) {
+        const { default: hShiftModel } = await import("../models/shift.model.js");
+        const foundShift = await hShiftModel.findById(shiftId).lean();
+        if (foundShift) {
+           shiftDataToUse = foundShift;
+        }
+      }
+
+      if (!shiftDataToUse) {
+        const shiftAssignment = await ShiftAssignmentModel.findOne({
+          staffId,
+          startDate: { $lte: dayStart },
+          $or: [{ endDate: null }, { endDate: { $gte: dayStart } }],
+          isActive: true,
+        })
+          .populate("shiftId")
+          .lean();
+
+        if (shiftAssignment && shiftAssignment.shiftId) {
+            shiftDataToUse = shiftAssignment.shiftId;
+        }
+      }
+
+      if (shiftDataToUse) {
+        const shiftData = requireShiftTimes(shiftDataToUse as unknown as IShift);
+        const shiftStart = new Date(dayStart);
+        const [sh, sm] = shiftData.startTime.split(":");
+        shiftStart.setHours(Number(sh), Number(sm), 0, 0);
+
+        attendanceDay = new AttendanceDayModel({
+          staffId,
+          shiftId: shiftData._id,
+          date: dayStart,
+          status: status as any,
+          checkInAt: status === "present" ? shiftStart : null,
+          totalMinutes: 0,
+          lateMinutes: 0,
+          earlyExitMinutes: 0,
+          otMinutes: 0,
+          isAutoAbsent: false,
+          isManual: true,
+          notes: notes || `Created manually via Bulk Update`,
+        });
+        isNew = true;
+      } else {
+        continue;
+      }
+    }
+
+    await attendanceDay.save();
+
+    await auditService.createLog({
+      userId: updatedBy,
+      action: 'ATTENDANCE_UPDATE',
+      entity: 'AttendanceDay',
+      entityId: attendanceDay._id.toString(),
+      ipAddress,
+      userAgent,
+      details: {
+        isBulk: true,
+        isNew,
+        from: oldStatus,
+        to: status,
+        notes
+      }
+    });
+
+    results.push(attendanceDay);
+  }
+
+  return results;
+}
+
+export default {
+  checkInInDB,
+  checkOutInDB,
+  getTodayAttendanceFromDB,
+  getMonthlyStatsInDB,
+  getMyAttendanceHistoryInDB,
+  getAllAttendanceFromDB,
+  updateAttendanceStatusInDB,
+  bulkUpdateAttendanceStatusInDB,
+};

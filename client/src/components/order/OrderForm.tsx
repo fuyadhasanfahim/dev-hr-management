@@ -1,0 +1,824 @@
+'use client';
+
+import { useEffect, useState, useMemo } from 'react';
+import { useForm, useWatch } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { format } from 'date-fns';
+import { createOrderSchema } from '@/validators/order.validator';
+import {
+    useGetServicesQuery,
+    useCreateServiceMutation,
+} from '@/redux/features/service/serviceApi';
+import {
+    useGetReturnFileFormatsQuery,
+    useCreateReturnFileFormatMutation,
+} from '@/redux/features/returnFileFormat/returnFileFormatApi';
+import { 
+    useGetClientsQuery,
+    useGetAssignedServicesQuery 
+} from '@/redux/features/client/clientApi';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
+import {
+    Command,
+    CommandEmpty,
+    CommandGroup,
+    CommandInput,
+    CommandItem,
+    CommandList,
+} from '@/components/ui/command';
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from '@/components/ui/popover';
+import { Loader, Plus, X, Check, ChevronsUpDown, Filter } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
+import { DatePicker } from '@/components/shared/DatePicker';
+import { DateTimePicker } from '@/components/shared/DateTimePicker';
+import { Badge } from '@/components/ui/badge';
+import type { OrderPriority } from '@/types/order.type';
+
+export interface OrderFormData {
+    orderName: string;
+    clientId: string;
+    orderDate: string;
+    deadline: string;
+    imageQuantity: number;
+    perImagePrice: number;
+    totalPrice: number;
+    services: string[];
+    returnFileFormat: string;
+    instruction?: string;
+    priority: OrderPriority;
+    contactPersonId?: string;
+    notes?: string;
+}
+
+interface OrderFormProps {
+    defaultValues?: OrderFormData;
+    onSubmit: (data: OrderFormData) => Promise<void>;
+    isSubmitting: boolean;
+    submitLabel: string;
+    onCancel: () => void;
+    serverErrors?: Record<string, string[]>;
+}
+
+export function OrderForm({
+    defaultValues,
+    onSubmit,
+    isSubmitting,
+    submitLabel,
+    onCancel,
+    serverErrors,
+}: OrderFormProps) {
+    const [selectedServices, setSelectedServices] = useState<string[]>(
+        defaultValues?.services || [],
+    );
+    const [orderDate, setOrderDate] = useState<Date | undefined>(
+        defaultValues?.orderDate
+            ? new Date(defaultValues.orderDate)
+            : new Date(),
+    );
+    const [deadline, setDeadline] = useState<Date | undefined>(
+        defaultValues?.deadline ? new Date(defaultValues.deadline) : undefined,
+    );
+    const [isNewServiceMode, setIsNewServiceMode] = useState(false);
+    const [isNewFormatMode, setIsNewFormatMode] = useState(false);
+    const [newServiceName, setNewServiceName] = useState('');
+    const [newServiceDescription, setNewServiceDescription] = useState('');
+    const [newFormatName, setNewFormatName] = useState('');
+    const [newFormatExtension, setNewFormatExtension] = useState('');
+
+    // Filter mode: 'assigned' or 'all'
+    const [showAllServices, setShowAllServices] = useState(false);
+
+    // Service search with debounce
+    const [serviceSearchInput, setServiceSearchInput] = useState('');
+    const [debouncedServiceSearch, setDebouncedServiceSearch] = useState('');
+    const [openClient, setOpenClient] = useState(false);
+
+    const {
+        register,
+        handleSubmit,
+        formState: { errors },
+        setValue,
+        setError,
+        control,
+    } = useForm<OrderFormData>({
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        resolver: zodResolver(createOrderSchema) as any,
+        defaultValues: defaultValues || {
+            orderName: '',
+            clientId: '',
+            orderDate: new Date().toISOString().split('T')[0],
+            deadline: '',
+            imageQuantity: 1,
+            perImagePrice: 0,
+            totalPrice: 0,
+            services: [],
+            returnFileFormat: '',
+            instruction: '',
+            priority: 'normal',
+            contactPersonId: '',
+            notes: '',
+        },
+    });
+
+    const clientId = useWatch({ control, name: 'clientId' });
+    const contactPersonId = useWatch({ control, name: 'contactPersonId' });
+    const priority = useWatch({ control, name: 'priority' });
+    const returnFileFormat = useWatch({ control, name: 'returnFileFormat' });
+
+    // Queries
+    const { data: servicesData, isLoading: isLoadingServices } =
+        useGetServicesQuery({ isActive: true, limit: 1000 });
+    const { data: assignedServices, isLoading: isLoadingAssigned } = 
+        useGetAssignedServicesQuery(clientId, { skip: !clientId });
+    const { data: formatsData, isLoading: isLoadingFormats } =
+        useGetReturnFileFormatsQuery({ isActive: true });
+    const { data: clientsData, isLoading: isLoadingClients } =
+        useGetClientsQuery({ limit: 100 });
+
+    const [createService, { isLoading: isCreatingService }] =
+        useCreateServiceMutation();
+    const [createFormat, { isLoading: isCreatingFormat }] =
+        useCreateReturnFileFormatMutation();
+
+    const allServices = useMemo(() => servicesData?.data || [], [servicesData]);
+    const formats = useMemo(() => formatsData?.data || [], [formatsData]);
+    const clients = useMemo(() => clientsData?.clients || [], [clientsData]);
+
+    // Determine derived services list
+    const services = useMemo(() => {
+        if (!clientId || showAllServices) return allServices;
+        if (assignedServices && assignedServices.length > 0) {
+            return assignedServices;
+        }
+        return allServices;
+    }, [clientId, showAllServices, assignedServices, allServices]);
+    
+    const selectedClient = useMemo(() => {
+        return clients.find((c) => c._id === clientId);
+    }, [clientId, clients]);
+
+    const teamMembers = selectedClient?.teamMembers || [];
+
+    const hasAssignedServices = assignedServices && assignedServices.length > 0;
+
+    // Debounce service search (300ms delay)
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setDebouncedServiceSearch(serviceSearchInput);
+        }, 300);
+        return () => clearTimeout(timer);
+    }, [serviceSearchInput]);
+
+    // Filter services based on debounced search
+    const filteredServices = useMemo(() => {
+        if (!debouncedServiceSearch.trim()) return services;
+        const searchLower = debouncedServiceSearch.toLowerCase();
+        return services.filter((service: { name: string }) =>
+            service.name.toLowerCase().includes(searchLower),
+        );
+    }, [services, debouncedServiceSearch]);
+
+    const imageQuantity = useWatch({ control, name: 'imageQuantity' });
+    const perImagePrice = useWatch({ control, name: 'perImagePrice' });
+    const totalPrice = useWatch({ control, name: 'totalPrice' });
+
+    // Track which field the user is editing - 'perImage' or 'total'
+    const [priceMode, setPriceMode] = useState<'perImage' | 'total'>(
+        'perImage',
+    );
+
+    // Auto-calculate based on which field was last edited
+    useEffect(() => {
+        const qty = Number(imageQuantity) || 0;
+
+        if (priceMode === 'perImage') {
+            // User entered per image price, calculate total
+            const price = Number(perImagePrice) || 0;
+            const calculatedTotal = Number((qty * price).toFixed(2));
+            setValue('totalPrice', calculatedTotal);
+        } else {
+            // User entered total price, calculate per image
+            const total = Number(totalPrice) || 0;
+            if (qty > 0) {
+                const calculatedPerImage = Number((total / qty).toFixed(2));
+                setValue('perImagePrice', calculatedPerImage);
+            }
+        }
+    }, [imageQuantity, perImagePrice, totalPrice, priceMode, setValue]);
+
+    // Set server errors
+    useEffect(() => {
+        if (serverErrors) {
+            Object.entries(serverErrors).forEach(([key, messages]) => {
+                setError(key as keyof OrderFormData, {
+                    type: 'server',
+                    message: messages[0],
+                });
+            });
+        }
+    }, [serverErrors, setError]);
+
+    // Update services in form
+    useEffect(() => {
+        setValue('services', selectedServices);
+    }, [selectedServices, setValue]);
+
+    // Update dates in form
+    useEffect(() => {
+        if (orderDate) {
+            setValue('orderDate', format(orderDate, 'yyyy-MM-dd'));
+        }
+    }, [orderDate, setValue]);
+
+    useEffect(() => {
+        if (deadline) {
+            // Store full ISO string with time for deadline
+            setValue('deadline', deadline.toISOString());
+        }
+    }, [deadline, setValue]);
+
+    const handleServiceToggle = (serviceId: string) => {
+        setSelectedServices((prev) =>
+            prev.includes(serviceId)
+                ? prev.filter((id) => id !== serviceId)
+                : [...prev, serviceId],
+        );
+    };
+
+    const handleCreateService = async () => {
+        if (!newServiceName.trim()) {
+            toast.error('Service name is required');
+            return;
+        }
+        try {
+            const result = await createService({
+                name: newServiceName,
+                description: newServiceDescription,
+            }).unwrap();
+            toast.success('Service created successfully');
+            setSelectedServices((prev) => [...prev, result.data._id]);
+            setNewServiceName('');
+            setNewServiceDescription('');
+            setIsNewServiceMode(false);
+        } catch (error: unknown) {
+            const err = error as { data?: { message?: string } };
+            toast.error(err?.data?.message || 'Failed to create service');
+        }
+    };
+
+    const handleCreateFormat = async () => {
+        if (!newFormatName.trim() || !newFormatExtension.trim()) {
+            toast.error('Format name and extension are required');
+            return;
+        }
+        try {
+            const result = await createFormat({
+                name: newFormatName,
+                extension: newFormatExtension,
+            }).unwrap();
+            toast.success('File format created successfully');
+            setValue('returnFileFormat', result.data._id);
+            setNewFormatName('');
+            setNewFormatExtension('');
+            setIsNewFormatMode(false);
+        } catch (error: unknown) {
+            const err = error as { data?: { message?: string } };
+            toast.error(err?.data?.message || 'Failed to create file format');
+        }
+    };
+
+    const onFormSubmit = (data: OrderFormData) => {
+        onSubmit({
+            ...data,
+            services: selectedServices,
+        });
+    };
+
+    return (
+        <form onSubmit={handleSubmit(onFormSubmit)} className="space-y-4">
+            {/* Order Name */}
+            <div className="space-y-2">
+                <Label htmlFor="orderName">Order Name *</Label>
+                <Input
+                    id="orderName"
+                    {...register('orderName')}
+                    placeholder="Product Photo Editing Batch 1"
+                />
+                {errors.orderName && (
+                    <p className="text-sm text-destructive">
+                        {errors.orderName.message}
+                    </p>
+                )}
+            </div>
+
+            {/* Client */}
+            <div className="space-y-2 flex flex-col">
+                <Label htmlFor="clientId">Client *</Label>
+                <Popover open={openClient} onOpenChange={setOpenClient}>
+                    <PopoverTrigger asChild>
+                        <Button
+                            variant="outline"
+                            role="combobox"
+                            aria-expanded={openClient}
+                            className={cn(
+                                'w-full justify-between',
+                                !clientId && 'text-muted-foreground',
+                            )}
+                            disabled={isLoadingClients}
+                        >
+                            {clientId
+                                ? (() => {
+                                      return clients.find(
+                                          (client: { _id: string }) =>
+                                              client._id === clientId,
+                                      )?.name;
+                                  })()
+                                : 'Select client'}
+                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
+                        <Command>
+                            <CommandInput placeholder="Search client..." />
+                            <CommandList>
+                                <CommandEmpty>No client found.</CommandEmpty>
+                                <CommandGroup>
+                                    {clients.map((client) => (
+                                        <CommandItem
+                                            key={client._id}
+                                            value={client.name}
+                                            keywords={[
+                                                client.name,
+                                                client.clientId,
+                                            ]} // Search by name and ID
+                                            onSelect={() => {
+                                                setValue(
+                                                    'clientId',
+                                                    client._id,
+                                                );
+                                                setValue('contactPersonId', '');
+                                                setOpenClient(false);
+                                                // Reset services filter when client changes
+                                                setShowAllServices(false);
+                                            }}
+                                        >
+                                            <Check
+                                                className={cn(
+                                                    ' h-4 w-4',
+                                                    clientId ===
+                                                        client._id
+                                                        ? 'opacity-100'
+                                                        : 'opacity-0',
+                                                )}
+                                            />
+                                            <span className="flex flex-col">
+                                                <span>{client.name}</span>
+                                                <span className="text-xs text-muted-foreground">
+                                                    {client.clientId}
+                                                </span>
+                                            </span>
+                                        </CommandItem>
+                                    ))}
+                                </CommandGroup>
+                            </CommandList>
+                        </Command>
+                    </PopoverContent>
+                </Popover>
+                {errors.clientId && (
+                    <p className="text-sm text-destructive">
+                        {errors.clientId.message}
+                    </p>
+                )}
+            </div>
+
+            {/* Contact Person */}
+            {clientId && teamMembers.length > 0 && (
+                <div className="space-y-2 animate-in fade-in slide-in-from-top-1">
+                    <Label htmlFor="contactPersonId">Team Member</Label>
+                    <Select
+                        value={contactPersonId || '_none'}
+                        onValueChange={(value) =>
+                            setValue(
+                                'contactPersonId',
+                                value === '_none' ? '' : value,
+                            )
+                        }
+                    >
+                        <SelectTrigger className="w-full">
+                            <SelectValue placeholder="Select team member" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="_none">None</SelectItem>
+                            {teamMembers.map((member) => (
+                                <SelectItem key={member._id} value={member._id!}>
+                                    {member.name} {member.designation ? `(${member.designation})` : ''}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                    {errors.contactPersonId && (
+                        <p className="text-sm text-destructive">
+                            {errors.contactPersonId.message}
+                        </p>
+                    )}
+                </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-4">
+                {/* Order Date */}
+                <div className="space-y-2">
+                    <DatePicker
+                        label="Order Date *"
+                        value={orderDate}
+                        onChange={setOrderDate}
+                        placeholder="Select order date"
+                    />
+                    {errors.orderDate && (
+                        <p className="text-sm text-destructive">
+                            {errors.orderDate.message}
+                        </p>
+                    )}
+                </div>
+
+                {/* Deadline */}
+                <div className="space-y-2">
+                    <DateTimePicker
+                        label="Deadline *"
+                        value={deadline}
+                        onChange={setDeadline}
+                        placeholder="Select deadline with time"
+                        minDate={orderDate}
+                    />
+                    {errors.deadline && (
+                        <p className="text-sm text-destructive">
+                            {errors.deadline.message}
+                        </p>
+                    )}
+                </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-4">
+                {/* Image Quantity */}
+                <div className="space-y-2">
+                    <Label htmlFor="imageQuantity">Image Quantity *</Label>
+                    <Input
+                        id="imageQuantity"
+                        type="number"
+                        min="1"
+                        {...register('imageQuantity', { valueAsNumber: true })}
+                    />
+                    {errors.imageQuantity && (
+                        <p className="text-sm text-destructive">
+                            {errors.imageQuantity.message}
+                        </p>
+                    )}
+                </div>
+
+                {/* Per Image Price */}
+                <div className="space-y-2">
+                    <Label htmlFor="perImagePrice">Per Image Price ($) *</Label>
+                    <Input
+                        id="perImagePrice"
+                        type="number"
+                        step="any"
+                        min="0"
+                        value={perImagePrice || ''}
+                        onChange={(e) => {
+                            setPriceMode('perImage');
+                            setValue(
+                                'perImagePrice',
+                                Number(e.target.value) || 0,
+                            );
+                        }}
+                    />
+                    {errors.perImagePrice && (
+                        <p className="text-sm text-destructive">
+                            {errors.perImagePrice.message}
+                        </p>
+                    )}
+                </div>
+
+                {/* Total Price */}
+                <div className="space-y-2">
+                    <Label htmlFor="totalPrice">Total Price ($)</Label>
+                    <Input
+                        id="totalPrice"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={totalPrice || ''}
+                        onChange={(e) => {
+                            setPriceMode('total');
+                            setValue('totalPrice', Number(e.target.value) || 0);
+                        }}
+                    />
+                </div>
+            </div>
+
+            {/* Services */}
+            <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                        <Label>Services *</Label>
+                        {clientId && hasAssignedServices && (
+                            <Badge variant={showAllServices ? "outline" : "secondary"} className="text-[10px] cursor-pointer" onClick={() => setShowAllServices(!showAllServices)}>
+                                <Filter className="h-3 w-3 mr-1" />
+                                {showAllServices ? "Showing All" : "Assigned"}
+                            </Badge>
+                        )}
+                    </div>
+                    <Button
+                        type="button"
+                        variant={isNewServiceMode ? 'secondary' : 'outline'}
+                        size="sm"
+                        onClick={() => setIsNewServiceMode(!isNewServiceMode)}
+                    >
+                        {isNewServiceMode ? (
+                            <>
+                                <X className="h-4 w-4 mr-1" />
+                                Cancel
+                            </>
+                        ) : (
+                            <>
+                                <Plus className="h-4 w-4 mr-1" />
+                                New Service
+                            </>
+                        )}
+                    </Button>
+                </div>
+
+                {isNewServiceMode && (
+                    <div className="p-4 border rounded-lg bg-muted/50 space-y-4 animate-in fade-in slide-in-from-top-2">
+                        <div className="space-y-2">
+                            <Label htmlFor="new-service-name">
+                                Service Name *
+                            </Label>
+                            <Input
+                                id="new-service-name"
+                                value={newServiceName}
+                                onChange={(e) =>
+                                    setNewServiceName(e.target.value)
+                                }
+                                placeholder="e.g., Clipping Path"
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="new-service-desc">
+                                Description
+                            </Label>
+                            <Textarea
+                                id="new-service-desc"
+                                value={newServiceDescription}
+                                onChange={(e) =>
+                                    setNewServiceDescription(e.target.value)
+                                }
+                                placeholder="Optional description"
+                                rows={2}
+                            />
+                        </div>
+                        <div className="flex justify-end">
+                            <Button
+                                type="button"
+                                onClick={handleCreateService}
+                                disabled={isCreatingService}
+                                size="sm"
+                            >
+                                {isCreatingService && (
+                                    <Loader className="h-4 w-4  animate-spin" />
+                                )}
+                                Create Service
+                            </Button>
+                        </div>
+                    </div>
+                )}
+
+                {/* Service Search Input */}
+                <Input
+                    placeholder="Search services..."
+                    value={serviceSearchInput}
+                    onChange={(e) => setServiceSearchInput(e.target.value)}
+                    className="h-9"
+                />
+
+                {isLoadingServices || (clientId && isLoadingAssigned) ? (
+                    <div className="flex items-center justify-center p-6 border rounded-md">
+                         <Loader className="h-6 w-6 animate-spin text-muted-foreground" />
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-2 gap-2 p-3 border rounded-md max-h-40 overflow-y-auto">
+                        {filteredServices.length === 0 ? (
+                            <p className="text-sm text-muted-foreground col-span-2 text-center py-4">
+                                No services found
+                            </p>
+                        ) : (
+                            filteredServices.map((service) => (
+                                <div
+                                    key={service._id}
+                                    className="flex items-center space-x-2"
+                                >
+                                    <Checkbox
+                                        id={`service-${service._id}`}
+                                        checked={selectedServices.includes(
+                                            service._id,
+                                        )}
+                                        onCheckedChange={() =>
+                                            handleServiceToggle(service._id)
+                                        }
+                                    />
+                                    <Label
+                                        htmlFor={`service-${service._id}`}
+                                        className="text-sm cursor-pointer"
+                                    >
+                                        {service.name}
+                                    </Label>
+                                </div>
+                            ))
+                        )}
+                    </div>
+                )}
+                {errors.services && (
+                    <p className="text-sm text-destructive">
+                        {errors.services.message}
+                    </p>
+                )}
+            </div>
+
+            {/* Return File Format */}
+            <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                    <Label>Return File Format *</Label>
+                    <Button
+                        type="button"
+                        variant={isNewFormatMode ? 'secondary' : 'outline'}
+                        size="sm"
+                        onClick={() => setIsNewFormatMode(!isNewFormatMode)}
+                    >
+                        {isNewFormatMode ? (
+                            <>
+                                <X className="h-4 w-4 mr-1" />
+                                Cancel
+                            </>
+                        ) : (
+                            <>
+                                <Plus className="h-4 w-4 mr-1" />
+                                New Format
+                            </>
+                        )}
+                    </Button>
+                </div>
+
+                {isNewFormatMode && (
+                    <div className="p-4 border rounded-lg bg-muted/50 space-y-4 animate-in fade-in slide-in-from-top-2">
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="new-format-name">
+                                    Format Name *
+                                </Label>
+                                <Input
+                                    id="new-format-name"
+                                    value={newFormatName}
+                                    onChange={(e) =>
+                                        setNewFormatName(e.target.value)
+                                    }
+                                    placeholder="e.g., JPEG"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="new-format-ext">
+                                    Extension *
+                                </Label>
+                                <Input
+                                    id="new-format-ext"
+                                    value={newFormatExtension}
+                                    onChange={(e) =>
+                                        setNewFormatExtension(e.target.value)
+                                    }
+                                    placeholder="e.g., jpg"
+                                />
+                            </div>
+                        </div>
+                        <div className="flex justify-end">
+                            <Button
+                                type="button"
+                                onClick={handleCreateFormat}
+                                disabled={isCreatingFormat}
+                                size="sm"
+                            >
+                                {isCreatingFormat && (
+                                    <Loader className="h-4 w-4  animate-spin" />
+                                )}
+                                Create Format
+                            </Button>
+                        </div>
+                    </div>
+                )}
+                <Select
+                    value={returnFileFormat}
+                    onValueChange={(value) =>
+                        setValue('returnFileFormat', value)
+                    }
+                    disabled={isLoadingFormats}
+                >
+                    <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Select file format" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {formats.map((format) => (
+                            <SelectItem key={format._id} value={format._id}>
+                                {format.name} (.{format.extension})
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+                {errors.returnFileFormat && (
+                    <p className="text-sm text-destructive">
+                        {errors.returnFileFormat.message}
+                    </p>
+                )}
+            </div>
+
+            {/* Priority */}
+            <div className="space-y-2">
+                <Label>Priority</Label>
+                <Select
+                    value={priority}
+                    onValueChange={(value) =>
+                        setValue('priority', value as OrderPriority)
+                    }
+                >
+                    <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Select priority" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="low">Low</SelectItem>
+                        <SelectItem value="normal">Normal</SelectItem>
+                        <SelectItem value="high">High</SelectItem>
+                        <SelectItem value="urgent">Urgent</SelectItem>
+                    </SelectContent>
+                </Select>
+            </div>
+
+            {/* Instructions */}
+            <div className="space-y-2">
+                <Label htmlFor="instruction">Instructions</Label>
+                <Textarea
+                    id="instruction"
+                    {...register('instruction')}
+                    placeholder="Special instructions for this order..."
+                    rows={3}
+                />
+                {errors.instruction && (
+                    <p className="text-sm text-destructive">
+                        {errors.instruction.message}
+                    </p>
+                )}
+            </div>
+
+            {/* Notes */}
+            <div className="space-y-2">
+                <Label htmlFor="notes">Internal Notes</Label>
+                <Textarea
+                    id="notes"
+                    {...register('notes')}
+                    placeholder="Internal notes (not visible to client)..."
+                    rows={2}
+                />
+                {errors.notes && (
+                    <p className="text-sm text-destructive">
+                        {errors.notes.message}
+                    </p>
+                )}
+            </div>
+
+            {/* Actions */}
+            <div className="flex justify-end gap-3 pt-4">
+                <Button type="button" variant="outline" onClick={onCancel}>
+                    Cancel
+                </Button>
+                <Button type="submit" disabled={isSubmitting}>
+                    {isSubmitting && (
+                        <Loader className="h-4 w-4  animate-spin" />
+                    )}
+                    {submitLabel}
+                </Button>
+            </div>
+        </form>
+    );
+}
+
