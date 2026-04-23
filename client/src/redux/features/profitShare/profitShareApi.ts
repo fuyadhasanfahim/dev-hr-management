@@ -112,7 +112,7 @@ const profitShareApi = apiSlice.injectEndpoints({
                 params: params || undefined,
             }),
             providesTags: (result) =>
-                result
+                result?.data
                     ? [
                           ...result.data.map(({ _id }) => ({
                               type: 'Shareholder' as const,
@@ -202,7 +202,7 @@ const profitShareApi = apiSlice.injectEndpoints({
                 params: params || undefined,
             }),
             providesTags: (result) =>
-                result
+                result?.data
                     ? [
                           ...result.data.map(({ _id }) => ({
                               type: 'Distribution' as const,

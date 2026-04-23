@@ -19,7 +19,7 @@ const earningApi = apiSlice.injectEndpoints({
                 params,
             }),
             providesTags: (result) =>
-                result
+                result?.data
                     ? [
                           ...result.data.map(({ _id }) => ({
                               type: 'Earning' as const,

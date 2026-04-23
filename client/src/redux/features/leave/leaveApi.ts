@@ -71,7 +71,7 @@ export const leaveApi = apiSlice.injectEndpoints({
                 params: params || {},
             }),
             providesTags: (result) =>
-                result
+                result?.data
                     ? [
                           ...result.data.map(({ _id }) => ({
                               type: 'Leave' as const,
@@ -203,10 +203,7 @@ export const leaveApi = apiSlice.injectEndpoints({
         }),
 
         // Upload medical document
-        uploadMedicalDocument: builder.mutation<
-            { message: string; data: any },
-            { id: string; file: File }
-        >({
+        uploadMedicalDocument: builder.mutation({
             query: ({ id, file }) => {
                 const formData = new FormData();
                 formData.append('document', file);

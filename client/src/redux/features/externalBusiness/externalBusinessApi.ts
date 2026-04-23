@@ -112,7 +112,7 @@ const externalBusinessApi = apiSlice.injectEndpoints({
                 params: params || undefined,
             }),
             providesTags: (result) =>
-                result
+                result?.data
                     ? [
                           ...result.data.map(({ _id }) => ({
                               type: 'ExternalBusiness' as const,
@@ -190,7 +190,7 @@ const externalBusinessApi = apiSlice.injectEndpoints({
                 params: params || undefined,
             }),
             providesTags: (result) =>
-                result
+                result?.data
                     ? [
                           ...result.data.map(({ _id }) => ({
                               type: 'ProfitTransfer' as const,
