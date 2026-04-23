@@ -165,7 +165,7 @@ export default function ClientsPage() {
   };
 
   return (
-    <div className="w-full p-4 md:p-6 space-y-8 bg-slate-50/50 min-h-screen">
+    <div className="w-full space-y-8 bg-slate-50/50 min-h-screen">
       {/* Header section */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
@@ -251,13 +251,15 @@ export default function ClientsPage() {
 
       {/* Add Client Dialog */}
       <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Add New Client</DialogTitle>
-            <DialogDescription>
-              Create a new client profile with contact and team details.
-            </DialogDescription>
-          </DialogHeader>
+        <DialogContent className="max-w-4xl h-[90vh] max-h-[90vh] flex flex-col p-0 overflow-hidden gap-0 bg-white">
+          <div className="px-6 py-4 border-b border-slate-100 shrink-0">
+            <DialogHeader>
+              <DialogTitle className="text-xl font-semibold text-slate-900">Add New Client</DialogTitle>
+              <DialogDescription className="text-slate-500">
+                Create a new client profile with contact and team details.
+              </DialogDescription>
+            </DialogHeader>
+          </div>
           <ClientForm
             onSubmit={handleAddClient}
             isSubmitting={isCreating}
@@ -270,13 +272,15 @@ export default function ClientsPage() {
 
       {/* Edit Client Dialog */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Edit Client</DialogTitle>
-            <DialogDescription>
-              Update client profile and team information.
-            </DialogDescription>
-          </DialogHeader>
+        <DialogContent className="max-w-4xl h-[90vh] max-h-[90vh] flex flex-col p-0 overflow-hidden gap-0 bg-white">
+          <div className="px-6 py-4 border-b border-slate-100 shrink-0">
+            <DialogHeader>
+              <DialogTitle className="text-xl font-semibold text-slate-900">Edit Client</DialogTitle>
+              <DialogDescription className="text-slate-500">
+                Update client profile and team information.
+              </DialogDescription>
+            </DialogHeader>
+          </div>
           {editDefaultValues && (
             <ClientForm
               key={selectedClient?._id}
