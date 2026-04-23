@@ -44,6 +44,7 @@ export const QuotationPDF = ({
         <View style={styles.headerSection}>
           <View style={styles.companyInfo}>
             {data.company.logo ? (
+              // eslint-disable-next-line jsx-a11y/alt-text
               <Image src={data.company.logo} style={styles.logo} />
             ) : (
               <Text style={styles.companyName}>{data.company.name}</Text>
@@ -398,13 +399,28 @@ export const QuotationPDF = ({
           {data.details.validUntil ? format(new Date(data.details.validUntil), 'MMMM dd, yyyy') : '-'}
         </Text>
 
-        {/* ── FOOTER ── */}
-        <View style={styles.footer}>
-          {/* Note: In production, sign.png path should be correct */}
-          {/* <Image src="/assets/image/sign.png" style={{ width: 60, height: 'auto', marginBottom: 4 }} /> */}
-          <Text style={styles.signName}>Md. Ashaduzzaman</Text>
-          <Text style={styles.signRole}>Founder and CEO</Text>
-          <Text style={styles.signCompany}>WebBriks</Text>
+        {/* ── SIGNATURE SECTION ── */}
+        <View style={styles.signatureSection} wrap={false}>
+          {/* Company Signature */}
+          <View style={styles.signatureBlock}>
+            {/* eslint-disable-next-line jsx-a11y/alt-text */}
+            <Image 
+              src="https://res.cloudinary.com/dny7zfbg9/image/upload/v1776961131/ouvycul8e7xskhrioca4.png" 
+              style={styles.signatureImage} 
+            />
+            <View style={styles.signatureLine} />
+            <Text style={styles.signatureName}>Md. Ashaduzzaman</Text>
+            <Text style={styles.signatureRole}>Founder and CEO</Text>
+            <Text style={styles.signatureCompany}>{data.company.name}</Text>
+          </View>
+
+          {/* Client Signature Placeholder */}
+          <View style={styles.signatureBlock}>
+            <View style={{ height: 35 }} /> {/* Space for manual signature */}
+            <View style={styles.signatureLine} />
+            <Text style={styles.signatureName}>{data.client.contactName}</Text>
+            <Text style={styles.signatureLabel}>Client Signature</Text>
+          </View>
         </View>
 
         <Text style={styles.pageNumber} render={({ pageNumber, totalPages }) => `${pageNumber} / ${totalPages}`} fixed />

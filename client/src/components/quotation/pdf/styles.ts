@@ -308,27 +308,50 @@ export const styles = StyleSheet.create({
     paddingTop: 8,
   },
 
-  // ── Footer ──
-  footer: {
-    marginTop: 2,
-    width: 250,
-    borderTopWidth: 1,
-    borderTopColor: "#E5E7EB",
-    paddingTop: 8,
+  // ── Signature Section ──
+  signatureSection: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 40,
+    paddingTop: 15,
   },
-  signName: {
+  signatureBlock: {
+    width: "45%",
+    flexDirection: "column",
+  },
+  signatureImage: {
+    width: 80,
+    height: "auto",
+    marginBottom: 4,
+  },
+  signatureLine: {
+    borderTopWidth: 1,
+    borderTopColor: "#D1D5DB",
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  signatureName: {
     fontSize: 10,
     fontFamily: "Helvetica-Bold",
     color: "#111827",
-    lineHeight: 1.2,
   },
-  signRole: { fontSize: 8, color: "#6B7280", marginTop: 1, lineHeight: 1.2 },
-  signCompany: {
+  signatureRole: {
+    fontSize: 8,
+    color: "#6B7280",
+    marginTop: 1,
+  },
+  signatureCompany: {
     fontSize: 8,
     fontFamily: "Helvetica-Bold",
-    color: "#111827",
+    color: "#019689",
     marginTop: 1,
-    lineHeight: 1.2,
+  },
+  signatureLabel: {
+    fontSize: 8,
+    color: "#9CA3AF",
+    textTransform: "uppercase",
+    letterSpacing: 1,
+    marginTop: 4,
   },
 
   // ── Page Number ──
