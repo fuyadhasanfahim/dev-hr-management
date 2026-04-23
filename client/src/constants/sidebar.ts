@@ -10,7 +10,7 @@ import {
     IconUsers,
     IconPackage,
     IconChartBar,
-    IconPigMoney,
+    IconUserShare,
     IconCreditCard,
     IconUserCircle,
     IconSpeakerphone,
@@ -110,9 +110,15 @@ export const sidebarGroups: SidebarGroup[] = [
                 access: [Role.SUPER_ADMIN, Role.ADMIN],
             },
             {
+                title: "Quotations",
+                url: "/quotations",
+                icon: IconReceipt,
+                access: [Role.SUPER_ADMIN, Role.ADMIN],
+            },
+            {
                 title: "Profit Share",
                 url: "/profit-share",
-                icon: IconPigMoney,
+                icon: IconUserShare,
                 access: [Role.SUPER_ADMIN, Role.ADMIN],
             },
             {

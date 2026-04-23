@@ -12,6 +12,11 @@ export type OrderPriority = "low" | "normal" | "high" | "urgent";
 export interface IService {
     _id: string;
     name: string;
+    category?: string;
+    pricingModel?: 'fixed' | 'hourly' | 'milestone';
+    basePrice?: number;
+    hourlyRate?: number;
+    milestoneNotes?: string;
     description?: string;
     isActive: boolean;
     createdBy: string;
@@ -148,11 +153,21 @@ export interface AddRevisionInput {
 
 export interface CreateServiceInput {
     name: string;
+    category?: string;
+    pricingModel?: 'fixed' | 'hourly' | 'milestone';
+    basePrice?: number;
+    hourlyRate?: number;
+    milestoneNotes?: string;
     description?: string;
 }
 
 export interface UpdateServiceInput {
     name?: string;
+    category?: string;
+    pricingModel?: 'fixed' | 'hourly' | 'milestone';
+    basePrice?: number;
+    hourlyRate?: number;
+    milestoneNotes?: string;
     description?: string;
     isActive?: boolean;
 }
