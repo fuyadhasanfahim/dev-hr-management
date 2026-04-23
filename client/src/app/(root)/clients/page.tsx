@@ -15,23 +15,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Card } from "@/components/ui/card";
 import {
   Plus,
-  ChevronLeft,
-  ChevronRight,
-  ChevronsLeft,
-  ChevronsRight,
   Loader,
   FileDown,
-  RefreshCw,
 } from "lucide-react";
+import { subDays, isAfter } from "date-fns";
 import { toast } from "sonner";
 import {
   ClientForm,
@@ -40,7 +30,7 @@ import {
 import { ClientStats } from "@/components/client/ClientStats";
 import { ClientFilters } from "@/components/client/ClientFilters";
 import { ClientTable } from "@/components/client/ClientTable";
-import { PER_PAGE_OPTIONS } from "@/lib/constants";
+import { ClientPagination } from "@/components/client/ClientPagination";
 import { Client } from "@/types/client.type";
 
 export default function ClientsPage() {
@@ -49,7 +39,7 @@ export default function ClientsPage() {
 
   // Filter states
   const [page, setPage] = useState(1);
-  const [limit, setLimit] = useState(10);
+  const [limit, setLimit] = useState(20); // Default 20 as per plan
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
 
@@ -66,7 +56,6 @@ export default function ClientsPage() {
     data: clientsData,
     isLoading,
     isFetching,
-    refetch,
   } = useGetClientsQuery({
     page,
     limit,
@@ -84,22 +73,34 @@ export default function ClientsPage() {
     Record<string, string[]> | undefined
   >(undefined);
 
-  const clients = useMemo(() => clientsData?.clients || [], [clientsData?.clients]);
+  const clients = useMemo(
+    () => clientsData?.clients || [],
+    [clientsData?.clients],
+  );
   const pagination = clientsData?.pagination || {
     page: 1,
-    limit: 10,
+    limit: 20,
     total: 0,
     pages: 1,
   };
 
-  // Derived stats for the CURRENT PAGE
+  // State for pure rendering of date-based stats
+  const [thirtyDaysAgo] = useState(() => subDays(new Date(), 30));
+
   const stats = useMemo(() => {
     return {
       total: pagination.total,
       active: clients.filter((c: Client) => c.status === "active").length,
       inactive: clients.filter((c: Client) => c.status === "inactive").length,
+      newClients: clients.filter((c: Client) => {
+        // Mock new clients calculation based on created date if available, or just 0
+        const isNew = c.createdAt
+          ? isAfter(new Date(c.createdAt), thirtyDaysAgo)
+          : false;
+        return isNew;
+      }).length,
     };
-  }, [clients, pagination.total]);
+  }, [clients, pagination.total, thirtyDaysAgo]);
 
   const handleFilterChange = (key: string, value: string | number) => {
     if (key === "search") setSearch(value as string);
@@ -111,7 +112,7 @@ export default function ClientsPage() {
   const handleClearFilters = () => {
     setSearch("");
     setStatus("");
-    setLimit(10);
+    setLimit(20);
     setPage(1);
   };
 
@@ -164,17 +165,17 @@ export default function ClientsPage() {
   };
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
+    <div className="w-full p-4 md:p-6 space-y-8 bg-slate-50/50 min-h-screen">
       {/* Header section */}
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
-        <div className="space-y-1">
-          <h1 className="text-3xl font-bold tracking-tight text-slate-800 dark:text-slate-100">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-slate-900">
             Clients
           </h1>
-          <p className="text-muted-foreground flex items-center gap-2">
-            Manage your client database and team assignments
+          <p className="text-sm text-slate-500 mt-1 flex items-center gap-2">
+            Manage your client relationships
             {isFetching && (
-              <Loader className="h-3 w-3 animate-spin text-primary" />
+              <Loader className="h-3 w-3 animate-spin text-teal-600" />
             )}
           </p>
         </div>
@@ -182,29 +183,17 @@ export default function ClientsPage() {
           <div className="flex items-center gap-3">
             <Button
               variant="outline"
-              className="bg-card shadow-sm hover:shadow-md transition-all duration-200"
+              className="bg-white"
               onClick={() => toast.info("Export feature coming soon")}
             >
-              <FileDown className="mr-2 h-4 w-4 text-slate-500" />
+              <FileDown className="h-4 w-4 text-slate-500" />
               Export
             </Button>
             <Button
-              variant="outline"
-              size="icon"
-              onClick={() => refetch()}
-              disabled={isLoading || isFetching}
-              className="bg-card shadow-sm hover:shadow-md transition-all duration-200"
-            >
-              <RefreshCw
-                className={isFetching ? "animate-spin" : ""}
-                size={16}
-              />
-            </Button>
-            <Button
               onClick={() => setIsAddDialogOpen(true)}
-              className="bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20 transition-all duration-200"
+              className="bg-teal-600 hover:bg-teal-700 text-white shadow-sm"
             >
-              <Plus className="mr-2 h-4 w-4" /> Add Client
+              <Plus className="h-4 w-4" /> Add Client
             </Button>
           </div>
         )}
@@ -215,22 +204,24 @@ export default function ClientsPage() {
         total={stats.total}
         active={stats.active}
         inactive={stats.inactive}
+        newClients={stats.newClients}
         isLoading={isLoading}
       />
 
-      {/* Filter section */}
-      <div className="bg-card p-4 rounded-xl border shadow-sm space-y-4">
-        <ClientFilters
-          search={search}
-          status={status}
-          limit={limit}
-          onFilterChange={handleFilterChange}
-          onClearFilters={handleClearFilters}
-        />
-      </div>
+      {/* Main Table Card wrapper */}
+      <Card className="border-slate-200 bg-white">
+        {/* Toolbar */}
+        <div className="p-4 border-b border-slate-100">
+          <ClientFilters
+            search={search}
+            status={status}
+            limit={limit}
+            onFilterChange={handleFilterChange}
+            onClearFilters={handleClearFilters}
+          />
+        </div>
 
-      {/* Table section */}
-      <div className="bg-card rounded-xl border shadow-sm overflow-hidden">
+        {/* Table section */}
         <ClientTable
           clients={clients}
           isLoading={isLoading}
@@ -239,98 +230,24 @@ export default function ClientsPage() {
         />
 
         {/* Pagination */}
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-6 py-4 border-t bg-muted/20">
-          <div className="flex items-center gap-4 order-2 sm:order-1">
-            <div className="text-sm text-muted-foreground">
-              Showing{" "}
-              <span className="font-medium text-foreground">
-                {clients.length}
-              </span>{" "}
-              of{" "}
-              <span className="font-medium text-foreground">
-                {pagination.total}
-              </span>{" "}
-              clients
-            </div>
-            <div className="h-4 w-px bg-slate-300 hidden sm:block" />
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-muted-foreground whitespace-nowrap">
-                Per page
-              </span>
-              <Select
-                value={limit.toString()}
-                onValueChange={(val) =>
-                  handleFilterChange("limit", parseInt(val))
-                }
-              >
-                <SelectTrigger className="h-7 w-[70px] text-xs bg-background">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {PER_PAGE_OPTIONS.map((opt) => (
-                    <SelectItem
-                      key={opt}
-                      value={opt.toString()}
-                      className="text-xs"
-                    >
-                      {opt}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+        <div className="p-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="text-sm text-slate-500">
+            Showing{" "}
+            <span className="font-medium text-slate-900">{clients.length}</span>{" "}
+            of{" "}
+            <span className="font-medium text-slate-900">
+              {pagination.total}
+            </span>{" "}
+            clients
           </div>
-          <div className="flex items-center space-x-2 order-1 sm:order-2">
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-8 w-8"
-              onClick={() => setPage(1)}
-              disabled={page === 1 || isLoading}
-            >
-              <ChevronsLeft className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-8 w-8"
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={page === 1 || isLoading}
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <div className="flex items-center gap-1.5 px-3">
-              <span className="text-sm font-medium">Page</span>
-              <span className="flex h-7 w-12 items-center justify-center rounded-md border bg-background text-sm font-bold text-primary">
-                {page}
-              </span>
-              <span className="text-sm font-medium">
-                of {pagination.pages}
-              </span>
-            </div>
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-8 w-8"
-              onClick={() =>
-                setPage((p) => Math.min(pagination.pages, p + 1))
-              }
-              disabled={page === pagination.pages || isLoading}
-            >
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-8 w-8"
-              onClick={() => setPage(pagination.pages)}
-              disabled={page === pagination.pages || isLoading}
-            >
-              <ChevronsRight className="h-4 w-4" />
-            </Button>
-          </div>
+          <ClientPagination
+            currentPage={page}
+            totalPages={pagination.pages}
+            onPageChange={setPage}
+            isLoading={isLoading}
+          />
         </div>
-      </div>
+      </Card>
 
       {/* Add Client Dialog */}
       <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>

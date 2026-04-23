@@ -8,10 +8,10 @@ import {
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import { Eye, Edit2, Users } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Eye, Edit2, Users, UsersRound } from "lucide-react";
 import Link from "next/link";
 import { Client } from "@/types/client.type";
-import { CLIENT_STATUS_OPTIONS } from "@/lib/constants";
 import {
   Tooltip,
   TooltipContent,
@@ -33,46 +33,44 @@ export function ClientTable({
 }: ClientTableProps) {
   if (isLoading) {
     return (
-      <div className="border">
+      <div className="overflow-x-auto w-full">
         <Table>
           <TableHeader>
-            <TableRow>
-              <TableHead className="border-r text-center">Client ID</TableHead>
-              <TableHead className="border-r text-center">Name</TableHead>
-              <TableHead className="border-r text-center">Email</TableHead>
-              <TableHead className="border-r text-center">Phone</TableHead>
-              <TableHead className="border-r text-center">
-                Team Members
-              </TableHead>
-              <TableHead className="border-r text-center">Status</TableHead>
-              <TableHead className="text-center">Actions</TableHead>
+            <TableRow className="hover:bg-transparent">
+              <TableHead>Client ID</TableHead>
+              <TableHead>Name</TableHead>
+              <TableHead>Email</TableHead>
+              <TableHead>Phone</TableHead>
+              <TableHead className="text-center">Team Members</TableHead>
+              <TableHead className="text-center">Status</TableHead>
+              <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {[...Array(5)].map((_, i) => (
-              <TableRow key={i}>
-                <TableCell className="border-r">
+              <TableRow key={i} className="hover:bg-transparent">
+                <TableCell>
                   <Skeleton className="h-4 w-20" />
                 </TableCell>
-                <TableCell className="border-r">
+                <TableCell>
                   <Skeleton className="h-4 w-32" />
                 </TableCell>
-                <TableCell className="border-r">
+                <TableCell>
                   <Skeleton className="h-4 w-40" />
                 </TableCell>
-                <TableCell className="border-r">
+                <TableCell>
                   <Skeleton className="h-4 w-24" />
                 </TableCell>
-                <TableCell className="border-r">
+                <TableCell>
                   <Skeleton className="h-4 w-12 mx-auto" />
                 </TableCell>
-                <TableCell className="border-r text-center">
+                <TableCell className="text-center">
                   <Skeleton className="h-6 w-16 mx-auto rounded-full" />
                 </TableCell>
                 <TableCell className="text-right">
-                  <div className="flex justify-end gap-2">
-                    <Skeleton className="h-8 w-8" />
-                    <Skeleton className="h-8 w-8" />
+                  <div className="flex justify-end gap-1">
+                    <Skeleton className="h-8 w-8 rounded-md" />
+                    <Skeleton className="h-8 w-8 rounded-md" />
                   </div>
                 </TableCell>
               </TableRow>
@@ -84,63 +82,69 @@ export function ClientTable({
   }
 
   return (
-    <div className="border">
+    <div className="overflow-x-auto w-full">
       <Table>
         <TableHeader>
-          <TableRow>
-            <TableHead className="border-r text-center">Client ID</TableHead>
-            <TableHead className="border-r text-center">Name</TableHead>
-            <TableHead className="border-r text-center">Email</TableHead>
-            <TableHead className="border-r text-center">Phone</TableHead>
-            <TableHead className="border-r text-center">Team Members</TableHead>
-            <TableHead className="border-r text-center">Status</TableHead>
-            <TableHead className="text-center">Actions</TableHead>
+          <TableRow className="hover:bg-transparent">
+            <TableHead className="font-medium text-slate-500">Client ID</TableHead>
+            <TableHead className="font-medium text-slate-500">Name</TableHead>
+            <TableHead className="font-medium text-slate-500">Email</TableHead>
+            <TableHead className="font-medium text-slate-500">Phone</TableHead>
+            <TableHead className="font-medium text-slate-500 text-center">Team Members</TableHead>
+            <TableHead className="font-medium text-slate-500 text-center">Status</TableHead>
+            <TableHead className="font-medium text-slate-500 text-right">Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {clients.length === 0 ? (
-            <TableRow>
+            <TableRow className="hover:bg-transparent">
               <TableCell
                 colSpan={7}
-                className="text-center py-8 text-muted-foreground"
+                className="text-center py-16 text-muted-foreground"
               >
-                No clients found
+                <div className="flex flex-col items-center justify-center space-y-3">
+                  <div className="p-4 bg-slate-50 rounded-full text-slate-400">
+                    <UsersRound className="w-8 h-8" />
+                  </div>
+                  <p className="text-base font-medium text-slate-900">No clients yet</p>
+                  <p className="text-sm text-slate-500 max-w-sm">
+                    Get started by adding your first client to manage their details and team assignments.
+                  </p>
+                </div>
               </TableCell>
             </TableRow>
           ) : (
             clients.map((client) => {
-              const statusOpt = CLIENT_STATUS_OPTIONS.find(
-                (s) => s.value === client.status,
-              );
+              const isActive = client.status === "active";
               return (
-                <TableRow key={client._id}>
-                  <TableCell className="border-r font-mono">
+                <TableRow key={client._id} className="hover:bg-slate-50/80 transition-colors">
+                  <TableCell className="font-mono text-slate-500 text-sm">
                     {client.clientId}
                   </TableCell>
-                  <TableCell className="font-medium border-r">
+                  <TableCell className="font-medium text-slate-900">
                     {client.name}
                   </TableCell>
-                  <TableCell className="border-r">
-                    <div className="flex items-center gap-1">
-                      <span className="truncate max-w-[150px]">
+                  <TableCell>
+                    <div className="flex items-center gap-2">
+                      <span className="truncate max-w-[150px] text-slate-600">
                         {client.emails?.[0] || "-"}
                       </span>
                       {client.emails && client.emails.length > 1 && (
-                        <span className="shrink-0 px-1.5 py-0.5 rounded-sm bg-teal-50 text-teal-600 text-[10px] font-bold">
+                        <Badge variant="secondary" className="bg-slate-100 text-slate-600 hover:bg-slate-200">
                           +{client.emails.length - 1}
-                        </span>
+                        </Badge>
                       )}
                     </div>
                   </TableCell>
-                  <TableCell className="border-r">
+                  <TableCell className="text-slate-600">
                     {client.phone || "-"}
                   </TableCell>
-                  <TableCell className="border-r">
+                  <TableCell>
                     <div className="flex justify-center">
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <div className="flex items-center gap-1.5 cursor-default hover:bg-muted/50 px-2 py-1 rounded-md transition-colors">
-                            <Users className="h-4 w-4 text-muted-foreground" />
+                          <div className="flex items-center gap-1.5 cursor-default hover:bg-slate-100 px-2 py-1 rounded-md transition-colors text-slate-600">
+                            <Users className="h-4 w-4 text-slate-400" />
                             <span className="font-semibold text-sm">
                               {client.teamMembers?.length || 0}
                             </span>
@@ -148,7 +152,7 @@ export function ClientTable({
                         </TooltipTrigger>
                         <TooltipContent
                           side="top"
-                          className="p-3 min-w-[150px]"
+                          className="p-3 min-w-[150px] shadow-md border-slate-200 bg-white text-slate-900"
                         >
                           {client.teamMembers &&
                           client.teamMembers.length > 0 ? (
@@ -156,7 +160,7 @@ export function ClientTable({
                               <ul className="space-y-1.5">
                                 {client.teamMembers.map((member, idx) => (
                                   <li key={idx} className="flex flex-col">
-                                    <span className="font-medium">
+                                    <span className="font-medium text-sm">
                                       {idx + 1}. {member.name}
                                     </span>
                                   </li>
@@ -164,22 +168,26 @@ export function ClientTable({
                               </ul>
                             </div>
                           ) : (
-                            <p className="text-xs">No team members assigned</p>
+                            <p className="text-xs text-slate-500">No team members assigned</p>
                           )}
                         </TooltipContent>
                       </Tooltip>
                     </div>
                   </TableCell>
-                  <TableCell className="border-r text-center">
-                    <span
-                      className={`px-2 py-1 rounded-full text-xs font-medium ${statusOpt?.color}`}
+                  <TableCell className="text-center">
+                    <Badge 
+                      variant="outline" 
+                      className={isActive 
+                        ? "bg-teal-50 text-teal-700 border-teal-200" 
+                        : "bg-orange-50 text-orange-700 border-orange-200"
+                      }
                     >
-                      {statusOpt?.label}
-                    </span>
+                      {isActive ? "Active" : "Inactive"}
+                    </Badge>
                   </TableCell>
                   <TableCell className="text-right">
-                    <div className="flex items-center justify-center gap-2">
-                      <Button variant="ghost" size="icon" asChild>
+                    <div className="flex items-center justify-end gap-1">
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-slate-900" asChild>
                         <Link href={`/clients/${client._id}`}>
                           <Eye className="h-4 w-4" />
                         </Link>
@@ -188,6 +196,7 @@ export function ClientTable({
                         <Button
                           variant="ghost"
                           size="icon"
+                          className="h-8 w-8 text-slate-400 hover:text-teal-600"
                           onClick={() => onEdit(client)}
                         >
                           <Edit2 className="h-4 w-4" />
