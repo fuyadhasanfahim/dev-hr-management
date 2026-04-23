@@ -43,6 +43,7 @@ export const apiSlice = createApi({
         "WalletTransaction",
         "Policy",
         "PendingPolicy",
+        "Quotation",
     ],
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     endpoints: (_builder) => ({}),

@@ -55,7 +55,16 @@ interface QuotationStore {
 
   // Template Loader
   loadTemplate: (type: "ecommerce" | "saas" | "service") => void;
+  setData: (data: QuotationData) => void;
+  reset: () => void;
 }
+
+const generateInitialTotals = () => ({
+  packagePrice: 0,
+  additionalTotal: 0,
+  taxAmount: 0,
+  grandTotal: 0,
+});
 
 const ecommerceTemplate: Partial<QuotationData> = {
   details: {
@@ -359,6 +368,7 @@ const serviceTemplate: Partial<QuotationData> = {
 
 const initialState: QuotationData = {
   serviceType: "web-development",
+  clientId: "",
   company: {
     logo: "/assets/image/logo.svg",
     name: "WebBriks",
@@ -375,15 +385,15 @@ const initialState: QuotationData = {
     email: "jane.doe@acmecorp.com",
     phone: "+1 (555) 987-6543",
   },
-  details: ecommerceTemplate.details as any,
+  details: ecommerceTemplate.details as QuotationData["details"],
   overview: ecommerceTemplate.overview as string,
   scopeOfWork: ecommerceTemplate.scopeOfWork as ScopePhase[],
-  techStack: ecommerceTemplate.techStack as any,
+  techStack: ecommerceTemplate.techStack as QuotationData["techStack"],
   features: ecommerceTemplate.features as string[],
   adminFeatures: ecommerceTemplate.adminFeatures as string[],
   marketingSetup: ecommerceTemplate.marketingSetup as string[],
-  deliveryTimeline: ecommerceTimeline.deliveryTimeline as string,
-  pricing: ecommerceTemplate.pricing as any,
+  deliveryTimeline: ecommerceTemplate.deliveryTimeline as string,
+  pricing: ecommerceTemplate.pricing as QuotationData["pricing"],
   optionalServices: ecommerceTemplate.optionalServices as OptionalService[],
   photographyItems: [],
   workflow: ecommerceTemplate.workflow as string[],
@@ -393,6 +403,7 @@ const initialState: QuotationData = {
     taxRate: 0,
     discount: 0,
   },
+  totals: generateInitialTotals(),
 };
 
 export const useQuotationStore = create<QuotationStore>((set) => ({
@@ -601,4 +612,6 @@ export const useQuotationStore = create<QuotationStore>((set) => ({
 
       return { data: { ...state.data, ...tpl } as QuotationData };
     }),
+  setData: (data) => set({ data }),
+  reset: () => set({ data: initialState }),
 }));

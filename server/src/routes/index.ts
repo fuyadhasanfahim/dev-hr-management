@@ -28,6 +28,7 @@ import shiftOffDateRoute from "./shift-off-date.route.js";
 import payrollBankSettingsRoute from "./payroll-bank-settings.route.js";
 import { PaymentRoutes } from "./payment.route.js";
 import { policyRoute } from "./policy.route.js";
+import { quotationRoute } from "./quotation.route.js";
 
 const router: Router = Router();
 
@@ -147,6 +148,10 @@ const moduleRoutes = [
     {
         path: "/policies",
         route: policyRoute,
+    },
+    {
+        path: "/quotations",
+        route: quotationRoute,
     },
 ];
 

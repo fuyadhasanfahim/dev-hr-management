@@ -62,7 +62,10 @@ export interface PhotographyItem {
 }
 
 export interface QuotationData {
+  _id?: string;
+  quotationNumber?: string;
   serviceType: ServiceType;
+  clientId: string;
   company: CompanyDetails;
   client: ClientDetails;
   details: QuotationDetails;
@@ -88,4 +91,15 @@ export interface QuotationData {
   finalNote: string;
 
   settings: Settings;
+
+  totals: {
+    packagePrice: number;
+    additionalTotal: number;
+    taxAmount: number;
+    grandTotal: number;
+  };
+
+  status?: "draft" | "sent" | "accepted" | "rejected";
+  createdAt?: string;
+  updatedAt?: string;
 }
