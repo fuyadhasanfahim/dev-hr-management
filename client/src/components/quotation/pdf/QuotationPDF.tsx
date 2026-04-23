@@ -45,7 +45,15 @@ export const QuotationPDF = ({
           <View style={styles.companyInfo}>
             {data.company.logo ? (
               // eslint-disable-next-line jsx-a11y/alt-text
-              <Image src={data.company.logo} style={styles.logo} />
+              <Image 
+                src={{ uri: "https://res.cloudinary.com/dny7zfbg9/image/upload/v1755954483/mqontecf1xao7znsh6cx.png" }} 
+                style={{
+                  width: 120,
+                  height: 40,
+                  objectFit: 'contain',
+                  marginBottom: 8
+                }} 
+              />
             ) : (
               <Text style={styles.companyName}>{data.company.name}</Text>
             )}
@@ -61,7 +69,9 @@ export const QuotationPDF = ({
             <Text style={styles.titleLabel}>Quotation</Text>
             <View style={styles.metaRow}>
               <Text style={styles.metaLabel}>ID:</Text>
-              <Text style={styles.metaValue}>{data.details.quotationNumber}</Text>
+              <Text style={styles.metaValue}>
+                {data.quotationNumber || data.details.quotationNumber || "TBD"}
+              </Text>
             </View>
             <View style={styles.metaRow}>
               <Text style={styles.metaLabel}>Date:</Text>
@@ -400,26 +410,51 @@ export const QuotationPDF = ({
         </Text>
 
         {/* ── SIGNATURE SECTION ── */}
-        <View style={styles.signatureSection} wrap={false}>
+        <View style={{
+          marginTop: 40,
+          flexDirection: 'row',
+          justifyContent: 'space-between',
+          alignItems: 'flex-end'
+        }} wrap={false}>
           {/* Company Signature */}
-          <View style={styles.signatureBlock}>
+          <View style={{ width: '45%' }}>
             {/* eslint-disable-next-line jsx-a11y/alt-text */}
             <Image 
-              src="https://res.cloudinary.com/dny7zfbg9/image/upload/v1776961131/ouvycul8e7xskhrioca4.png" 
-              style={styles.signatureImage} 
+              src={{ uri: "https://res.cloudinary.com/dny7zfbg9/image/upload/v1776961131/ouvycul8e7xskhrioca4.png" }} 
+              style={{ width: 120, height: 40 }} 
             />
-            <View style={styles.signatureLine} />
-            <Text style={styles.signatureName}>Md. Ashaduzzaman</Text>
-            <Text style={styles.signatureRole}>Founder and CEO</Text>
-            <Text style={styles.signatureCompany}>{data.company.name}</Text>
+            <View style={{
+              borderTopWidth: 1,
+              borderTopColor: '#9CA3AF',
+              marginTop: 8,
+              marginBottom: 4
+            }} />
+            <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: '#111827' }}>
+              Md. Ashaduzzaman
+            </Text>
+            <Text style={{ fontSize: 9, color: '#6B7280', marginTop: 1 }}>
+              Founder and CEO
+            </Text>
+            <Text style={{ fontSize: 9, fontFamily: 'Helvetica-Bold', color: '#019689', marginTop: 1 }}>
+              {data.company.name}
+            </Text>
           </View>
 
           {/* Client Signature Placeholder */}
-          <View style={styles.signatureBlock}>
-            <View style={{ height: 35 }} /> {/* Space for manual signature */}
-            <View style={styles.signatureLine} />
-            <Text style={styles.signatureName}>{data.client.contactName}</Text>
-            <Text style={styles.signatureLabel}>Client Signature</Text>
+          <View style={{ width: '45%' }}>
+            <View style={{ height: 40 }} />
+            <View style={{
+              borderTopWidth: 1,
+              borderTopColor: '#9CA3AF',
+              marginTop: 8,
+              marginBottom: 4
+            }} />
+            <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: '#111827' }}>
+              {data.client.contactName}
+            </Text>
+            <Text style={{ fontSize: 9, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: 1, marginTop: 4 }}>
+              Client Signature
+            </Text>
           </View>
         </View>
 

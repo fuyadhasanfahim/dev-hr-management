@@ -29,7 +29,7 @@ export default function PDFDownloadBtn({ data, totalAmounts }: Props) {
           grandTotal={totalAmounts.grandTotal}
         />
       }
-      fileName={`${data.details.quotationNumber}.pdf`}
+      fileName={`${data.quotationNumber || data.details.quotationNumber || data.details.title || 'Quotation'}.pdf`}
     >
       {({ loading }) => (
         <Button className="bg-teal-600 hover:bg-teal-700 text-white" disabled={loading}>
