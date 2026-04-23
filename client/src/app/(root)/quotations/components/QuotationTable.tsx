@@ -115,7 +115,7 @@ export function QuotationTable({
                     </Badge>
                   </TableCell>
                   <TableCell className="text-slate-500 text-sm">
-                    {format(new Date(q.createdAt || new Date()), "MMM dd, yyyy")}
+                    {format(new Date(q.createdAt || new Date), "MMM dd, yyyy")}
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-1">
