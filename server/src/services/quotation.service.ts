@@ -2,6 +2,8 @@ import QuotationModel from '../models/quotation.model.js';
 import { InvoiceCounter } from '../models/invoice-counter.model.js';
 import type { IQuotation } from '../types/quotation.type.js';
 import { Types } from 'mongoose';
+import OrderServices from './order.service.js';
+import { OrderType, OrderStatus } from '../models/order.model.js';
 
 export class QuotationService {
     static async generateQuotationNumber(): Promise<string> {
@@ -78,5 +80,33 @@ export class QuotationService {
 
     static async deleteQuotation(id: string): Promise<IQuotation | null> {
         return await QuotationModel.findByIdAndDelete(id);
+    }
+
+    static async convertToOrder(id: string, userId: string): Promise<any> {
+        const quotation = await QuotationModel.findById(id);
+        if (!quotation) throw new Error('Quotation not found');
+        
+        const orderPayload = {
+            clientId: quotation.clientId,
+            title: quotation.details.title,
+            description: quotation.overview,
+            orderType: quotation.serviceType === 'web-development' ? OrderType.PROJECT : OrderType.SERVICE,
+            status: OrderStatus.PENDING,
+            currency: quotation.settings.currency || 'USD',
+            totalAmount: quotation.totals.grandTotal,
+            items: [
+                {
+                    name: quotation.details.title,
+                    pricingModel: 'fixed' as any,
+                    quantity: 1,
+                    unitPrice: quotation.totals.grandTotal,
+                    totalPrice: quotation.totals.grandTotal
+                }
+            ],
+            createdBy: new Types.ObjectId(userId)
+        };
+
+        const order = await OrderServices.createOrderInDB(orderPayload);
+        return order;
     }
 }
