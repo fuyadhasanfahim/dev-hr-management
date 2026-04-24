@@ -92,7 +92,14 @@ import {
   Filter,
   X,
   CheckSquare,
+  User,
+  Calendar,
+  CreditCard,
+  Briefcase,
+  Hash,
+  ArrowRight,
 } from "lucide-react";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import Link from "next/link";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
@@ -112,23 +119,6 @@ import { cn } from "@/lib/utils";
 import { useSession } from "@/lib/auth-client";
 import { useGetMeQuery } from "@/redux/features/staff/staffApi";
 import { Role } from "@/constants/role";
-
-const statusColors: Record<OrderStatus, string> = {
-  pending: "bg-yellow-500/20 text-yellow-700 dark:text-yellow-400",
-  in_progress: "bg-blue-500/20 text-blue-700 dark:text-blue-400",
-  quality_check: "bg-purple-500/20 text-purple-700 dark:text-purple-400",
-  revision: "bg-orange-500/20 text-orange-700 dark:text-orange-400",
-  completed: "bg-green-500/20 text-green-700 dark:text-green-400",
-  delivered: "bg-emerald-500/20 text-emerald-700 dark:text-emerald-400",
-  cancelled: "bg-red-500/20 text-red-700 dark:text-red-400",
-};
-
-const priorityColors: Record<OrderPriority, string> = {
-  low: "bg-muted text-muted-foreground",
-  normal: "bg-blue-500/20 text-blue-700 dark:text-blue-400",
-  high: "bg-orange-500/20 text-orange-700 dark:text-orange-400",
-  urgent: "bg-red-500/20 text-red-700 dark:text-red-400",
-};
 
 // Status workflow: defines which statuses can transition to which
 // Key = current status, Value = array of allowed next statuses
@@ -1439,152 +1429,264 @@ export default function OrdersPage() {
         </DialogContent>
       </Dialog>
 
-      {/* View Dialog */}
+      {/* Pixel-Perfect SaaS View Order Modal */}
       <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Order Details</DialogTitle>
-            <DialogDescription>
-              {selectedOrder?.title || selectedOrder?.orderName}
-            </DialogDescription>
-          </DialogHeader>
+        <DialogContent className="max-w-3xl! p-0 overflow-hidden border-none shadow-2xl rounded-2xl bg-background">
           {selectedOrder && (
-            <div className="space-y-6">
-              <div className="grid grid-cols-2 gap-x-8 gap-y-4">
-                <div className="space-y-1">
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Client</p>
-                  <p className="font-semibold text-sm">
-                    {typeof selectedOrder.clientId === "object"
-                      ? selectedOrder.clientId.name
-                      : "N/A"}
-                  </p>
-                </div>
-                <div className="space-y-1">
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Contact Person</p>
-                  <p className="font-semibold text-sm">
-                    {(() => {
-                      const clientObj =
-                        typeof selectedOrder.clientId === "object"
-                          ? selectedOrder.clientId
-                          : null;
-                      const member = clientObj?.teamMembers?.find(
-                        (m) => m._id === selectedOrder.contactPersonId,
-                      );
-                      return member
-                        ? `${member.name} (${member.designation})`
-                        : "N/A";
-                    })()}
-                  </p>
-                </div>
-                <div className="space-y-1">
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Status</p>
-                  <Badge className={cn("text-[10px] uppercase font-bold tracking-wide", statusColors[selectedOrder.status])}>
-                    {ORDER_STATUS_LABELS[selectedOrder.status]}
-                  </Badge>
-                </div>
-                <div className="space-y-1">
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Created Date</p>
-                  <p className="font-semibold text-sm">
-                    {safeFormat(selectedOrder.createdAt || selectedOrder.orderDate, "MMM dd, yyyy")}
-                  </p>
-                </div>
-                <div className="space-y-1">
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Deadline</p>
-                  <p className="font-semibold text-sm">
-                    {safeFormat(selectedOrder.deadline, "MMM dd, yyyy h:mm a")}
-                  </p>
-                </div>
-                <div className="space-y-1">
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Priority</p>
-                  <Badge className={cn("text-[10px] uppercase font-bold tracking-wide", priorityColors[selectedOrder.priority])}>
-                    {ORDER_PRIORITY_LABELS[selectedOrder.priority]}
-                  </Badge>
-                </div>
-                <div className="space-y-1">
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Type</p>
-                  <p className="font-semibold text-sm capitalize">{selectedOrder.orderType || "Service"}</p>
-                </div>
-                <div className="space-y-1">
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Total Amount</p>
-                  <p className="font-bold text-lg">
-                    $
-                    {(selectedOrder.totalAmount || selectedOrder.totalPrice || 0).toLocaleString(undefined, {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2
-                    })}
-                  </p>
-                </div>
-              </div>
-
-              {/* Items / Services Section */}
-              <div className="space-y-3">
-                <h4 className="text-sm font-bold uppercase tracking-widest text-muted-foreground">Project Scope</h4>
-                <div className="rounded-lg border overflow-hidden">
-                  <Table>
-                    <TableHeader className="bg-muted/50">
-                      <TableRow>
-                        <TableHead className="h-9 text-[10px] uppercase font-bold">Item Name</TableHead>
-                        <TableHead className="h-9 text-[10px] uppercase font-bold text-center">Qty/Hrs</TableHead>
-                        <TableHead className="h-9 text-[10px] uppercase font-bold text-right">Price</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {selectedOrder.items && selectedOrder.items.length > 0 ? (
-                        selectedOrder.items.map((item, idx) => (
-                          <TableRow key={idx}>
-                            <TableCell className="py-2 text-sm">{item.name}</TableCell>
-                            <TableCell className="py-2 text-sm text-center">{item.quantity || item.hours || 1}</TableCell>
-                            <TableCell className="py-2 text-sm text-right font-medium">${item.totalPrice?.toFixed(2)}</TableCell>
-                          </TableRow>
-                        ))
-                      ) : (
-                        selectedOrder.services?.map((service) => (
-                          <TableRow key={service._id}>
-                            <TableCell className="py-2 text-sm">{service.name}</TableCell>
-                            <TableCell className="py-2 text-sm text-center">1</TableCell>
-                            <TableCell className="py-2 text-sm text-right font-medium">Included</TableCell>
-                          </TableRow>
-                        ))
+            <div className="flex flex-col max-h-[90vh]">
+              {/* Premium Header - Stripe/Linear Inspired */}
+              <div className="px-8 pt-8 pb-6 border-b bg-muted/20">
+                <div className="flex justify-between items-start">
+                  <div className="space-y-1.5">
+                    <DialogTitle className="text-2xl font-bold tracking-tight leading-tight text-foreground">
+                      {selectedOrder.title || selectedOrder.orderName}
+                    </DialogTitle>
+                    <div className="flex items-center gap-2 text-muted-foreground/80">
+                      <Hash className="w-3.5 h-3.5" />
+                      <span className="text-[11px] font-mono font-semibold tracking-wider uppercase">
+                        Order-{selectedOrder._id.slice(-8).toUpperCase()}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex flex-col items-end gap-3">
+                    <Badge
+                      className={cn(
+                        "px-4 py-1 text-[11px] font-bold uppercase tracking-[0.05em] rounded-full border shadow-sm transition-colors",
+                        selectedOrder.status === "pending"
+                          ? "bg-amber-100 text-amber-700 border-amber-200 hover:bg-amber-100"
+                          : selectedOrder.status === "in_progress"
+                            ? "bg-blue-100 text-blue-700 border-blue-200 hover:bg-blue-100"
+                            : selectedOrder.status === "completed"
+                              ? "bg-emerald-100 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
+                              : "bg-muted text-muted-foreground border-transparent",
                       )}
-                      {(!selectedOrder.items?.length && !selectedOrder.services?.length) && (
-                        <TableRow>
-                          <TableCell colSpan={3} className="text-center py-4 text-muted-foreground text-xs italic">
-                            No items or services listed
-                          </TableCell>
-                        </TableRow>
-                      )}
-                    </TableBody>
-                  </Table>
-                </div>
-              </div>
-
-              {selectedOrder.instruction && (
-                <div className="space-y-2">
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Global Instructions</p>
-                  <div className="text-sm bg-muted/50 p-4 rounded-lg border italic text-muted-foreground">
-                    &ldquo;{selectedOrder.instruction}&rdquo;
+                    >
+                      {ORDER_STATUS_LABELS[selectedOrder.status]}
+                    </Badge>
+                    <div className="flex items-center gap-1.5 text-[10px] font-bold text-muted-foreground/60 uppercase tracking-widest">
+                      <Clock className="w-3 h-3" />
+                      Updated {format(new Date(selectedOrder.updatedAt), "MMM dd, p")}
+                    </div>
                   </div>
                 </div>
-              )}
+              </div>
 
-              {selectedOrder.revisionInstructions && selectedOrder.revisionInstructions.length > 0 && (
-                <div className="space-y-3">
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Revision History</p>
-                  <div className="space-y-3">
-                    {selectedOrder.revisionInstructions.map((rev, idx) => (
-                      <div
-                        key={idx}
-                        className="text-sm bg-orange-500/5 dark:bg-orange-500/10 p-4 rounded-lg border border-orange-500/20"
-                      >
-                        <p className="leading-relaxed">{rev.instruction}</p>
-                        <p className="text-[10px] font-bold uppercase tracking-tight text-orange-500/60 mt-2">
-                          {safeFormat(rev.createdAt, "MMM dd, yyyy @ h:mm a")}
+              <ScrollArea className="flex-1 px-8 py-6">
+                <div className="space-y-10 pb-6">
+                  {/* Info Grid - Premium Cards Layout */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-5">
+                    <Card className="relative bg-card border border-transparent hover:border-teal-500/40 shadow-sm hover:shadow-md transition-all duration-300 hover:scale-[1.02] rounded-xl overflow-hidden group h-full">
+                      <CardContent className="p-4 flex flex-col h-full">
+                        <div className="flex flex-col gap-4 h-full justify-between">
+                          <div className="w-9 h-9 flex items-center justify-center bg-teal-500/10 rounded-lg text-teal-600 group-hover:bg-teal-500/20 transition-colors">
+                            <User className="w-4.5 h-4.5" />
+                          </div>
+                          <div className="space-y-1">
+                            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.1em]">Client</p>
+                            <div className="min-w-0">
+                              <p className="text-sm font-bold text-foreground truncate">
+                                {typeof selectedOrder.clientId === "object" ? selectedOrder.clientId.name : "Not provided"}
+                              </p>
+                              <p className="text-[10px] text-muted-foreground font-semibold truncate opacity-50 uppercase tracking-tighter">
+                                ID: {typeof selectedOrder.clientId === "object" ? selectedOrder.clientId._id.slice(-6) : "---"}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    <Card className="relative bg-card border border-transparent hover:border-indigo-500/40 shadow-sm hover:shadow-md transition-all duration-300 hover:scale-[1.02] rounded-xl overflow-hidden group h-full">
+                      <CardContent className="p-4 flex flex-col h-full">
+                        <div className="flex flex-col gap-4 h-full justify-between">
+                          <div className="w-9 h-9 flex items-center justify-center bg-indigo-500/10 rounded-lg text-indigo-600 group-hover:bg-indigo-500/20 transition-colors">
+                            <Briefcase className="w-4.5 h-4.5" />
+                          </div>
+                          <div className="space-y-1.5">
+                            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.1em]">Type</p>
+                            <Badge variant="secondary" className={cn(
+                              "text-[10px] font-bold rounded-md px-2 py-0.5 border-none",
+                              selectedOrder.orderType === 'project' ? "bg-teal-100 text-teal-700" : "bg-purple-100 text-purple-700"
+                            )}>
+                              {selectedOrder.orderType || "Service"}
+                            </Badge>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    <Card className="relative bg-card border border-transparent hover:border-blue-500/40 shadow-sm hover:shadow-md transition-all duration-300 hover:scale-[1.02] rounded-xl overflow-hidden group h-full">
+                      <CardContent className="p-4 flex flex-col h-full">
+                        <div className="flex flex-col gap-4 h-full justify-between">
+                          <div className="w-9 h-9 flex items-center justify-center bg-blue-500/10 rounded-lg text-blue-600 group-hover:bg-blue-500/20 transition-colors">
+                            <Calendar className="w-4.5 h-4.5" />
+                          </div>
+                          <div className="space-y-1">
+                            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.1em]">Created</p>
+                            <p className="text-sm font-bold text-foreground">
+                              {safeFormat(selectedOrder.createdAt, "MMM dd, yyyy")}
+                            </p>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    <Card className="relative bg-card border border-transparent hover:border-teal-500/60 shadow-sm hover:shadow-md transition-all duration-300 hover:scale-[1.02] rounded-xl overflow-hidden group h-full">
+                      <CardContent className="p-4 flex flex-col h-full">
+                        <div className="flex flex-col gap-4 h-full justify-between">
+                          <div className="w-9 h-9 flex items-center justify-center bg-emerald-500/10 rounded-lg text-emerald-600 group-hover:bg-emerald-500/20 transition-colors">
+                            <CreditCard className="w-4.5 h-4.5" />
+                          </div>
+                          <div className="space-y-1">
+                            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.1em]">Total Amount</p>
+                            <p className="text-xl font-black text-teal-600 tracking-tight">
+                              ${(selectedOrder.totalAmount || selectedOrder.totalPrice || 0).toLocaleString()}
+                            </p>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  {/* Description Section */}
+                  {(selectedOrder.description || selectedOrder.instruction) && (
+                    <div className="space-y-4">
+                      <div className="flex items-center gap-3">
+                        <div className="h-5 w-[3px] bg-teal-500 rounded-full" />
+                        <h4 className="text-[11px] font-black uppercase tracking-[0.2em] text-foreground/70">Project Summary</h4>
+                      </div>
+                      <div className="bg-muted/40 p-6 rounded-2xl border border-muted/20">
+                        <p className="text-sm leading-relaxed text-foreground/80 font-medium">
+                          {selectedOrder.description || selectedOrder.instruction}
                         </p>
                       </div>
-                    ))}
+                    </div>
+                  )}
+
+                  {/* Scope of Work */}
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="h-5 w-[3px] bg-teal-500 rounded-full" />
+                        <h4 className="text-[11px] font-black uppercase tracking-[0.2em] text-foreground/70">Scope of Work</h4>
+                      </div>
+                      <div className="bg-muted/50 px-2 py-0.5 rounded text-[10px] font-bold text-muted-foreground uppercase tracking-wider border">
+                        {selectedOrder.items?.length || selectedOrder.services?.length || 0} Items
+                      </div>
+                    </div>
+                    
+                    <div className="rounded-2xl border bg-card shadow-sm overflow-hidden">
+                      <Table>
+                        <TableHeader className="bg-muted/30">
+                          <TableRow className="hover:bg-transparent border-b">
+                            <TableHead className="w-[60%] h-11 text-[10px] uppercase font-bold text-muted-foreground/70 tracking-wider pl-6">Service / Item</TableHead>
+                            <TableHead className="h-11 text-[10px] uppercase font-bold text-muted-foreground/70 tracking-wider text-center">Unit</TableHead>
+                            <TableHead className="h-11 text-[10px] uppercase font-bold text-muted-foreground/70 tracking-wider text-right pr-6">Subtotal</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {selectedOrder.items && selectedOrder.items.length > 0 ? (
+                            selectedOrder.items.map((item, idx) => (
+                              <TableRow key={idx} className="group hover:bg-muted/20 transition-colors border-b last:border-0 even:bg-muted/5">
+                                <TableCell className="py-5 pl-6">
+                                  <div className="flex flex-col gap-1">
+                                    <span className="font-bold text-sm group-hover:text-teal-600 transition-colors">{item.name}</span>
+                                    <span className="text-[10px] text-muted-foreground/60 uppercase font-black tracking-tight">{item.pricingModel || 'Standard'}</span>
+                                  </div>
+                                </TableCell>
+                                <TableCell className="py-5 text-center">
+                                  <div className="inline-flex items-center justify-center bg-muted px-2.5 py-0.5 rounded text-[11px] font-bold font-mono">
+                                    {item.quantity || item.hours || 1}
+                                  </div>
+                                </TableCell>
+                                <TableCell className="py-5 text-right pr-6">
+                                  <span className="font-black text-sm tracking-tighter text-foreground">${item.totalPrice?.toLocaleString()}</span>
+                                </TableCell>
+                              </TableRow>
+                            ))
+                          ) : selectedOrder.services?.length > 0 ? (
+                            selectedOrder.services.map((service) => (
+                              <TableRow key={service._id} className="group hover:bg-muted/20 transition-colors border-b last:border-0 even:bg-muted/5">
+                                <TableCell className="py-5 pl-6 font-bold text-sm group-hover:text-teal-600 transition-colors">{service.name}</TableCell>
+                                <TableCell className="py-5 text-center">
+                                  <div className="inline-flex items-center justify-center bg-muted px-2.5 py-0.5 rounded text-[11px] font-bold font-mono">1</div>
+                                </TableCell>
+                                <TableCell className="py-5 text-right pr-6 italic text-[10px] text-muted-foreground/50 uppercase font-black tracking-widest">Included</TableCell>
+                              </TableRow>
+                            ))
+                          ) : (
+                            <TableRow>
+                              <TableCell colSpan={3} className="h-32 text-center text-muted-foreground/60 text-sm italic font-medium">
+                                No specific scope items defined for this order
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </TableBody>
+                      </Table>
+                    </div>
                   </div>
+
+                  {/* Revision Log */}
+                  {selectedOrder.revisionInstructions?.length > 0 && (
+                    <div className="space-y-5 pt-2">
+                      <div className="flex items-center gap-3">
+                        <div className="h-5 w-[3px] bg-orange-500 rounded-full" />
+                        <h4 className="text-[11px] font-black uppercase tracking-[0.2em] text-foreground/70">Revision Log</h4>
+                      </div>
+                      <div className="space-y-4">
+                        {selectedOrder.revisionInstructions.map((rev, idx) => (
+                          <div key={idx} className="relative pl-7 pb-2 last:pb-0 group">
+                            <div className="absolute left-0 top-1.5 w-2 h-2 rounded-full bg-orange-500 ring-4 ring-orange-500/10 z-10" />
+                            {idx !== selectedOrder.revisionInstructions.length - 1 && (
+                              <div className="absolute left-[3.5px] top-4 w-px h-[calc(100%-4px)] bg-muted/60 group-hover:bg-orange-500/30 transition-colors" />
+                            )}
+                            <div className="space-y-1.5">
+                              <div className="bg-orange-500/5 p-4 rounded-xl border border-orange-500/10">
+                                <p className="text-sm text-foreground/90 leading-relaxed font-semibold">{rev.instruction}</p>
+                                <div className="mt-3 flex items-center gap-2 text-[10px] font-black text-orange-500/60 uppercase tracking-widest">
+                                  <Calendar className="w-3 h-3" />
+                                  {safeFormat(rev.createdAt, "MMM dd, yyyy @ h:mm a")}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
-              )}
+              </ScrollArea>
+
+              {/* Actions Footer */}
+              <div className="px-8 py-6 border-t bg-muted/20 flex items-center justify-between gap-4">
+                <Button 
+                  variant="ghost" 
+                  onClick={() => setIsViewDialogOpen(false)}
+                  className="rounded-xl px-6 font-bold text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  Close
+                </Button>
+                <div className="flex gap-4">
+                  <Button 
+                    variant="outline" 
+                    className="rounded-xl px-6 h-11 font-bold border-teal-500/20 hover:bg-teal-500/5 hover:text-teal-600 transition-all active:scale-95 flex items-center gap-2"
+                    onClick={() => {
+                      setIsViewDialogOpen(false);
+                      openEditDialog(selectedOrder);
+                    }}
+                  >
+                    <Edit2 className="w-4 h-4" />
+                    Edit Order
+                  </Button>
+                  <Link href={`/orders/invoice/${selectedOrder._id}`} target="_blank">
+                    <Button className="rounded-xl px-8 h-11 font-black bg-teal-600 hover:bg-teal-700 shadow-xl shadow-teal-500/20 transition-all active:scale-95 flex items-center gap-2 group">
+                      <FileText className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+                      Invoice
+                      <ArrowRight className="w-3.5 h-3.5 ml-1 opacity-50" />
+                    </Button>
+                  </Link>
+                </div>
+              </div>
             </div>
           )}
         </DialogContent>
