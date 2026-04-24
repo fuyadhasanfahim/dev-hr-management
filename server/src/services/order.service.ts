@@ -19,7 +19,7 @@ async function createOrderInDB(payload: Partial<IOrder>) {
                         orderId: newOrder._id,
                         clientId: newOrder.clientId,
                         status: 'not_started',
-                        milestones: [], // Initially empty, added via update or specific logic
+                        milestones: [],
                     },
                 ],
                 { session },
@@ -28,7 +28,9 @@ async function createOrderInDB(payload: Partial<IOrder>) {
 
         await session.commitTransaction();
         return newOrder;
-    } catch (err) {
+    } catch (err: any) {
+        console.error('ORDER CREATION FAILED. Payload:', JSON.stringify(payload, null, 2));
+        console.error('Error Details:', err);
         await session.abortTransaction();
         throw err;
     } finally {
@@ -51,20 +53,20 @@ async function getAllOrdersFromDB(query: any) {
     if (clientId) filter.clientId = clientId;
 
     const orders = await OrderModel.find(filter)
-        .populate('clientId', 'name emails')
+        .populate('clientId', 'name clientId emails')
         .sort({ createdAt: -1 })
-        .skip(skip)
+        .skip((Number(page) - 1) * Number(limit))
         .limit(Number(limit));
 
     const total = await OrderModel.countDocuments(filter);
 
     return {
-        orders,
+        data: orders,
         meta: {
             total,
             page: Number(page),
             limit: Number(limit),
-            totalPage: Math.ceil(total / Number(limit)),
+            totalPages: Math.ceil(total / Number(limit)),
         },
     };
 }

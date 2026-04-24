@@ -101,6 +101,10 @@ const quotationSchema = new Schema<IQuotation>(
             default: 'draft',
             index: true,
         },
+        orderId: {
+            type: Schema.Types.ObjectId,
+            ref: 'Order',
+        },
         createdBy: {
             type: Schema.Types.ObjectId,
             ref: 'User',

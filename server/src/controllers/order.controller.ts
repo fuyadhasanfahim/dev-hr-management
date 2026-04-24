@@ -17,7 +17,11 @@ async function createOrder(req: Request, res: Response) {
 async function getAllOrders(req: Request, res: Response) {
     try {
         const result = await OrderServices.getAllOrdersFromDB(req.query);
-        return res.status(200).json({ success: true, ...result });
+        return res.status(200).json({ 
+            success: true, 
+            message: 'Orders fetched successfully',
+            ...result 
+        });
     } catch (err) {
         return res.status(500).json({ success: false, message: (err as Error).message });
     }

@@ -59,6 +59,13 @@ export const quotationApi = apiSlice.injectEndpoints({
       }),
       invalidatesTags: ['Quotation'],
     }),
+    convertToOrder: builder.mutation<{ success: boolean; data: { _id: string } }, string>({
+      query: (id) => ({
+        url: `/quotations/${id}/convert`,
+        method: 'POST',
+      }),
+      invalidatesTags: ['Quotation', 'Order'],
+    }),
   }),
 });
 
@@ -68,4 +75,5 @@ export const {
   useCreateQuotationMutation,
   useUpdateQuotationMutation,
   useDeleteQuotationMutation,
+  useConvertToOrderMutation,
 } = quotationApi;

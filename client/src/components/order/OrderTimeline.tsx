@@ -74,10 +74,10 @@ export function OrderTimeline({ timeline }: OrderTimelineProps) {
                                             entry.status}
                                     </span>
                                     <span className="text-xs text-muted-foreground">
-                                        {format(
-                                            new Date(entry.timestamp),
-                                            'MMM d, yyyy h:mm a',
-                                        )}
+                                        {(() => {
+                                            const date = new Date(entry.timestamp);
+                                            return isNaN(date.getTime()) ? 'N/A' : format(date, 'MMM d, yyyy h:mm a');
+                                        })()}
                                     </span>
                                 </div>
                                 {entry.note && (

@@ -17,6 +17,8 @@ import {
 import {
   useGetQuotationsQuery,
   useDeleteQuotationMutation,
+  useConvertToOrderMutation,
+  useUpdateQuotationMutation,
 } from "@/redux/features/quotation/quotationApi";
 import { QuotationTable } from "./components/QuotationTable";
 import { Input } from "@/components/ui/input";
@@ -45,6 +47,35 @@ export default function QuotationsPage() {
   });
 
   const [deleteQuotation] = useDeleteQuotationMutation();
+  const [convertToOrder] = useConvertToOrderMutation();
+  const [updateQuotation] = useUpdateQuotationMutation();
+  const [convertingId, setConvertingId] = useState<string | null>(null);
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
+
+  const handleStatusChange = async (id: string, status: "draft" | "sent" | "accepted" | "rejected") => {
+    try {
+      setUpdatingId(id);
+      await updateQuotation({ id, status }).unwrap();
+      toast.success(`Status updated to ${status}`);
+    } catch (err) {
+      toast.error((err as Error).message || "Failed to update status");
+    } finally {
+      setUpdatingId(null);
+    }
+  };
+
+  const handleConvert = async (id: string) => {
+    try {
+      setConvertingId(id);
+      const result = await convertToOrder(id).unwrap();
+      toast.success("Quotation converted to order successfully");
+      router.push(`/orders/${result.data._id}`);
+    } catch (err) {
+      toast.error((err as Error).message || "Failed to convert quotation to order");
+    } finally {
+      setConvertingId(null);
+    }
+  };
 
   const handleDelete = async (id: string) => {
     if (confirm("Are you sure you want to delete this quotation?")) {
@@ -183,6 +214,10 @@ export default function QuotationsPage() {
             isLoading={isLoading}
             onEdit={handleEdit}
             onDelete={handleDelete}
+            onConvert={handleConvert}
+            onStatusChange={handleStatusChange}
+            isConverting={convertingId}
+            updatingId={updatingId}
           />
         </Card>
       </div>

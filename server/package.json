@@ -30,6 +30,7 @@
         "@paypal/checkout-server-sdk": "^1.0.3",
         "@react-email/components": "^1.0.6",
         "@react-email/render": "^2.0.4",
+        "axios": "^1.15.2",
         "bcrypt": "^6.0.0",
         "better-auth": "^1.4.5",
         "bullmq": "^5.76.0",

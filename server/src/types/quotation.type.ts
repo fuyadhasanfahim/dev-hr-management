@@ -96,6 +96,7 @@ export interface IQuotation extends Document {
     };
 
     status: QuotationStatus;
+    orderId?: Types.ObjectId;
     createdBy: Types.ObjectId;
     createdAt: Date;
     updatedAt: Date;

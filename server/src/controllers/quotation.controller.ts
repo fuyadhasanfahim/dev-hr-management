@@ -131,9 +131,11 @@ export default {
         data: result,
       });
     } catch (error: any) {
+      console.error(`CONVERT ERROR [ID: ${req.params.id}]:`, error);
       res.status(500).json({
         success: false,
         message: error.message || "Failed to convert quotation to order",
+        stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
       });
     }
   },

@@ -50,21 +50,31 @@ export interface ITimelineEntry {
     note?: string;
 }
 
+export interface IOrderItem {
+    serviceId?: string;
+    name: string;
+    pricingModel: string;
+    quantity?: number;
+    hours?: number;
+    unitPrice: number;
+    totalPrice: number;
+}
+
+import { Client } from "./client.type";
+
 export interface IOrder {
     _id: string;
+    // New fields from backend
+    title?: string; 
+    description?: string;
+    orderType?: string;
+    currency?: string;
+    totalAmount?: number;
+    items?: IOrderItem[];
+
+    // Legacy fields
     orderName: string;
-    clientId: {
-        _id: string;
-        clientId: string;
-        name: string;
-        email: string;
-        emails: string[];
-        currency?: string;
-        address?: string;
-        officeAddress?: string;
-        createdBy?: string;
-        teamMembers?: import('./client.type').TeamMember[];
-    };
+    clientId: Client | string;
     orderDate: string;
     deadline: string;
     originalDeadline?: string;

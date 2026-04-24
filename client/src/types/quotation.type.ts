@@ -100,6 +100,7 @@ export interface QuotationData {
   };
 
   status?: "draft" | "sent" | "accepted" | "rejected";
+  orderId?: string;
   createdAt?: string;
   updatedAt?: string;
 }

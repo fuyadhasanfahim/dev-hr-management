@@ -2,19 +2,43 @@
 
 import React from "react";
 import { useParams } from "next/navigation";
-import { useGetQuotationByIdQuery } from "@/redux/features/quotation/quotationApi";
+import { useGetQuotationByIdQuery, useConvertToOrderMutation, useUpdateQuotationMutation } from "@/redux/features/quotation/quotationApi";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Loader2, ArrowLeft, FileText, User, Briefcase } from "lucide-react";
+import { Loader2, ArrowLeft, FileText, User, Briefcase, RefreshCcw, Edit2, Check, X } from "lucide-react";
 import Link from "next/link";
 import PDFDownloadBtn from "@/components/quotation/pdf/PDFDownloadBtn";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import { IconReceipt } from "@tabler/icons-react";
+import { toast } from "sonner";
+import { useRouter } from "next/navigation";
 
 export default function ViewQuotationPage() {
+  const router = useRouter();
   const { id } = useParams();
   const { data, isLoading } = useGetQuotationByIdQuery(id as string);
+  const [convertToOrder, { isLoading: isConverting }] = useConvertToOrderMutation();
+  const [updateQuotation, { isLoading: isUpdating }] = useUpdateQuotationMutation();
+
+  const handleStatusChange = async (status: "draft" | "sent" | "accepted" | "rejected") => {
+    try {
+      await updateQuotation({ id: id as string, status }).unwrap();
+      toast.success(`Quotation ${status}`);
+    } catch (err) {
+      toast.error((err as Error).message || "Failed to update status");
+    }
+  };
+
+  const handleConvert = async () => {
+    try {
+      const result = await convertToOrder(id as string).unwrap();
+      toast.success("Quotation converted to order successfully");
+      router.push(`/orders/${result.data._id}`);
+    } catch (err) {
+      toast.error((err as Error).message || "Failed to convert quotation to order");
+    }
+  };
 
   if (isLoading) {
     return (
@@ -44,7 +68,7 @@ export default function ViewQuotationPage() {
 
   return (
     <div className="flex flex-col h-full bg-slate-50/30">
-      <div className="px-8 py-6 border-b border-slate-200 bg-white flex items-center justify-between shrink-0">
+      <div className="border-b border-slate-200 bg-white flex items-center justify-between shrink-0 pb-3">
         <div className="flex items-center gap-4">
           <Button
             variant="ghost"
@@ -76,6 +100,56 @@ export default function ViewQuotationPage() {
         </div>
         <div className="flex items-center gap-3">
           <PDFDownloadBtn data={data} totalAmounts={data.totals} />
+          
+          {data.status === "draft" && (
+            <Button
+              variant="outline"
+              className="text-blue-600 border-blue-200 hover:bg-blue-50"
+              onClick={() => handleStatusChange("sent")}
+              disabled={isUpdating}
+            >
+              {isUpdating ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <RefreshCcw className="w-4 h-4 mr-2" />}
+              Mark as Sent
+            </Button>
+          )}
+
+          {data.status === "sent" && (
+            <>
+              <Button
+                variant="outline"
+                className="text-teal-600 border-teal-200 hover:bg-teal-50"
+                onClick={() => handleStatusChange("accepted")}
+                disabled={isUpdating}
+              >
+                {isUpdating ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Check className="w-4 h-4 mr-2" />}
+                Accept
+              </Button>
+              <Button
+                variant="outline"
+                className="text-red-600 border-red-200 hover:bg-red-50"
+                onClick={() => handleStatusChange("rejected")}
+                disabled={isUpdating}
+              >
+                {isUpdating ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <X className="w-4 h-4 mr-2" />}
+                Reject
+              </Button>
+            </>
+          )}
+
+          {data.status === "accepted" && (
+            <Button 
+              className="bg-blue-600 hover:bg-blue-700 gap-2 shadow-lg shadow-blue-600/10"
+              onClick={handleConvert}
+              disabled={!!data.orderId || isConverting}
+            >
+              {isConverting ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <RefreshCcw className="w-4 h-4" />
+              )}
+              {data.orderId ? "Converted" : "Convert to Order"}
+            </Button>
+          )}
           <Button variant="outline" asChild>
             <Link href={`/quotations/${id}/edit`}>
               <Edit2 className="w-4 h-4 mr-2" />
@@ -157,23 +231,3 @@ export default function ViewQuotationPage() {
   );
 }
 
-// Inline helper for Edit icon
-function Edit2(props: React.SVGProps<SVGSVGElement>) {
-  return (
-    <svg
-      {...props}
-      xmlns="http://www.w3.org/2000/svg"
-      width="24"
-      height="24"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
-      <path d="m15 5 4 4" />
-    </svg>
-  );
-}

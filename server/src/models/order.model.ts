@@ -136,7 +136,7 @@ const orderSchema = new Schema<IOrder>(
 );
 
 // Auto-calculate totalAmount before saving
-orderSchema.pre('save', function (next: any) {
+orderSchema.pre('save', function () {
     if (this.items && this.items.length > 0) {
         this.totalAmount = this.items.reduce((sum, item) => {
             // Re-calculate totalPrice to ensure integrity
@@ -152,7 +152,6 @@ orderSchema.pre('save', function (next: any) {
     } else {
         this.totalAmount = 0;
     }
-    next();
 });
 
 const OrderModel = model<IOrder>('Order', orderSchema);

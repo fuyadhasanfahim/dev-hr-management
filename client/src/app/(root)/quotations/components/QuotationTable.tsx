@@ -8,8 +8,14 @@ import {
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Eye, Edit2, FileText, Trash2 } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Eye, Edit2, FileText, Trash2, RefreshCcw, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { QuotationData } from "@/types/quotation.type";
 import { format } from "date-fns";
@@ -19,6 +25,10 @@ interface QuotationTableProps {
   isLoading: boolean;
   onEdit: (quotation: QuotationData) => void;
   onDelete: (id: string) => void;
+  onConvert: (id: string) => void;
+  onStatusChange: (id: string, status: "draft" | "sent" | "accepted" | "rejected") => void;
+  isConverting?: string | null;
+  updatingId?: string | null;
 }
 
 export function QuotationTable({
@@ -26,6 +36,10 @@ export function QuotationTable({
   isLoading,
   onEdit,
   onDelete,
+  onConvert,
+  onStatusChange,
+  isConverting,
+  updatingId,
 }: QuotationTableProps) {
   if (isLoading) {
     return (
@@ -110,9 +124,26 @@ export function QuotationTable({
                     {q.settings.currency}{q.totals.grandTotal.toLocaleString()}
                   </TableCell>
                   <TableCell className="text-center">
-                    <Badge variant="outline" className={`${statusColors[q.status || 'draft']} capitalize`}>
-                      {q.status || 'draft'}
-                    </Badge>
+                    {updatingId === q._id ? (
+                      <div className="flex justify-center">
+                        <Loader2 className="w-4 h-4 animate-spin text-slate-400" />
+                      </div>
+                    ) : (
+                      <Select
+                        value={q.status || 'draft'}
+                        onValueChange={(val) => q._id && onStatusChange(q._id, val as "draft" | "sent" | "accepted" | "rejected")}
+                      >
+                        <SelectTrigger className={`h-7 w-[100px] mx-auto border-none shadow-none focus:ring-0 ${statusColors[q.status || 'draft']} capitalize font-semibold text-[11px] rounded-full px-2.5`}>
+                          <SelectValue placeholder="Status" />
+                        </SelectTrigger>
+                        <SelectContent className="min-w-[120px]">
+                          <SelectItem value="draft" className="text-xs capitalize">Draft</SelectItem>
+                          <SelectItem value="sent" className="text-xs capitalize">Sent</SelectItem>
+                          <SelectItem value="accepted" className="text-xs capitalize text-teal-600">Accepted</SelectItem>
+                          <SelectItem value="rejected" className="text-xs capitalize text-red-600">Rejected</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    )}
                   </TableCell>
                   <TableCell className="text-slate-500 text-sm">
                     {format(new Date(q.createdAt || new Date), "MMM dd, yyyy")}
@@ -124,6 +155,22 @@ export function QuotationTable({
                           <Eye className="h-4 w-4" />
                         </Link>
                       </Button>
+                      {q.status === 'accepted' && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-slate-400 hover:text-blue-600"
+                          onClick={() => q._id && onConvert(q._id)}
+                          disabled={!!q.orderId || isConverting === q._id}
+                          title={q.orderId ? "Already converted to order" : "Convert to Order"}
+                        >
+                          {isConverting === q._id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <RefreshCcw className="h-4 w-4" />
+                          )}
+                        </Button>
+                      )}
                       <Button
                         variant="ghost"
                         size="icon"
