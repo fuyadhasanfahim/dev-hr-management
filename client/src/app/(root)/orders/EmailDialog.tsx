@@ -53,7 +53,8 @@ export const EmailDialog: React.FC<EmailDialogProps> = ({
     const [selectedEmails, setSelectedEmails] = useState<string[]>([]);
     const [prevOrderAndStatus, setPrevOrderAndStatus] = useState<{ id: string; status: OrderStatus } | null>(null);
 
-    const clientId = order?.clientId?._id;
+    const client = order?.clientId && typeof order.clientId === "object" ? order.clientId : null;
+    const clientId = client?._id || (typeof order?.clientId === "string" ? order.clientId : undefined);
     const { data: emailsData, isLoading: isLoadingEmails } = useGetClientEmailsQuery(clientId!, {
         skip: !clientId || !open,
     });
@@ -71,14 +72,14 @@ export const EmailDialog: React.FC<EmailDialogProps> = ({
         
         const tmpl = defaultTemplates[status] || `Status updated to ${status}.`;
         const msg = tmpl
-            .replace("{clientName}", order.clientId?.name || "Client")
+            .replace("{clientName}", client?.name || "Client")
             .replace("{orderName}", order.orderName || "Order");
 
         setMessage(msg);
         setDownloadLink("");
         
-        if (order.clientId?.emails?.[0]) {
-            setSelectedEmails([order.clientId.emails[0]]);
+        if (client?.emails?.[0]) {
+            setSelectedEmails([client.emails[0]]);
         } else {
             setSelectedEmails([]);
         }
@@ -103,7 +104,7 @@ export const EmailDialog: React.FC<EmailDialogProps> = ({
                         Send Email Notification
                     </DialogTitle>
                     <DialogDescription>
-                        Customise the email that will be sent to <strong>{order.clientId?.name}</strong> regarding the order status changing to <strong>{status}</strong>.
+                        Customise the email that will be sent to <strong>{client?.name || "Client"}</strong> regarding the order status changing to <strong>{status}</strong>.
                     </DialogDescription>
                 </DialogHeader>
 

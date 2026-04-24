@@ -133,15 +133,16 @@ export default function InvoicePage() {
             }
         >();
         allOrders.forEach((order: IOrder) => {
-            if (order.clientId && !clientMap.has(order.clientId._id)) {
-                clientMap.set(order.clientId._id, {
-                    _id: order.clientId._id,
-                    name: order.clientId.name,
-                    clientId: order.clientId.clientId,
-                    currency: order.clientId.currency,
-                    address: order.clientId.address,
-                    officeAddress: order.clientId.officeAddress,
-                    emails: order.clientId.emails,
+            const client = order.clientId && typeof order.clientId === "object" ? order.clientId : null;
+            if (client && !clientMap.has(client._id)) {
+                clientMap.set(client._id, {
+                    _id: client._id,
+                    name: client.name,
+                    clientId: client.clientId,
+                    currency: client.currency,
+                    address: client.address,
+                    officeAddress: client.officeAddress,
+                    emails: client.emails,
                 });
             }
         });
@@ -154,7 +155,7 @@ export default function InvoicePage() {
     const orders = useMemo(() => {
         if (!selectedClientId) return [];
         return allOrders.filter(
-            (order: IOrder) => order.clientId?._id === selectedClientId,
+            (order: IOrder) => (typeof order.clientId === 'object' ? order.clientId?._id : order.clientId) === selectedClientId,
         );
     }, [allOrders, selectedClientId]);
 

@@ -40,7 +40,6 @@ async function createOrderInDB(payload: Partial<IOrder>) {
 
 async function getAllOrdersFromDB(query: any) {
     const { page = 1, limit = 10, search, status, orderType, clientId } = query;
-    const skip = (page - 1) * limit;
 
     const filter: any = {};
 
