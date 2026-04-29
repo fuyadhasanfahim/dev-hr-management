@@ -1,105 +1,85 @@
 export type ServiceType = "web-development" | "product-photography";
 
-export interface CompanyDetails {
-  logo?: string;
-  name: string;
-  address: string;
-  email: string;
-  phone: string;
-  website: string;
-}
+export type QuotationStatus =
+  | "draft"
+  | "sent"
+  | "accepted"
+  | "rejected"
+  | "superseded"
+  | "expired"
+  | "change_requested";
 
-export interface ClientDetails {
-  contactName: string;
-  companyName: string;
-  address: string;
-  email: string;
-  phone: string;
-}
-
-export interface QuotationDetails {
+export interface IQuotationPhase {
   title: string;
-  quotationNumber: string;
-  date: string;
-  validUntil: string;
-}
-
-export interface ScopePhase {
-  id: string;
-  title: string;
-  description: string;
+  description?: string;
   items: string[];
 }
 
-export interface TechStack {
-  frontend: string[];
-  backend: string[];
-  tools: string[];
-  database: string[];
-}
-
-export interface Settings {
-  currency: "$" | "৳" | "€" | "£";
-  taxRate: number;
-  discount: number;
-}
-
-export interface OptionalService {
-  id: string;
+export interface IAdditionalService {
   title: string;
   price: number;
-  description: string;
-  items: string[];
-  type: "recurring" | "one-time";
-}
-
-export interface PhotographyItem {
-  id: string;
-  title: string;
-  outputString: string;
-  quantity: number;
-  price: number;
+  billingCycle: "one-time" | "monthly" | "yearly";
+  description?: string;
 }
 
 export interface QuotationData {
   _id?: string;
   quotationNumber?: string;
+  quotationGroupId?: string;
+  version?: number;
+  isLatestVersion?: boolean;
+
   serviceType: ServiceType;
   clientId: string;
-  company: CompanyDetails;
-  client: ClientDetails;
-  details: QuotationDetails;
 
-  overview: string;
-  scopeOfWork: ScopePhase[];
-  techStack: TechStack;
-  features: string[];
-  adminFeatures: string[];
-  marketingSetup: string[];
-  deliveryTimeline: string;
-
-  pricing: {
-    totalCost: number;
-    included: string[];
-    notIncluded: string[];
+  company: {
+    name: string;
+    address?: string;
+    email?: string;
+    phone?: string;
+    website?: string;
+    logo?: string;
+  };
+  client: {
+    contactName: string;
+    companyName?: string;
+    address?: string;
+    email?: string;
+    phone?: string;
+  };
+  details: {
+    title: string;
+    date: string;
+    validUntil: string;
   };
 
-  optionalServices: OptionalService[];
-  photographyItems: PhotographyItem[];
+  // ── Unified Content ───────────────────────────────────────────────────
+  overview?: string;
+  phases: IQuotationPhase[];
+  
+  techStack: {
+    frontend: string;
+    backend: string;
+    database: string;
+    tools: string[];
+  };
 
+  pricing: {
+    basePrice: number;
+    taxRate: number;
+    discount: number;
+  };
+
+  additionalServices: IAdditionalService[];
   workflow: string[];
-  finalNote: string;
-
-  settings: Settings;
 
   totals: {
-    packagePrice: number;
-    additionalTotal: number;
+    subtotal: number;
     taxAmount: number;
     grandTotal: number;
   };
 
-  status?: "draft" | "sent" | "accepted" | "rejected";
+  status?: QuotationStatus;
   orderId?: string;
   createdAt?: string;
   updatedAt?: string;

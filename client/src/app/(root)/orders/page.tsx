@@ -14,6 +14,7 @@ import {
   useGetOrderYearsQuery,
 } from "@/redux/features/order/orderApi";
 import { useGetClientsQuery } from "@/redux/features/client/clientApi";
+import { IconReceipt } from "@tabler/icons-react";
 import type {
   IOrder,
   OrderStatus,
@@ -128,8 +129,13 @@ const statusWorkflow: Record<OrderStatus, OrderStatus[]> = {
   quality_check: ["completed", "revision", "in_progress"],
   revision: ["in_progress", "cancelled"],
   completed: ["delivered", "revision"],
-  delivered: [], // Final state - no transitions allowed
-  cancelled: [], // Final state - no transitions allowed
+  delivered: [], 
+  cancelled: [],
+  // ── New Pipeline Transitions ──────────────────────────────────────
+  pending_upfront: ["cancelled"], // Moves to 'active' via webhook
+  active: ["pending_delivery", "cancelled"], // Staff triggers delivery
+  pending_delivery: ["cancelled"], // Moves to 'delivered' via webhook
+  pending_final: ["completed"], // Moves to 'completed' via webhook
 };
 
 // Helper function to check if a status transition is allowed
@@ -769,35 +775,19 @@ export default function OrdersPage() {
                 Generate Invoice
               </Link>
             </Button>
-            <Dialog
-              open={isAddDialogOpen}
-              onOpenChange={(open) => {
-                setIsAddDialogOpen(open);
-                if (!open) setServerErrors(undefined);
-              }}
-            >
-              <DialogTrigger asChild>
-                <Button>
-                  <Plus />
-                  Add Order
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-2xl! max-h-[90vh] overflow-y-auto">
-                <DialogHeader>
-                  <DialogTitle>Create New Order</DialogTitle>
-                  <DialogDescription>
-                    Fill in the order details
-                  </DialogDescription>
-                </DialogHeader>
-                <OrderForm
-                  onSubmit={handleCreateOrder}
-                  isSubmitting={isCreating}
-                  submitLabel="Create Order"
-                  onCancel={() => setIsAddDialogOpen(false)}
-                  serverErrors={serverErrors}
-                />
-              </DialogContent>
-            </Dialog>
+            <Button variant="outline" asChild>
+              <Link href="/quotations">
+                <IconReceipt className=" h-4 w-4" />
+                Quotation Pipeline
+              </Link>
+            </Button>
+            {/* Manual Add Order is disabled - redirect to Quotations */}
+            <Button asChild>
+              <Link href="/quotations/new">
+                <Plus />
+                New Quotation
+              </Link>
+            </Button>
           </div>
         </CardHeader>
         <CardContent className="space-y-4">

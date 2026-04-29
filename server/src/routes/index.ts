@@ -29,6 +29,7 @@ import payrollBankSettingsRoute from "./payroll-bank-settings.route.js";
 import { PaymentRoutes } from "./payment.route.js";
 import { policyRoute } from "./policy.route.js";
 import { quotationRoute } from "./quotation.route.js";
+import { quotationPaymentRoute } from "./quotation-payment.route.js";
 
 const router: Router = Router();
 
@@ -152,6 +153,10 @@ const moduleRoutes = [
     {
         path: "/quotations",
         route: quotationRoute,
+    },
+    {
+        path: "/quotation-payments",
+        route: quotationPaymentRoute,
     },
 ];
 

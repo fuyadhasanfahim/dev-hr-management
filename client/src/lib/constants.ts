@@ -8,6 +8,11 @@ export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
   completed: "Completed",
   delivered: "Delivered",
   cancelled: "Cancelled",
+  // ── New Pipeline Statuses ───────────────────────────────────────────
+  pending_upfront: "Awaiting 50% Upfront",
+  active: "Active (Paid)",
+  pending_delivery: "Awaiting 30% Delivery",
+  pending_final: "Awaiting 20% Final",
 };
 
 export const ORDER_PRIORITY_LABELS: Record<OrderPriority, string> = {
@@ -25,6 +30,11 @@ export const ORDER_STATUS_COLORS: Record<OrderStatus, string> = {
   completed: "bg-green-500/20 text-green-700 dark:text-green-400",
   delivered: "bg-emerald-500/20 text-emerald-700 dark:text-emerald-400",
   cancelled: "bg-red-500/20 text-red-700 dark:text-red-400",
+  // ── New Pipeline Colors ────────────────────────────────────────────
+  pending_upfront: "bg-amber-500/20 text-amber-700 dark:text-amber-400 border-amber-200",
+  active: "bg-teal-500/20 text-teal-700 dark:text-teal-400 border-teal-200",
+  pending_delivery: "bg-indigo-500/20 text-indigo-700 dark:text-indigo-400 border-indigo-200",
+  pending_final: "bg-cyan-500/20 text-cyan-700 dark:text-cyan-400 border-cyan-200",
 };
 
 export const ORDER_PRIORITY_COLORS: Record<OrderPriority, string> = {

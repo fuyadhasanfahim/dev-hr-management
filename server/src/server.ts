@@ -4,6 +4,7 @@ import { createServer } from "http";
 import app from "./app.js";
 import schedulerService from "./services/scheduler.service.js";
 import { initSocket } from "./socket.js";
+import { registerQuotationEventWorker } from "./services/quotation-event.worker.js";
 
 const { port, mongo_uri } = envConfig;
 
@@ -23,6 +24,10 @@ async function Server() {
                 `Server is listening the port: http://localhost:${port}`,
             );
         });
+
+        // Register BullMQ workers
+        // QuotationEventWorker handles: order creation, asset unlock, order completion
+        registerQuotationEventWorker();
 
         // Start all schedulers (attendance, overtime, leave)
         schedulerService.startAllSchedulers();

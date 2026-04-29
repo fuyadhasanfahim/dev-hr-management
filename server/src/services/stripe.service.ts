@@ -10,6 +10,39 @@ export const stripe = new Stripe(envConfig.stripe_secret_key, {
     apiVersion: '2026-02-25.clover',
 });
 
+// ─── Phase-based Payment Intent (Quotation Pipeline) ─────────────────────────
+
+export interface CreatePhaseIntentParams {
+    amountCents: number;
+    currency: string;
+    quotationGroupId: string;
+    phase: 'upfront' | 'delivery' | 'final';
+    quotationId: string;
+    quotationNumber: string;
+    idempotencyKey: string;
+}
+
+/**
+ * Creates a Stripe PaymentIntent for a quotation payment phase.
+ * Uses Stripe-level idempotency key to prevent duplicate intents.
+ */
+export async function createPaymentIntentForPhase(params: CreatePhaseIntentParams) {
+    const intent = await stripe.paymentIntents.create(
+        {
+            amount: params.amountCents,
+            currency: params.currency.toLowerCase(),
+            metadata: {
+                quotationGroupId: params.quotationGroupId,
+                phase: params.phase,
+                quotationId: params.quotationId,
+            },
+            description: `${params.phase} payment — Quotation ${params.quotationNumber}`,
+        },
+        { idempotencyKey: params.idempotencyKey },
+    );
+    return { clientSecret: intent.client_secret!, paymentIntentId: intent.id };
+}
+
 export async function createCheckoutSession(invoice: IInvoice, clientEmail: string) {
     const session = await stripe.checkout.sessions.create({
         payment_method_types: ['card'],

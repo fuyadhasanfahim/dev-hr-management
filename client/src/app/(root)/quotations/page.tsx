@@ -17,8 +17,7 @@ import {
 import {
   useGetQuotationsQuery,
   useDeleteQuotationMutation,
-  useConvertToOrderMutation,
-  useUpdateQuotationMutation,
+  useSendQuotationMutation,
 } from "@/redux/features/quotation/quotationApi";
 import { QuotationTable } from "./components/QuotationTable";
 import { Input } from "@/components/ui/input";
@@ -47,41 +46,33 @@ export default function QuotationsPage() {
   });
 
   const [deleteQuotation] = useDeleteQuotationMutation();
-  const [convertToOrder] = useConvertToOrderMutation();
-  const [updateQuotation] = useUpdateQuotationMutation();
-  const [convertingId, setConvertingId] = useState<string | null>(null);
-  const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [sendQuotation, { isLoading: isSending }] = useSendQuotationMutation();
+  const [sendingId, setSendingId] = useState<string | null>(null);
 
-  const handleStatusChange = async (id: string, status: "draft" | "sent" | "accepted" | "rejected") => {
+  const handleSend = async (id: string) => {
     try {
-      setUpdatingId(id);
-      await updateQuotation({ id, status }).unwrap();
-      toast.success(`Status updated to ${status}`);
+      setSendingId(id);
+      const result = await sendQuotation(id).unwrap();
+      
+      // Copy to clipboard
+      if (result.data.clientLink) {
+        await navigator.clipboard.writeText(result.data.clientLink);
+        toast.success("Secure payment link copied to clipboard!");
+      }
+      
+      toast.success("Quotation marked as sent");
     } catch (err) {
-      toast.error((err as Error).message || "Failed to update status");
+      toast.error((err as Error).message || "Failed to send quotation");
     } finally {
-      setUpdatingId(null);
-    }
-  };
-
-  const handleConvert = async (id: string) => {
-    try {
-      setConvertingId(id);
-      const result = await convertToOrder(id).unwrap();
-      toast.success("Quotation converted to order successfully");
-      router.push(`/orders/${result.data._id}`);
-    } catch (err) {
-      toast.error((err as Error).message || "Failed to convert quotation to order");
-    } finally {
-      setConvertingId(null);
+      setSendingId(null);
     }
   };
 
   const handleDelete = async (id: string) => {
-    if (confirm("Are you sure you want to delete this quotation?")) {
+    if (confirm("Are you sure? This will also delete any associated order and payment logs.")) {
       try {
         await deleteQuotation(id).unwrap();
-        toast.success("Quotation deleted successfully");
+        toast.success("Quotation and associated records deleted");
       } catch (err) {
         toast.error((err as Error).message || "Failed to delete quotation");
       }
@@ -100,20 +91,20 @@ export default function QuotationsPage() {
       color: "bg-blue-50 text-blue-600",
     },
     {
-      label: "Drafts",
-      value: qData?.items.filter((i) => i.status === "draft").length || 0,
+      label: "Latest Drafts",
+      value: qData?.items.filter((i) => i.status === "draft" && i.isLatestVersion).length || 0,
       icon: <IconClock size={20} />,
       color: "bg-amber-50 text-amber-600",
     },
     {
-      label: "Sent",
-      value: qData?.items.filter((i) => i.status === "sent").length || 0,
+      label: "Active Links",
+      value: qData?.items.filter((i) => i.status === "sent" && i.isLatestVersion).length || 0,
       icon: <IconCheck size={20} />,
       color: "bg-green-50 text-green-600",
     },
     {
-      label: "Revenue",
-      value: `৳${(qData?.items.reduce((acc, i) => acc + i.totals.grandTotal, 0) || 0).toLocaleString()}`,
+      label: "Project Value",
+      value: `৳${(qData?.items.filter(i => i.isLatestVersion).reduce((acc, i) => acc + i.totals.grandTotal, 0) || 0).toLocaleString()}`,
       icon: <IconReceipt size={20} />,
       color: "bg-teal-50 text-teal-600",
     },
@@ -124,26 +115,19 @@ export default function QuotationsPage() {
       {/* Header */}
       <div className="px-8 py-6 border-b border-slate-200 bg-white flex items-center justify-between shrink-0">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Quotations</h1>
+          <h1 className="text-2xl font-bold text-slate-900">Quotation Pipeline</h1>
           <p className="text-sm text-slate-500">
-            Generate and manage project proposals
+            Secure, version-controlled quotation-to-order workflow
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <Button
-            variant="outline"
-            className="gap-2 border-slate-200 text-slate-600"
-          >
-            <IconDownload size={18} />
-            Export
-          </Button>
           <Link
             href="/quotations/new"
             onClick={() => useQuotationStore.getState().reset()}
           >
             <Button className="bg-teal-600 hover:bg-teal-700 gap-2 shadow-lg shadow-teal-600/10">
               <IconPlus size={18} />
-              Create Quotation
+              New Quotation
             </Button>
           </Link>
         </div>
@@ -200,7 +184,8 @@ export default function QuotationsPage() {
               <SelectItem value="draft">Draft</SelectItem>
               <SelectItem value="sent">Sent</SelectItem>
               <SelectItem value="accepted">Accepted</SelectItem>
-              <SelectItem value="rejected">Rejected</SelectItem>
+              <SelectItem value="superseded">Superseded</SelectItem>
+              <SelectItem value="expired">Expired</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -214,10 +199,8 @@ export default function QuotationsPage() {
             isLoading={isLoading}
             onEdit={handleEdit}
             onDelete={handleDelete}
-            onConvert={handleConvert}
-            onStatusChange={handleStatusChange}
-            isConverting={convertingId}
-            updatingId={updatingId}
+            onSend={handleSend}
+            sendingId={sendingId}
           />
         </Card>
       </div>

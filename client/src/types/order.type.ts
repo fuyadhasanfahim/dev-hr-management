@@ -5,7 +5,12 @@ export type OrderStatus =
     | "revision"
     | "completed"
     | "delivered"
-    | "cancelled";
+    | "cancelled"
+    // ── Quotation Pipeline Statuses (New) ───────────────────────────────
+    | "pending_upfront"
+    | "active"
+    | "pending_delivery"
+    | "pending_final";
 
 export type OrderPriority = "low" | "normal" | "high" | "urgent";
 
@@ -35,18 +40,16 @@ export interface IReturnFileFormat {
     updatedAt: string;
 }
 
-// Revision instruction entry
 export interface IRevisionInstruction {
     instruction: string;
     createdAt: string;
-    createdBy: string; // User ID (not populated)
+    createdBy: string;
 }
 
-// Timeline entry for tracking order history
 export interface ITimelineEntry {
     status: OrderStatus;
     timestamp: string;
-    changedBy: string; // User ID (not populated)
+    changedBy: string;
     note?: string;
 }
 
@@ -62,9 +65,22 @@ export interface IOrderItem {
 
 import { Client } from "./client.type";
 
+export interface IOrderAsset {
+    id: string;
+    name: string;
+    url: string;
+    isLocked: boolean;
+}
+
 export interface IOrder {
     _id: string;
-    // New fields from backend
+    
+    // ── Pipeline Fields (New) ───────────────────────────────────────────
+    quotationGroupId?: string;
+    quotationSnapshot?: any;
+    assets?: IOrderAsset[];
+    // ──────────────────────────────────────────────────────────────────
+
     title?: string; 
     description?: string;
     orderType?: string;
@@ -72,7 +88,6 @@ export interface IOrder {
     totalAmount?: number;
     items?: IOrderItem[];
 
-    // Legacy fields
     orderName: string;
     clientId: Client | string;
     orderDate: string;
@@ -96,7 +111,7 @@ export interface IOrder {
     contactPersonId?: string;
     notes?: string;
     revisionCount: number;
-    isLegacy?: boolean; // Flag for migrated orders
+    isLegacy?: boolean; 
     earning?: {
         status: "paid" | "unpaid";
     };
@@ -161,40 +176,6 @@ export interface AddRevisionInput {
     instruction: string;
 }
 
-export interface CreateServiceInput {
-    name: string;
-    category?: string;
-    pricingModel?: 'fixed' | 'hourly' | 'milestone';
-    basePrice?: number;
-    hourlyRate?: number;
-    milestoneNotes?: string;
-    description?: string;
-}
-
-export interface UpdateServiceInput {
-    name?: string;
-    category?: string;
-    pricingModel?: 'fixed' | 'hourly' | 'milestone';
-    basePrice?: number;
-    hourlyRate?: number;
-    milestoneNotes?: string;
-    description?: string;
-    isActive?: boolean;
-}
-
-export interface CreateReturnFileFormatInput {
-    name: string;
-    extension: string;
-    description?: string;
-}
-
-export interface UpdateReturnFileFormatInput {
-    name?: string;
-    extension?: string;
-    description?: string;
-    isActive?: boolean;
-}
-
 export interface OrderFilters {
     clientId?: string;
     status?: OrderStatus;
@@ -207,4 +188,3 @@ export interface OrderFilters {
     page?: number;
     limit?: number;
 }
-// Labels and other constants moved to @/lib/constants.ts

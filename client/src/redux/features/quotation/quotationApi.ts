@@ -19,6 +19,7 @@ export interface QuotationQueryParams {
 
 export const quotationApi = apiSlice.injectEndpoints({
   endpoints: (builder) => ({
+    // ── Read ──────────────────────────────────────────────────────────────
     getQuotations: builder.query<QuotationsResponse, QuotationQueryParams>({
       query: (params) => ({
         url: '/quotations',
@@ -28,6 +29,7 @@ export const quotationApi = apiSlice.injectEndpoints({
       transformResponse: (response: { data: QuotationsResponse }) => response.data,
       providesTags: ['Quotation'],
     }),
+
     getQuotationById: builder.query<QuotationData, string>({
       query: (id) => ({
         url: `/quotations/${id}`,
@@ -36,6 +38,17 @@ export const quotationApi = apiSlice.injectEndpoints({
       transformResponse: (response: { data: QuotationData }) => response.data,
       providesTags: ['Quotation'],
     }),
+
+    getGroupVersions: builder.query<QuotationData[], string>({
+      query: (groupId) => ({
+        url: `/quotations/group/${groupId}/versions`,
+        method: 'GET',
+      }),
+      transformResponse: (response: { data: QuotationData[] }) => response.data,
+      providesTags: ['Quotation'],
+    }),
+
+    // ── Create ────────────────────────────────────────────────────────────
     createQuotation: builder.mutation<QuotationData, Partial<QuotationData>>({
       query: (body) => ({
         url: '/quotations',
@@ -44,6 +57,20 @@ export const quotationApi = apiSlice.injectEndpoints({
       }),
       invalidatesTags: ['Quotation'],
     }),
+
+    createNewVersion: builder.mutation<
+      { data: QuotationData },
+      { groupId: string; data: Partial<QuotationData> }
+    >({
+      query: ({ groupId, data }) => ({
+        url: `/quotations/group/${groupId}/version`,
+        method: 'POST',
+        body: data,
+      }),
+      invalidatesTags: ['Quotation'],
+    }),
+
+    // ── Update ────────────────────────────────────────────────────────────
     updateQuotation: builder.mutation<QuotationData, { id: string } & Partial<QuotationData>>({
       query: ({ id, ...body }) => ({
         url: `/quotations/${id}`,
@@ -52,17 +79,24 @@ export const quotationApi = apiSlice.injectEndpoints({
       }),
       invalidatesTags: ['Quotation'],
     }),
+
+    /**
+     * Send quotation to client — generates a secure token and returns a shareable link.
+     * POST /quotations/:id/send
+     */
+    sendQuotation: builder.mutation<{ data: { clientLink: string } }, string>({
+      query: (id) => ({
+        url: `/quotations/${id}/send`,
+        method: 'POST',
+      }),
+      invalidatesTags: ['Quotation'],
+    }),
+
+    // ── Delete ────────────────────────────────────────────────────────────
     deleteQuotation: builder.mutation<void, string>({
       query: (id) => ({
         url: `/quotations/${id}`,
         method: 'DELETE',
-      }),
-      invalidatesTags: ['Quotation'],
-    }),
-    convertToOrder: builder.mutation<{ success: boolean; data: { _id: string } }, string>({
-      query: (id) => ({
-        url: `/quotations/${id}/convert`,
-        method: 'POST',
       }),
       invalidatesTags: ['Quotation', 'Order'],
     }),
@@ -72,8 +106,10 @@ export const quotationApi = apiSlice.injectEndpoints({
 export const {
   useGetQuotationsQuery,
   useGetQuotationByIdQuery,
+  useGetGroupVersionsQuery,
   useCreateQuotationMutation,
+  useCreateNewVersionMutation,
   useUpdateQuotationMutation,
+  useSendQuotationMutation,
   useDeleteQuotationMutation,
-  useConvertToOrderMutation,
 } = quotationApi;

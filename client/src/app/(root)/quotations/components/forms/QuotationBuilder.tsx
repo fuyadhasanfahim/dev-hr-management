@@ -7,6 +7,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -18,20 +20,17 @@ import {
   FileText,
   User,
   Building2,
-  StickyNote,
   List,
   Cpu,
-  Monitor,
-  Briefcase,
   Plus,
   Trash2,
   Sparkles,
-  Camera,
   Save,
   Send,
-  Loader2,
+  Receipt,
+  Layers,
+  Activity,
 } from "lucide-react";
-import PDFDownloadBtn from "@/components/quotation/pdf/PDFDownloadBtn";
 import { useGetClientsQuery } from "@/redux/features/client/clientApi";
 import {
   useCreateQuotationMutation,
@@ -39,109 +38,34 @@ import {
 } from "@/redux/features/quotation/quotationApi";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
+import { QUOTATION_TEMPLATES } from "@/constants/quotation-templates";
+import { cn } from "@/lib/utils";
 
-const PREDEFINED_WEB_PHASES = [
-  {
-    id: "phase-1",
-    title: "UI/UX Design Phase",
-    items: [
-      "Full UI design shared for review.",
-      "Feedback and revisions finalized in this phase.",
-      "Upon approval, development begins.",
-    ],
-  },
-  {
-    id: "phase-2",
-    title: "Frontend Development Phase",
-    items: [
-      "Homepage with banners & featured sections",
-      "Product listing with categories & filters",
-      "Product details page",
-      "Search functionality",
-      "Shopping cart system",
-      "Checkout process",
-      "User login & registration",
-      "Order tracking interface",
-      "Offers & discount display",
-      "Contact & support pages",
-      "Newsletter subscription",
-      "Mobile responsive design",
-    ],
-  },
-  {
-    id: "phase-3",
-    title: "Admin Dashboard & Backend Phase",
-    items: [
-      "Admin dashboard overview",
-      "User & role management",
-      "Product & category management",
-      "Inventory management",
-      "Order management & status tracking",
-      "Customer management",
-      "Shopping cart monitoring",
-      "Payment management",
-      "Coupon & discount management",
-      "Review & rating management",
-      "Marketing tools & campaign management",
-      "Analytics & sales reports",
-      "Courier integration & parcel booking",
-      "Shipment tracking from courier",
-      "Fraud detection & order validation",
-      "CMS & content management",
-      "Contact & support management",
-      "System settings & configuration",
-    ],
-  },
-  {
-    id: "phase-4",
-    title: "Marketing & SEO Phase",
-    items: [
-      "Facebook Pixel integration",
-      "Google Analytics (GA4) setup",
-      "Conversion tracking ready structure",
-      "Custom data layer implementation",
-      "Google Tag Manager (GTM) integration",
-      "Event tracking (add to cart, purchase, etc.)",
-      "Ecommerce tracking setup",
-      "Page speed & performance optimization",
-      "Search engine indexing setup (Google Search Console)",
-    ],
-  },
-];
+// ── Components ───────────────────────────────────────────────────────────────
 
 function FormSection({
-  id,
   title,
   icon,
-  badge,
   children,
+  className,
 }: {
-  id: string;
   title: string;
   icon: React.ReactNode;
-  badge?: string;
   children: React.ReactNode;
+  className?: string;
 }) {
   return (
-    <Card
-      id={`section-${id}`}
-      className="overflow-hidden border-slate-200 shadow-sm"
-    >
-      <div className="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-        <div className="flex items-center gap-3">
-          <span className="text-slate-500">{icon}</span>
-          <h2 className="font-semibold text-slate-900">{title}</h2>
-        </div>
-        {badge && (
-          <span className="text-[10px] bg-slate-200 text-slate-700 font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
-            {badge}
-          </span>
-        )}
+    <Card className={cn("overflow-hidden border-slate-200 shadow-sm", className)}>
+      <div className="px-5 py-3 border-b border-slate-100 flex items-center gap-3 bg-slate-50/50">
+        <span className="text-slate-400">{icon}</span>
+        <h2 className="font-semibold text-slate-900 text-sm uppercase tracking-wider">{title}</h2>
       </div>
       <div className="p-5">{children}</div>
     </Card>
   );
 }
+
+// ── Main Builder ─────────────────────────────────────────────────────────────
 
 export default function QuotationBuilder() {
   const router = useRouter();
@@ -152,1025 +76,401 @@ export default function QuotationBuilder() {
     updateClient,
     updateDetails,
     loadTemplate,
-    updateSettings,
     updateOverview,
     updateTechStack,
     updateWorkflow,
-    updateFinalNote,
     updatePricing,
-    addScopePhase,
-    updateScopePhase,
-    removeScopePhase,
-    addOptionalService,
-    updateOptionalService,
-    removeOptionalService,
-    addPhotographyItem,
-    updatePhotographyItem,
-    removePhotographyItem,
+    addPhase,
+    updatePhase,
+    removePhase,
+    addService,
+    updateService,
+    removeService,
     reset,
   } = useQuotationStore();
 
-  const { data: clientsData, isLoading: clientsLoading } = useGetClientsQuery(
-    {},
-  );
-  const [createQuotation, { isLoading: isCreating }] =
-    useCreateQuotationMutation();
-  const [updateQuotation, { isLoading: isUpdating }] =
-    useUpdateQuotationMutation();
+  const { data: clientsData, isLoading: clientsLoading } = useGetClientsQuery({});
+  const [createQuotation, { isLoading: isCreating }] = useCreateQuotationMutation();
+  const [updateQuotation, { isLoading: isUpdating }] = useUpdateQuotationMutation();
 
-  const handleListChange = (val: string, updater: (arr: string[]) => void) => {
-    updater(val.split("\n").filter(Boolean));
-  };
-
-  const totalAmounts = useMemo(() => {
-    const packagePrice =
-      data.serviceType === "web-development"
-        ? data.pricing.totalCost
-        : data.photographyItems.reduce(
-            (acc, item) => acc + item.quantity * item.price,
-            0,
-          );
-
-    const additionalTotal =
-      data.serviceType === "web-development"
-        ? data.optionalServices.reduce((acc, srv) => acc + srv.price, 0)
-        : 0;
-
-    const subtotal = packagePrice + additionalTotal - data.settings.discount;
-    const taxAmount = (subtotal * data.settings.taxRate) / 100;
-    const grandTotal = subtotal + taxAmount;
+  // ── Computed Totals ──
+  const computedTotals = useMemo(() => {
+    const subtotal = data.pricing.basePrice + data.additionalServices.reduce((acc, s) => acc + s.price, 0);
+    const discountAmount = data.pricing.discount;
+    const netSubtotal = subtotal - discountAmount;
+    const taxAmount = (netSubtotal * data.pricing.taxRate) / 100;
+    const grandTotal = netSubtotal + taxAmount;
 
     return {
-      packagePrice,
-      additionalTotal,
+      subtotal: netSubtotal,
       taxAmount,
       grandTotal,
     };
-  }, [data]);
+  }, [data.pricing, data.additionalServices]);
 
-  // Sync totals to store for PDF generation without causing infinite loop
+  // Sync totals to store for PDF/Backend
   useEffect(() => {
-    if (
-      data.totals.packagePrice !== totalAmounts.packagePrice ||
-      data.totals.additionalTotal !== totalAmounts.additionalTotal ||
-      data.totals.taxAmount !== totalAmounts.taxAmount ||
-      data.totals.grandTotal !== totalAmounts.grandTotal
-    ) {
-      useQuotationStore.setState((state) => ({
-        data: {
-          ...state.data,
-          totals: totalAmounts,
-        },
-      }));
-    }
-  }, [totalAmounts, data.totals]);
-
-  const handleClientSelect = (clientId: string) => {
-    const client = clientsData?.clients.find((c) => c._id === clientId);
-    if (client) {
-      updateClient({
-        contactName: client.name,
-        companyName: client.name, // Usually company name for B2B
-        address: client.address || "",
-        email: client.emails[0] || "",
-        phone: client.phone || "",
-      });
-      useQuotationStore.setState((state) => ({
-        data: {
-          ...state.data,
-          clientId: clientId,
-        },
-      }));
-    }
-  };
+    useQuotationStore.setState((state) => ({
+      data: { ...state.data, totals: computedTotals },
+    }));
+  }, [computedTotals]);
 
   const handleSave = async (status: "draft" | "sent") => {
+    if (!data.clientId) return toast.error("Please select a client first");
+    
     try {
-      if (!data.clientId) {
-        toast.error("Please select a client first");
-        return;
-      }
-
       const payload = { ...data, status };
-
-      let result;
       if (data._id) {
-        result = await updateQuotation({ id: data._id, ...payload }).unwrap();
-        toast.success(
-          `Quotation ${status === "draft" ? "draft saved" : "sent"} successfully`,
-        );
+        await updateQuotation({ id: data._id, ...payload }).unwrap();
+        toast.success("Quotation updated successfully");
       } else {
-        result = await createQuotation(payload).unwrap();
-        toast.success(
-          `Quotation ${status === "draft" ? "draft created" : "sent"} successfully`,
-        );
+        await createQuotation(payload).unwrap();
+        toast.success("Quotation created successfully");
       }
-
       if (status === "sent") {
         reset();
         router.push("/quotations");
-      } else if (result._id && !data._id) {
-        useQuotationStore.setState((state) => ({
-          data: {
-            ...state.data,
-            _id: result._id,
-          },
-        }));
       }
-    } catch (error) {
-      toast.error((error as Error).message || "Failed to save quotation");
+    } catch (err: any) {
+      toast.error(err?.data?.message || "Failed to save quotation");
     }
   };
 
   return (
-    <div className="flex flex-col h-full overflow-hidden bg-slate-50/30">
-      {/* Scrollable Content */}
-      <div className="flex-1 overflow-y-auto p-6 space-y-8">
-        {/* ── Mode, Template & Client Selection ── */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <Card className="p-5 border-slate-200 shadow-sm flex items-center justify-between gap-4">
-            <div className="shrink-0">
-              <h3 className="font-bold text-slate-900">Service Type</h3>
-              <p className="text-xs text-slate-500">Choose format</p>
-            </div>
-            <Select
-              value={data.serviceType}
-              onValueChange={(val) =>
-                setServiceType(val as "web-development" | "product-photography")
-              }
-            >
-              <SelectTrigger className="w-full bg-white">
-                <SelectValue placeholder="Select type" />
+    <div className="flex flex-col h-full bg-slate-50/30 overflow-hidden">
+      {/* Top Bar / Controls */}
+      <div className="p-6 pb-0 grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card className="p-4 flex items-center justify-between gap-4 border-slate-200">
+          <div>
+            <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Service Type</Label>
+            <Select value={data.serviceType} onValueChange={(v: any) => setServiceType(v)}>
+              <SelectTrigger className="border-none p-0 h-auto shadow-none focus:ring-0 font-bold text-lg">
+                <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="web-development">
-                  Web Design & Dev
-                </SelectItem>
+                <SelectItem value="web-development">Web Development</SelectItem>
                 <SelectItem value="product-photography">Photography</SelectItem>
               </SelectContent>
             </Select>
-          </Card>
-
-          <Card className="p-5 border-slate-200 shadow-sm flex items-center justify-between gap-4">
-            <div className="shrink-0">
-              <h3 className="font-bold text-slate-900">Select Client</h3>
-              <p className="text-xs text-slate-500">Link to profile</p>
-            </div>
-            <Select value={data.clientId} onValueChange={handleClientSelect}>
-              <SelectTrigger className="w-full bg-white">
-                <SelectValue
-                  placeholder={clientsLoading ? "Loading..." : "Choose client"}
-                />
-              </SelectTrigger>
-              <SelectContent>
-                {clientsData?.clients.map((client) => (
-                  <SelectItem key={client._id} value={client._id}>
-                    {client.name} ({client.clientId})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Card>
-
-          <Card className="p-5 border-teal-100 bg-teal-50/20 shadow-sm flex items-center justify-between gap-4">
-            <div className="flex items-center gap-3 shrink-0">
-              <div className="w-10 h-10 rounded-full bg-teal-100 flex items-center justify-center text-teal-600">
-                <Sparkles className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="font-bold text-slate-900">Templates</h3>
-                <p className="text-xs text-slate-500">Auto-fill content</p>
-              </div>
-            </div>
-            {data.serviceType === "web-development" ? (
-              <Select
-                onValueChange={(val) =>
-                  loadTemplate(val as "ecommerce" | "saas" | "service")
-                }
-              >
-                <SelectTrigger className="w-full bg-white border-teal-200 text-teal-700 font-medium">
-                  <SelectValue placeholder="Choose template" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ecommerce">E-Commerce</SelectItem>
-                  <SelectItem value="saas">SaaS App</SelectItem>
-                  <SelectItem value="service">Agency Site</SelectItem>
-                </SelectContent>
-              </Select>
-            ) : (
-              <div className="text-xs text-slate-400 italic">
-                No templates for photography
-              </div>
-            )}
-          </Card>
-        </div>
-
-        {/* ── Document Details ── */}
-        <FormSection
-          id="details"
-          title="Document Details"
-          icon={<FileText className="w-5 h-5" />}
-        >
-          <div className="space-y-4">
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold uppercase text-slate-500 tracking-wider">
-                Proposal Title
-              </Label>
-              <Input
-                value={data.details.title || ""}
-                onChange={(e) => updateDetails({ title: e.target.value })}
-                className="bg-white border-slate-200 focus:border-teal-500 focus:ring-teal-500"
-              />
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold uppercase text-slate-500 tracking-wider">
-                  Quotation #
-                </Label>
-                <Input
-                  value={data.details.quotationNumber || ""}
-                  onChange={(e) =>
-                    updateDetails({ quotationNumber: e.target.value })
-                  }
-                  className="bg-white"
-                  disabled
-                  placeholder="Generated on save"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold uppercase text-slate-500 tracking-wider">
-                  Date
-                </Label>
-                <Input
-                  type="date"
-                  value={data.details.date || ""}
-                  onChange={(e) => updateDetails({ date: e.target.value })}
-                  className="bg-white"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold uppercase text-slate-500 tracking-wider">
-                  Valid Until
-                </Label>
-                <Input
-                  type="date"
-                  value={data.details.validUntil || ""}
-                  onChange={(e) =>
-                    updateDetails({ validUntil: e.target.value })
-                  }
-                  className="bg-white"
-                />
-              </div>
-            </div>
-          </div>
-        </FormSection>
-
-        {/* ── Client & Company ── */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <FormSection
-            id="client"
-            title="Client Information"
-            icon={<User className="w-5 h-5" />}
-          >
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold uppercase text-slate-500 tracking-wider">
-                    Contact Name
-                  </Label>
-                  <Input
-                    value={data.client.contactName || ""}
-                    onChange={(e) =>
-                      updateClient({ contactName: e.target.value })
-                    }
-                    className="bg-white"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold uppercase text-slate-500 tracking-wider">
-                    Company
-                  </Label>
-                  <Input
-                    value={data.client.companyName || ""}
-                    onChange={(e) =>
-                      updateClient({ companyName: e.target.value })
-                    }
-                    className="bg-white"
-                  />
-                </div>
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold uppercase text-slate-500 tracking-wider">
-                  Address
-                </Label>
-                <Textarea
-                  value={data.client.address || ""}
-                  onChange={(e) => updateClient({ address: e.target.value })}
-                  rows={2}
-                  className="bg-white resize-none"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold uppercase text-slate-500 tracking-wider">
-                    Email
-                  </Label>
-                  <Input
-                    type="email"
-                    value={data.client.email || ""}
-                    onChange={(e) => updateClient({ email: e.target.value })}
-                    className="bg-white"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold uppercase text-slate-500 tracking-wider">
-                    Phone
-                  </Label>
-                  <Input
-                    value={data.client.phone || ""}
-                    onChange={(e) => updateClient({ phone: e.target.value })}
-                    className="bg-white"
-                  />
-                </div>
-              </div>
-            </div>
-          </FormSection>
-
-          <FormSection
-            id="company"
-            title="Company Details"
-            icon={<Building2 className="w-5 h-5" />}
-          >
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold uppercase text-slate-500 tracking-wider">
-                    Name
-                  </Label>
-                  <Input
-                    value={data.company.name || ""}
-                    onChange={(e) => updateCompany({ name: e.target.value })}
-                    className="bg-white"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold uppercase text-slate-500 tracking-wider">
-                    Website
-                  </Label>
-                  <Input
-                    value={data.company.website || ""}
-                    onChange={(e) => updateCompany({ website: e.target.value })}
-                    className="bg-white"
-                  />
-                </div>
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold uppercase text-slate-500 tracking-wider">
-                  Address
-                </Label>
-                <Textarea
-                  value={data.company.address || ""}
-                  onChange={(e) => updateCompany({ address: e.target.value })}
-                  rows={2}
-                  className="bg-white resize-none"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold uppercase text-slate-500 tracking-wider">
-                    Email
-                  </Label>
-                  <Input
-                    type="email"
-                    value={data.company.email || ""}
-                    onChange={(e) => updateCompany({ email: e.target.value })}
-                    className="bg-white"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold uppercase text-slate-500 tracking-wider">
-                    Phone
-                  </Label>
-                  <Input
-                    value={data.company.phone || ""}
-                    onChange={(e) => updateCompany({ phone: e.target.value })}
-                    className="bg-white"
-                  />
-                </div>
-              </div>
-            </div>
-          </FormSection>
-        </div>
-
-        {/* ── Pricing & Settings ── */}
-        <Card className="p-6 border-slate-200 shadow-sm bg-white">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 items-end">
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold uppercase text-slate-500 tracking-wider">
-                Currency
-              </Label>
-              <Select
-                value={data.settings.currency}
-                onValueChange={(val) =>
-                  updateSettings({ currency: val as "$" | "৳" | "€" | "£" })
-                }
-              >
-                <SelectTrigger className="bg-white">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="৳">BDT (৳)</SelectItem>
-                  <SelectItem value="$">USD ($)</SelectItem>
-                  <SelectItem value="€">EUR (€)</SelectItem>
-                  <SelectItem value="£">GBP (£)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            {data.serviceType === "web-development" && (
-              <div className="space-y-1.5 md:col-span-1">
-                <Label className="text-xs font-semibold uppercase text-slate-500 tracking-wider">
-                  Base Cost
-                </Label>
-                <Input
-                  type="number"
-                  value={data.pricing.totalCost ?? 0}
-                  onChange={(e) =>
-                    updatePricing({ totalCost: Number(e.target.value) })
-                  }
-                  className="bg-white font-bold text-slate-900"
-                />
-              </div>
-            )}
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold uppercase text-slate-500 tracking-wider">
-                Tax Rate (%)
-              </Label>
-              <Input
-                type="number"
-                value={data.settings.taxRate ?? 0}
-                onChange={(e) =>
-                  updateSettings({ taxRate: Number(e.target.value) })
-                }
-                className="bg-white"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold uppercase text-slate-500 tracking-wider">
-                Discount ({data.settings.currency})
-              </Label>
-              <Input
-                type="number"
-                value={data.settings.discount ?? 0}
-                onChange={(e) =>
-                  updateSettings({ discount: Number(e.target.value) })
-                }
-                className="bg-white"
-              />
-            </div>
           </div>
         </Card>
 
-        {/* ── Content Modules ── */}
-        <FormSection
-          id="overview"
-          title="Project Overview"
-          icon={<Monitor className="w-5 h-5" />}
-        >
-          <Textarea
-            value={data.overview || ""}
-            onChange={(e) => updateOverview(e.target.value)}
-            rows={4}
-            className="bg-white resize-none text-slate-700 leading-relaxed"
-            placeholder="High-level description of the project goals..."
-          />
-        </FormSection>
-
-        {data.serviceType === "web-development" ? (
-          <>
-            <FormSection
-              id="scope"
-              title="Scope of Work"
-              icon={<Briefcase className="w-5 h-5" />}
-              badge="Phases"
+        <Card className="p-4 flex items-center justify-between gap-4 border-slate-200">
+          <div className="w-full">
+            <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Link Client</Label>
+            <Select 
+              value={data.clientId} 
+              onValueChange={(id) => {
+                const client = clientsData?.clients.find(c => c._id === id);
+                if (client) {
+                  updateClient({ 
+                    contactName: client.name, 
+                    email: client.emails[0], 
+                    phone: client.phone,
+                    companyName: client.name
+                  });
+                  useQuotationStore.setState(s => ({ data: { ...s.data, clientId: id } }));
+                }
+              }}
             >
-              <div className="space-y-6">
-                {/* Predefined phases */}
-                {PREDEFINED_WEB_PHASES.map((phase, idx) => {
-                  const activePhase = data.scopeOfWork.find(
-                    (p) => p.title === phase.title,
-                  );
-                  const isPhaseActive = !!activePhase;
-
-                  return (
-                    <div
-                      key={phase.id}
-                      className={`p-4 rounded-xl border transition-all ${isPhaseActive ? "border-teal-200 bg-teal-50/20" : "border-slate-100 bg-slate-50/50 grayscale opacity-70"}`}
-                    >
-                      <div className="flex items-center gap-3 mb-4">
-                        <input
-                          type="checkbox"
-                          checked={isPhaseActive}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              useQuotationStore.setState((state) => ({
-                                data: {
-                                  ...state.data,
-                                  scopeOfWork: [
-                                    ...state.data.scopeOfWork,
-                                    {
-                                      id: Math.random()
-                                        .toString(36)
-                                        .substr(2, 9),
-                                      title: phase.title,
-                                      description: "",
-                                      items: [...phase.items],
-                                    },
-                                  ],
-                                },
-                              }));
-                            } else if (activePhase) {
-                              removeScopePhase(activePhase.id);
-                            }
-                          }}
-                          className="w-5 h-5 rounded border-slate-300 accent-teal-600 cursor-pointer"
-                        />
-                        <h4 className="font-bold text-slate-900">
-                          Phase {idx + 1}: {phase.title}
-                        </h4>
-                      </div>
-
-                      {isPhaseActive && (
-                        <div className="ml-8 grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-3">
-                          {phase.items.map((item, i) => {
-                            const isItemActive =
-                              activePhase.items.includes(item);
-                            return (
-                              <div key={i} className="flex items-start gap-2.5">
-                                <input
-                                  type="checkbox"
-                                  checked={isItemActive}
-                                  onChange={(e) => {
-                                    const newItems = e.target.checked
-                                      ? [...activePhase.items, item]
-                                      : activePhase.items.filter(
-                                          (x) => x !== item,
-                                        );
-                                    updateScopePhase(activePhase.id, {
-                                      items: newItems,
-                                    });
-                                  }}
-                                  className="w-4 h-4 mt-0.5 rounded border-slate-300 accent-teal-600 cursor-pointer"
-                                />
-                                <span className="text-sm text-slate-600 leading-tight">
-                                  {item}
-                                </span>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-
-                {/* Custom Phases */}
-                {data.scopeOfWork
-                  .filter(
-                    (p) =>
-                      !PREDEFINED_WEB_PHASES.some(
-                        (pref) => pref.title === p.title,
-                      ),
-                  )
-                  .map((phase) => (
-                    <div
-                      key={phase.id}
-                      className="p-4 rounded-xl border border-slate-200 bg-white relative"
-                    >
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="absolute top-2 right-2 text-slate-400 hover:text-red-500"
-                        onClick={() => removeScopePhase(phase.id)}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                      <div className="space-y-4">
-                        <div className="pr-10">
-                          <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 block">
-                            Phase Title
-                          </Label>
-                          <Input
-                            value={phase.title}
-                            onChange={(e) =>
-                              updateScopePhase(phase.id, {
-                                title: e.target.value,
-                              })
-                            }
-                            className="font-bold h-9"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 block">
-                            Milestones (One per line)
-                          </Label>
-                          <Textarea
-                            value={phase.items.join("\n")}
-                            onChange={(e) =>
-                              updateScopePhase(phase.id, {
-                                items: e.target.value
-                                  .split("\n")
-                                  .filter(Boolean),
-                              })
-                            }
-                            rows={3}
-                            className="text-sm resize-none"
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-
-                <Button
-                  variant="outline"
-                  onClick={addScopePhase}
-                  className="w-full border-dashed border-slate-300 py-6 hover:bg-slate-50 group"
-                >
-                  <Plus className="w-4 h-4 mr-2 text-slate-400 group-hover:text-teal-600" />
-                  Add Custom Phase
-                </Button>
-              </div>
-            </FormSection>
-
-            <FormSection
-              id="tech"
-              title="Technology Stack"
-              icon={<Cpu className="w-5 h-5" />}
-            >
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold text-slate-500">
-                    Frontend
-                  </Label>
-                  <Input
-                    value={data.techStack.frontend.join(", ")}
-                    onChange={(e) =>
-                      updateTechStack({
-                        frontend: e.target.value
-                          .split(",")
-                          .map((s) => s.trim())
-                          .filter(Boolean),
-                      })
-                    }
-                    placeholder="Next.js, React..."
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold text-slate-500">
-                    Backend
-                  </Label>
-                  <Input
-                    value={data.techStack.backend.join(", ")}
-                    onChange={(e) =>
-                      updateTechStack({
-                        backend: e.target.value
-                          .split(",")
-                          .map((s) => s.trim())
-                          .filter(Boolean),
-                      })
-                    }
-                    placeholder="Node.js, Go..."
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold text-slate-500">
-                    Database
-                  </Label>
-                  <Input
-                    value={data.techStack.database?.join(", ")}
-                    onChange={(e) =>
-                      updateTechStack({
-                        database: e.target.value
-                          .split(",")
-                          .map((s) => s.trim())
-                          .filter(Boolean),
-                      })
-                    }
-                    placeholder="PostgreSQL, Redis..."
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold text-slate-500">
-                    Tools
-                  </Label>
-                  <Input
-                    value={data.techStack.tools.join(", ")}
-                    onChange={(e) =>
-                      updateTechStack({
-                        tools: e.target.value
-                          .split(",")
-                          .map((s) => s.trim())
-                          .filter(Boolean),
-                      })
-                    }
-                    placeholder="Figma, Docker..."
-                  />
-                </div>
-              </div>
-            </FormSection>
-
-            <FormSection
-              id="additional"
-              title="Additional Services"
-              icon={<Plus className="w-5 h-5" />}
-            >
-              <div className="space-y-4">
-                {data.optionalServices.map((srv) => (
-                  <div
-                    key={srv.id}
-                    className="p-4 border border-slate-200 rounded-xl relative bg-white shadow-sm"
-                  >
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="absolute top-2 right-2 text-slate-400 hover:text-red-500"
-                      onClick={() => removeOptionalService(srv.id)}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                    <div className="grid grid-cols-12 gap-4">
-                      <div className="col-span-12 md:col-span-6 pr-8 space-y-1.5">
-                        <Label className="text-xs font-semibold text-slate-500">
-                          Service Title
-                        </Label>
-                        <Input
-                          value={srv.title}
-                          onChange={(e) =>
-                            updateOptionalService(srv.id, {
-                              title: e.target.value,
-                            })
-                          }
-                          className="font-bold"
-                        />
-                      </div>
-                      <div className="col-span-6 md:col-span-3 space-y-1.5">
-                        <Label className="text-xs font-semibold text-slate-500">
-                          Price
-                        </Label>
-                        <Input
-                          type="number"
-                          value={srv.price}
-                          onChange={(e) =>
-                            updateOptionalService(srv.id, {
-                              price: Number(e.target.value),
-                            })
-                          }
-                        />
-                      </div>
-                      <div className="col-span-6 md:col-span-3 space-y-1.5">
-                        <Label className="text-xs font-semibold text-slate-500">
-                          Billing
-                        </Label>
-                        <Select
-                          value={srv.type}
-                          onValueChange={(val) =>
-                            updateOptionalService(srv.id, {
-                              type: val as "recurring" | "one-time",
-                            })
-                          }
-                        >
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="one-time">One-time</SelectItem>
-                            <SelectItem value="recurring">Yearly</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="col-span-12 space-y-1.5">
-                        <Label className="text-xs font-semibold text-slate-500">
-                          Short Description
-                        </Label>
-                        <Input
-                          value={srv.description}
-                          onChange={(e) =>
-                            updateOptionalService(srv.id, {
-                              description: e.target.value,
-                            })
-                          }
-                        />
-                      </div>
-                    </div>
-                  </div>
+              <SelectTrigger className="border-none p-0 h-auto shadow-none focus:ring-0 font-bold text-lg">
+                <SelectValue placeholder={clientsLoading ? "Loading..." : "Select Client"} />
+              </SelectTrigger>
+              <SelectContent>
+                {clientsData?.clients.map(c => (
+                  <SelectItem key={c._id} value={c._id}>{c.name}</SelectItem>
                 ))}
-                <Button
-                  variant="outline"
-                  onClick={addOptionalService}
-                  className="w-full border-dashed"
-                >
-                  <Plus className="w-4 h-4 mr-2" />
-                  Add Service Line
-                </Button>
-              </div>
-            </FormSection>
-          </>
-        ) : (
-          <FormSection
-            id="photography"
-            title="Photography Packages"
-            icon={<Camera className="w-5 h-5" />}
-          >
-            <div className="space-y-4">
-              {data.photographyItems.map((item) => (
-                <div
-                  key={item.id}
-                  className="p-4 border border-slate-200 rounded-xl relative bg-white shadow-sm"
-                >
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="absolute top-2 right-2 text-slate-400 hover:text-red-500"
-                    onClick={() => removePhotographyItem(item.id)}
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
-                  <div className="grid grid-cols-12 gap-4 pr-8">
-                    <div className="col-span-12 md:col-span-6 space-y-1.5">
-                      <Label className="text-xs font-semibold text-slate-500 tracking-wider uppercase">
-                        Item / Category
-                      </Label>
-                      <Input
-                        value={item.title}
-                        onChange={(e) =>
-                          updatePhotographyItem(item.id, {
-                            title: e.target.value,
-                          })
-                        }
-                        placeholder="e.g. Model Shoot"
-                      />
-                    </div>
-                    <div className="col-span-12 md:col-span-6 space-y-1.5">
-                      <Label className="text-xs font-semibold text-slate-500 tracking-wider uppercase">
-                        Deliverables
-                      </Label>
-                      <Input
-                        value={item.outputString}
-                        onChange={(e) =>
-                          updatePhotographyItem(item.id, {
-                            outputString: e.target.value,
-                          })
-                        }
-                        placeholder="e.g. 10 Retouched Images"
-                      />
-                    </div>
-                    <div className="col-span-6 md:col-span-3 space-y-1.5">
-                      <Label className="text-xs font-semibold text-slate-500 tracking-wider uppercase">
-                        Quantity
-                      </Label>
-                      <Input
-                        type="number"
-                        min={1}
-                        value={item.quantity}
-                        onChange={(e) =>
-                          updatePhotographyItem(item.id, {
-                            quantity: Number(e.target.value),
-                          })
-                        }
-                      />
-                    </div>
-                    <div className="col-span-6 md:col-span-3 space-y-1.5">
-                      <Label className="text-xs font-semibold text-slate-500 tracking-wider uppercase">
-                        Rate
-                      </Label>
-                      <Input
-                        type="number"
-                        min={0}
-                        value={item.price}
-                        onChange={(e) =>
-                          updatePhotographyItem(item.id, {
-                            price: Number(e.target.value),
-                          })
-                        }
-                      />
-                    </div>
-                    <div className="col-span-12 md:col-span-6 flex items-end">
-                      <div className="h-10 w-full flex items-center justify-end px-4 bg-slate-50 border border-slate-200 rounded-md font-bold text-slate-700">
-                        Subtotal: {data.settings.currency}
-                        {(item.quantity * item.price).toLocaleString()}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-              <Button
-                onClick={addPhotographyItem}
-                variant="outline"
-                className="w-full border-dashed"
-              >
-                <Plus className="w-4 h-4 mr-2" /> Add Photography Package
-              </Button>
+              </SelectContent>
+            </Select>
+          </div>
+        </Card>
+
+        <Card className="p-4 flex items-center justify-between gap-4 border-teal-100 bg-teal-50/30">
+          <div className="w-full">
+            <div className="flex items-center gap-2 mb-1">
+              <Sparkles className="w-3 h-3 text-teal-600" />
+              <Label className="text-[10px] font-bold text-teal-600 uppercase tracking-widest">Magic Templates</Label>
             </div>
-          </FormSection>
-        )}
-
-        {/* ── Workflow & Notes ── */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <FormSection
-            id="workflow"
-            title="Workflow Summary"
-            icon={<List className="w-5 h-5" />}
-          >
-            <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 block">
-              Process Steps (One per line)
-            </Label>
-            <Textarea
-              value={data.workflow.join("\n")}
-              onChange={(e) => handleListChange(e.target.value, updateWorkflow)}
-              rows={6}
-              className="bg-white resize-none text-sm"
-            />
-          </FormSection>
-          <FormSection
-            id="notes"
-            title="Final Note"
-            icon={<StickyNote className="w-5 h-5" />}
-          >
-            <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 block">
-              Closing Remarks
-            </Label>
-            <Textarea
-              value={data.finalNote}
-              onChange={(e) => updateFinalNote(e.target.value)}
-              rows={6}
-              className="bg-white resize-none text-sm"
-            />
-          </FormSection>
-        </div>
-
-        {/* Padding for sticky footer */}
-        <div className="h-20" />
+            <Select onValueChange={loadTemplate}>
+              <SelectTrigger className="border-none p-0 h-auto shadow-none focus:ring-0 font-bold text-lg text-teal-700">
+                <SelectValue placeholder="Choose Template" />
+              </SelectTrigger>
+              <SelectContent>
+                {Object.keys(QUOTATION_TEMPLATES).map(key => (
+                  <SelectItem key={key} value={key}>{key.replace('-', ' ').toUpperCase()}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </Card>
       </div>
 
-      {/* ── Sticky Footer ── */}
-      <div className="p-4 border-t border-slate-200 bg-white shrink-0 flex items-center justify-between shadow-[0_-4px_12px_rgba(0,0,0,0.03)] z-10">
-        <div className="flex items-center gap-6 pl-2">
-          <div className="flex flex-col">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-              Estimated Total
-            </span>
-            <span className="text-xl font-black text-teal-600">
-              {data.settings.currency}
-              {totalAmounts.grandTotal.toLocaleString()}
-            </span>
-          </div>
-          <div className="hidden md:flex items-center gap-3 text-xs text-slate-500 border-l border-slate-100 pl-6">
-            <span className="flex items-center gap-1">
-              <div className="w-1.5 h-1.5 rounded-full bg-slate-300" /> Base:{" "}
-              {data.settings.currency}
-              {totalAmounts.packagePrice.toLocaleString()}
-            </span>
-            {totalAmounts.additionalTotal > 0 && (
-              <span className="flex items-center gap-1">
-                <div className="w-1.5 h-1.5 rounded-full bg-slate-300" />{" "}
-                Extras: {data.settings.currency}
-                {totalAmounts.additionalTotal.toLocaleString()}
-              </span>
-            )}
-            {data.settings.taxRate > 0 && (
-              <span className="flex items-center gap-1">
-                <div className="w-1.5 h-1.5 rounded-full bg-slate-300" /> Tax:{" "}
-                {totalAmounts.taxAmount.toLocaleString()}
-              </span>
-            )}
-          </div>
+      {/* Main Form Content */}
+      <div className="flex-1 overflow-y-auto p-6 space-y-6">
+        
+        {/* Basic Info */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <FormSection title="Client & Document" icon={<FileText className="w-4 h-4" />}>
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <Label className="text-[10px] font-bold text-slate-500 uppercase">Proposal Title</Label>
+                  <Input value={data.details.title} onChange={e => updateDetails({ title: e.target.value })} />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-[10px] font-bold text-slate-500 uppercase">Quotation #</Label>
+                  <Input value={data.quotationNumber || "Auto-generated"} disabled className="bg-slate-50" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <Label className="text-[10px] font-bold text-slate-500 uppercase">Date</Label>
+                  <Input type="date" value={data.details.date} onChange={e => updateDetails({ date: e.target.value })} />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-[10px] font-bold text-slate-500 uppercase">Valid Until</Label>
+                  <Input type="date" value={data.details.validUntil} onChange={e => updateDetails({ validUntil: e.target.value })} />
+                </div>
+              </div>
+            </div>
+          </FormSection>
+
+          <FormSection title="Contact Person" icon={<User className="w-4 h-4" />}>
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <Label className="text-[10px] font-bold text-slate-500 uppercase">Name</Label>
+                  <Input value={data.client.contactName} onChange={e => updateClient({ contactName: e.target.value })} />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-[10px] font-bold text-slate-500 uppercase">Email</Label>
+                  <Input value={data.client.email} onChange={e => updateClient({ email: e.target.value })} />
+                </div>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-[10px] font-bold text-slate-500 uppercase">Address</Label>
+                <Input value={data.client.address} onChange={e => updateClient({ address: e.target.value })} />
+              </div>
+            </div>
+          </FormSection>
         </div>
-        <div className="flex items-center gap-3">
-          <Button
-            variant="outline"
-            className="text-slate-600 border-slate-200"
-            disabled={isCreating || isUpdating}
-            onClick={() => handleSave("draft")}
-          >
-            {isCreating || isUpdating ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <Save className="w-4 h-4 mr-2" />
-            )}
-            Save Draft
+
+        {/* Dynamic Phase Builder */}
+        <FormSection title="Project Phases & Milestones" icon={<Layers className="w-4 h-4" />}>
+          <div className="space-y-4">
+            {data.phases.map((phase, pIdx) => (
+              <div key={pIdx} className="p-4 border rounded-xl bg-white space-y-4 relative group">
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity text-slate-400 hover:text-red-500"
+                  onClick={() => removePhase(pIdx)}
+                >
+                  <Trash2 className="w-4 h-4" />
+                </Button>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <Label className="text-[10px] font-bold text-slate-400 uppercase">Phase Title</Label>
+                    <Input 
+                      value={phase.title} 
+                      onChange={e => updatePhase(pIdx, { title: e.target.value })}
+                      className="font-bold border-none p-0 h-auto focus-visible:ring-0 text-lg"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-[10px] font-bold text-slate-400 uppercase">Short Description</Label>
+                    <Input 
+                      value={phase.description} 
+                      onChange={e => updatePhase(pIdx, { description: e.target.value })}
+                      className="text-sm text-slate-500 border-none p-0 h-auto focus-visible:ring-0"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-[10px] font-bold text-slate-400 uppercase">Phase Checklist</Label>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {phase.items.map((item, iIdx) => (
+                      <div key={iIdx} className="flex items-center gap-2 group/item">
+                        <Checkbox 
+                          checked={true} 
+                          onCheckedChange={() => {
+                            const newItems = phase.items.filter((_, i) => i !== iIdx);
+                            updatePhase(pIdx, { items: newItems });
+                          }}
+                        />
+                        <span className="text-sm text-slate-600 truncate">{item}</span>
+                      </div>
+                    ))}
+                    <div className="flex items-center gap-2">
+                      <Input 
+                        placeholder="Add item..." 
+                        className="h-8 text-xs border-dashed"
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') {
+                            const val = e.currentTarget.value;
+                            if (val) {
+                              updatePhase(pIdx, { items: [...phase.items, val] });
+                              e.currentTarget.value = "";
+                            }
+                          }
+                        }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+            <Button variant="outline" className="w-full border-dashed py-6" onClick={() => addPhase()}>
+              <Plus className="w-4 h-4 mr-2" /> Add New Phase
+            </Button>
+          </div>
+        </FormSection>
+
+        {/* Tech Stack & Workflow */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <FormSection title="Tech Stack" icon={<Cpu className="w-4 h-4" />}>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+              <div className="space-y-1">
+                <Label className="text-[10px] font-bold text-slate-500 uppercase">Frontend</Label>
+                <Input value={data.techStack.frontend} onChange={e => updateTechStack({ frontend: e.target.value })} />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-[10px] font-bold text-slate-500 uppercase">Backend</Label>
+                <Input value={data.techStack.backend} onChange={e => updateTechStack({ backend: e.target.value })} />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-[10px] font-bold text-slate-500 uppercase">Database</Label>
+                <Input value={data.techStack.database} onChange={e => updateTechStack({ database: e.target.value })} />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-[10px] font-bold text-slate-500 uppercase">Additional Tools (Comma separated)</Label>
+              <Input 
+                value={data.techStack.tools.join(", ")} 
+                onChange={e => updateTechStack({ tools: e.target.value.split(",").map(t => t.trim()).filter(Boolean) })} 
+              />
+            </div>
+          </FormSection>
+
+          <FormSection title="Project Workflow" icon={<Activity className="w-4 h-4" />}>
+            <div className="space-y-3">
+              <div className="flex flex-wrap gap-2">
+                {data.workflow.map((step, idx) => (
+                  <Badge key={idx} variant="secondary" className="pl-3 pr-1 py-1 gap-1">
+                    {step}
+                    <Button variant="ghost" size="icon" className="h-4 w-4 rounded-full p-0" onClick={() => updateWorkflow(data.workflow.filter((_, i) => i !== idx))}>
+                      <Trash2 className="w-2.5 h-2.5" />
+                    </Button>
+                  </Badge>
+                ))}
+              </div>
+              <Input 
+                placeholder="Add workflow step (Enter)..." 
+                onKeyDown={e => {
+                  if (e.key === 'Enter') {
+                    const val = e.currentTarget.value;
+                    if (val) {
+                      updateWorkflow([...data.workflow, val]);
+                      e.currentTarget.value = "";
+                    }
+                  }
+                }}
+              />
+            </div>
+          </FormSection>
+        </div>
+
+        {/* Additional Services */}
+        <FormSection title="Additional Services" icon={<Plus className="w-4 h-4" />}>
+          <div className="space-y-3">
+            {data.additionalServices.map((service, idx) => (
+              <div key={idx} className="flex items-start gap-4 p-3 border rounded-lg bg-white relative group">
+                <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div className="space-y-1">
+                    <Label className="text-[10px] font-bold text-slate-400 uppercase">Title</Label>
+                    <Input value={service.title} onChange={e => updateService(idx, { title: e.target.value })} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-[10px] font-bold text-slate-400 uppercase">Price</Label>
+                    <Input type="number" value={service.price} onChange={e => updateService(idx, { price: Number(e.target.value) })} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-[10px] font-bold text-slate-400 uppercase">Cycle</Label>
+                    <Select value={service.billingCycle} onValueChange={(v: any) => updateService(idx, { billingCycle: v })}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="one-time">One-time</SelectItem>
+                        <SelectItem value="monthly">Monthly</SelectItem>
+                        <SelectItem value="yearly">Yearly</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <Button variant="ghost" size="icon" className="mt-6 text-slate-400 hover:text-red-500" onClick={() => removeService(idx)}>
+                  <Trash2 className="w-4 h-4" />
+                </Button>
+              </div>
+            ))}
+            <Button variant="outline" className="w-full text-xs" onClick={() => addService()}>
+              Add Extra Service
+            </Button>
+          </div>
+        </FormSection>
+
+        {/* Pricing Section */}
+        <FormSection title="Pricing & Calculations" icon={<Receipt className="w-4 h-4" />} className="border-teal-200">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <div className="space-y-4">
+              <div className="grid grid-cols-3 gap-4">
+                <div className="space-y-1">
+                  <Label className="text-[10px] font-bold text-slate-500 uppercase">Base Price</Label>
+                  <Input type="number" value={data.pricing.basePrice} onChange={e => updatePricing({ basePrice: Number(e.target.value) })} />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-[10px] font-bold text-slate-500 uppercase">Tax Rate %</Label>
+                  <Input type="number" value={data.pricing.taxRate} onChange={e => updatePricing({ taxRate: Number(e.target.value) })} />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-[10px] font-bold text-slate-500 uppercase">Discount</Label>
+                  <Input type="number" value={data.pricing.discount} onChange={e => updatePricing({ discount: Number(e.target.value) })} />
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-slate-900 text-white p-6 rounded-2xl space-y-4 shadow-xl">
+              <div className="flex justify-between text-sm opacity-60 font-medium">
+                <span>Subtotal (Net)</span>
+                <span>৳ {computedTotals.subtotal.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between text-sm opacity-60 font-medium">
+                <span>Tax Amount ({data.pricing.taxRate}%)</span>
+                <span>৳ {computedTotals.taxAmount.toLocaleString()}</span>
+              </div>
+              <div className="pt-4 border-t border-white/10 flex justify-between items-end">
+                <div>
+                  <div className="text-[10px] font-bold text-teal-400 uppercase tracking-widest mb-1">Grand Total</div>
+                  <div className="text-4xl font-bold tracking-tighter">৳ {computedTotals.grandTotal.toLocaleString()}</div>
+                </div>
+                <Badge className="bg-teal-500 text-white border-none px-3 py-1">Payable in 3 Phases</Badge>
+              </div>
+            </div>
+          </div>
+        </FormSection>
+
+      </div>
+
+      {/* Action Footer */}
+      <div className="p-6 bg-white border-t border-slate-200 flex justify-between items-center shadow-[0_-4px_12px_rgba(0,0,0,0.03)]">
+        <Button variant="ghost" onClick={reset} className="text-slate-500">Reset Builder</Button>
+        <div className="flex gap-3">
+          <Button variant="outline" onClick={() => handleSave("draft")} disabled={isCreating || isUpdating} className="gap-2">
+            <Save className="w-4 h-4" /> Save Draft
           </Button>
-          <Button
-            className="bg-slate-900 hover:bg-slate-800 text-white"
-            disabled={isCreating || isUpdating}
-            onClick={() => handleSave("sent")}
-          >
-            {isCreating || isUpdating ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <Send className="w-4 h-4 mr-2" />
-            )}
-            Submit Proposal
+          <Button onClick={() => handleSave("sent")} disabled={isCreating || isUpdating} className="gap-2 bg-slate-900 hover:bg-slate-800 text-white px-8">
+            <Send className="w-4 h-4" /> Send to Client
           </Button>
-          <PDFDownloadBtn data={data} totalAmounts={totalAmounts} />
         </div>
       </div>
     </div>

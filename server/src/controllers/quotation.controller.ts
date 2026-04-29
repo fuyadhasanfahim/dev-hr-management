@@ -1,142 +1,191 @@
-import type { Request, Response } from "express";
-import { QuotationService } from "../services/quotation.service.js";
+import type { Request, Response, NextFunction } from 'express';
+import { QuotationService } from '../services/quotation.service.js';
 
-const createQuotation = async (req: Request, res: Response) => {
-  try {
-    const userId = req.user?.id;
-    if (!userId) throw new Error("Unauthorized");
+// ─── Staff / Admin Handlers ───────────────────────────────────────────────────
 
-    const result = await QuotationService.createQuotation(req.body, userId);
-    res.status(201).json({
-      success: true,
-      message: "Quotation created successfully",
-      data: result,
-    });
-  } catch (error: any) {
-    res.status(500).json({
-      success: false,
-      message: error.message || "Failed to create quotation",
-    });
-  }
-};
-
-const updateQuotation = async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params;
-    const result = await QuotationService.updateQuotation(
-      id as string,
-      req.body,
-    );
-    if (!result) {
-      res.status(404).json({ success: false, message: "Quotation not found" });
-      return;
+const createQuotation = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const userId = req.user?.id;
+        if (!userId) return next(new Error('Unauthorized'));
+        const result = await QuotationService.createQuotation(req.body, userId);
+        res.status(201).json({ success: true, message: 'Quotation created successfully', data: result });
+    } catch (err) {
+        next(err);
     }
-    res.status(200).json({
-      success: true,
-      message: "Quotation updated successfully",
-      data: result,
-    });
-  } catch (error: any) {
-    res.status(500).json({
-      success: false,
-      message: error.message || "Failed to update quotation",
-    });
-  }
 };
 
-const getAllQuotations = async (req: Request, res: Response) => {
-  try {
-    const filters: any = {};
-    if (req.query.status) filters.status = req.query.status;
-    if (req.query.clientId) filters.clientId = req.query.clientId;
-    if (req.query.search) filters.search = req.query.search;
-
-    const options = {
-      page: req.query.page ? parseInt(req.query.page as string) : 1,
-      limit: req.query.limit ? parseInt(req.query.limit as string) : 10,
-    };
-
-    const result = await QuotationService.getQuotations(filters, options);
-    res.status(200).json({
-      success: true,
-      data: result,
-    });
-  } catch (error: any) {
-    res.status(500).json({
-      success: false,
-      message: error.message || "Failed to fetch quotations",
-    });
-  }
-};
-
-const getQuotationById = async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params;
-    const result = await QuotationService.getQuotationById(id as string);
-    if (!result) {
-      res.status(404).json({ success: false, message: "Quotation not found" });
-      return;
+const updateQuotation = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const userId = req.user?.id;
+        if (!userId) return next(new Error('Unauthorized'));
+        const result = await QuotationService.updateQuotation(req.params.id, req.body, userId);
+        res.status(200).json({ success: true, message: 'Quotation updated successfully', data: result });
+    } catch (err) {
+        next(err);
     }
-    res.status(200).json({
-      success: true,
-      data: result,
-    });
-  } catch (error: any) {
-    res.status(500).json({
-      success: false,
-      message: error.message || "Failed to fetch quotation",
-    });
-  }
 };
 
-const deleteQuotation = async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params;
-    const result = await QuotationService.deleteQuotation(id as string);
-    if (!result) {
-      res.status(404).json({ success: false, message: "Quotation not found" });
-      return;
+const sendQuotation = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const userId = req.user?.id;
+        if (!userId) return next(new Error('Unauthorized'));
+        const result = await QuotationService.sendQuotation(req.params.id, userId);
+        res.status(200).json({
+            success: true,
+            message: 'Quotation sent to client successfully',
+            data: {
+                quotationId: result._id,
+                quotationNumber: result.quotationNumber,
+                secureToken: result.secureToken,
+                tokenExpiresAt: result.tokenExpiresAt,
+                // Construct the client-facing link
+                clientLink: `${process.env.PAYMENT_CLIENT_URL}/quotation/${result.secureToken}`,
+            },
+        });
+    } catch (err) {
+        next(err);
     }
-    res.status(200).json({
-      success: true,
-      message: "Quotation deleted successfully",
-    });
-  } catch (error: any) {
-    res.status(500).json({
-      success: false,
-      message: error.message || "Failed to delete quotation",
-    });
-  }
+};
+
+const createNewVersion = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const userId = req.user?.id;
+        if (!userId) return next(new Error('Unauthorized'));
+        const result = await QuotationService.createNewVersion(
+            req.params.groupId,
+            req.body,
+            userId,
+        );
+        res.status(201).json({
+            success: true,
+            message: `New version v${result.version} created successfully`,
+            data: result,
+        });
+    } catch (err) {
+        next(err);
+    }
+};
+
+const getAllQuotations = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const filters: any = {};
+        if (req.query.status) filters.status = req.query.status;
+        if (req.query.clientId) filters.clientId = req.query.clientId;
+        if (req.query.search) filters.search = req.query.search;
+        if (req.query.isLatestVersion !== undefined) {
+            filters.isLatestVersion = req.query.isLatestVersion === 'true';
+        }
+
+        const options = {
+            page: req.query.page ? parseInt(req.query.page as string) : 1,
+            limit: req.query.limit ? parseInt(req.query.limit as string) : 10,
+        };
+
+        const result = await QuotationService.getQuotations(filters, options);
+        res.status(200).json({ success: true, data: result });
+    } catch (err) {
+        next(err);
+    }
+};
+
+const getQuotationById = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const result = await QuotationService.getQuotationById(req.params.id);
+        if (!result) return res.status(404).json({ success: false, message: 'Quotation not found' });
+        res.status(200).json({ success: true, data: result });
+    } catch (err) {
+        next(err);
+    }
+};
+
+const getGroupVersions = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const result = await QuotationService.getGroupVersions(req.params.groupId);
+        res.status(200).json({ success: true, data: result });
+    } catch (err) {
+        next(err);
+    }
+};
+
+const deleteQuotation = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        await QuotationService.deleteQuotation(req.params.id);
+        res.status(200).json({ success: true, message: 'Quotation deleted successfully' });
+    } catch (err) {
+        next(err);
+    }
+};
+
+// ─── Public / Client Handlers (token-authenticated) ──────────────────────────
+
+/**
+ * Client accesses quotation via secure link.
+ * No auth middleware — the token IS the credential.
+ */
+const viewQuotationByToken = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const result = await QuotationService.getQuotationByToken(req.params.token);
+        res.status(200).json({ success: true, data: result });
+    } catch (err) {
+        next(err);
+    }
+};
+
+/**
+ * Client accepts the quotation.
+ * Triggers payment tracker initialization via event bus.
+ */
+const acceptQuotation = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const result = await QuotationService.acceptQuotation(req.params.token);
+        res.status(200).json({
+            success: true,
+            message: 'Quotation accepted. Proceed to payment.',
+            data: {
+                quotationGroupId: result.quotationGroupId,
+                status: result.status,
+            },
+        });
+    } catch (err) {
+        next(err);
+    }
+};
+
+/**
+ * Client requests changes.
+ * Staff must create a new version in response.
+ */
+const requestChanges = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const { reason } = req.body;
+        if (!reason || typeof reason !== 'string' || reason.trim().length < 10) {
+            return res.status(400).json({
+                success: false,
+                message: 'A reason for the change request is required (minimum 10 characters)',
+            });
+        }
+        const result = await QuotationService.requestChanges(req.params.token, reason.trim());
+        res.status(200).json({
+            success: true,
+            message: 'Change request submitted. The team will review and issue a new version.',
+            data: { status: result.status, changeRequestReason: result.changeRequestReason },
+        });
+    } catch (err) {
+        next(err);
+    }
 };
 
 export default {
-  createQuotation,
-  updateQuotation,
-  getAllQuotations,
-  getQuotationById,
-  deleteQuotation,
-  convertToOrder: async (req: Request, res: Response) => {
-    try {
-      const { id } = req.params;
-      const userId = req.user?.id;
-      if (!userId) throw new Error("Unauthorized");
-
-      const result = await QuotationService.convertToOrder(
-        id as string,
-        userId,
-      );
-      res.status(201).json({
-        success: true,
-        message: "Quotation converted to order successfully",
-        data: result,
-      });
-    } catch (error: any) {
-      console.error(`CONVERT ERROR [ID: ${req.params.id}]:`, error);
-      res.status(500).json({
-        success: false,
-        message: error.message || "Failed to convert quotation to order",
-        stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
-      });
-    }
-  },
+    createQuotation,
+    updateQuotation,
+    sendQuotation,
+    createNewVersion,
+    getAllQuotations,
+    getQuotationById,
+    getGroupVersions,
+    deleteQuotation,
+    // Public
+    viewQuotationByToken,
+    acceptQuotation,
+    requestChanges,
 };
