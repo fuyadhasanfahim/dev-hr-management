@@ -25,6 +25,12 @@ export interface IAdditionalService {
     description?: string;
 }
 
+export interface IPaymentMilestone {
+    label: string;
+    percentage: number; // 0-100
+    note?: string;
+}
+
 export interface IQuotation extends Document {
     _id: Types.ObjectId;
     quotationNumber: string;
@@ -32,7 +38,7 @@ export interface IQuotation extends Document {
     version: number;
     isLatestVersion: boolean;
     
-    serviceType: 'web-development' | 'product-photography';
+    serviceType: 'web-development';
     clientId: Types.ObjectId;
     
     company: {
@@ -69,11 +75,15 @@ export interface IQuotation extends Document {
     pricing: {
         basePrice: number;
         taxRate: number; // Percentage
-        discount: number; // Percentage
+        discount: number; // Percentage (0-100)
     };
 
     additionalServices: IAdditionalService[];
     workflow: string[];
+
+    paymentMilestones?: IPaymentMilestone[];
+
+    currency: string;
 
     totals: {
         subtotal: number;
@@ -82,11 +92,16 @@ export interface IQuotation extends Document {
     };
 
     status: QuotationStatus;
+    viewed?: boolean;
     secureToken?: string;
     tokenExpiresAt?: Date;
     changeRequestReason?: string;
     orderId?: Types.ObjectId;
     createdBy: Types.ObjectId;
+
+    // Idempotency / provenance
+    versionCreationKey?: string;
+    derivedFromQuotationId?: Types.ObjectId;
     createdAt: Date;
     updatedAt: Date;
 }

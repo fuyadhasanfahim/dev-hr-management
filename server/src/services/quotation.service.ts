@@ -4,8 +4,23 @@ import mongoose, { Types } from 'mongoose';
 import QuotationModel from '../models/quotation.model.js';
 import { InvoiceCounter } from '../models/invoice-counter.model.js';
 import type { IQuotation } from '../types/quotation.type.js';
+import type { QuotationStatus } from '../types/quotation.type.js';
 import { AppError } from '../utils/AppError.js';
+import { OutboxService } from './outbox.service.js';
 import { quotationPaymentEventQueue } from './queue.service.js';
+import { getCorrelationId } from '../lib/requestContext.js';
+import { logger } from '../lib/logger.js';
+import ClientModel from '../models/client.model.js';
+import envConfig from '../config/env.config.js';
+import emailService from './email.service.js';
+
+type SendQuotationResult = {
+    quotation: IQuotation;
+    clientLink: string;
+    emailSent: boolean;
+    emailedTo?: string[];
+    emailError?: string;
+};
 
 const QUOTATION_TOKEN_SECRET = process.env.QUOTATION_TOKEN_SECRET;
 const TOKEN_EXPIRY_DAYS = 30;
@@ -19,10 +34,12 @@ if (!QUOTATION_TOKEN_SECRET) {
 function calculateTotals(data: Partial<IQuotation>) {
     const basePrice = data.pricing?.basePrice || 0;
     const additionalServicesTotal = data.additionalServices?.reduce((acc, s) => acc + (s.price || 0), 0) || 0;
-    const discountAmount = data.pricing?.discount || 0;
+    const discountRate = data.pricing?.discount || 0;
     const taxRate = data.pricing?.taxRate || 0;
 
-    const subtotal = basePrice + additionalServicesTotal - discountAmount;
+    const subtotalBeforeDiscount = basePrice + additionalServicesTotal;
+    const discountAmount = (subtotalBeforeDiscount * discountRate) / 100;
+    const subtotal = subtotalBeforeDiscount - discountAmount;
     const taxAmount = (subtotal * taxRate) / 100;
     const grandTotal = subtotal + taxAmount;
 
@@ -53,6 +70,35 @@ function verifyQuotationToken(token: string): QuotationTokenPayload {
     } catch {
         throw new AppError('Invalid or expired quotation link', 410);
     }
+}
+
+// ─── State machine (simple but explicit) ──────────────────────────────────────
+
+const ALLOWED_TRANSITIONS: Record<QuotationStatus, ReadonlySet<QuotationStatus>> = {
+    draft: new Set(['sent', 'superseded', 'expired']),
+    sent: new Set(['viewed', 'accepted', 'change_requested', 'rejected', 'expired', 'superseded']),
+    viewed: new Set(['accepted', 'change_requested', 'rejected', 'expired', 'superseded']),
+    change_requested: new Set(['superseded', 'expired']),
+    accepted: new Set(['superseded']),
+    rejected: new Set(['superseded']),
+    expired: new Set(['superseded']),
+    superseded: new Set([]),
+};
+
+function assertTransition(from: QuotationStatus, to: QuotationStatus) {
+    const allowed = ALLOWED_TRANSITIONS[from];
+    if (!allowed?.has(to)) {
+        throw new AppError(`Invalid quotation transition: ${from} → ${to}`, 409);
+    }
+}
+
+function stableStringify(value: unknown): string {
+    if (value === null || value === undefined) return String(value);
+    if (typeof value !== 'object') return JSON.stringify(value);
+    if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`;
+    const obj = value as Record<string, unknown>;
+    const keys = Object.keys(obj).sort();
+    return `{${keys.map((k) => `${JSON.stringify(k)}:${stableStringify(obj[k])}`).join(',')}}`;
 }
 
 // ─── Quotation Number Generator ───────────────────────────────────────────────
@@ -98,6 +144,7 @@ export class QuotationService {
     static async updateQuotation(
         id: string,
         data: Partial<IQuotation>,
+        _userId?: string,
     ): Promise<IQuotation> {
         const quotation = await QuotationModel.findById(id);
         if (!quotation) throw new AppError('Quotation not found', 404);
@@ -113,11 +160,20 @@ export class QuotationService {
         return await quotation.save();
     }
 
-    static async sendQuotation(id: string, _userId: string): Promise<IQuotation> {
+    static async sendQuotation(id: string, _userId: string): Promise<SendQuotationResult> {
         const quotation = await QuotationModel.findById(id);
         if (!quotation) throw new AppError('Quotation not found', 404);
-        if (quotation.status !== 'draft') {
-            throw new AppError('Only draft quotations can be sent', 409);
+
+        // Idempotent: already sent/viewed => return existing link (or re-issue if missing/expired)
+        if (quotation.status === 'sent' || quotation.status === 'viewed') {
+            const hasValidToken =
+                Boolean(quotation.secureToken) &&
+                (!quotation.tokenExpiresAt || quotation.tokenExpiresAt >= new Date());
+
+            if (hasValidToken) return quotation;
+            // token missing/expired: allow re-issuing while staying in sent/viewed
+        } else {
+            assertTransition(quotation.status, 'sent');
         }
 
         const tokenExpiresAt = new Date();
@@ -129,22 +185,95 @@ export class QuotationService {
             version: quotation.version,
         });
 
-        quotation.status = 'sent';
+        // Only move to `sent` when transitioning from draft; otherwise preserve viewed state.
+        if (quotation.status === 'draft') {
+            quotation.status = 'sent';
+        }
         quotation.secureToken = secureToken;
         quotation.tokenExpiresAt = tokenExpiresAt;
 
-        return await quotation.save();
+        const saved = await quotation.save();
+
+        const clientLink = `${envConfig.payment_client_url}/quotation/${saved.secureToken}`;
+
+        let emailSent = false;
+        let emailedTo: string[] | undefined;
+        let emailError: string | undefined;
+
+        try {
+            const client = await ClientModel.findById(saved.clientId).lean();
+            const toList = (client?.emails ?? []).filter(Boolean);
+
+            if (toList.length === 0) {
+                emailError = 'Client has no emails on record';
+            } else {
+                // Send to the first email; the UI/link can be shared further if needed.
+                const to = toList[0]!;
+                await emailService.sendQuotationEmail({
+                    to,
+                    clientName: saved.client?.contactName || client?.name || 'Client',
+                    quotationTitle: saved.details?.title || 'Quotation',
+                    quotationNumber: saved.quotationNumber,
+                    clientLink,
+                    validUntil: saved.details?.validUntil
+                        ? new Date(saved.details.validUntil).toLocaleDateString('en-GB')
+                        : undefined,
+                });
+                emailSent = true;
+                emailedTo = [to];
+            }
+        } catch (err: any) {
+            emailError = err?.message || String(err);
+        }
+
+        logger.info(
+            {
+                quotationId: saved._id.toString(),
+                quotationGroupId: saved.quotationGroupId,
+                quotationVersion: saved.version,
+                status: saved.status,
+                tokenExpiresAt: saved.tokenExpiresAt,
+                correlationId: getCorrelationId(),
+                emailSent,
+                emailedTo,
+                emailError,
+            },
+            'quotation.send_result',
+        );
+
+        return {
+            quotation: saved,
+            clientLink,
+            emailSent,
+            ...(emailedTo ? { emailedTo } : {}),
+            ...(emailError ? { emailError } : {}),
+        };
     }
 
     static async createNewVersion(
         quotationGroupId: string,
         data: Partial<IQuotation>,
         userId: string,
+        idempotencyKey?: string,
     ): Promise<IQuotation> {
         const session = await mongoose.startSession();
         session.startTransaction();
 
         try {
+            // Idempotency: if the same request key already created a version, return it.
+            const effectiveKey =
+                (idempotencyKey && String(idempotencyKey).trim()) ||
+                crypto
+                    .createHash('sha256')
+                    .update(`${quotationGroupId}::${userId}::${stableStringify(data)}`)
+                    .digest('hex');
+
+            const existingByKey = await QuotationModel.findOne({
+                quotationGroupId,
+                versionCreationKey: effectiveKey,
+            }).session(session);
+            if (existingByKey) return existingByKey;
+
             const currentLatest = await QuotationModel.findOne({ quotationGroupId, isLatestVersion: true }).session(session);
             if (!currentLatest) throw new AppError('No active quotation found', 404);
 
@@ -181,6 +310,8 @@ export class QuotationService {
                         isLatestVersion: true,
                         status: 'draft',
                         createdBy: new Types.ObjectId(userId),
+                        versionCreationKey: effectiveKey,
+                        derivedFromQuotationId: currentLatest._id,
                     },
                 ],
                 { session },
@@ -191,13 +322,23 @@ export class QuotationService {
                 throw new Error('Failed to create new quotation version');
             }
 
-            await session.commitTransaction();
+            await OutboxService.enqueue(
+                {
+                    dedupeKey: `quotation.superseded:${quotationGroupId}:${currentLatest.version}->${newVersion.version}`,
+                    eventName: 'quotation.superseded',
+                    aggregateType: 'quotationGroup',
+                    aggregateId: quotationGroupId,
+                    correlationId: getCorrelationId(),
+                    payload: {
+                        quotationGroupId,
+                        supersededVersion: currentLatest.version,
+                        newVersion: newVersion.version,
+                    },
+                },
+                { session },
+            );
 
-            await quotationPaymentEventQueue.add('quotation.superseded', {
-                quotationGroupId,
-                supersededVersion: currentLatest.version,
-                newVersion: newVersion.version,
-            });
+            await session.commitTransaction();
 
             return newVersion;
         } catch (err) {
@@ -224,8 +365,19 @@ export class QuotationService {
         }
 
         if (quotation.status === 'sent') {
+            assertTransition(quotation.status, 'viewed');
             quotation.status = 'viewed';
             await quotation.save();
+            logger.info(
+                {
+                    quotationId: quotation._id.toString(),
+                    quotationGroupId: quotation.quotationGroupId,
+                    quotationVersion: quotation.version,
+                    from: 'sent',
+                    to: 'viewed',
+                },
+                'quotation.status_transition',
+            );
         }
 
         return quotation;
@@ -240,21 +392,45 @@ export class QuotationService {
             throw new AppError('Version inactive.', 410);
         }
 
+        // Idempotent: already accepted => return without side effects
+        if (quotation.status === 'accepted') return quotation;
+
+        assertTransition(quotation.status, 'accepted');
+
         const updated = await QuotationModel.findOneAndUpdate(
             { _id: quotation._id, __v: quotation.__v, isLatestVersion: true, status: { $in: ['sent', 'viewed'] } },
             { $set: { status: 'accepted' } },
             { new: true },
         );
 
-        if (!updated) throw new AppError('State changed concurrently', 409);
+        if (!updated) {
+            // Retry-safe: if the quotation became accepted between read and update, return it.
+            const latest = await QuotationModel.findById(payload.quotationId);
+            if (latest && latest.isLatestVersion && latest.status === 'accepted') return latest;
+            throw new AppError('State changed concurrently', 409);
+        }
 
         await quotationPaymentEventQueue.add('quotation.accepted', {
             quotationId: updated._id.toString(),
             quotationGroupId: updated.quotationGroupId,
+            quotationVersion: updated.version,
             clientId: updated.clientId.toString(),
             grandTotal: updated.totals.grandTotal,
-            currency: '৳', // Default or from snapshot
+            currency: updated.currency || '৳',
+            correlationId: getCorrelationId(),
+            aggregateType: 'quotationGroup',
+            aggregateId: updated.quotationGroupId,
         });
+
+        logger.info(
+            {
+                quotationId: updated._id.toString(),
+                quotationGroupId: updated.quotationGroupId,
+                quotationVersion: updated.version,
+                status: updated.status,
+            },
+            'quotation.accepted',
+        );
 
         return updated;
     }
@@ -264,19 +440,48 @@ export class QuotationService {
         const quotation = await QuotationModel.findById(payload.quotationId);
         if (!quotation) throw new AppError('Quotation not found', 404);
 
+        if (!quotation.isLatestVersion || quotation.status === 'superseded') {
+            throw new AppError('Version inactive.', 410);
+        }
+
+        // Idempotent: already requested changes with same reason
+        if (quotation.status === 'change_requested' && quotation.changeRequestReason === reason) {
+            return quotation;
+        }
+
+        assertTransition(quotation.status, 'change_requested');
+
         const updated = await QuotationModel.findOneAndUpdate(
-            { _id: quotation._id, __v: quotation.__v, isLatestVersion: true },
+            { _id: quotation._id, __v: quotation.__v, isLatestVersion: true, status: { $in: ['sent', 'viewed'] } },
             { $set: { status: 'change_requested', changeRequestReason: reason } },
             { new: true },
         );
 
-        if (!updated) throw new AppError('State changed concurrently', 409);
+        if (!updated) {
+            // Retry-safe: if already moved to change_requested, return it
+            const latest = await QuotationModel.findById(payload.quotationId);
+            if (latest && latest.isLatestVersion && latest.status === 'change_requested') return latest;
+            throw new AppError('State changed concurrently', 409);
+        }
 
         await quotationPaymentEventQueue.add('quotation.change_requested', {
             quotationGroupId: updated.quotationGroupId,
             quotationId: updated._id.toString(),
             reason,
+            correlationId: getCorrelationId(),
+            aggregateType: 'quotationGroup',
+            aggregateId: updated.quotationGroupId,
         });
+
+        logger.info(
+            {
+                quotationId: updated._id.toString(),
+                quotationGroupId: updated.quotationGroupId,
+                quotationVersion: updated.version,
+                status: updated.status,
+            },
+            'quotation.change_requested',
+        );
 
         return updated;
     }

@@ -1,5 +1,6 @@
 import type { Request, Response, NextFunction } from 'express';
 import { QuotationService } from '../services/quotation.service.js';
+import { logger } from '../lib/logger.js';
 
 // ─── Staff / Admin Handlers ───────────────────────────────────────────────────
 
@@ -29,17 +30,34 @@ const sendQuotation = async (req: Request, res: Response, next: NextFunction) =>
     try {
         const userId = req.user?.id;
         if (!userId) return next(new Error('Unauthorized'));
+        logger.info({ quotationId: req.params.id }, 'quotation.send.requested');
         const result = await QuotationService.sendQuotation(req.params.id, userId);
+        const q = result.quotation;
+        logger.info(
+            {
+                quotationId: q._id.toString(),
+                quotationGroupId: q.quotationGroupId,
+                quotationVersion: q.version,
+                tokenExpiresAt: q.tokenExpiresAt,
+                emailSent: result.emailSent,
+                emailedTo: result.emailedTo,
+            },
+            'quotation.send.completed',
+        );
         res.status(200).json({
             success: true,
-            message: 'Quotation sent to client successfully',
+            message: result.emailSent
+                ? 'Quotation email sent to client'
+                : 'Quotation link generated (email not sent)',
             data: {
-                quotationId: result._id,
-                quotationNumber: result.quotationNumber,
-                secureToken: result.secureToken,
-                tokenExpiresAt: result.tokenExpiresAt,
-                // Construct the client-facing link
-                clientLink: `${process.env.PAYMENT_CLIENT_URL}/quotation/${result.secureToken}`,
+                quotationId: q._id,
+                quotationNumber: q.quotationNumber,
+                secureToken: q.secureToken,
+                tokenExpiresAt: q.tokenExpiresAt,
+                clientLink: result.clientLink,
+                emailSent: result.emailSent,
+                emailedTo: result.emailedTo,
+                emailError: result.emailError,
             },
         });
     } catch (err) {
@@ -51,10 +69,14 @@ const createNewVersion = async (req: Request, res: Response, next: NextFunction)
     try {
         const userId = req.user?.id;
         if (!userId) return next(new Error('Unauthorized'));
+        const idempotencyKey = (req.header('x-idempotency-key') || req.header('idempotency-key') || undefined) as
+            | string
+            | undefined;
         const result = await QuotationService.createNewVersion(
             req.params.groupId,
             req.body,
             userId,
+            idempotencyKey,
         );
         res.status(201).json({
             success: true,
@@ -124,7 +146,12 @@ const deleteQuotation = async (req: Request, res: Response, next: NextFunction) 
  */
 const viewQuotationByToken = async (req: Request, res: Response, next: NextFunction) => {
     try {
+        logger.info({ token: req.params.token ? 'present' : 'missing' }, 'quotation.view_by_token.requested');
         const result = await QuotationService.getQuotationByToken(req.params.token);
+        logger.info(
+            { quotationId: result._id.toString(), quotationGroupId: result.quotationGroupId, status: result.status },
+            'quotation.view_by_token.completed',
+        );
         res.status(200).json({ success: true, data: result });
     } catch (err) {
         next(err);
@@ -137,7 +164,12 @@ const viewQuotationByToken = async (req: Request, res: Response, next: NextFunct
  */
 const acceptQuotation = async (req: Request, res: Response, next: NextFunction) => {
     try {
+        logger.info({ token: req.params.token ? 'present' : 'missing' }, 'quotation.accept.requested');
         const result = await QuotationService.acceptQuotation(req.params.token);
+        logger.info(
+            { quotationId: result._id.toString(), quotationGroupId: result.quotationGroupId, status: result.status },
+            'quotation.accept.completed',
+        );
         res.status(200).json({
             success: true,
             message: 'Quotation accepted. Proceed to payment.',
@@ -164,7 +196,12 @@ const requestChanges = async (req: Request, res: Response, next: NextFunction) =
                 message: 'A reason for the change request is required (minimum 10 characters)',
             });
         }
+        logger.info({ token: req.params.token ? 'present' : 'missing' }, 'quotation.change_request.requested');
         const result = await QuotationService.requestChanges(req.params.token, reason.trim());
+        logger.info(
+            { quotationId: result._id.toString(), quotationGroupId: result.quotationGroupId, status: result.status },
+            'quotation.change_request.completed',
+        );
         res.status(200).json({
             success: true,
             message: 'Change request submitted. The team will review and issue a new version.',

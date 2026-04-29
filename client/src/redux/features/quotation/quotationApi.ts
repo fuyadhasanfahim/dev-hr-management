@@ -84,7 +84,10 @@ export const quotationApi = apiSlice.injectEndpoints({
      * Send quotation to client — generates a secure token and returns a shareable link.
      * POST /quotations/:id/send
      */
-    sendQuotation: builder.mutation<{ data: { clientLink: string } }, string>({
+    sendQuotation: builder.mutation<
+      { data: { clientLink: string; emailSent: boolean; emailedTo?: string[]; emailError?: string } },
+      string
+    >({
       query: (id) => ({
         url: `/quotations/${id}/send`,
         method: 'POST',

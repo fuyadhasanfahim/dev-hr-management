@@ -1,0 +1,438 @@
+"use client";
+
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Card } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
+import {
+    CheckCircle2,
+    CreditCard,
+    FileText,
+    Loader2,
+    Lock,
+    Wallet,
+} from "lucide-react";
+import { loadStripe } from "@stripe/stripe-js";
+import { Elements } from "@stripe/react-stripe-js";
+import StripePhaseCheckout from "./stripe-phase-checkout";
+import PayPalPhaseCheckout from "./paypal-phase-checkout";
+import { useRouter } from "next/navigation";
+
+type PaymentProvider = "stripe" | "paypal";
+type Phase = "upfront" | "delivery" | "final";
+
+type Quotation = {
+    _id: string;
+    quotationGroupId: string;
+    quotationNumber: string;
+    status: string;
+    currency?: string;
+    totals?: { grandTotal?: number };
+    details?: { title?: string };
+    client?: { contactName?: string; companyName?: string };
+    company?: { name?: string };
+};
+
+type QuotationPaymentTracker = {
+    quotationGroupId: string;
+    currency: string;
+    totalAmount: number;
+    phases: Record<
+        Phase,
+        {
+            status: "pending" | "processing" | "paid" | "failed";
+            percentage: number;
+            amountDue: number;
+            amountPaid: number;
+            paidAt?: string;
+        }
+    >;
+};
+
+const stripePromise = loadStripe(
+    process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || "",
+);
+
+function formatMoney(amount: number, currency: string) {
+    return new Intl.NumberFormat("en-US", {
+        style: "currency",
+        currency: currency || "USD",
+    }).format(amount);
+}
+
+function phaseLabel(phase: Phase) {
+    if (phase === "upfront") return "Upfront";
+    if (phase === "delivery") return "Delivery";
+    return "Final";
+}
+
+function statusBadgeVariant(status: string) {
+    if (status === "paid") return "default";
+    if (status === "processing") return "secondary";
+    if (status === "failed") return "destructive";
+    return "outline";
+}
+
+export default function QuotationPayClient({ token }: { token: string }) {
+    const apiBase = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+    const router = useRouter();
+
+    const [quotation, setQuotation] = useState<Quotation | null>(null);
+    const [tracker, setTracker] = useState<QuotationPaymentTracker | null>(null);
+
+    const [activeProvider, setActiveProvider] =
+        useState<PaymentProvider>("stripe");
+    const activePhase: Phase = "upfront";
+
+    const [isLoading, setIsLoading] = useState(true);
+    const [isAccepting, setIsAccepting] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    const loadAll = useCallback(async () => {
+        setIsLoading(true);
+        setError(null);
+        try {
+            const qRes = await fetch(`${apiBase}/api/quotations/client/${token}`, {
+                cache: "no-store",
+            });
+            const qJson = await qRes.json();
+            if (!qRes.ok) throw new Error(qJson?.message || "Failed to load quotation");
+            setQuotation(qJson?.data);
+
+            const sRes = await fetch(
+                `${apiBase}/api/quotation-payments/client/${token}/status`,
+                { cache: "no-store" },
+            );
+            if (sRes.ok) {
+                const sJson = await sRes.json();
+                setTracker(sJson?.data ?? null);
+            } else {
+                setTracker(null);
+            }
+        } catch (e) {
+            setError((e as Error).message);
+        } finally {
+            setIsLoading(false);
+        }
+    }, [apiBase, token]);
+
+    useEffect(() => {
+        void loadAll();
+    }, [loadAll]);
+
+    const canPay = quotation?.status === "accepted";
+    const upfrontPaid = tracker?.phases?.upfront?.status === "paid";
+
+    const currency =
+        (tracker?.currency && tracker.currency !== "BDT" ? tracker.currency : "USD") || "USD";
+
+    const milestoneText = useMemo(() => {
+        if (!tracker) return null;
+        const p = tracker.phases.upfront;
+        return `${formatMoney(p.amountDue / 100, currency)} (${p.percentage}%)`;
+    }, [tracker, currency]);
+
+    useEffect(() => {
+        if (!upfrontPaid) return;
+        const t = setTimeout(() => {
+            router.push("/success?already_paid=true");
+        }, 1400);
+        return () => clearTimeout(t);
+    }, [upfrontPaid, router]);
+
+    const acceptQuotation = async () => {
+        setIsAccepting(true);
+        setError(null);
+        try {
+            const res = await fetch(`${apiBase}/api/quotations/client/${token}/accept`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+            });
+            const json = await res.json();
+            if (!res.ok) throw new Error(json?.message || "Failed to accept quotation");
+            await loadAll();
+        } catch (e) {
+            setError((e as Error).message);
+        } finally {
+            setIsAccepting(false);
+        }
+    };
+
+    if (isLoading) {
+        return (
+            <div className="min-h-[70vh] flex items-center justify-center px-6">
+                <div className="flex items-center gap-3 text-muted-foreground">
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                    <span className="text-sm font-medium">Loading quotation…</span>
+                </div>
+            </div>
+        );
+    }
+
+    if (error || !quotation) {
+        return (
+            <div className="min-h-[70vh] flex items-center justify-center px-6">
+                <Card className="w-full max-w-xl p-6">
+                    <div className="flex items-start gap-3">
+                        <div className="mt-0.5 text-red-600">
+                            <FileText className="h-5 w-5" />
+                        </div>
+                        <div>
+                            <div className="font-semibold">Unable to open this quotation</div>
+                            <div className="text-sm text-muted-foreground mt-1">
+                                {error || "The link may be invalid or expired."}
+                            </div>
+                        </div>
+                    </div>
+                </Card>
+            </div>
+        );
+    }
+
+    if (upfrontPaid) {
+        return (
+            <div className="min-h-[70vh] flex items-center justify-center px-6">
+                <Card className="w-full max-w-xl p-6">
+                    <div className="space-y-2">
+                        <div className="font-semibold text-gray-900">
+                            You have already completed the payment.
+                        </div>
+                        <div className="text-sm text-muted-foreground">
+                            You can proceed to the next step. Redirecting you now…
+                        </div>
+                    </div>
+                </Card>
+            </div>
+        );
+    }
+
+    return (
+        <div className="min-h-screen">
+            <div className="max-w-6xl mx-auto px-4 sm:px-6 py-10">
+                <div className="flex flex-col gap-6">
+                    <motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.35 }}
+                        className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4"
+                    >
+                        <div className="space-y-2">
+                            <div className="flex items-center gap-2">
+                                <Badge variant="secondary" className="rounded-full">
+                                    {quotation.quotationNumber}
+                                </Badge>
+                                <Badge
+                                    variant={quotation.status === "accepted" ? "default" : "outline"}
+                                    className="rounded-full"
+                                >
+                                    {quotation.status}
+                                </Badge>
+                            </div>
+                            <div className="text-2xl sm:text-3xl font-semibold tracking-tight text-gray-900">
+                                {quotation.details?.title || "Quotation"}
+                            </div>
+                            <div className="text-sm text-muted-foreground">
+                                {quotation.company?.name ? `${quotation.company.name} • ` : ""}
+                                {quotation.client?.contactName || quotation.client?.companyName || "Client"}
+                            </div>
+                        </div>
+
+                        {!canPay && (
+                            <Button
+                                onClick={acceptQuotation}
+                                disabled={isAccepting}
+                                className="h-11 rounded-xl bg-gray-900 hover:bg-gray-800"
+                            >
+                                {isAccepting ? (
+                                    <span className="flex items-center gap-2">
+                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                        Accepting…
+                                    </span>
+                                ) : (
+                                    <span className="flex items-center gap-2">
+                                        <CheckCircle2 className="h-4 w-4" />
+                                        Accept & continue to payment
+                                    </span>
+                                )}
+                            </Button>
+                        )}
+                    </motion.div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                        <Card className="lg:col-span-5 p-6 rounded-3xl border-gray-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
+                            <div className="flex items-start justify-between gap-3">
+                                <div>
+                                    <div className="text-sm font-medium text-muted-foreground">
+                                        Payment plan
+                                    </div>
+                                    <div className="text-xl font-semibold mt-1">
+                                        Payment milestone
+                                    </div>
+                                </div>
+                                <div className="text-xs text-muted-foreground flex items-center gap-1">
+                                    <Lock className="h-3 w-3" />
+                                    Secure
+                                </div>
+                            </div>
+
+                            <Separator className="my-5" />
+
+                            {tracker ? (
+                                <div className="space-y-3">
+                                    {(() => {
+                                        const row = tracker.phases.upfront;
+                                        return (
+                                            <div className="w-full text-left rounded-2xl border border-gray-900/20 bg-gray-900/5 p-4">
+                                                <div className="flex items-start justify-between gap-3">
+                                                    <div className="space-y-1">
+                                                        <div className="flex items-center gap-2">
+                                                            <div className="font-semibold text-gray-900">
+                                                                {phaseLabel("upfront")}
+                                                            </div>
+                                                            <Badge
+                                                                variant={statusBadgeVariant(row.status)}
+                                                                className="rounded-full"
+                                                            >
+                                                                {row.status}
+                                                            </Badge>
+                                                        </div>
+                                                        <div className="text-sm text-muted-foreground">
+                                                            {formatMoney(row.amountDue / 100, currency)} • {row.percentage}%
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })()}
+                                </div>
+                            ) : (
+                                <div className="text-sm text-muted-foreground">
+                                    Accept the quotation to enable payments.
+                                </div>
+                            )}
+                        </Card>
+
+                        <Card className="lg:col-span-7 p-6 sm:p-8 rounded-3xl border-gray-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden">
+                            <div className="flex items-start justify-between gap-3">
+                                <div>
+                                    <div className="text-sm font-medium text-muted-foreground">
+                                        Payment method
+                                    </div>
+                                    <div className="text-xl font-semibold mt-1">
+                                        Pay {milestoneText || "securely"}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <Separator className="my-5" />
+
+                            <Tabs
+                                value={activeProvider}
+                                onValueChange={(v) => setActiveProvider(v as PaymentProvider)}
+                                className="w-full"
+                            >
+                                <TabsList className="grid grid-cols-2 w-full bg-transparent p-0 gap-3">
+                                    <TabsTrigger
+                                        value="stripe"
+                                        className="rounded-2xl border border-gray-200 data-[state=active]:border-teal-600 data-[state=active]:bg-teal-50/30 data-[state=active]:ring-1 data-[state=active]:ring-teal-600/30 py-3"
+                                    >
+                                        <span className="flex items-center gap-2">
+                                            <CreditCard className="h-4 w-4" />
+                                            Card
+                                        </span>
+                                    </TabsTrigger>
+                                    <TabsTrigger
+                                        value="paypal"
+                                        className="rounded-2xl border border-gray-200 data-[state=active]:border-[#003087] data-[state=active]:bg-[#003087]/5 data-[state=active]:ring-1 data-[state=active]:ring-[#003087]/25 py-3"
+                                    >
+                                        <span className="flex items-center gap-2">
+                                            <Wallet className="h-4 w-4" />
+                                            PayPal
+                                        </span>
+                                    </TabsTrigger>
+                                </TabsList>
+
+                                <div className="mt-6">
+                                    <AnimatePresence mode="wait">
+                                        <TabsContent value="stripe" className="mt-0">
+                                            <motion.div
+                                                key="stripe"
+                                                initial={{ opacity: 0, y: 6 }}
+                                                animate={{ opacity: 1, y: 0 }}
+                                                exit={{ opacity: 0, y: 6 }}
+                                                transition={{ duration: 0.25 }}
+                                            >
+                                                {canPay && tracker ? (
+                                                    <Elements
+                                                        stripe={stripePromise}
+                                                        options={{
+                                                            appearance: {
+                                                                theme: "stripe",
+                                                                variables: {
+                                                                    colorPrimary: "#0d9488",
+                                                                    fontFamily:
+                                                                        'Inter, system-ui, -apple-system, "Segoe UI", sans-serif',
+                                                                    borderRadius: "14px",
+                                                                },
+                                                            },
+                                                        }}
+                                                    >
+                                                        <StripePhaseCheckout
+                                                            apiBase={apiBase}
+                                                            token={token}
+                                                            phase="upfront"
+                                                            currency={currency}
+                                                            onPaid={loadAll}
+                                                        />
+                                                    </Elements>
+                                                ) : (
+                                                    <div className="rounded-2xl border border-dashed border-gray-200 p-6 text-sm text-muted-foreground">
+                                                        Accept the quotation to enable payment.
+                                                    </div>
+                                                )}
+                                            </motion.div>
+                                        </TabsContent>
+
+                                        <TabsContent value="paypal" className="mt-0">
+                                            <motion.div
+                                                key="paypal"
+                                                initial={{ opacity: 0, y: 6 }}
+                                                animate={{ opacity: 1, y: 0 }}
+                                                exit={{ opacity: 0, y: 6 }}
+                                                transition={{ duration: 0.25 }}
+                                            >
+                                                {canPay && tracker ? (
+                                                    <PayPalPhaseCheckout
+                                                        apiBase={apiBase}
+                                                        token={token}
+                                                        phase="upfront"
+                                                        currency={currency}
+                                                        onPaid={loadAll}
+                                                    />
+                                                ) : (
+                                                    <div className="rounded-2xl border border-dashed border-gray-200 p-6 text-sm text-muted-foreground">
+                                                        Accept the quotation to enable payment.
+                                                    </div>
+                                                )}
+                                            </motion.div>
+                                        </TabsContent>
+                                    </AnimatePresence>
+                                </div>
+                            </Tabs>
+
+                            {error && (
+                                <div className="mt-6 text-sm text-red-600 bg-red-50 border border-red-200 rounded-2xl p-4">
+                                    {error}
+                                </div>
+                            )}
+                        </Card>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}
+

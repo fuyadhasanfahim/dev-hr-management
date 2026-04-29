@@ -29,6 +29,19 @@ export interface IService {
     updatedAt: string;
 }
 
+export interface CreateServiceInput {
+    name: string;
+    category?: string;
+    pricingModel?: 'fixed' | 'hourly' | 'milestone';
+    basePrice?: number;
+    hourlyRate?: number;
+    milestoneNotes?: string;
+    description?: string;
+    isActive?: boolean;
+}
+
+export interface UpdateServiceInput extends Partial<CreateServiceInput> {}
+
 export interface IReturnFileFormat {
     _id: string;
     name: string;
@@ -39,6 +52,16 @@ export interface IReturnFileFormat {
     createdAt: string;
     updatedAt: string;
 }
+
+export interface CreateReturnFileFormatInput {
+    name: string;
+    extension: string;
+    description?: string;
+    isActive?: boolean;
+}
+
+export interface UpdateReturnFileFormatInput
+    extends Partial<CreateReturnFileFormatInput> {}
 
 export interface IRevisionInstruction {
     instruction: string;

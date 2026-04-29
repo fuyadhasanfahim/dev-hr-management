@@ -8,9 +8,10 @@ import { AppError } from '../utils/AppError.js';
 import { stripe } from './stripe.service.js';
 import { paypalClient } from './paypal.service.js';
 import checkoutNodeJssdk from '@paypal/checkout-server-sdk';
+import { getCorrelationId } from '../lib/requestContext.js';
 
-// Phase percentage mapping — single source of truth
-const PHASE_PERCENTAGES: Record<QuotationPaymentPhase, number> = {
+// Default split used when quotation.paymentMilestones is missing/invalid
+const DEFAULT_PHASE_PERCENTAGES: Record<QuotationPaymentPhase, number> = {
     upfront: 50,
     delivery: 30,
     final: 20,
@@ -22,8 +23,33 @@ const PHASE_PERCENTAGES: Record<QuotationPaymentPhase, number> = {
  * Compute phase amount from grandTotal.
  * Returns integer cents (Stripe-compatible).
  */
-function computePhaseAmount(grandTotal: number, phase: QuotationPaymentPhase): number {
-    return Math.round(grandTotal * (PHASE_PERCENTAGES[phase] / 100) * 100); // in cents
+function computePhaseAmount(grandTotal: number, percentage: number): number {
+    return Math.round(grandTotal * (percentage / 100) * 100); // in cents
+}
+
+function sanitizePercent(n: unknown): number | null {
+    const num = typeof n === 'number' ? n : Number(n);
+    if (!Number.isFinite(num)) return null;
+    if (num <= 0 || num >= 100) return null;
+    return num;
+}
+
+function resolvePhasePercentagesFromQuotation(quotation: any): Record<QuotationPaymentPhase, number> {
+    const milestones = Array.isArray(quotation?.paymentMilestones) ? quotation.paymentMilestones : [];
+    if (milestones.length !== 3) return DEFAULT_PHASE_PERCENTAGES;
+
+    const percents: Array<number | null> = milestones.map((m: any) => sanitizePercent(m?.percentage));
+    if (percents.some((p: number | null) => p === null)) return DEFAULT_PHASE_PERCENTAGES;
+
+    const sum = Math.round((percents[0]! + percents[1]! + percents[2]!) * 100) / 100;
+    // Accept minor floating error only
+    if (Math.abs(sum - 100) > 0.01) return DEFAULT_PHASE_PERCENTAGES;
+
+    return {
+        upfront: percents[0]!,
+        delivery: percents[1]!,
+        final: percents[2]!,
+    };
 }
 
 // ─── QuotationPaymentService ──────────────────────────────────────────────────
@@ -32,42 +58,76 @@ export class QuotationPaymentService {
 
     /**
      * Called by the event worker when quotation.accepted fires.
-     * Creates the QuotationPayment tracker with all three phase amounts pre-calculated.
-     * IDEMPOTENT: safe to call multiple times — upserts by quotationGroupId.
+     * Creates the active payable (QuotationPayment) for the accepted latest quotation version.
+     *
+     * Invariant:
+     *  - exactly one active payable per quotationGroupId (latest version only)
+     *
+     * IDEMPOTENT:
+     *  - safe to call multiple times for the same quotationId (returns existing active payable)
+     *  - safe under retries/concurrency via unique indexes.
      */
     static async initializePaymentTracker(
         quotationGroupId: string,
+        quotationId: string,
+        quotationVersion: number,
         clientId: string,
         grandTotal: number,
         currency: string,
     ): Promise<IQuotationPayment> {
         const totalCents = Math.round(grandTotal * 100);
 
-        const existing = await QuotationPaymentModel.findOne({ quotationGroupId });
-        if (existing) return existing;
+        // Align payment split with quotation schema (paymentMilestones)
+        const quotation = await QuotationModel.findById(quotationId).lean();
+        const percentages = resolvePhasePercentagesFromQuotation(quotation);
+
+        const existingForQuotation = await QuotationPaymentModel.findOne({
+            quotationGroupId,
+            quotationId: new mongoose.Types.ObjectId(quotationId),
+        });
+        if (existingForQuotation) {
+            if (!existingForQuotation.isActive) {
+                await QuotationPaymentModel.findByIdAndUpdate(existingForQuotation._id, {
+                    $set: { isActive: true },
+                    $unset: { supersededAt: '' },
+                });
+            }
+            // Return the latest view (no in-memory mutation; plays nicely with exactOptionalPropertyTypes)
+            const refreshed = await QuotationPaymentModel.findById(existingForQuotation._id);
+            return (refreshed ?? existingForQuotation) as unknown as IQuotationPayment;
+        }
+
+        // Deactivate any previous active payable for this group (audit preserved)
+        await QuotationPaymentModel.updateMany(
+            { quotationGroupId, isActive: true },
+            { $set: { isActive: false, supersededAt: new Date() } },
+        );
 
         return QuotationPaymentModel.create({
             quotationGroupId,
+            quotationId: new mongoose.Types.ObjectId(quotationId),
+            quotationVersion,
+            isActive: true,
             clientId: new mongoose.Types.ObjectId(clientId),
             currency: currency.toUpperCase() === '৳' ? 'BDT' : currency.toUpperCase(),
             totalAmount: totalCents,
             phases: {
                 upfront: {
                     status: 'pending',
-                    percentage: 50,
-                    amountDue: computePhaseAmount(grandTotal, 'upfront'),
+                    percentage: percentages.upfront,
+                    amountDue: computePhaseAmount(grandTotal, percentages.upfront),
                     amountPaid: 0,
                 },
                 delivery: {
                     status: 'pending',
-                    percentage: 30,
-                    amountDue: computePhaseAmount(grandTotal, 'delivery'),
+                    percentage: percentages.delivery,
+                    amountDue: computePhaseAmount(grandTotal, percentages.delivery),
                     amountPaid: 0,
                 },
                 final: {
                     status: 'pending',
-                    percentage: 20,
-                    amountDue: computePhaseAmount(grandTotal, 'final'),
+                    percentage: percentages.final,
+                    amountDue: computePhaseAmount(grandTotal, percentages.final),
                     amountPaid: 0,
                 },
             },
@@ -107,7 +167,22 @@ export class QuotationPaymentService {
         }
 
         // Rule 2-4: Phase eligibility
-        const tracker = await QuotationPaymentModel.findOne({ quotationGroupId });
+        let tracker: any = await QuotationPaymentModel.findOne({
+            quotationGroupId,
+            quotationId: quotation._id,
+            isActive: true,
+        });
+        if (!tracker) {
+            // Retry-safe: if the accepted event worker hasn't initialized yet, do it here.
+            tracker = await this.initializePaymentTracker(
+                quotationGroupId,
+                quotation._id.toString(),
+                quotation.version,
+                quotation.clientId.toString(),
+                quotation.totals.grandTotal,
+                quotation.currency || '৳',
+            );
+        }
         if (!tracker) {
             throw new AppError('Payment tracker not initialized. Quotation must be accepted first.', 422);
         }
@@ -126,7 +201,8 @@ export class QuotationPaymentService {
 
         const amountCents = phaseData.amountDue;
         const currency = tracker.currency.toLowerCase();
-        const idempotencyKey = `stripe-${phase}-${quotationGroupId}`;
+        // Include quotationId so new versions don't collide with old idempotency keys.
+        const idempotencyKey = `stripe:${phase}:${quotation._id.toString()}`;
 
         // Create or retrieve existing PaymentIntent
         let paymentIntentId = phaseData.paymentIntentId;
@@ -148,8 +224,10 @@ export class QuotationPaymentService {
                         quotationGroupId,
                         phase,
                         quotationId: quotation._id.toString(),
+                        quotationVersion: String(quotation.version),
+                        ...(getCorrelationId() ? { correlationId: getCorrelationId()! } : {}),
                     },
-                    description: `${phase.toUpperCase()} payment (${PHASE_PERCENTAGES[phase]}%) — Quotation ${quotation.quotationNumber}`,
+                    description: `${phase.toUpperCase()} payment (${tracker.phases[phase].percentage}%) — Quotation ${quotation.quotationNumber}`,
                 },
                 { idempotencyKey },
             );
@@ -159,7 +237,7 @@ export class QuotationPaymentService {
 
             // Store the intent ID and mark as processing
             await QuotationPaymentModel.findOneAndUpdate(
-                { quotationGroupId },
+                { quotationGroupId, quotationId: quotation._id, isActive: true },
                 {
                     $set: {
                         [`phases.${phase}.paymentIntentId`]: paymentIntentId,
@@ -185,7 +263,21 @@ export class QuotationPaymentService {
             throw new AppError('Quotation must be accepted before payment.', 409);
         }
 
-        const tracker = await QuotationPaymentModel.findOne({ quotationGroupId });
+        let tracker: any = await QuotationPaymentModel.findOne({
+            quotationGroupId,
+            quotationId: quotation._id,
+            isActive: true,
+        });
+        if (!tracker) {
+            tracker = await this.initializePaymentTracker(
+                quotationGroupId,
+                quotation._id.toString(),
+                quotation.version,
+                quotation.clientId.toString(),
+                quotation.totals.grandTotal,
+                quotation.currency || '৳',
+            );
+        }
         if (!tracker) throw new AppError('Payment tracker not found', 422);
 
         const phaseData = tracker.phases[phase];
@@ -205,7 +297,8 @@ export class QuotationPaymentService {
             purchase_units: [
                 {
                     reference_id: `${phase}-${quotationGroupId}`,
-                    custom_id: `${phase}::${quotationGroupId}`,
+                    // Encode version context to make handlers retry-safe across superseded versions.
+                    custom_id: `${phase}::${quotationGroupId}::${quotation._id.toString()}::${getCorrelationId() ?? ''}`,
                     amount: {
                         currency_code: tracker.currency === 'BDT' ? 'USD' : tracker.currency,
                         value: amountDollars,
@@ -236,8 +329,13 @@ export class QuotationPaymentService {
         phase: QuotationPaymentPhase,
         amountReceived: number,  // in cents
         paymentIntentId: string,
+        quotationId?: string,
     ): Promise<IQuotationPayment> {
-        const tracker = await QuotationPaymentModel.findOne({ quotationGroupId });
+        const tracker = await QuotationPaymentModel.findOne(
+            quotationId
+                ? { quotationGroupId, quotationId: new mongoose.Types.ObjectId(quotationId) }
+                : { quotationGroupId, isActive: true },
+        );
         if (!tracker) throw new AppError('Payment tracker not found', 404);
 
         // Idempotency: already paid, return as-is
@@ -246,7 +344,11 @@ export class QuotationPaymentService {
         }
 
         const updated = await QuotationPaymentModel.findOneAndUpdate(
-            { quotationGroupId, [`phases.${phase}.status`]: { $ne: 'paid' } },
+            {
+                quotationGroupId,
+                ...(quotationId ? { quotationId: new mongoose.Types.ObjectId(quotationId) } : { isActive: true }),
+                [`phases.${phase}.status`]: { $ne: 'paid' },
+            },
             {
                 $set: {
                     [`phases.${phase}.status`]: 'paid',
@@ -267,6 +369,6 @@ export class QuotationPaymentService {
     }
 
     static async getPaymentStatus(quotationGroupId: string): Promise<IQuotationPayment | null> {
-        return QuotationPaymentModel.findOne({ quotationGroupId });
+        return QuotationPaymentModel.findOne({ quotationGroupId, isActive: true });
     }
 }

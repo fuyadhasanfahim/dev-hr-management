@@ -7,6 +7,7 @@ import { InvitationEmail } from '../templates/InvitationEmail.js';
 import { ApplicationStatusEmail } from '../templates/ApplicationStatusEmail.js';
 import { OrderStatusUpdateEmail } from '../templates/OrderStatusUpdateEmail.js';
 import { AdminPaymentEmail } from '../templates/AdminPaymentEmail.js';
+import { QuotationEmail } from '../templates/QuotationEmail.js';
 import * as React from 'react';
 import envConfig from '../config/env.config.js';
 
@@ -232,6 +233,42 @@ const sendInvitationEmail = async (data: SendInvitationData) => {
     }
 };
 
+interface SendQuotationEmailData {
+    to: string;
+    clientName: string;
+    quotationTitle: string;
+    quotationNumber: string;
+    clientLink: string;
+    validUntil?: string;
+}
+
+const sendQuotationEmail = async (data: SendQuotationEmailData) => {
+    try {
+        const emailHtml = await render(
+            React.createElement(QuotationEmail, {
+                clientName: data.clientName,
+                quotationTitle: data.quotationTitle,
+                quotationNumber: data.quotationNumber,
+                clientLink: data.clientLink,
+                validUntil: data.validUntil,
+            }),
+        );
+
+        const mailOptions = {
+            from: 'Quotation | WebBriks',
+            to: data.to,
+            subject: `Quotation ${data.quotationNumber} — ${data.quotationTitle}`,
+            html: emailHtml,
+        };
+
+        const info = await transporter.sendMail(mailOptions);
+        return info;
+    } catch (error) {
+        console.error('Error sending quotation email:', error);
+        throw error;
+    }
+};
+
 interface SendApplicationStatusData {
     to: string;
     applicantName: string;
@@ -307,6 +344,7 @@ export default {
     sendVerificationEmail,
     sendResetPasswordEmail,
     sendInvitationEmail,
+    sendQuotationEmail,
     sendApplicationStatusEmail,
     sendAdminPaymentEmail,
 };

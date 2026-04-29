@@ -26,9 +26,12 @@ async function getAllOrders(req: Request, res: Response, next: NextFunction) {
 
 async function getOrderById(req: Request, res: Response, next: NextFunction) {
     try {
-        const result = await OrderService.getOrderByIdFromDB(req.params.id);
+        const { id } = req.params;
+        if (!id) return next(new AppError('Order id is required', 400));
+
+        const result = await OrderService.getOrderByIdFromDB(id);
         if (!result) return res.status(404).json({ success: false, message: 'Order not found' });
-        res.status(200).json({ success: true, data: result });
+        return res.status(200).json({ success: true, data: result });
     } catch (err) {
         next(err);
     }

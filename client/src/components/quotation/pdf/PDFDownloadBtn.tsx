@@ -9,27 +9,15 @@ import { Button } from '@/components/ui/button';
 
 interface Props {
   data: QuotationData;
-  totalAmounts: {
-    packagePrice: number;
-    additionalTotal: number;
-    taxAmount: number;
-    grandTotal: number;
-  };
 }
 
-export default function PDFDownloadBtn({ data, totalAmounts }: Props) {
+export default function PDFDownloadBtn({ data }: Props) {
   return (
     <PDFDownloadLink
       document={
-        <QuotationPDF
-          data={data}
-          packagePrice={totalAmounts.packagePrice}
-          additionalTotal={totalAmounts.additionalTotal}
-          taxAmount={totalAmounts.taxAmount}
-          grandTotal={totalAmounts.grandTotal}
-        />
+        <QuotationPDF data={data} />
       }
-      fileName={`${data.quotationNumber || data.details.quotationNumber || data.details.title || 'Quotation'}.pdf`}
+      fileName={`${data.quotationNumber || data.details.title || 'Quotation'}.pdf`}
     >
       {({ loading }) => (
         <Button className="bg-teal-600 hover:bg-teal-700 text-white" disabled={loading}>

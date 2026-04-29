@@ -15,6 +15,15 @@ export interface IPaymentPhase {
 
 export interface IQuotationPayment extends Document {
     quotationGroupId: string;   // shared across all versions
+    /** The specific quotation version this payable is for (latest-only invariant). */
+    quotationId: Types.ObjectId;
+    quotationVersion: number;
+    /**
+     * Exactly one active payable per quotationGroupId.
+     * Older payables are retained for audit but marked inactive.
+     */
+    isActive: boolean;
+    supersededAt?: Date;
     orderId?: Types.ObjectId;   // populated after upfront paid + order created
     clientId: Types.ObjectId;
     currency: string;
@@ -50,9 +59,26 @@ const quotationPaymentSchema = new Schema<IQuotationPayment>(
         quotationGroupId: {
             type: String,
             required: true,
-            unique: true,   // ONE tracker per quotation group — enforced at DB level
             index: true,
         },
+        quotationId: {
+            type: Schema.Types.ObjectId,
+            ref: 'Quotation',
+            required: true,
+            index: true,
+        },
+        quotationVersion: {
+            type: Number,
+            required: true,
+            min: 1,
+            index: true,
+        },
+        isActive: {
+            type: Boolean,
+            default: true,
+            index: true,
+        },
+        supersededAt: { type: Date },
         orderId: {
             type: Schema.Types.ObjectId,
             ref: 'Order',
@@ -93,8 +119,23 @@ const quotationPaymentSchema = new Schema<IQuotationPayment>(
     { timestamps: true },
 );
 
+/**
+ * Invariant: one "active payable" per quotationGroupId.
+ * Enforced via a partial unique index (MongoDB).
+ */
+quotationPaymentSchema.index(
+    { quotationGroupId: 1, isActive: 1 },
+    { unique: true, partialFilterExpression: { isActive: true } },
+);
+
+/**
+ * Prevent creating multiple payables for the same exact quotation version.
+ * (Useful under retries / concurrency.)
+ */
+quotationPaymentSchema.index({ quotationId: 1 }, { unique: true });
+
 // Guard: delivery phase cannot be initiated before upfront is paid
-quotationPaymentSchema.pre('save', function (next) {
+(quotationPaymentSchema as any).pre('save', function (this: any, next: (err?: any) => void) {
     if (
         this.phases.delivery.status === 'processing' ||
         this.phases.delivery.status === 'paid'

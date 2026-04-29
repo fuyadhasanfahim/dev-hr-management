@@ -3,6 +3,10 @@ import { stripe } from '../services/stripe.service.js';
 import envConfig from '../config/env.config.js';
 import PaymentEventLogModel from '../models/payment-event-log.model.js';
 import { quotationPaymentEventQueue } from '../services/queue.service.js';
+import { logger } from '../lib/logger.js';
+import { createCorrelationId, createRequestId, runWithRequestContext } from '../lib/requestContext.js';
+import { captureException } from '../lib/sentry.js';
+import { getPayPalOrder, verifyPayPalWebhookSignature } from '../services/paypal.service.js';
 
 // ─── Stripe Webhook ───────────────────────────────────────────────────────────
 
@@ -30,7 +34,11 @@ export async function stripeWebhook(req: Request, res: Response) {
     try {
         event = stripe.webhooks.constructEvent(req.body, sig, envConfig.stripe_webhook_secret);
     } catch (err) {
-        console.error(`[Webhook] Stripe signature verification failed: ${(err as Error).message}`);
+        logger.warn(
+            { err, provider: 'stripe' },
+            'webhook.signature_verification_failed',
+        );
+        captureException(err, { provider: 'stripe', stage: 'signature_verification' });
         return res.status(400).send(`Webhook signature error: ${(err as Error).message}`);
     }
 
@@ -41,58 +49,100 @@ export async function stripeWebhook(req: Request, res: Response) {
     }
 
     const paymentIntent = event.data.object as any;
-    const { quotationGroupId, phase } = paymentIntent.metadata ?? {};
+    const { quotationGroupId, phase, quotationId, correlationId: upstreamCorrelationId } = paymentIntent.metadata ?? {};
     const idempotencyKey = `stripe:${event.id}`;
+    const correlationId =
+        (upstreamCorrelationId && String(upstreamCorrelationId).trim()) ||
+        (quotationGroupId ? `qg:${quotationGroupId}` : undefined) ||
+        createCorrelationId();
 
-    // Step 2: Atomic idempotency insert — prevents duplicate processing
-    let eventLogId: string;
-    try {
-        const logEntry = await PaymentEventLogModel.create({
-            idempotencyKey,
-            provider: 'stripe',
-            providerId: event.id,
-            eventType: event.type,
-            quotationGroupId: quotationGroupId || undefined,
-            phase: phase || undefined,
-            amountReceived: event.type === 'payment_intent.succeeded'
-                ? paymentIntent.amount_received
-                : undefined,
-            currency: paymentIntent.currency?.toUpperCase(),
-            rawPayload: event,
-            status: 'pending',
-        });
-        eventLogId = logEntry._id.toString();
-    } catch (err: any) {
-        // Duplicate key error (code 11000) = already processed
-        if (err?.code === 11000) {
-            console.log(`[Webhook] Duplicate Stripe event ${event.id} — skipping`);
-            return res.status(200).json({ received: true, note: 'Duplicate event, already processed' });
+    return await runWithRequestContext(
+        {
+            correlationId,
+            requestId: req.requestId ?? createRequestId(),
+        },
+        async () => {
+
+        // Step 2: Atomic idempotency insert — prevents duplicate processing
+        let eventLogId: string;
+        try {
+            const logEntry = await new PaymentEventLogModel({
+                idempotencyKey,
+                provider: 'stripe',
+                providerId: event.id,
+                eventType: event.type,
+                quotationGroupId: quotationGroupId || undefined,
+                phase: phase || undefined,
+                correlationId,
+                amountReceived:
+                    event.type === 'payment_intent.succeeded'
+                        ? paymentIntent.amount_received
+                        : undefined,
+                currency: paymentIntent.currency?.toUpperCase(),
+                rawPayload: event as any,
+                status: 'pending',
+            } as any).save();
+            eventLogId = (logEntry as any)._id.toString();
+        } catch (err: any) {
+            // Duplicate key error (code 11000) = already processed
+            if (err?.code === 11000) {
+                logger.info(
+                    { provider: 'stripe', providerEventId: event.id, eventType: event.type },
+                    'webhook.duplicate_event',
+                );
+                return res.status(200).json({ received: true, note: 'Duplicate event, already processed' });
+            }
+            logger.error({ err, provider: 'stripe', providerEventId: event.id }, 'webhook.eventlog_insert_failed');
+            captureException(err, { provider: 'stripe', stage: 'eventlog_insert', providerEventId: event.id });
+            return res.status(500).send('Internal error during event logging');
         }
-        console.error('[Webhook] Failed to insert PaymentEventLog:', err);
-        return res.status(500).send('Internal error during event logging');
-    }
 
     // Step 3: Enqueue for async processing — return 200 immediately
-    if (event.type === 'payment_intent.succeeded' && quotationGroupId && phase) {
-        await quotationPaymentEventQueue.add(`payment.${phase}.succeeded`, {
-            eventLogId,
-            quotationGroupId,
-            phase,
-            amountReceived: paymentIntent.amount_received,
-            paymentIntentId: paymentIntent.id,
-            systemActorId: '000000000000000000000000', // system actor ObjectId
-        });
-    } else if (event.type === 'payment_intent.payment_failed' && quotationGroupId && phase) {
-        await quotationPaymentEventQueue.add(`payment.${phase}.failed`, {
-            eventLogId,
-            quotationGroupId,
-            phase,
-            paymentIntentId: paymentIntent.id,
-        });
-    }
+        try {
+            if (event.type === 'payment_intent.succeeded' && quotationGroupId && phase) {
+                await quotationPaymentEventQueue.add(`payment.${phase}.succeeded`, {
+                    eventLogId,
+                    quotationGroupId,
+                    quotationId: quotationId || undefined,
+                    phase,
+                    amountReceived: paymentIntent.amount_received,
+                    paymentIntentId: paymentIntent.id,
+                    systemActorId: '000000000000000000000000', // system actor ObjectId
+                    correlationId,
+                    aggregateType: 'quotationGroup',
+                    aggregateId: quotationGroupId,
+                });
+            } else if (event.type === 'payment_intent.payment_failed' && quotationGroupId && phase) {
+                await quotationPaymentEventQueue.add(`payment.${phase}.failed`, {
+                    eventLogId,
+                    quotationGroupId,
+                    quotationId: quotationId || undefined,
+                    phase,
+                    paymentIntentId: paymentIntent.id,
+                    correlationId,
+                    aggregateType: 'quotationGroup',
+                    aggregateId: quotationGroupId,
+                });
+            }
+        } catch (err: any) {
+            logger.error(
+                { err, provider: 'stripe', providerEventId: event.id, eventType: event.type },
+                'webhook.enqueue_failed',
+            );
+            captureException(err, { provider: 'stripe', stage: 'enqueue', providerEventId: event.id, eventType: event.type });
+            await PaymentEventLogModel.findByIdAndUpdate(eventLogId, {
+                $set: {
+                    status: 'failed',
+                    failureReason: err?.message || String(err),
+                },
+            });
+            // Always 200: we store the event for later reprocessing.
+            return res.status(200).json({ received: true, note: 'Enqueue failed; event logged for retry' });
+        }
 
-    // Always return 200 to Stripe — never let Stripe retry due to our internal errors
-    return res.status(200).json({ received: true });
+        // Always return 200 to Stripe — never let Stripe retry due to our internal errors
+        return res.status(200).json({ received: true });
+    });
 }
 
 // ─── PayPal Webhook ───────────────────────────────────────────────────────────
@@ -104,58 +154,147 @@ export async function stripeWebhook(req: Request, res: Response) {
  * This is set during PayPal order creation in QuotationPaymentService.createPayPalOrder().
  */
 export async function paypalWebhook(req: Request, res: Response) {
-    // TODO: Add PayPal webhook signature verification in production
-    // Reference: https://developer.paypal.com/docs/api/webhooks/v1/#verify-webhook-signature
     const event = req.body;
+
+    // Step 1: signature verification (required in production)
+    try {
+        const transmissionId = String(req.header('paypal-transmission-id') || '');
+        const transmissionTime = String(req.header('paypal-transmission-time') || '');
+        const certUrl = String(req.header('paypal-cert-url') || '');
+        const authAlgo = String(req.header('paypal-auth-algo') || '');
+        const transmissionSig = String(req.header('paypal-transmission-sig') || '');
+
+        if (
+            envConfig.node_env === 'production' &&
+            (!transmissionId || !transmissionTime || !certUrl || !authAlgo || !transmissionSig)
+        ) {
+            return res.status(400).send('Missing PayPal transmission headers');
+        }
+
+        const ok = await verifyPayPalWebhookSignature({
+            transmissionId,
+            transmissionTime,
+            certUrl,
+            authAlgo,
+            transmissionSig,
+            webhookEvent: event,
+        });
+
+        if (!ok) {
+            logger.warn({ provider: 'paypal' }, 'webhook.signature_verification_failed');
+            return res.status(400).send('Invalid PayPal webhook signature');
+        }
+    } catch (err) {
+        logger.error({ err, provider: 'paypal' }, 'webhook.signature_verification_error');
+        captureException(err, { provider: 'paypal', stage: 'signature_verification' });
+        return res.status(400).send(`PayPal webhook verification error: ${(err as Error).message}`);
+    }
 
     if (event.event_type !== 'PAYMENT.CAPTURE.COMPLETED') {
         return res.status(200).json({ received: true, note: 'Event type not handled' });
     }
 
     const capture = event.resource;
-    const customId: string = capture?.custom_id ?? '';
 
-    // Parse phase::quotationGroupId from custom_id
-    const [phase, quotationGroupId] = customId.split('::');
+    // PayPal capture webhook doesn't reliably include purchase_unit.custom_id.
+    // We fetch the Order to read the encoded `custom_id` we set at order creation time.
+    const orderId: string =
+        capture?.supplementary_data?.related_ids?.order_id ||
+        capture?.supplementary_data?.related_ids?.order ||
+        '';
+
+    if (!orderId) {
+        logger.warn({ provider: 'paypal' }, 'webhook.missing_order_id');
+        return res.status(200).json({ received: true, note: 'Missing order id' });
+    }
+
+    let customId = '';
+    try {
+        const order: any = await getPayPalOrder(orderId);
+        customId = String(order?.purchase_units?.[0]?.custom_id || '');
+    } catch (err) {
+        logger.error({ err, provider: 'paypal', orderId }, 'webhook.order_fetch_failed');
+        captureException(err, { provider: 'paypal', stage: 'order_fetch', orderId });
+        // Return 200: event is valid but we couldn't enrich it; it can be replayed later.
+        return res.status(200).json({ received: true, note: 'Order fetch failed' });
+    }
+
+    // Parse phase::quotationGroupId::quotationId::correlationId from custom_id
+    const [phase, quotationGroupId, quotationId, correlationIdFromCustomId] = String(customId).split('::');
     if (!phase || !quotationGroupId) {
-        console.error('[Webhook] PayPal event missing valid custom_id:', customId);
+        logger.warn({ provider: 'paypal', customId, orderId }, 'webhook.missing_custom_id_encoding');
         return res.status(200).json({ received: true, note: 'Missing custom_id encoding' });
     }
 
     const idempotencyKey = `paypal:${event.id}`;
+    const correlationId =
+        (correlationIdFromCustomId && String(correlationIdFromCustomId).trim()) ||
+        `qg:${quotationGroupId}`;
 
-    let eventLogId: string;
-    try {
-        const logEntry = await PaymentEventLogModel.create({
-            idempotencyKey,
-            provider: 'paypal',
-            providerId: event.id,
-            eventType: event.event_type,
-            quotationGroupId,
-            phase,
-            amountReceived: Math.round(parseFloat(capture.amount.value) * 100), // convert to cents
-            currency: capture.amount.currency_code,
-            rawPayload: event,
-            status: 'pending',
-        });
-        eventLogId = logEntry._id.toString();
-    } catch (err: any) {
-        if (err?.code === 11000) {
-            console.log(`[Webhook] Duplicate PayPal event ${event.id} — skipping`);
-            return res.status(200).json({ received: true, note: 'Duplicate event' });
+    return await runWithRequestContext(
+        {
+            correlationId,
+            requestId: req.requestId ?? createRequestId(),
+        },
+        async () => {
+
+        let eventLogId: string;
+        try {
+            const logEntry = await new PaymentEventLogModel({
+                idempotencyKey,
+                provider: 'paypal',
+                providerId: event.id,
+                eventType: event.event_type,
+                quotationGroupId,
+                phase,
+                correlationId,
+                amountReceived: Math.round(parseFloat(capture.amount.value) * 100), // convert to cents
+                currency: capture.amount.currency_code,
+                rawPayload: event as any,
+                status: 'pending',
+            } as any).save();
+            eventLogId = (logEntry as any)._id.toString();
+        } catch (err: any) {
+            if (err?.code === 11000) {
+                logger.info(
+                    { provider: 'paypal', providerEventId: event.id, eventType: event.event_type },
+                    'webhook.duplicate_event',
+                );
+                return res.status(200).json({ received: true, note: 'Duplicate event' });
+            }
+            logger.error({ err, provider: 'paypal', providerEventId: event.id }, 'webhook.eventlog_insert_failed');
+            captureException(err, { provider: 'paypal', stage: 'eventlog_insert', providerEventId: event.id });
+            return res.status(500).send('Internal error during event logging');
         }
-        console.error('[Webhook] Failed to insert PaymentEventLog:', err);
-        return res.status(500).send('Internal error during event logging');
-    }
 
-    await quotationPaymentEventQueue.add(`payment.${phase}.succeeded`, {
-        eventLogId,
-        quotationGroupId,
-        phase,
-        amountReceived: Math.round(parseFloat(capture.amount.value) * 100),
-        paymentIntentId: capture.id,
-        systemActorId: '000000000000000000000000',
+        try {
+            await quotationPaymentEventQueue.add(`payment.${phase}.succeeded`, {
+                eventLogId,
+                quotationGroupId,
+                quotationId: quotationId || undefined,
+                phase,
+                amountReceived: Math.round(parseFloat(capture.amount.value) * 100),
+                paymentIntentId: capture.id || orderId,
+                systemActorId: '000000000000000000000000',
+                correlationId,
+                aggregateType: 'quotationGroup',
+                aggregateId: quotationGroupId,
+            });
+        } catch (err: any) {
+            logger.error(
+                { err, provider: 'paypal', providerEventId: event.id, eventType: event.event_type },
+                'webhook.enqueue_failed',
+            );
+            captureException(err, { provider: 'paypal', stage: 'enqueue', providerEventId: event.id, eventType: event.event_type });
+            await PaymentEventLogModel.findByIdAndUpdate(eventLogId, {
+                $set: {
+                    status: 'failed',
+                    failureReason: err?.message || String(err),
+                },
+            });
+            return res.status(200).json({ received: true, note: 'Enqueue failed; event logged for retry' });
+        }
+
+        return res.status(200).json({ received: true });
     });
-
-    return res.status(200).json({ received: true });
 }

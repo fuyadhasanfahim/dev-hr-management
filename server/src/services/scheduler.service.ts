@@ -14,6 +14,7 @@ import {
     getPreviousMonthRange,
 } from '../utils/date.util.js';
 import envConfig from '../config/env.config.js';
+import { TelemetryService } from './telemetry.service.js';
 
 // ============================================
 // ATTENDANCE AUTO-CHECK (Every 10 minutes)
@@ -562,6 +563,7 @@ const ONE_MINUTE = 60 * 1000;
 let attendanceInterval: NodeJS.Timeout | null = null;
 let overtimeInterval: NodeJS.Timeout | null = null;
 let monthlySMSInterval: NodeJS.Timeout | null = null;
+let telemetryInterval: NodeJS.Timeout | null = null;
 
 function startAllSchedulers() {
     console.log('[Scheduler] Starting all schedulers...');
@@ -621,6 +623,13 @@ function startAllSchedulers() {
     console.log('[Scheduler] Leave expiry: Scheduled for daily at 11:59 PM');
 
     console.log('[Scheduler] All schedulers started successfully');
+
+    // Operational health checks (alerts via Sentry messages when enabled)
+    const TELEMETRY_INTERVAL_MS = 5 * 60 * 1000;
+    TelemetryService.runHealthChecks().catch(console.error);
+    telemetryInterval = setInterval(() => {
+        TelemetryService.runHealthChecks().catch(console.error);
+    }, TELEMETRY_INTERVAL_MS);
 }
 
 function stopAllSchedulers() {
@@ -635,6 +644,10 @@ function stopAllSchedulers() {
     if (monthlySMSInterval) {
         clearInterval(monthlySMSInterval);
         monthlySMSInterval = null;
+    }
+    if (telemetryInterval) {
+        clearInterval(telemetryInterval);
+        telemetryInterval = null;
     }
     console.log('[Scheduler] All schedulers stopped');
 }

@@ -7,6 +7,11 @@ const router: Router = Router();
 
 const STAFF_ROLES = [Role.SUPER_ADMIN, Role.ADMIN, Role.HR_MANAGER, Role.TEAM_LEADER, Role.STAFF];
 
+// ─── Public Client Routes (token-authenticated — no JWT auth middleware) ───────
+// Token itself is the credential, enforced server-side.
+router.post('/client/:token/intent', QuotationPaymentController.createClientPaymentIntent);
+router.get('/client/:token/status', QuotationPaymentController.getClientPaymentStatus);
+
 /**
  * POST /api/quotation-payments/intent
  * Create a Stripe PaymentIntent or PayPal order for a specific payment phase.

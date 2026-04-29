@@ -78,6 +78,7 @@ const envConfig = {
     stripe_webhook_secret: process.env.STRIPE_WEBHOOK_SECRET,
     paypal_client_id: process.env.PAYPAL_CLIENT_ID,
     paypal_client_secret: process.env.PAYPAL_CLIENT_SECRET,
+    paypal_webhook_id: process.env.PAYPAL_WEBHOOK_ID,
 
     // Quotation pipeline
     quotation_token_secret: process.env.QUOTATION_TOKEN_SECRET!,

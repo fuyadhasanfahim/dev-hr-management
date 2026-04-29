@@ -30,6 +30,8 @@ import { PaymentRoutes } from "./payment.route.js";
 import { policyRoute } from "./policy.route.js";
 import { quotationRoute } from "./quotation.route.js";
 import { quotationPaymentRoute } from "./quotation-payment.route.js";
+import { outboxAdminRoute } from "./outbox-admin.route.js";
+import { quotationTimelineAdminRoute } from "./quotation-timeline-admin.route.js";
 
 const router: Router = Router();
 
@@ -157,6 +159,14 @@ const moduleRoutes = [
     {
         path: "/quotation-payments",
         route: quotationPaymentRoute,
+    },
+    {
+        path: "/admin/outbox",
+        route: outboxAdminRoute,
+    },
+    {
+        path: "/admin/quotation-timeline",
+        route: quotationTimelineAdminRoute,
     },
 ];
 

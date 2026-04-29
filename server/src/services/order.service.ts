@@ -12,6 +12,7 @@ import QuotationModel from '../models/quotation.model.js';
 import { AppError } from '../utils/AppError.js';
 import { InvoiceCounter } from '../models/invoice-counter.model.js';
 import type { IQuotation } from '../types/quotation.type.js';
+import { logger } from '../lib/logger.js';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -63,6 +64,7 @@ function buildQuotationSnapshot(quotation: IQuotation): IQuotationSnapshot {
  * inside the transaction. If one already exists, returns it without creating a duplicate.
  */
 async function createOrderFromQuotation(quotationGroupId: string, createdBy: string): Promise<IOrder> {
+    logger.info({ quotationGroupId, createdBy }, 'order.create_from_quotation.requested');
     const session = await mongoose.startSession();
     session.startTransaction();
 
@@ -71,6 +73,10 @@ async function createOrderFromQuotation(quotationGroupId: string, createdBy: str
         const existing = await OrderModel.findOne({ quotationGroupId }).session(session);
         if (existing) {
             await session.abortTransaction();
+            logger.info(
+                { quotationGroupId, orderId: existing._id.toString(), orderNumber: existing.orderNumber },
+                'order.create_from_quotation.idempotent_hit',
+            );
             return existing;
         }
 
@@ -128,9 +134,14 @@ async function createOrderFromQuotation(quotationGroupId: string, createdBy: str
         );
 
         await session.commitTransaction();
+        logger.info(
+            { quotationGroupId, orderId: order._id.toString(), orderNumber: order.orderNumber },
+            'order.create_from_quotation.completed',
+        );
         return order;
     } catch (err) {
         await session.abortTransaction();
+        logger.error({ err, quotationGroupId }, 'order.create_from_quotation.failed');
         throw err;
     } finally {
         session.endSession();

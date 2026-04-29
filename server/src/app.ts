@@ -10,6 +10,7 @@ import envConfig from "./config/env.config.js";
 import { toNodeHandler } from "better-auth/node";
 import { auth } from "./lib/auth.js";
 import { requireAuth } from "./middlewares/auth.middleware.js";
+import { requestContextMiddleware } from "./middlewares/requestContext.middleware.js";
 import router from "./routes/index.js";
 import { stripeWebhook, paypalWebhook } from "./controllers/webhook.controller.js";
 import { globalErrorHandler } from "./middlewares/globalErrorHandler.js";
@@ -17,6 +18,9 @@ import { globalErrorHandler } from "./middlewares/globalErrorHandler.js";
 const { trusted_origins } = envConfig;
 
 const app: Application = express();
+
+// Correlation IDs + request logging (must be early, also covers webhooks)
+app.use(requestContextMiddleware);
 
 app.use(
     cors({
@@ -87,11 +91,24 @@ app.use(
         const isPublicInvoiceRoute =
             req.method === "GET" && /^\/invoices\/public\//.test(req.path);
 
+        // Allow public access to quotation token routes (payment portal)
+        const isPublicQuotationTokenRoute =
+            (req.method === "GET" && /^\/quotations\/client\/[^/]+$/.test(req.path)) ||
+            (req.method === "POST" && /^\/quotations\/client\/[^/]+\/accept$/.test(req.path)) ||
+            (req.method === "POST" && /^\/quotations\/client\/[^/]+\/changes$/.test(req.path));
+
+        // Allow public access to quotation payment token routes (payment portal)
+        const isPublicQuotationPaymentTokenRoute =
+            (req.method === "GET" && /^\/quotation-payments\/client\/[^/]+\/status$/.test(req.path)) ||
+            (req.method === "POST" && /^\/quotation-payments\/client\/[^/]+\/intent$/.test(req.path));
+
         if (
             isPublicInvitationRoute ||
             isPublicMetadataRoute ||
             isPublicCareerRoute ||
-            isPublicInvoiceRoute
+            isPublicInvoiceRoute ||
+            isPublicQuotationTokenRoute ||
+            isPublicQuotationPaymentTokenRoute
         ) {
             return next();
         }

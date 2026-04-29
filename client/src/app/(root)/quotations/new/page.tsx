@@ -1,36 +1,54 @@
-"use client"
+"use client";
 
-import { useEffect } from 'react';
-import { useQuotationStore } from '@/store/useQuotationStore';
-import QuotationBuilder from '../components/forms/QuotationBuilder';
-import { IconReceipt } from '@tabler/icons-react';
+import { useEffect } from "react";
+import { useQuotationStore } from "@/store/useQuotationStore";
+import QuotationBuilder from "../components/forms/QuotationBuilder";
+import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { ArrowLeft, ReceiptText } from "lucide-react";
 
 export default function NewQuotationPage() {
   const { reset } = useQuotationStore();
+  const router = useRouter();
 
   useEffect(() => {
     reset();
   }, [reset]);
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="px-8 py-5 border-b border-slate-200 bg-white flex items-center justify-between shrink-0">
+    <div className="container mx-auto p-6 space-y-6 animate-in fade-in duration-300">
+      {/* Header (Orders-like) */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-teal-50 flex items-center justify-center text-teal-600 border border-teal-100">
-            <IconReceipt className="w-6 h-6" />
-          </div>
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => router.push("/quotations")}
+            className="rounded-full shadow-sm"
+          >
+            <ArrowLeft className="h-5 w-5" />
+          </Button>
+
           <div>
-            <h1 className="text-xl font-bold text-slate-900">Create Quotation</h1>
-            <p className="text-sm text-slate-500">Design a professional proposal for your client</p>
+            <div className="flex items-center gap-2">
+              <ReceiptText className="h-5 w-5 text-muted-foreground" />
+              <h1 className="text-3xl font-bold tracking-tight">
+                Create Quotation
+              </h1>
+            </div>
+            <p className="text-muted-foreground mt-1 text-sm">
+              Design a professional proposal for your client.
+            </p>
           </div>
         </div>
       </div>
 
-      {/* Main Content Area */}
-      <div className="flex-1 overflow-hidden">
-        <QuotationBuilder />
-      </div>
+      <Card>
+        <CardContent className="p-6">
+          <QuotationBuilder hideHeader />
+        </CardContent>
+      </Card>
     </div>
   );
 }

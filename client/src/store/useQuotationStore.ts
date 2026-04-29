@@ -3,6 +3,7 @@ import {
   QuotationData,
   IQuotationPhase,
   IAdditionalService,
+  IPaymentMilestone,
   ServiceType,
 } from "@/types/quotation.type";
 import { QUOTATION_TEMPLATES } from "@/constants/quotation-templates";
@@ -32,6 +33,12 @@ interface QuotationStore {
   updateService: (index: number, updates: Partial<IAdditionalService>) => void;
   removeService: (index: number) => void;
 
+  // Payment Milestones CRUD
+  setPaymentMilestones: (milestones: IPaymentMilestone[]) => void;
+  addPaymentMilestone: (milestone?: IPaymentMilestone) => void;
+  updatePaymentMilestone: (index: number, updates: Partial<IPaymentMilestone>) => void;
+  removePaymentMilestone: (index: number) => void;
+
   // Helpers
   loadTemplate: (templateKey: string) => void;
   setData: (data: QuotationData) => void;
@@ -41,6 +48,7 @@ interface QuotationStore {
 const initialState: QuotationData = {
   serviceType: "web-development",
   clientId: "",
+  currency: "৳",
   company: {
     name: "WebBriks",
     address: "115 Senpara Parbata, Mirpur, Dhaka 1216, Bangladesh.",
@@ -76,6 +84,11 @@ const initialState: QuotationData = {
   },
   additionalServices: [],
   workflow: [],
+  paymentMilestones: [
+    { label: "Upfront on acceptance", percentage: 50 },
+    { label: "After delivery handover", percentage: 30 },
+    { label: "Final approval / clearance", percentage: 20 },
+  ],
   totals: {
     subtotal: 0,
     taxAmount: 0,
@@ -171,6 +184,37 @@ export const useQuotationStore = create<QuotationStore>((set) => ({
       data: {
         ...state.data,
         additionalServices: state.data.additionalServices.filter((_, i) => i !== index),
+      },
+    })),
+
+  setPaymentMilestones: (milestones) =>
+    set((state) => ({
+      data: { ...state.data, paymentMilestones: milestones },
+    })),
+
+  addPaymentMilestone: (milestone) =>
+    set((state) => ({
+      data: {
+        ...state.data,
+        paymentMilestones: [
+          ...(state.data.paymentMilestones || []),
+          milestone || { label: "New milestone", percentage: 0 },
+        ],
+      },
+    })),
+
+  updatePaymentMilestone: (index, updates) =>
+    set((state) => {
+      const list = [...(state.data.paymentMilestones || [])];
+      list[index] = { ...list[index], ...updates };
+      return { data: { ...state.data, paymentMilestones: list } };
+    }),
+
+  removePaymentMilestone: (index) =>
+    set((state) => ({
+      data: {
+        ...state.data,
+        paymentMilestones: (state.data.paymentMilestones || []).filter((_, i) => i !== index),
       },
     })),
 

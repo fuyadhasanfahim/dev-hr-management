@@ -1,27 +1,35 @@
-import { EventEmitter } from 'events';
+import crypto from 'crypto';
+import { OutboxService } from './outbox.service.js';
 
-/**
- * In-Memory Event Bus (Option B: No Redis)
- * 
- * This replaces BullMQ for local development. 
- * Events are processed asynchronously in the same Node.js process.
- */
-class QuotationEventBus extends EventEmitter {
-    /**
-     * Add a job to the bus. 
-     * In the Redis version, this enqueued to BullMQ.
-     * Here, it simply emits an event immediately.
-     */
+class OutboxBackedQueue {
     async add(eventName: string, data: any) {
-        // We use setImmediate to ensure it's processed in the next tick (non-blocking)
-        setImmediate(() => {
-            this.emit(eventName, data);
+        const explicitDedupeKey =
+            data?.dedupeKey ||
+            data?.idempotencyKey ||
+            (data?.eventLogId ? `eventLog:${data.eventLogId}` : undefined);
+
+        const dedupeKey =
+            explicitDedupeKey ||
+            `${eventName}:${crypto
+                .createHash('sha256')
+                .update(JSON.stringify(data ?? {}))
+                .digest('hex')}`;
+
+        const doc = await OutboxService.enqueue({
+            dedupeKey,
+            eventName,
+            payload: data ?? {},
+            aggregateType: data?.aggregateType,
+            aggregateId: data?.aggregateId,
+            correlationId: data?.correlationId,
+            causationId: data?.causationId,
         });
-        return { id: 'local-' + Date.now() };
+
+        return { id: doc?._id?.toString() ?? dedupeKey };
     }
 }
 
-export const quotationPaymentEventQueue = new QuotationEventBus();
+export const quotationPaymentEventQueue = new OutboxBackedQueue();
 
 // Dummy queues for compatibility with existing code
 export const emailQueue = { add: async () => {} };

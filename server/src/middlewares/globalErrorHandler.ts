@@ -1,7 +1,9 @@
 import type { Request, Response, NextFunction } from 'express';
 import { AppError } from '../utils/AppError.js';
+import { logger } from '../lib/logger.js';
+import { captureException } from '../lib/sentry.js';
 
-export const globalErrorHandler = (err: any, _req: Request, res: Response, _next: NextFunction) => {
+export const globalErrorHandler = (err: any, req: Request, res: Response, _next: NextFunction) => {
     err.statusCode = err.statusCode || 500;
     err.status = err.status || 'error';
 
@@ -22,7 +24,20 @@ export const globalErrorHandler = (err: any, _req: Request, res: Response, _next
                 message: err.message,
             });
         } else {
-            console.error('ERROR 💥', err);
+            logger.error(
+                {
+                    err,
+                    http: {
+                        method: req.method,
+                        path: req.originalUrl,
+                    },
+                },
+                'http.error',
+            );
+            captureException(err, {
+                method: req.method,
+                path: req.originalUrl,
+            });
             res.status(500).json({
                 success: false,
                 status: 'error',

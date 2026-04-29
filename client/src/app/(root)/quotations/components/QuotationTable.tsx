@@ -23,6 +23,7 @@ const STATUS_CONFIG: Record<
 > = {
   draft:            { label: "Draft",            className: "bg-slate-100 text-slate-700 border-slate-200" },
   sent:             { label: "Sent",             className: "bg-blue-50 text-blue-700 border-blue-200" },
+  viewed:           { label: "Viewed",           className: "bg-indigo-50 text-indigo-700 border-indigo-200" },
   accepted:         { label: "Accepted",         className: "bg-teal-50 text-teal-700 border-teal-200" },
   rejected:         { label: "Rejected",         className: "bg-red-50 text-red-700 border-red-200" },
   superseded:       { label: "Superseded",       className: "bg-amber-50 text-amber-700 border-amber-200" },
@@ -160,8 +161,7 @@ export function QuotationTable({
 
                 {/* Total */}
                 <TableCell className="font-bold text-slate-900">
-                  {q.settings.currency}
-                  {q.totals.grandTotal.toLocaleString()}
+                  {(q.currency || "৳")}{(q.totals?.grandTotal ?? 0).toLocaleString()}
                 </TableCell>
 
                 {/* Status badge */}

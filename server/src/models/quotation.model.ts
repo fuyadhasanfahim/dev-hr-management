@@ -14,6 +14,12 @@ const serviceSchema = new Schema({
     description: { type: String },
 }, { _id: false });
 
+const paymentMilestoneSchema = new Schema({
+    label: { type: String, required: true },
+    percentage: { type: Number, required: true, min: 0, max: 100 },
+    note: { type: String },
+}, { _id: false });
+
 const quotationSchema = new Schema<IQuotation>(
     {
         // ── Versioning ────────────────────────────────────────────────────────────
@@ -23,7 +29,7 @@ const quotationSchema = new Schema<IQuotation>(
 
         // ── Identity ──────────────────────────────────────────────────────────────
         quotationNumber: { type: String, required: true, unique: true, index: true },
-        serviceType: { type: String, enum: ['web-development', 'product-photography'], required: true },
+        serviceType: { type: String, enum: ['web-development'], required: true },
         clientId: { type: Schema.Types.ObjectId, ref: 'Client', required: true },
 
         // ── Snapshots ─────────────────────────────────────────────────────────────
@@ -61,6 +67,11 @@ const quotationSchema = new Schema<IQuotation>(
         additionalServices: [serviceSchema],
         workflow: [{ type: String }],
 
+        paymentMilestones: { type: [paymentMilestoneSchema], default: undefined },
+
+        // ── Currency snapshot (used in PDF/UI/events) ────────────────────────────
+        currency: { type: String, default: '৳' },
+
         totals: {
             subtotal: { type: Number, default: 0 },
             taxAmount: { type: Number, default: 0 },
@@ -77,12 +88,29 @@ const quotationSchema = new Schema<IQuotation>(
 
         secureToken: { type: String, sparse: true, index: true },
         tokenExpiresAt: Date,
+        changeRequestReason: String,
         orderId: { type: Schema.Types.ObjectId, ref: 'Order' },
         createdBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+
+        // ── Idempotency / Provenance ─────────────────────────────────────────────
+        // Used to make createNewVersion safe to retry (and safe under concurrency).
+        versionCreationKey: { type: String, sparse: true, index: true },
+        derivedFromQuotationId: { type: Schema.Types.ObjectId, ref: 'Quotation', sparse: true, index: true },
     },
-    { timestamps: true, optimisticConcurrency: true }
+    {
+        timestamps: true,
+        optimisticConcurrency: true,
+        toJSON: { virtuals: true },
+        toObject: { virtuals: true },
+    }
 );
 
 quotationSchema.index({ quotationGroupId: 1, version: -1 });
+quotationSchema.index({ quotationGroupId: 1, versionCreationKey: 1 }, { unique: true, sparse: true });
+
+quotationSchema.virtual('viewed').get(function (this: IQuotation) {
+    return this.status !== 'draft' && this.status !== 'sent';
+});
+
 const QuotationModel = model<IQuotation>('Quotation', quotationSchema);
 export default QuotationModel;

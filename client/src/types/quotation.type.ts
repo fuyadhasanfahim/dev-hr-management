@@ -1,8 +1,9 @@
-export type ServiceType = "web-development" | "product-photography";
+export type ServiceType = "web-development";
 
 export type QuotationStatus =
   | "draft"
   | "sent"
+  | "viewed"
   | "accepted"
   | "rejected"
   | "superseded"
@@ -22,6 +23,12 @@ export interface IAdditionalService {
   price: number;
   billingCycle: "one-time" | "monthly" | "yearly";
   description?: string;
+}
+
+export interface IPaymentMilestone {
+  label: string;
+  percentage: number; // 0-100
+  note?: string;
 }
 
 export interface QuotationData {
@@ -69,11 +76,15 @@ export interface QuotationData {
   pricing: {
     basePrice: number;
     taxRate: number; // Percentage
-    discount: number; // Percentage
+    discount: number; // Percentage (0-100)
   };
 
   additionalServices: IAdditionalService[];
   workflow: string[];
+
+  paymentMilestones?: IPaymentMilestone[];
+
+  currency?: string;
 
   totals: {
     subtotal: number;
@@ -82,7 +93,12 @@ export interface QuotationData {
   };
 
   status?: QuotationStatus;
+  viewed?: boolean;
+  secureToken?: string;
+  tokenExpiresAt?: string;
+  changeRequestReason?: string;
   orderId?: string;
+  createdBy?: string;
   createdAt?: string;
   updatedAt?: string;
 }

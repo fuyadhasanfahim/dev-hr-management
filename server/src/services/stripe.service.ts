@@ -43,30 +43,37 @@ export async function createPaymentIntentForPhase(params: CreatePhaseIntentParam
     return { clientSecret: intent.client_secret!, paymentIntentId: intent.id };
 }
 
-export async function createCheckoutSession(invoice: IInvoice, clientEmail: string) {
-    const session = await stripe.checkout.sessions.create({
-        payment_method_types: ['card'],
-        customer_email: clientEmail,
-        client_reference_id: invoice.clientId.toString(),
-        metadata: {
-            invoiceId: invoice._id.toString(),
-            orderId: invoice.orderId ? invoice.orderId.toString() : '',
-            projectId: invoice.projectId ? invoice.projectId.toString() : '',
-        },
-        line_items: invoice.items.map(item => ({
-            price_data: {
-                currency: invoice.currency.toLowerCase(),
-                product_data: {
-                    name: item.name,
-                },
-                unit_amount: Math.round(item.unitPrice * 100), // Stripe expects cents
+export async function createCheckoutSession(
+    invoice: IInvoice,
+    clientEmail: string,
+    idempotencyKey?: string,
+) {
+    const session = await stripe.checkout.sessions.create(
+        {
+            payment_method_types: ['card'],
+            customer_email: clientEmail,
+            client_reference_id: invoice.clientId.toString(),
+            metadata: {
+                invoiceId: invoice._id.toString(),
+                orderId: invoice.orderId ? invoice.orderId.toString() : '',
+                projectId: invoice.projectId ? invoice.projectId.toString() : '',
             },
-            quantity: item.quantity,
-        })),
-        mode: 'payment',
-        success_url: `${envConfig.client_url}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${envConfig.client_url}/payment/cancel`,
-    });
+            line_items: invoice.items.map(item => ({
+                price_data: {
+                    currency: invoice.currency.toLowerCase(),
+                    product_data: {
+                        name: item.name,
+                    },
+                    unit_amount: Math.round(item.unitPrice * 100), // Stripe expects cents
+                },
+                quantity: item.quantity,
+            })),
+            mode: 'payment',
+            success_url: `${envConfig.client_url}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
+            cancel_url: `${envConfig.client_url}/payment/cancel`,
+        },
+        idempotencyKey ? { idempotencyKey } : undefined,
+    );
 
     return session;
 }

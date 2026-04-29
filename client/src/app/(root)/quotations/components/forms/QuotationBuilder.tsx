@@ -33,8 +33,6 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
-  FileText,
-  User,
   Building2,
   Cpu,
   Plus,
@@ -48,6 +46,9 @@ import {
   X,
   CalendarIcon,
   Settings2,
+  HandCoins,
+  PieChart,
+  Briefcase,
 } from "lucide-react";
 import { useGetClientsQuery } from "@/redux/features/client/clientApi";
 import {
@@ -58,7 +59,7 @@ import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { QUOTATION_TEMPLATES } from "@/constants/quotation-templates";
 import { format } from "date-fns";
-import { cn } from "@/lib/utils";
+import { formatMoney } from "@/lib/money";
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -78,7 +79,9 @@ function SectionHeader({ title, icon, description }: { title: string; icon: Reac
   return (
     <div className="space-y-1 mb-4">
       <div className="flex items-center gap-2">
-        <span className="text-primary">{icon}</span>
+        <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-muted text-muted-foreground ring-1 ring-border">
+          {icon}
+        </span>
         <h3 className="text-lg font-semibold tracking-tight">{title}</h3>
       </div>
       {description && <p className="text-sm text-muted-foreground">{description}</p>}
@@ -86,14 +89,37 @@ function SectionHeader({ title, icon, description }: { title: string; icon: Reac
   );
 }
 
+function GradientCard({
+  children,
+  className = "",
+  tone = "neutral",
+}: {
+  children: React.ReactNode;
+  className?: string;
+  tone?: "neutral" | "teal" | "orange" | "mixed";
+}) {
+  return (
+    <Card
+      className={`relative overflow-hidden border bg-card shadow-sm ${className}`}
+    >
+      {tone !== "neutral" ? (
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-0.5 bg-border" />
+      ) : null}
+      {children}
+    </Card>
+  );
+}
+
 // ── Main Builder ─────────────────────────────────────────────────────────────
 
-export default function QuotationBuilder() {
+export default function QuotationBuilder({
+  hideHeader = false,
+}: {
+  hideHeader?: boolean;
+}) {
   const router = useRouter();
   const {
     data,
-    setServiceType,
-    updateCompany,
     updateClient,
     updateDetails,
     loadTemplate,
@@ -103,9 +129,10 @@ export default function QuotationBuilder() {
     addPhase,
     updatePhase,
     removePhase,
-    addService,
-    updateService,
-    removeService,
+    setPaymentMilestones,
+    addPaymentMilestone,
+    updatePaymentMilestone,
+    removePaymentMilestone,
     reset,
   } = useQuotationStore();
 
@@ -149,35 +176,55 @@ export default function QuotationBuilder() {
         reset();
         router.push("/quotations");
       }
-    } catch (err: any) {
-      toast.error(err?.data?.message || "Failed to save quotation");
+    } catch (err: unknown) {
+      const maybe = err as { data?: { message?: string } } | null;
+      toast.error(maybe?.data?.message || "Failed to save quotation");
     }
   };
 
   return (
-    <div className="container max-w-7xl py-10 space-y-8">
-      
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 pb-6 border-b">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Quotation Architect</h1>
-          <p className="text-muted-foreground text-sm">Professional solution configuration & cost estimation.</p>
+    <div className="space-y-8">
+      {!hideHeader && (
+        <div className="relative overflow-hidden rounded-2xl border bg-card p-6">
+          <div className="absolute inset-x-0 top-0 h-0.5 bg-border" />
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+            <div className="flex items-center gap-4">
+              <span className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-muted text-muted-foreground ring-1 ring-border">
+                <Briefcase className="w-6 h-6 text-muted-foreground" />
+              </span>
+              <div>
+                <h1 className="text-3xl font-bold tracking-tight">
+                  Quotation Builder
+                </h1>
+                <p className="text-muted-foreground text-sm">
+                  Configure scope, timeline, milestones, and pricing.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <Select onValueChange={loadTemplate}>
+                <SelectTrigger className="w-[240px] bg-background">
+                  <Sparkles className="w-4 h-4 mr-2 text-muted-foreground" />
+                  <SelectValue placeholder="Industry Templates" />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.keys(QUOTATION_TEMPLATES).map((key) => (
+                    <SelectItem key={key} value={key}>
+                      {key
+                        .split("-")
+                        .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+                        .join(" ")}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button variant="outline" size="sm" onClick={reset}>
+                Reset
+              </Button>
+            </div>
+          </div>
         </div>
-        <div className="flex items-center gap-3">
-          <Select onValueChange={loadTemplate}>
-            <SelectTrigger className="w-[240px] border-primary/20 bg-primary/5">
-              <Sparkles className="w-4 h-4 mr-2 text-primary" />
-              <SelectValue placeholder="Industry Templates" />
-            </SelectTrigger>
-            <SelectContent>
-              {Object.keys(QUOTATION_TEMPLATES).map(key => (
-                <SelectItem key={key} value={key}>{key.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Button variant="outline" size="sm" onClick={reset}>Reset</Button>
-        </div>
-      </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
         
@@ -185,7 +232,7 @@ export default function QuotationBuilder() {
         <div className="lg:col-span-3 space-y-8">
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <Card>
+            <GradientCard tone="teal">
               <CardHeader className="pb-4">
                 <SectionHeader title="Project & Client" icon={<Building2 className="w-5 h-5" />} />
               </CardHeader>
@@ -196,14 +243,33 @@ export default function QuotationBuilder() {
                 </div>
                 <div className="space-y-2">
                   <Label className="text-xs font-bold uppercase text-muted-foreground">Link Client Profile</Label>
-                  <Select 
-                    value={data.clientId} 
+                  <Select
+                    value={data.clientId}
                     onValueChange={(id) => {
-                      const client = clientsData?.clients.find(c => c._id === id);
-                      if (client) {
-                        updateClient({ contactName: client.name, email: client.emails[0], phone: client.phone, companyName: client.name });
-                        useQuotationStore.setState(s => ({ data: { ...s.data, clientId: id } }));
-                      }
+                      const c = clientsData?.clients.find((x) => x._id === id);
+                      if (!c) return;
+                      // Single atomic update prevents render-loop overwrites of
+                      // manually edited contactName/companyName fields.
+                      useQuotationStore.setState((state) => ({
+                        data: {
+                          ...state.data,
+                          clientId: id,
+                          currency: c.currency || state.data.currency || "BDT",
+                          client: {
+                            ...state.data.client,
+                            contactName: c.name || state.data.client.contactName,
+                            companyName:
+                              state.data.client.companyName || c.name || "",
+                            email: c.emails?.[0] || state.data.client.email || "",
+                            phone: c.phone || state.data.client.phone || "",
+                            address:
+                              c.address ||
+                              c.officeAddress ||
+                              state.data.client.address ||
+                              "",
+                          },
+                        },
+                      }));
                     }}
                   >
                     <SelectTrigger>
@@ -216,12 +282,58 @@ export default function QuotationBuilder() {
                     </SelectContent>
                   </Select>
                 </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <Label className="text-xs font-bold uppercase text-muted-foreground">Contact name</Label>
+                    <Input
+                      value={data.client.contactName}
+                      onChange={(e) => updateClient({ contactName: e.target.value })}
+                      placeholder="Client contact"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs font-bold uppercase text-muted-foreground">Company name</Label>
+                    <Input
+                      value={data.client.companyName || ""}
+                      onChange={(e) => updateClient({ companyName: e.target.value })}
+                      placeholder="Client company"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <Label className="text-xs font-bold uppercase text-muted-foreground">Email</Label>
+                    <Input
+                      type="email"
+                      value={data.client.email || ""}
+                      onChange={(e) => updateClient({ email: e.target.value })}
+                      placeholder="email@client.com"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs font-bold uppercase text-muted-foreground">Phone</Label>
+                    <Input
+                      value={data.client.phone || ""}
+                      onChange={(e) => updateClient({ phone: e.target.value })}
+                      placeholder="+880…"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs font-bold uppercase text-muted-foreground">Address</Label>
+                  <Textarea
+                    value={data.client.address || ""}
+                    onChange={(e) => updateClient({ address: e.target.value })}
+                    placeholder="Bill-to address (auto-filled from client profile)"
+                    className="min-h-[60px]"
+                  />
+                </div>
               </CardContent>
-            </Card>
+            </GradientCard>
 
-            <Card>
+            <GradientCard tone="orange">
               <CardHeader className="pb-4">
-                <SectionHeader title="Timeline" icon={<CalendarIcon className="w-5 h-5" />} />
+                <SectionHeader title="Timeline & Overview" icon={<CalendarIcon className="w-5 h-5" />} />
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
@@ -234,15 +346,32 @@ export default function QuotationBuilder() {
                     <Input type="date" value={data.details.validUntil} onChange={e => updateDetails({ validUntil: e.target.value })} />
                   </div>
                 </div>
+                <div className="space-y-2">
+                  <Label className="text-xs font-bold uppercase text-muted-foreground">Project Overview</Label>
+                  <Textarea
+                    value={data.overview || ""}
+                    onChange={(e) =>
+                      useQuotationStore.setState((s) => ({
+                        data: { ...s.data, overview: e.target.value },
+                      }))
+                    }
+                    placeholder="Short description of the project goals and scope (1–3 sentences)…"
+                    className="min-h-[90px]"
+                  />
+                </div>
               </CardContent>
-            </Card>
+            </GradientCard>
           </div>
 
           {/* Phases Accordion */}
-          <Card>
+          <GradientCard tone="mixed">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
               <SectionHeader title="Project Phases" icon={<Layers className="w-5 h-5" />} description="Strategic scheduling and milestone tracking." />
-              <Button size="sm" variant="secondary" onClick={() => addPhase()}>
+              <Button
+                size="sm"
+                className="shadow-sm"
+                onClick={() => addPhase()}
+              >
                 <Plus className="w-4 h-4 mr-1" /> New Phase
               </Button>
             </CardHeader>
@@ -252,8 +381,8 @@ export default function QuotationBuilder() {
                   <AccordionItem key={pIdx} value={`phase-${pIdx}`} className="border rounded-xl px-4 overflow-hidden">
                     <AccordionTrigger className="hover:no-underline py-4 group">
                       <div className="flex items-center gap-4 text-left w-full">
-                        <Badge variant="outline" className="bg-primary/5 border-primary/20 text-primary">Phase {pIdx + 1}</Badge>
-                        <span className="font-semibold text-slate-900 group-hover:text-primary transition-colors">{phase.title || "Define Phase Title"}</span>
+                        <Badge variant="outline" className="bg-muted/30">Phase {pIdx + 1}</Badge>
+                        <span className="font-semibold text-foreground group-hover:text-foreground transition-colors">{phase.title || "Define Phase Title"}</span>
                         <div className="ml-auto mr-4 flex items-center gap-2 text-[10px] font-mono text-muted-foreground uppercase tracking-widest">
                           {phase.startDate ? format(new Date(phase.startDate), "MMM dd") : "TBD"} — {phase.endDate ? format(new Date(phase.endDate), "MMM dd") : "TBD"}
                         </div>
@@ -293,9 +422,16 @@ export default function QuotationBuilder() {
                         <Label className="text-xs font-bold text-muted-foreground uppercase">Detailed Checkpoints</Label>
                         <div className="flex flex-wrap gap-2">
                           {phase.items.map((item, iIdx) => (
-                            <Badge key={iIdx} variant="secondary" className="pl-3 pr-1 py-1.5 gap-2 rounded-lg bg-slate-100/50">
+                            <Badge key={iIdx} variant="secondary" className="pl-3 pr-1 py-1.5 gap-2 rounded-lg bg-muted/40">
                               {item}
-                              <button onClick={() => updatePhase(pIdx, { items: phase.items.filter((_, i) => i !== iIdx) })} className="hover:text-red-500">
+                              <button
+                                onClick={() =>
+                                  updatePhase(pIdx, {
+                                    items: phase.items.filter((_, i) => i !== iIdx),
+                                  })
+                                }
+                                className="text-muted-foreground hover:text-foreground"
+                              >
                                 <X className="w-3.5 h-3.5" />
                               </button>
                             </Badge>
@@ -317,7 +453,12 @@ export default function QuotationBuilder() {
                       </div>
 
                       <div className="pt-4 flex justify-end">
-                        <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-red-500" onClick={() => removePhase(pIdx)}>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-muted-foreground hover:text-foreground"
+                          onClick={() => removePhase(pIdx)}
+                        >
                           <Trash2 className="w-4 h-4 mr-2" /> Delete Phase
                         </Button>
                       </div>
@@ -326,11 +467,11 @@ export default function QuotationBuilder() {
                 ))}
               </Accordion>
             </CardContent>
-          </Card>
+          </GradientCard>
 
           {/* Tech Stack Selection */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <Card>
+            <GradientCard tone="teal">
               <CardHeader>
                 <SectionHeader title="Technical Blueprint" icon={<Cpu className="w-5 h-5" />} />
               </CardHeader>
@@ -365,9 +506,9 @@ export default function QuotationBuilder() {
                   </div>
                 </div>
               </CardContent>
-            </Card>
+            </GradientCard>
 
-            <Card>
+            <GradientCard tone="orange">
               <CardHeader>
                 <SectionHeader title="Tools Checklist" icon={<Settings2 className="w-5 h-5" />} />
               </CardHeader>
@@ -405,23 +546,32 @@ export default function QuotationBuilder() {
                   </div>
                 </div>
               </CardContent>
-            </Card>
+            </GradientCard>
           </div>
         </div>
 
         {/* Right Col: Financials (1 Col) */}
         <div className="space-y-8">
-          <Card className="sticky top-10 shadow-lg border-primary/20">
-            <CardHeader className="bg-primary/5 rounded-t-xl">
+          <Card className="sticky top-10 shadow-sm border overflow-hidden">
+            <div className="absolute inset-x-0 top-0 h-0.5 bg-border" />
+            <CardHeader className="bg-muted/20 border-b">
               <CardTitle className="text-lg flex items-center gap-2">
-                <Receipt className="w-5 h-5 text-primary" /> Cost Projection
+                <span className="inline-flex w-9 h-9 items-center justify-center rounded-lg bg-muted text-muted-foreground ring-1 ring-border">
+                  <Receipt className="w-4 h-4 text-muted-foreground" />
+                </span>
+                Cost Projection
               </CardTitle>
             </CardHeader>
             <CardContent className="pt-6 space-y-6">
               <div className="space-y-4">
                 <div className="space-y-2">
                   <Label className="text-xs font-bold uppercase text-muted-foreground tracking-widest">Base Investment</Label>
-                  <Input type="number" value={data.pricing.basePrice} onChange={e => updatePricing({ basePrice: Number(e.target.value) })} className="font-bold text-xl h-12" />
+                  <Input
+                    type="number"
+                    value={data.pricing.basePrice}
+                    onChange={(e) => updatePricing({ basePrice: Number(e.target.value) })}
+                    className="font-semibold text-lg h-11"
+                  />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
@@ -440,29 +590,43 @@ export default function QuotationBuilder() {
               <div className="space-y-4 pt-2">
                 <div className="flex justify-between items-center text-sm">
                   <span className="text-muted-foreground">Subtotal (Net)</span>
-                  <span className="font-bold">৳ {computedTotals.subtotal.toLocaleString()}</span>
+                  <span className="font-bold">{formatMoney(computedTotals.subtotal, data.currency)}</span>
                 </div>
-                <div className="flex justify-between items-center text-sm text-emerald-600">
-                  <span className="flex items-center gap-1">Govt. Tax <Badge variant="outline" className="text-[8px] h-4 px-1">{data.pricing.taxRate}%</Badge></span>
-                  <span className="font-bold">+ ৳ {computedTotals.taxAmount.toLocaleString()}</span>
+                <div className="flex justify-between items-center text-sm">
+                  <span className="flex items-center gap-1 text-muted-foreground">
+                    Govt. Tax{" "}
+                    <Badge variant="outline" className="text-[8px] h-4 px-1">
+                      {data.pricing.taxRate}%
+                    </Badge>
+                  </span>
+                  <span className="font-bold">+ {formatMoney(computedTotals.taxAmount, data.currency)}</span>
                 </div>
                 {data.pricing.discount > 0 && (
-                  <div className="flex justify-between items-center text-sm text-rose-500">
-                    <span className="flex items-center gap-1">Campaign Discount <Badge variant="outline" className="text-[8px] h-4 px-1 text-rose-500 border-rose-200">{data.pricing.discount}%</Badge></span>
-                    <span className="font-bold">- Computed</span>
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="flex items-center gap-1 text-muted-foreground">
+                      Campaign Discount{" "}
+                      <Badge variant="outline" className="text-[8px] h-4 px-1">
+                        {data.pricing.discount}%
+                      </Badge>
+                    </span>
+                    <span className="font-bold">- {formatMoney(((data.pricing.basePrice + data.additionalServices.reduce((acc, s) => acc + s.price, 0)) * data.pricing.discount) / 100, data.currency)}</span>
                   </div>
                 )}
-                
+
                 <div className="pt-6 border-t space-y-1">
                   <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">Grand Project Total</span>
-                  <div className="text-4xl font-bold tracking-tight text-slate-900 leading-none">
-                    ৳ {computedTotals.grandTotal.toLocaleString()}
+                  <div className="text-3xl font-bold tracking-tight text-foreground leading-none">
+                    {formatMoney(computedTotals.grandTotal, data.currency)}
                   </div>
                 </div>
               </div>
             </CardContent>
             <CardFooter className="flex flex-col gap-3 pb-6">
-              <Button className="w-full h-12 text-md shadow-xl shadow-primary/10" onClick={() => handleSave("sent")} disabled={isCreating || isUpdating}>
+              <Button
+                className="w-full h-11 text-sm font-semibold"
+                onClick={() => handleSave("sent")}
+                disabled={isCreating || isUpdating}
+              >
                 <Send className="w-4 h-4 mr-2" /> Dispatch to Client
               </Button>
               <Button variant="outline" className="w-full h-11" onClick={() => handleSave("draft")} disabled={isCreating || isUpdating}>
@@ -471,8 +635,120 @@ export default function QuotationBuilder() {
             </CardFooter>
           </Card>
 
+          {/* Payment Milestones */}
+          <GradientCard tone="mixed">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+              <SectionHeader
+                title="Payment Milestones"
+                icon={<HandCoins className="w-4 h-4" />}
+                description="Configure how the client pays across the project lifecycle."
+              />
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => addPaymentMilestone()}
+              >
+                <Plus className="w-4 h-4 mr-1" /> Add
+              </Button>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {(data.paymentMilestones || []).length === 0 ? (
+                <p className="text-xs text-muted-foreground">
+                  No milestones yet — add a payment plan (e.g. 50% / 30% / 20%).
+                </p>
+              ) : null}
+              {(data.paymentMilestones || []).map((m, idx) => (
+                <div
+                  key={idx}
+                  className="grid grid-cols-12 gap-2 items-center rounded-lg border bg-card p-2"
+                >
+                  <Input
+                    className="col-span-7 h-9 text-sm"
+                    value={m.label}
+                    onChange={(e) =>
+                      updatePaymentMilestone(idx, { label: e.target.value })
+                    }
+                    placeholder="Milestone label"
+                  />
+                  <div className="col-span-3 flex items-center gap-1">
+                    <Input
+                      className="h-9 text-sm"
+                      type="number"
+                      value={m.percentage}
+                      min={0}
+                      max={100}
+                      onChange={(e) =>
+                        updatePaymentMilestone(idx, {
+                          percentage: Number(e.target.value),
+                        })
+                      }
+                    />
+                    <span className="text-xs text-muted-foreground">%</span>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="col-span-2 text-muted-foreground hover:text-foreground"
+                    onClick={() => removePaymentMilestone(idx)}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                </div>
+              ))}
+              {(() => {
+                const total = (data.paymentMilestones || []).reduce(
+                  (s, m) => s + (Number(m.percentage) || 0),
+                  0,
+                );
+                const ok = total === 100;
+                return (
+                  <div
+                    className={`flex items-center justify-between text-xs rounded-md px-3 py-2 ${
+                      ok
+                        ? "bg-muted/40 text-foreground"
+                        : "bg-muted/40 text-foreground"
+                    }`}
+                  >
+                    <span className="flex items-center gap-1">
+                      <PieChart className="w-3.5 h-3.5" /> Allocation
+                    </span>
+                    <span className="font-semibold">{total}% {ok ? "✓" : "of 100%"}</span>
+                  </div>
+                );
+              })()}
+              <div className="flex flex-wrap gap-2 pt-1">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() =>
+                    setPaymentMilestones([
+                      { label: "Upfront on acceptance", percentage: 50 },
+                      { label: "After delivery handover", percentage: 30 },
+                      { label: "Final approval / clearance", percentage: 20 },
+                    ])
+                  }
+                >
+                  Use 50 / 30 / 20
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() =>
+                    setPaymentMilestones([
+                      { label: "Upfront on acceptance", percentage: 40 },
+                      { label: "Mid-project review", percentage: 30 },
+                      { label: "Final delivery", percentage: 30 },
+                    ])
+                  }
+                >
+                  Use 40 / 30 / 30
+                </Button>
+              </div>
+            </CardContent>
+          </GradientCard>
+
           {/* Workflow Snapshot */}
-          <Card>
+          <GradientCard tone="teal">
             <CardHeader className="pb-3">
               <SectionHeader title="Workflow" icon={<Activity className="w-4 h-4" />} />
             </CardHeader>
@@ -480,10 +756,15 @@ export default function QuotationBuilder() {
               <div className="space-y-3">
                 <div className="flex flex-wrap gap-2">
                   {data.workflow.map((step, idx) => (
-                    <Badge key={idx} variant="secondary" className="pl-3 pr-1 py-1 gap-2 rounded-lg bg-slate-100/50">
+                    <Badge key={idx} variant="secondary" className="pl-3 pr-1 py-1 gap-2 rounded-lg bg-muted/40">
                       <span className="text-[8px] opacity-40 font-mono">{idx + 1}</span>
                       {step}
-                      <button onClick={() => updateWorkflow(data.workflow.filter((_, i) => i !== idx))}>
+                      <button
+                        onClick={() =>
+                          updateWorkflow(data.workflow.filter((_, i) => i !== idx))
+                        }
+                        className="text-muted-foreground hover:text-foreground"
+                      >
                         <X className="w-3.5 h-3.5" />
                       </button>
                     </Badge>
@@ -500,9 +781,10 @@ export default function QuotationBuilder() {
                 }} />
               </div>
             </CardContent>
-          </Card>
+          </GradientCard>
         </div>
       </div>
     </div>
   );
 }
+

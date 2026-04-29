@@ -20,6 +20,7 @@ export interface IPaymentEventLog extends Document {
 
     quotationGroupId?: string;
     phase?: QuotationPaymentPhase;
+    correlationId?: string;
 
     amountReceived?: number;   // in cents
     currency?: string;
@@ -57,6 +58,11 @@ const paymentEventLogSchema = new Schema<IPaymentEventLog>(
             required: true,
         },
         quotationGroupId: {
+            type: String,
+            index: true,
+            sparse: true,
+        },
+        correlationId: {
             type: String,
             index: true,
             sparse: true,

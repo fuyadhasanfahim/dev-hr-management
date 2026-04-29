@@ -5,8 +5,9 @@ import { useParams, useRouter } from "next/navigation";
 import { useGetQuotationByIdQuery } from "@/redux/features/quotation/quotationApi";
 import { useQuotationStore } from "@/store/useQuotationStore";
 import QuotationBuilder from "../../components/forms/QuotationBuilder";
-import { Loader2 } from "lucide-react";
-import { IconReceipt } from "@tabler/icons-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { ArrowLeft, Loader2, ReceiptText } from "lucide-react";
 
 export default function EditQuotationPage() {
   const { id } = useParams();
@@ -20,12 +21,19 @@ export default function EditQuotationPage() {
       const sanitizedData = {
         ...data,
         // Extract ID from populated client object
-        clientId: typeof data.clientId === 'object' ? (data.clientId as { _id: string })._id : data.clientId,
+        clientId:
+          typeof data.clientId === "object"
+            ? (data.clientId as { _id: string })?._id
+            : data.clientId,
         // Format dates for HTML5 date inputs (yyyy-MM-dd)
         details: {
           ...data.details,
-          date: data.details?.date ? new Date(data.details.date).toISOString().split('T')[0] : '',
-          validUntil: data.details?.validUntil ? new Date(data.details.validUntil).toISOString().split('T')[0] : '',
+          date: data.details?.date
+            ? new Date(data.details.date).toISOString().split("T")[0]
+            : "",
+          validUntil: data.details?.validUntil
+            ? new Date(data.details.validUntil).toISOString().split("T")[0]
+            : "",
         },
       };
       setData(sanitizedData);
@@ -42,39 +50,55 @@ export default function EditQuotationPage() {
 
   if (isError || !data) {
     return (
-      <div className="p-8 text-center">
-        <h2 className="text-xl font-bold text-red-600">Error loading quotation</h2>
-        <button
-          onClick={() => router.push("/quotations")}
-          className="mt-4 text-teal-600 underline"
-        >
-          Back to list
-        </button>
+      <div className="container mx-auto p-6 text-center mt-20">
+        <div className="flex flex-col items-center justify-center space-y-4">
+          <h2 className="text-2xl font-bold">Error loading quotation</h2>
+          <p className="text-muted-foreground max-w-md">
+            We couldn&apos;t load this quotation. It may have been deleted or the
+            link is incorrect.
+          </p>
+          <Button variant="outline" onClick={() => router.push("/quotations")}>
+            Back to Quotations
+          </Button>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="px-8 py-5 border-b border-slate-200 bg-white flex items-center justify-between shrink-0">
+    <div className="container mx-auto p-6 space-y-6 animate-in fade-in duration-300">
+      {/* Header (Orders-like) */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-amber-50 flex items-center justify-center text-amber-600 border border-amber-100">
-            <IconReceipt className="w-6 h-6" />
-          </div>
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => router.push(`/quotations/${id}`)}
+            className="rounded-full shadow-sm"
+          >
+            <ArrowLeft className="h-5 w-5" />
+          </Button>
+
           <div>
-            <h1 className="text-xl font-bold text-slate-900">Edit Quotation</h1>
-            <p className="text-sm text-slate-500">
-              Modifying: {data.details.title} (#{data.details.quotationNumber})
+            <div className="flex items-center gap-2">
+              <ReceiptText className="h-5 w-5 text-muted-foreground" />
+              <h1 className="text-3xl font-bold tracking-tight">
+                Edit Quotation
+              </h1>
+            </div>
+            <p className="text-muted-foreground mt-1 text-sm">
+              {data?.details?.title || "Untitled"} • #
+              {data?.quotationNumber || "—"}
             </p>
           </div>
         </div>
       </div>
 
-      {/* Main Content Area */}
-      <div className="flex-1 overflow-hidden">
-        <QuotationBuilder />
-      </div>
+      <Card>
+        <CardContent className="p-6">
+          <QuotationBuilder hideHeader />
+        </CardContent>
+      </Card>
     </div>
   );
 }
