@@ -1,37 +1,7 @@
 "use client";
 
-import React, { useMemo, useEffect } from "react";
+import React, { useMemo, useEffect, useState } from "react";
 import { useQuotationStore } from "@/store/useQuotationStore";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Button } from "@/components/ui/button";
-import { 
-  Card, 
-  CardHeader, 
-  CardTitle, 
-  CardDescription, 
-  CardContent, 
-  CardFooter 
-} from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion";
-import { Separator } from "@/components/ui/separator";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Building2,
   Cpu,
@@ -49,10 +19,12 @@ import {
   HandCoins,
   PieChart,
   Briefcase,
+  ChevronDown,
 } from "lucide-react";
 import { useGetClientsQuery } from "@/redux/features/client/clientApi";
 import {
   useCreateQuotationMutation,
+  useSendQuotationMutation,
   useUpdateQuotationMutation,
 } from "@/redux/features/quotation/quotationApi";
 import { toast } from "sonner";
@@ -60,6 +32,7 @@ import { useRouter } from "next/navigation";
 import { QUOTATION_TEMPLATES } from "@/constants/quotation-templates";
 import { format } from "date-fns";
 import { formatMoney } from "@/lib/money";
+import { useGetClientEmailsQuery } from "@/redux/features/client/clientApi";
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -89,6 +62,120 @@ function SectionHeader({ title, icon, description }: { title: string; icon: Reac
   );
 }
 
+function FieldLabel({
+  children,
+  htmlFor,
+  className = "",
+}: {
+  children: React.ReactNode;
+  htmlFor?: string;
+  className?: string;
+}) {
+  return (
+    <label
+      htmlFor={htmlFor}
+      className={`text-xs font-bold uppercase text-muted-foreground ${className}`}
+    >
+      {children}
+    </label>
+  );
+}
+
+function TextInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
+  const { className = "", ...rest } = props;
+  return (
+    <input
+      {...rest}
+      className={[
+        "h-10 w-full rounded-md border bg-background px-3 text-sm",
+        "placeholder:text-muted-foreground/70",
+        "focus:outline-none focus:ring-2 focus:ring-ring/30 focus:border-ring/40",
+        "disabled:opacity-60 disabled:cursor-not-allowed",
+        className,
+      ].join(" ")}
+    />
+  );
+}
+
+function TextArea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
+  const { className = "", ...rest } = props;
+  return (
+    <textarea
+      {...rest}
+      className={[
+        "w-full rounded-md border bg-background px-3 py-2 text-sm",
+        "placeholder:text-muted-foreground/70",
+        "focus:outline-none focus:ring-2 focus:ring-ring/30 focus:border-ring/40",
+        "disabled:opacity-60 disabled:cursor-not-allowed",
+        className,
+      ].join(" ")}
+    />
+  );
+}
+
+function SelectInput(
+  props: React.SelectHTMLAttributes<HTMLSelectElement> & { placeholder?: string },
+) {
+  const { className = "", placeholder, children, ...rest } = props;
+  return (
+    <select
+      {...rest}
+      className={[
+        "h-10 w-full rounded-md border bg-background px-3 text-sm",
+        "focus:outline-none focus:ring-2 focus:ring-ring/30 focus:border-ring/40",
+        "disabled:opacity-60 disabled:cursor-not-allowed",
+        className,
+      ].join(" ")}
+    >
+      {placeholder ? (
+        <option value="" disabled>
+          {placeholder}
+        </option>
+      ) : null}
+      {children}
+    </select>
+  );
+}
+
+function PrimaryButton(
+  props: React.ButtonHTMLAttributes<HTMLButtonElement> & {
+    variant?: "primary" | "outline" | "secondary" | "ghost";
+  },
+) {
+  const { className = "", variant = "primary", ...rest } = props;
+  const base =
+    "inline-flex items-center justify-center gap-2 rounded-md text-sm font-semibold transition-colors disabled:opacity-60 disabled:cursor-not-allowed";
+  const variants: Record<string, string> = {
+    primary: "bg-primary text-primary-foreground hover:bg-primary/90 h-11 px-4",
+    outline: "border bg-background hover:bg-muted/40 h-11 px-4",
+    secondary: "bg-muted text-foreground hover:bg-muted/70 h-10 px-3",
+    ghost: "bg-transparent hover:bg-muted/40 text-muted-foreground hover:text-foreground h-9 px-3",
+  };
+  return (
+    <button
+      {...rest}
+      type={rest.type ?? "button"}
+      className={[base, variants[variant], className].join(" ")}
+    />
+  );
+}
+
+function BadgePill({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="inline-flex items-center rounded-full border bg-muted/30 px-2.5 py-0.5 text-xs font-medium">
+      {children}
+    </span>
+  );
+}
+
+function SoftBadge({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="inline-flex items-center gap-2 rounded-md bg-muted/40 px-2 py-1 text-xs">
+      {children}
+    </span>
+  );
+}
+
 function GradientCard({
   children,
   className = "",
@@ -99,14 +186,14 @@ function GradientCard({
   tone?: "neutral" | "teal" | "orange" | "mixed";
 }) {
   return (
-    <Card
-      className={`relative overflow-hidden border bg-card shadow-sm ${className}`}
+    <div
+      className={`relative overflow-hidden rounded-xl border bg-card shadow-sm ${className}`}
     >
       {tone !== "neutral" ? (
         <div className="pointer-events-none absolute inset-x-0 top-0 h-0.5 bg-border" />
       ) : null}
       {children}
-    </Card>
+    </div>
   );
 }
 
@@ -139,6 +226,70 @@ export default function QuotationBuilder({
   const { data: clientsData, isLoading: clientsLoading } = useGetClientsQuery({});
   const [createQuotation, { isLoading: isCreating }] = useCreateQuotationMutation();
   const [updateQuotation, { isLoading: isUpdating }] = useUpdateQuotationMutation();
+  const [sendQuotation, { isLoading: isSending }] = useSendQuotationMutation();
+
+  const [recipientModalOpen, setRecipientModalOpen] = useState(false);
+  const [selectedEmails, setSelectedEmails] = useState<string[]>([]);
+
+  const { data: clientEmails } = useGetClientEmailsQuery(data.clientId || "", {
+    skip: !data.clientId || !recipientModalOpen,
+  });
+
+  const selectedClient = useMemo(() => {
+    if (!data.clientId) return null;
+    return clientsData?.clients?.find((c) => c._id === data.clientId) || null;
+  }, [clientsData?.clients, data.clientId]);
+
+  const emailOptions = useMemo(() => {
+    const map = new Map<string, { email: string; label: string }>();
+
+    // Labeled emails endpoint (preferred)
+    (clientEmails || []).forEach((e) => {
+      const email = (e.email || "").trim();
+      if (!email) return;
+      map.set(email.toLowerCase(), {
+        email,
+        label: e.label ? `${e.label}` : "Email",
+      });
+    });
+
+    // Client profile emails
+    (selectedClient?.emails || []).forEach((email, idx) => {
+      const v = (email || "").trim();
+      if (!v) return;
+      const key = v.toLowerCase();
+      if (!map.has(key)) {
+        map.set(key, { email: v, label: idx === 0 ? "Primary" : "Email" });
+      }
+    });
+
+    // Team members
+    (selectedClient?.teamMembers || []).forEach((m) => {
+      const v = (m.email || "").trim();
+      if (!v) return;
+      const key = v.toLowerCase();
+      if (!map.has(key)) {
+        map.set(key, { email: v, label: m.name ? `Team: ${m.name}` : "Team" });
+      }
+    });
+
+    // Fallback: manually filled email field
+    const manual = (data.client.email || "").trim();
+    if (manual) {
+      const key = manual.toLowerCase();
+      if (!map.has(key)) map.set(key, { email: manual, label: "Manual" });
+    }
+
+    return Array.from(map.values());
+  }, [clientEmails, data.client.email, selectedClient?.emails, selectedClient?.teamMembers]);
+
+  useEffect(() => {
+    if (!recipientModalOpen) return;
+    if (selectedEmails.length) return;
+    // Preselect: all known emails (or at least first)
+    const all = emailOptions.map((o) => o.email);
+    setSelectedEmails(all.length ? all : []);
+  }, [emailOptions, recipientModalOpen, selectedEmails.length]);
 
   // ── Pricing Logic ──
   const computedTotals = useMemo(() => {
@@ -161,24 +312,58 @@ export default function QuotationBuilder({
     }));
   }, [computedTotals]);
 
-  const handleSave = async (status: "draft" | "sent") => {
+  const saveQuotation = async (status: "draft" | "sent") => {
     if (!data.clientId) return toast.error("Please select a client first");
     try {
       const payload = { ...data, status };
       if (data._id) {
-        await updateQuotation({ id: data._id, ...payload }).unwrap();
+        const updated = await updateQuotation({ id: data._id, ...payload }).unwrap();
         toast.success("Quotation updated successfully");
+        return updated._id;
       } else {
-        await createQuotation(payload).unwrap();
+        const created = await createQuotation(payload).unwrap();
         toast.success("Quotation created successfully");
-      }
-      if (status === "sent") {
-        reset();
-        router.push("/quotations");
+        return created._id;
       }
     } catch (err: unknown) {
       const maybe = err as { data?: { message?: string } } | null;
       toast.error(maybe?.data?.message || "Failed to save quotation");
+    }
+  };
+
+  const openRecipientPicker = () => {
+    if (!data.clientId) return toast.error("Please select a client first");
+    setRecipientModalOpen(true);
+  };
+
+  const confirmDispatch = async () => {
+    if (!data.clientId) return toast.error("Please select a client first");
+    if (selectedEmails.length === 0) return toast.error("Select at least one recipient email");
+
+    // Ensure saved first (as draft), then send
+    const id = data._id || (await saveQuotation("draft"));
+    if (!id) return;
+
+    try {
+      const result = await sendQuotation({ id, emails: selectedEmails }).unwrap();
+      if (result.data.clientLink) {
+        await navigator.clipboard.writeText(result.data.clientLink);
+        toast.success("Client link copied to clipboard!");
+      }
+      if (result.data.emailSent) {
+        toast.success(
+          `Quotation email sent${result.data.emailedTo?.length ? ` to ${result.data.emailedTo.join(", ")}` : ""}`,
+        );
+      } else {
+        toast.warning(result.data.emailError || "Email was not sent. Link was generated only.");
+      }
+
+      setRecipientModalOpen(false);
+      setSelectedEmails([]);
+      reset();
+      router.push("/quotations");
+    } catch (err) {
+      toast.error((err as Error).message || "Failed to send quotation");
     }
   };
 
@@ -202,50 +387,60 @@ export default function QuotationBuilder({
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <Select onValueChange={loadTemplate}>
-                <SelectTrigger className="w-[240px] bg-background">
-                  <Sparkles className="w-4 h-4 mr-2 text-muted-foreground" />
-                  <SelectValue placeholder="Industry Templates" />
-                </SelectTrigger>
-                <SelectContent>
+              <div className="relative w-[240px]">
+                <Sparkles className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <SelectInput
+                  value=""
+                  placeholder="Industry Templates"
+                  className="pl-9"
+                  onChange={(e) => loadTemplate(e.target.value)}
+                >
                   {Object.keys(QUOTATION_TEMPLATES).map((key) => (
-                    <SelectItem key={key} value={key}>
+                    <option key={key} value={key}>
                       {key
                         .split("-")
                         .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
                         .join(" ")}
-                    </SelectItem>
+                    </option>
                   ))}
-                </SelectContent>
-              </Select>
-              <Button variant="outline" size="sm" onClick={reset}>
+                </SelectInput>
+              </div>
+              <PrimaryButton variant="outline" className="h-10 px-3" onClick={reset}>
                 Reset
-              </Button>
+              </PrimaryButton>
             </div>
           </div>
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-        
-        {/* Left Col: Core Config (3 Cols) */}
-        <div className="lg:col-span-3 space-y-8">
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <GradientCard tone="teal">
-              <CardHeader className="pb-4">
-                <SectionHeader title="Project & Client" icon={<Building2 className="w-5 h-5" />} />
-              </CardHeader>
-              <CardContent className="space-y-4">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Main */}
+        <div className="lg:col-span-2 space-y-6">
+          <div className="overflow-hidden rounded-xl border bg-card">
+            <div className="border-b bg-muted/20 p-6">
+              <SectionHeader
+                title="Basics"
+                icon={<Building2 className="w-5 h-5" />}
+                description="Start with the essentials. You can fill optional sections later."
+              />
+            </div>
+            <div className="p-6 space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label className="text-xs font-bold uppercase text-muted-foreground">Proposal Name</Label>
-                  <Input value={data.details.title} onChange={e => updateDetails({ title: e.target.value })} placeholder="e.g. Enterprise E-commerce" />
+                  <FieldLabel>Proposal Name</FieldLabel>
+                  <TextInput
+                    value={data.details.title}
+                    onChange={(e) => updateDetails({ title: e.target.value })}
+                    placeholder="e.g. Project Quotation"
+                  />
                 </div>
                 <div className="space-y-2">
-                  <Label className="text-xs font-bold uppercase text-muted-foreground">Link Client Profile</Label>
-                  <Select
-                    value={data.clientId}
-                    onValueChange={(id) => {
+                  <FieldLabel>Client</FieldLabel>
+                  <SelectInput
+                    value={data.clientId || ""}
+                    placeholder={clientsLoading ? "Fetching..." : "Select Client"}
+                    onChange={(e) => {
+                      const id = e.target.value;
                       const c = clientsData?.clients.find((x) => x._id === id);
                       if (!c) return;
                       // Single atomic update prevents render-loop overwrites of
@@ -272,301 +467,550 @@ export default function QuotationBuilder({
                       }));
                     }}
                   >
-                    <SelectTrigger>
-                      <SelectValue placeholder={clientsLoading ? "Fetching..." : "Select Client"} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {clientsData?.clients.map(c => (
-                        <SelectItem key={c._id} value={c._id}>{c.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    {clientsData?.clients.map((c) => (
+                      <option key={c._id} value={c._id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </SelectInput>
                 </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-2">
-                    <Label className="text-xs font-bold uppercase text-muted-foreground">Contact name</Label>
-                    <Input
-                      value={data.client.contactName}
-                      onChange={(e) => updateClient({ contactName: e.target.value })}
-                      placeholder="Client contact"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-xs font-bold uppercase text-muted-foreground">Company name</Label>
-                    <Input
-                      value={data.client.companyName || ""}
-                      onChange={(e) => updateClient({ companyName: e.target.value })}
-                      placeholder="Client company"
-                    />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-2">
-                    <Label className="text-xs font-bold uppercase text-muted-foreground">Email</Label>
-                    <Input
-                      type="email"
-                      value={data.client.email || ""}
-                      onChange={(e) => updateClient({ email: e.target.value })}
-                      placeholder="email@client.com"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-xs font-bold uppercase text-muted-foreground">Phone</Label>
-                    <Input
-                      value={data.client.phone || ""}
-                      onChange={(e) => updateClient({ phone: e.target.value })}
-                      placeholder="+880…"
-                    />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-xs font-bold uppercase text-muted-foreground">Address</Label>
-                  <Textarea
-                    value={data.client.address || ""}
-                    onChange={(e) => updateClient({ address: e.target.value })}
-                    placeholder="Bill-to address (auto-filled from client profile)"
-                    className="min-h-[60px]"
-                  />
-                </div>
-              </CardContent>
-            </GradientCard>
+              </div>
 
-            <GradientCard tone="orange">
-              <CardHeader className="pb-4">
-                <SectionHeader title="Timeline & Overview" icon={<CalendarIcon className="w-5 h-5" />} />
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label className="text-xs font-bold uppercase text-muted-foreground">Issuance Date</Label>
-                    <Input type="date" value={data.details.date} onChange={e => updateDetails({ date: e.target.value })} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-xs font-bold uppercase text-muted-foreground">Valid Until</Label>
-                    <Input type="date" value={data.details.validUntil} onChange={e => updateDetails({ validUntil: e.target.value })} />
-                  </div>
-                </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label className="text-xs font-bold uppercase text-muted-foreground">Project Overview</Label>
-                  <Textarea
-                    value={data.overview || ""}
-                    onChange={(e) =>
-                      useQuotationStore.setState((s) => ({
-                        data: { ...s.data, overview: e.target.value },
-                      }))
-                    }
-                    placeholder="Short description of the project goals and scope (1–3 sentences)…"
-                    className="min-h-[90px]"
+                  <FieldLabel>Issuance Date</FieldLabel>
+                  <TextInput
+                    type="date"
+                    value={data.details.date}
+                    onChange={(e) => updateDetails({ date: e.target.value })}
                   />
                 </div>
-              </CardContent>
-            </GradientCard>
+                <div className="space-y-2">
+                  <FieldLabel>Valid Until</FieldLabel>
+                  <TextInput
+                    type="date"
+                    value={data.details.validUntil}
+                    onChange={(e) => updateDetails({ validUntil: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <FieldLabel>Contact name</FieldLabel>
+                  <TextInput
+                    value={data.client.contactName}
+                    onChange={(e) => updateClient({ contactName: e.target.value })}
+                    placeholder="Client contact"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <FieldLabel>Company name</FieldLabel>
+                  <TextInput
+                    value={data.client.companyName || ""}
+                    onChange={(e) => updateClient({ companyName: e.target.value })}
+                    placeholder="Client company"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <FieldLabel>Email</FieldLabel>
+                  <TextInput
+                    type="email"
+                    value={data.client.email || ""}
+                    onChange={(e) => updateClient({ email: e.target.value })}
+                    placeholder="email@client.com"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <FieldLabel>Phone</FieldLabel>
+                  <TextInput
+                    value={data.client.phone || ""}
+                    onChange={(e) => updateClient({ phone: e.target.value })}
+                    placeholder="+880…"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <FieldLabel>Project Overview</FieldLabel>
+                <TextArea
+                  value={data.overview || ""}
+                  onChange={(e) =>
+                    useQuotationStore.setState((s) => ({
+                      data: { ...s.data, overview: e.target.value },
+                    }))
+                  }
+                  placeholder="Short description of the project goals and scope (1–3 sentences)…"
+                  className="min-h-[90px]"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <FieldLabel>Address</FieldLabel>
+                <TextArea
+                  value={data.client.address || ""}
+                  onChange={(e) => updateClient({ address: e.target.value })}
+                  placeholder="Bill-to address (auto-filled from client profile)"
+                  className="min-h-[60px]"
+                />
+              </div>
+            </div>
           </div>
 
-          {/* Phases Accordion */}
-          <GradientCard tone="mixed">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
-              <SectionHeader title="Project Phases" icon={<Layers className="w-5 h-5" />} description="Strategic scheduling and milestone tracking." />
-              <Button
-                size="sm"
-                className="shadow-sm"
+          {/* Phases */}
+          <div className="overflow-hidden rounded-xl border bg-card">
+            <div className="flex flex-row items-start justify-between gap-4 border-b bg-muted/20 p-6">
+              <div className="flex-1 min-w-0">
+                <SectionHeader
+                  title="Project Phases"
+                  icon={<Layers className="w-5 h-5" />}
+                  description="Add phases only if you need a timeline breakdown."
+                />
+              </div>
+              <PrimaryButton
+                variant="outline"
+                className="h-10 px-3 shrink-0 shadow-sm"
                 onClick={() => addPhase()}
               >
                 <Plus className="w-4 h-4 mr-1" /> New Phase
-              </Button>
-            </CardHeader>
-            <CardContent>
-              <Accordion type="multiple" className="space-y-4">
-                {data.phases.map((phase, pIdx) => (
-                  <AccordionItem key={pIdx} value={`phase-${pIdx}`} className="border rounded-xl px-4 overflow-hidden">
-                    <AccordionTrigger className="hover:no-underline py-4 group">
-                      <div className="flex items-center gap-4 text-left w-full">
-                        <Badge variant="outline" className="bg-muted/30">Phase {pIdx + 1}</Badge>
-                        <span className="font-semibold text-foreground group-hover:text-foreground transition-colors">{phase.title || "Define Phase Title"}</span>
-                        <div className="ml-auto mr-4 flex items-center gap-2 text-[10px] font-mono text-muted-foreground uppercase tracking-widest">
-                          {phase.startDate ? format(new Date(phase.startDate), "MMM dd") : "TBD"} — {phase.endDate ? format(new Date(phase.endDate), "MMM dd") : "TBD"}
-                        </div>
-                      </div>
-                    </AccordionTrigger>
-                    <AccordionContent className="pt-2 pb-6 space-y-6">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="space-y-4">
-                          <div className="space-y-2">
-                            <Label className="text-xs font-bold text-muted-foreground uppercase">Phase Overview</Label>
-                            <Input value={phase.title} onChange={e => updatePhase(pIdx, { title: e.target.value })} placeholder="Title" />
+              </PrimaryButton>
+            </div>
+            <div className="p-6">
+              {data.phases.length === 0 ? (
+                <div className="rounded-xl border bg-muted/20 p-4 text-sm text-muted-foreground">
+                  No phases yet. Click <span className="font-medium text-foreground">New Phase</span> if you want to add milestones and checkpoints.
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {data.phases.map((phase, pIdx) => (
+                    <details
+                      key={pIdx}
+                      className="group border rounded-xl bg-card px-4 py-3"
+                    >
+                      <summary className="flex cursor-pointer list-none items-center gap-3 py-2 [&::-webkit-details-marker]:hidden">
+                        <div className="flex items-center gap-3 text-left w-full">
+                          <BadgePill>Phase {pIdx + 1}</BadgePill>
+                          <span className="font-semibold text-foreground">
+                            {phase.title || "Untitled phase"}
+                          </span>
+                          <div className="ml-auto mr-4 hidden md:flex items-center gap-2 text-[10px] font-mono text-muted-foreground uppercase tracking-widest">
+                            {phase.startDate
+                              ? format(new Date(phase.startDate), "MMM dd")
+                              : "TBD"}{" "}
+                            —{" "}
+                            {phase.endDate
+                              ? format(new Date(phase.endDate), "MMM dd")
+                              : "TBD"}
                           </div>
-                          <div className="space-y-2">
-                            <Label className="text-xs font-bold text-muted-foreground uppercase">Description</Label>
-                            <Textarea value={phase.description} onChange={e => updatePhase(pIdx, { description: e.target.value })} placeholder="Deliverables..." className="min-h-[80px]" />
-                          </div>
                         </div>
-
-                        <div className="space-y-4">
-                          <Label className="text-xs font-bold text-muted-foreground uppercase">Timeline Selection</Label>
-                          <div className="grid grid-cols-2 gap-4">
+                        <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200 group-open:rotate-180" />
+                      </summary>
+                      <div className="pt-3 pb-4 space-y-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <div className="space-y-4">
                             <div className="space-y-2">
-                              <Label className="text-[10px]">Start Date</Label>
-                              <Input type="date" value={phase.startDate || ""} onChange={e => updatePhase(pIdx, { startDate: e.target.value })} />
+                              <FieldLabel>Title</FieldLabel>
+                              <TextInput
+                                value={phase.title}
+                                onChange={(e) =>
+                                  updatePhase(pIdx, { title: e.target.value })
+                                }
+                                placeholder="Phase title"
+                              />
                             </div>
                             <div className="space-y-2">
-                              <Label className="text-[10px]">End Date</Label>
-                              <Input type="date" value={phase.endDate || ""} onChange={e => updatePhase(pIdx, { endDate: e.target.value })} />
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      <Separator />
-
-                      <div className="space-y-3">
-                        <Label className="text-xs font-bold text-muted-foreground uppercase">Detailed Checkpoints</Label>
-                        <div className="flex flex-wrap gap-2">
-                          {phase.items.map((item, iIdx) => (
-                            <Badge key={iIdx} variant="secondary" className="pl-3 pr-1 py-1.5 gap-2 rounded-lg bg-muted/40">
-                              {item}
-                              <button
-                                onClick={() =>
+                              <FieldLabel>Description</FieldLabel>
+                              <TextArea
+                                value={phase.description}
+                                onChange={(e) =>
                                   updatePhase(pIdx, {
-                                    items: phase.items.filter((_, i) => i !== iIdx),
+                                    description: e.target.value,
                                   })
                                 }
-                                className="text-muted-foreground hover:text-foreground"
+                                placeholder="Deliverables..."
+                                className="min-h-[80px]"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="space-y-4">
+                            <FieldLabel>Dates (optional)</FieldLabel>
+                            <div className="grid grid-cols-2 gap-4">
+                              <div className="space-y-2">
+                                <label className="text-[10px] text-muted-foreground">Start</label>
+                                <TextInput
+                                  type="date"
+                                  value={phase.startDate || ""}
+                                  onChange={(e) =>
+                                    updatePhase(pIdx, {
+                                      startDate: e.target.value,
+                                    })
+                                  }
+                                />
+                              </div>
+                              <div className="space-y-2">
+                                <label className="text-[10px] text-muted-foreground">End</label>
+                                <TextInput
+                                  type="date"
+                                  value={phase.endDate || ""}
+                                  onChange={(e) =>
+                                    updatePhase(pIdx, {
+                                      endDate: e.target.value,
+                                    })
+                                  }
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        <hr className="border-border" />
+
+                        <div className="space-y-3">
+                          <FieldLabel>Checkpoints (optional)</FieldLabel>
+                          <div className="flex flex-wrap gap-2">
+                            {phase.items.map((item, iIdx) => (
+                              <SoftBadge
+                                key={iIdx}
                               >
-                                <X className="w-3.5 h-3.5" />
-                              </button>
-                            </Badge>
-                          ))}
-                          <Input 
-                            placeholder="+ Add checkpoint (Enter)..." 
-                            className="h-9 text-xs border-dashed"
-                            onKeyDown={e => {
-                              if (e.key === 'Enter') {
-                                const val = e.currentTarget.value;
-                                if (val) {
-                                  updatePhase(pIdx, { items: [...phase.items, val] });
-                                  e.currentTarget.value = "";
+                                {item}
+                                <button
+                                  onClick={() =>
+                                    updatePhase(pIdx, {
+                                      items: phase.items.filter((_, i) => i !== iIdx),
+                                    })
+                                  }
+                                  className="text-muted-foreground hover:text-foreground"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              </SoftBadge>
+                            ))}
+                            <TextInput
+                              placeholder="+ Add checkpoint (Enter)…"
+                              className="h-9 text-xs border-dashed"
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  const val = e.currentTarget.value;
+                                  if (val) {
+                                    updatePhase(pIdx, {
+                                      items: [...phase.items, val],
+                                    });
+                                    e.currentTarget.value = "";
+                                  }
                                 }
-                              }
-                            }}
-                          />
+                              }}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="pt-4 flex justify-end">
+                          <PrimaryButton
+                            variant="ghost"
+                            className="text-muted-foreground hover:text-foreground"
+                            onClick={() => removePhase(pIdx)}
+                          >
+                            <Trash2 className="w-4 h-4 mr-2" /> Delete Phase
+                          </PrimaryButton>
                         </div>
                       </div>
-
-                      <div className="pt-4 flex justify-end">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-muted-foreground hover:text-foreground"
-                          onClick={() => removePhase(pIdx)}
-                        >
-                          <Trash2 className="w-4 h-4 mr-2" /> Delete Phase
-                        </Button>
-                      </div>
-                    </AccordionContent>
-                  </AccordionItem>
-                ))}
-              </Accordion>
-            </CardContent>
-          </GradientCard>
-
-          {/* Tech Stack Selection */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <GradientCard tone="teal">
-              <CardHeader>
-                <SectionHeader title="Technical Blueprint" icon={<Cpu className="w-5 h-5" />} />
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="grid grid-cols-1 gap-4">
-                  <div className="space-y-2">
-                    <Label className="text-xs font-bold text-muted-foreground uppercase">Frontend Framework</Label>
-                    <Select value={data.techStack.frontend} onValueChange={v => updateTechStack({ frontend: v })}>
-                      <SelectTrigger><SelectValue placeholder="Select UI Library" /></SelectTrigger>
-                      <SelectContent>
-                        {FRONTEND_OPTIONS.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-xs font-bold text-muted-foreground uppercase">Backend Engine</Label>
-                    <Select value={data.techStack.backend} onValueChange={v => updateTechStack({ backend: v })}>
-                      <SelectTrigger><SelectValue placeholder="Select Server" /></SelectTrigger>
-                      <SelectContent>
-                        {BACKEND_OPTIONS.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-xs font-bold text-muted-foreground uppercase">Database Layer</Label>
-                    <Select value={data.techStack.database} onValueChange={v => updateTechStack({ database: v })}>
-                      <SelectTrigger><SelectValue placeholder="Select DB" /></SelectTrigger>
-                      <SelectContent>
-                        {DB_OPTIONS.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-              </CardContent>
-            </GradientCard>
-
-            <GradientCard tone="orange">
-              <CardHeader>
-                <SectionHeader title="Tools Checklist" icon={<Settings2 className="w-5 h-5" />} />
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="grid grid-cols-2 gap-y-3 gap-x-6">
-                  {PREDEFINED_TOOLS.map(tool => (
-                    <div key={tool} className="flex items-center space-x-2">
-                      <Checkbox 
-                        id={`tool-${tool}`}
-                        checked={data.techStack.tools.includes(tool)}
-                        onCheckedChange={(checked) => {
-                          const newTools = checked 
-                            ? [...data.techStack.tools, tool] 
-                            : data.techStack.tools.filter(t => t !== tool);
-                          updateTechStack({ tools: newTools });
-                        }}
-                      />
-                      <Label htmlFor={`tool-${tool}`} className="text-sm cursor-pointer">{tool}</Label>
-                    </div>
+                    </details>
                   ))}
                 </div>
-                <Separator />
-                <div className="space-y-2">
-                  <Label className="text-[10px] font-bold text-muted-foreground uppercase">Custom Infrastructure</Label>
-                  <div className="flex gap-2">
-                    <Input placeholder="Add custom tool..." className="h-9 text-xs" onKeyDown={e => {
-                      if (e.key === 'Enter') {
+              )}
+            </div>
+          </div>
+
+          {/* Optional sections */}
+          <div className="overflow-hidden rounded-xl border bg-card">
+            <div className="border-b bg-muted/20 p-6">
+              <SectionHeader
+                title="Optional details"
+                icon={<Settings2 className="w-5 h-5" />}
+                description="Fill these only if they add value for the client."
+              />
+            </div>
+            <div className="p-6 space-y-3">
+              <details className="group border rounded-xl bg-card px-4 py-3">
+                <summary className="flex cursor-pointer list-none items-center gap-2 py-2 [&::-webkit-details-marker]:hidden">
+                  <Cpu className="w-4 h-4 text-muted-foreground" />
+                  <span className="font-semibold">Technical Blueprint</span>
+                  <ChevronDown className="ml-auto h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200 group-open:rotate-180" />
+                </summary>
+                <div className="pt-3 pb-4 space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="space-y-2">
+                      <FieldLabel>Frontend</FieldLabel>
+                      <SelectInput
+                        value={data.techStack.frontend || ""}
+                        onChange={(e) => updateTechStack({ frontend: e.target.value })}
+                        placeholder="Select"
+                      >
+                        {FRONTEND_OPTIONS.map((opt) => (
+                          <option key={opt} value={opt}>
+                            {opt}
+                          </option>
+                        ))}
+                      </SelectInput>
+                    </div>
+                    <div className="space-y-2">
+                      <FieldLabel>Backend</FieldLabel>
+                      <SelectInput
+                        value={data.techStack.backend || ""}
+                        onChange={(e) => updateTechStack({ backend: e.target.value })}
+                        placeholder="Select"
+                      >
+                        {BACKEND_OPTIONS.map((opt) => (
+                          <option key={opt} value={opt}>
+                            {opt}
+                          </option>
+                        ))}
+                      </SelectInput>
+                    </div>
+                    <div className="space-y-2">
+                      <FieldLabel>Database</FieldLabel>
+                      <SelectInput
+                        value={data.techStack.database || ""}
+                        onChange={(e) => updateTechStack({ database: e.target.value })}
+                        placeholder="Select"
+                      >
+                        {DB_OPTIONS.map((opt) => (
+                          <option key={opt} value={opt}>
+                            {opt}
+                          </option>
+                        ))}
+                      </SelectInput>
+                    </div>
+                  </div>
+                </div>
+              </details>
+
+              <details className="group border rounded-xl bg-card px-4 py-3">
+                <summary className="flex cursor-pointer list-none items-center gap-2 py-2 [&::-webkit-details-marker]:hidden">
+                  <Settings2 className="w-4 h-4 text-muted-foreground" />
+                  <span className="font-semibold">Tools</span>
+                  <ChevronDown className="ml-auto h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200 group-open:rotate-180" />
+                </summary>
+                <div className="pt-3 pb-4 space-y-4">
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-y-3 gap-x-6">
+                    {PREDEFINED_TOOLS.map((tool) => (
+                      <div key={tool} className="flex items-center space-x-2">
+                        <input
+                          id={`tool-${tool}`}
+                          type="checkbox"
+                          checked={data.techStack.tools.includes(tool)}
+                          onChange={(e) => {
+                            const checked = e.target.checked;
+                            const newTools = checked
+                              ? [...data.techStack.tools, tool]
+                              : data.techStack.tools.filter((t) => t !== tool);
+                            updateTechStack({ tools: newTools });
+                          }}
+                          className="h-4 w-4 rounded border bg-background text-primary focus:ring-2 focus:ring-ring/30"
+                        />
+                        <label
+                          htmlFor={`tool-${tool}`}
+                          className="text-sm cursor-pointer"
+                        >
+                          {tool}
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+                  <hr className="border-border" />
+                  <div className="space-y-2">
+                    <FieldLabel className="text-[10px]">Custom tool</FieldLabel>
+                    <TextInput
+                      placeholder="Type a tool name and press Enter…"
+                      className="h-9 text-sm"
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          const val = e.currentTarget.value;
+                          if (val && !data.techStack.tools.includes(val)) {
+                            updateTechStack({ tools: [...data.techStack.tools, val] });
+                            e.currentTarget.value = "";
+                          }
+                        }
+                      }}
+                    />
+                  </div>
+                </div>
+              </details>
+
+              <details className="group border rounded-xl bg-card px-4 py-3">
+                <summary className="flex cursor-pointer list-none items-center gap-2 py-2 [&::-webkit-details-marker]:hidden">
+                  <HandCoins className="w-4 h-4 text-muted-foreground" />
+                  <span className="font-semibold">Payment Milestones</span>
+                  <ChevronDown className="ml-auto h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200 group-open:rotate-180" />
+                </summary>
+                <div className="pt-3 pb-4 space-y-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-sm text-muted-foreground">
+                      Optional — helps clients understand payment timing.
+                    </p>
+                    <PrimaryButton
+                      variant="secondary"
+                      onClick={() => addPaymentMilestone()}
+                    >
+                      <Plus className="w-4 h-4 mr-1" /> Add
+                    </PrimaryButton>
+                  </div>
+
+                  {(data.paymentMilestones || []).length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No milestones yet.</p>
+                  ) : null}
+
+                  {(data.paymentMilestones || []).map((m, idx) => (
+                    <div
+                      key={idx}
+                      className="grid grid-cols-12 gap-2 items-center rounded-lg border bg-card p-2"
+                    >
+                      <TextInput
+                        className="col-span-7 h-9 text-sm"
+                        value={m.label}
+                        onChange={(e) =>
+                          updatePaymentMilestone(idx, { label: e.target.value })
+                        }
+                        placeholder="Milestone label"
+                      />
+                      <div className="col-span-3 flex items-center gap-1">
+                        <TextInput
+                          className="h-9 text-sm"
+                          type="number"
+                          value={m.percentage}
+                          min={0}
+                          max={100}
+                          onChange={(e) =>
+                            updatePaymentMilestone(idx, {
+                              percentage: Number(e.target.value),
+                            })
+                          }
+                        />
+                        <span className="text-xs text-muted-foreground">%</span>
+                      </div>
+                      <PrimaryButton
+                        variant="ghost"
+                        className="col-span-2 text-muted-foreground hover:text-foreground"
+                        onClick={() => removePaymentMilestone(idx)}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </PrimaryButton>
+                    </div>
+                  ))}
+
+                  {(() => {
+                    const total = (data.paymentMilestones || []).reduce(
+                      (s, m) => s + (Number(m.percentage) || 0),
+                      0,
+                    );
+                    const ok = total === 100;
+                    return (
+                      <div className="flex items-center justify-between text-xs rounded-md px-3 py-2 bg-muted/40 text-foreground">
+                        <span className="flex items-center gap-1">
+                          <PieChart className="w-3.5 h-3.5" /> Allocation
+                        </span>
+                        <span className="font-semibold">
+                          {total}% {ok ? "✓" : "of 100%"}
+                        </span>
+                      </div>
+                    );
+                  })()}
+
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    <PrimaryButton
+                      variant="outline"
+                      className="h-10 px-3 text-sm"
+                      onClick={() =>
+                        setPaymentMilestones([
+                          { label: "Upfront on acceptance", percentage: 50 },
+                          { label: "After delivery handover", percentage: 30 },
+                          { label: "Final approval / clearance", percentage: 20 },
+                        ])
+                      }
+                    >
+                      Use 50 / 30 / 20
+                    </PrimaryButton>
+                    <PrimaryButton
+                      variant="outline"
+                      className="h-10 px-3 text-sm"
+                      onClick={() =>
+                        setPaymentMilestones([
+                          { label: "Upfront on acceptance", percentage: 40 },
+                          { label: "Mid-project review", percentage: 30 },
+                          { label: "Final delivery", percentage: 30 },
+                        ])
+                      }
+                    >
+                      Use 40 / 30 / 30
+                    </PrimaryButton>
+                  </div>
+                </div>
+              </details>
+
+              <details className="group border rounded-xl bg-card px-4 py-3">
+                <summary className="flex cursor-pointer list-none items-center gap-2 py-2 [&::-webkit-details-marker]:hidden">
+                  <Activity className="w-4 h-4 text-muted-foreground" />
+                  <span className="font-semibold">Workflow</span>
+                  <ChevronDown className="ml-auto h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200 group-open:rotate-180" />
+                </summary>
+                <div className="pt-3 pb-4 space-y-4">
+                  <div className="flex flex-wrap gap-2">
+                    {data.workflow.map((step, idx) => (
+                      <SoftBadge key={idx}>
+                        <span className="text-[8px] opacity-40 font-mono">
+                          {idx + 1}
+                        </span>
+                        {step}
+                        <button
+                          onClick={() =>
+                            updateWorkflow(data.workflow.filter((_, i) => i !== idx))
+                          }
+                          className="text-muted-foreground hover:text-foreground"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </SoftBadge>
+                    ))}
+                  </div>
+                  <TextInput
+                    placeholder="Add lifecycle step…"
+                    className="h-10 text-sm border-dashed"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
                         const val = e.currentTarget.value;
-                        if (val && !data.techStack.tools.includes(val)) {
-                          updateTechStack({ tools: [...data.techStack.tools, val] });
+                        if (val) {
+                          updateWorkflow([...data.workflow, val]);
                           e.currentTarget.value = "";
                         }
                       }
-                    }} />
-                  </div>
+                    }}
+                  />
                 </div>
-              </CardContent>
-            </GradientCard>
+              </details>
+            </div>
           </div>
         </div>
 
-        {/* Right Col: Financials (1 Col) */}
-        <div className="space-y-8">
-          <Card className="sticky top-10 shadow-sm border overflow-hidden">
+        {/* Sidebar: Financials */}
+        <div className="space-y-6">
+          <div className="lg:sticky lg:top-10 shadow-sm border overflow-hidden rounded-xl bg-card">
             <div className="absolute inset-x-0 top-0 h-0.5 bg-border" />
-            <CardHeader className="bg-muted/20 border-b">
-              <CardTitle className="text-lg flex items-center gap-2">
+            <div className="bg-muted/20 border-b p-6">
+              <div className="text-lg font-semibold flex items-center gap-2">
                 <span className="inline-flex w-9 h-9 items-center justify-center rounded-lg bg-muted text-muted-foreground ring-1 ring-border">
                   <Receipt className="w-4 h-4 text-muted-foreground" />
                 </span>
                 Cost Projection
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="pt-6 space-y-6">
+              </div>
+            </div>
+            <div className="p-6 space-y-6">
               <div className="space-y-4">
                 <div className="space-y-2">
-                  <Label className="text-xs font-bold uppercase text-muted-foreground tracking-widest">Base Investment</Label>
-                  <Input
+                  <FieldLabel className="tracking-widest">Base Investment</FieldLabel>
+                  <TextInput
                     type="number"
                     value={data.pricing.basePrice}
                     onChange={(e) => updatePricing({ basePrice: Number(e.target.value) })}
@@ -575,17 +1019,17 @@ export default function QuotationBuilder({
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label className="text-[10px] font-bold uppercase text-muted-foreground">Tax (%)</Label>
-                    <Input type="number" value={data.pricing.taxRate} onChange={e => updatePricing({ taxRate: Number(e.target.value) })} />
+                    <label className="text-[10px] font-bold uppercase text-muted-foreground">Tax (%)</label>
+                    <TextInput type="number" value={data.pricing.taxRate} onChange={e => updatePricing({ taxRate: Number(e.target.value) })} />
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-[10px] font-bold uppercase text-muted-foreground">Discount (%)</Label>
-                    <Input type="number" value={data.pricing.discount} onChange={e => updatePricing({ discount: Number(e.target.value) })} />
+                    <label className="text-[10px] font-bold uppercase text-muted-foreground">Discount (%)</label>
+                    <TextInput type="number" value={data.pricing.discount} onChange={e => updatePricing({ discount: Number(e.target.value) })} />
                   </div>
                 </div>
               </div>
 
-              <Separator />
+              <hr className="border-border" />
 
               <div className="space-y-4 pt-2">
                 <div className="flex justify-between items-center text-sm">
@@ -595,9 +1039,9 @@ export default function QuotationBuilder({
                 <div className="flex justify-between items-center text-sm">
                   <span className="flex items-center gap-1 text-muted-foreground">
                     Govt. Tax{" "}
-                    <Badge variant="outline" className="text-[8px] h-4 px-1">
+                    <span className="inline-flex items-center rounded border bg-muted/30 px-1 text-[10px] leading-4">
                       {data.pricing.taxRate}%
-                    </Badge>
+                    </span>
                   </span>
                   <span className="font-bold">+ {formatMoney(computedTotals.taxAmount, data.currency)}</span>
                 </div>
@@ -605,9 +1049,9 @@ export default function QuotationBuilder({
                   <div className="flex justify-between items-center text-sm">
                     <span className="flex items-center gap-1 text-muted-foreground">
                       Campaign Discount{" "}
-                      <Badge variant="outline" className="text-[8px] h-4 px-1">
+                      <span className="inline-flex items-center rounded border bg-muted/30 px-1 text-[10px] leading-4">
                         {data.pricing.discount}%
-                      </Badge>
+                      </span>
                     </span>
                     <span className="font-bold">- {formatMoney(((data.pricing.basePrice + data.additionalServices.reduce((acc, s) => acc + s.price, 0)) * data.pricing.discount) / 100, data.currency)}</span>
                   </div>
@@ -620,170 +1064,112 @@ export default function QuotationBuilder({
                   </div>
                 </div>
               </div>
-            </CardContent>
-            <CardFooter className="flex flex-col gap-3 pb-6">
-              <Button
-                className="w-full h-11 text-sm font-semibold"
-                onClick={() => handleSave("sent")}
-                disabled={isCreating || isUpdating}
+            </div>
+            <div className="flex flex-col gap-3 px-6 pb-6">
+              <PrimaryButton
+                onClick={openRecipientPicker}
+                disabled={isCreating || isUpdating || isSending}
               >
                 <Send className="w-4 h-4 mr-2" /> Dispatch to Client
-              </Button>
-              <Button variant="outline" className="w-full h-11" onClick={() => handleSave("draft")} disabled={isCreating || isUpdating}>
-                <Save className="w-4 h-4 mr-2" /> Save Internal Draft
-              </Button>
-            </CardFooter>
-          </Card>
-
-          {/* Payment Milestones */}
-          <GradientCard tone="mixed">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-              <SectionHeader
-                title="Payment Milestones"
-                icon={<HandCoins className="w-4 h-4" />}
-                description="Configure how the client pays across the project lifecycle."
-              />
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={() => addPaymentMilestone()}
+              </PrimaryButton>
+              <PrimaryButton
+                variant="outline"
+                className="w-full"
+                onClick={() => saveQuotation("draft")}
+                disabled={isCreating || isUpdating || isSending}
               >
-                <Plus className="w-4 h-4 mr-1" /> Add
-              </Button>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {(data.paymentMilestones || []).length === 0 ? (
-                <p className="text-xs text-muted-foreground">
-                  No milestones yet — add a payment plan (e.g. 50% / 30% / 20%).
-                </p>
-              ) : null}
-              {(data.paymentMilestones || []).map((m, idx) => (
-                <div
-                  key={idx}
-                  className="grid grid-cols-12 gap-2 items-center rounded-lg border bg-card p-2"
-                >
-                  <Input
-                    className="col-span-7 h-9 text-sm"
-                    value={m.label}
-                    onChange={(e) =>
-                      updatePaymentMilestone(idx, { label: e.target.value })
-                    }
-                    placeholder="Milestone label"
-                  />
-                  <div className="col-span-3 flex items-center gap-1">
-                    <Input
-                      className="h-9 text-sm"
-                      type="number"
-                      value={m.percentage}
-                      min={0}
-                      max={100}
-                      onChange={(e) =>
-                        updatePaymentMilestone(idx, {
-                          percentage: Number(e.target.value),
-                        })
-                      }
-                    />
-                    <span className="text-xs text-muted-foreground">%</span>
-                  </div>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="col-span-2 text-muted-foreground hover:text-foreground"
-                    onClick={() => removePaymentMilestone(idx)}
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
-                </div>
-              ))}
-              {(() => {
-                const total = (data.paymentMilestones || []).reduce(
-                  (s, m) => s + (Number(m.percentage) || 0),
-                  0,
-                );
-                const ok = total === 100;
-                return (
-                  <div
-                    className={`flex items-center justify-between text-xs rounded-md px-3 py-2 ${
-                      ok
-                        ? "bg-muted/40 text-foreground"
-                        : "bg-muted/40 text-foreground"
-                    }`}
-                  >
-                    <span className="flex items-center gap-1">
-                      <PieChart className="w-3.5 h-3.5" /> Allocation
-                    </span>
-                    <span className="font-semibold">{total}% {ok ? "✓" : "of 100%"}</span>
-                  </div>
-                );
-              })()}
-              <div className="flex flex-wrap gap-2 pt-1">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() =>
-                    setPaymentMilestones([
-                      { label: "Upfront on acceptance", percentage: 50 },
-                      { label: "After delivery handover", percentage: 30 },
-                      { label: "Final approval / clearance", percentage: 20 },
-                    ])
-                  }
-                >
-                  Use 50 / 30 / 20
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() =>
-                    setPaymentMilestones([
-                      { label: "Upfront on acceptance", percentage: 40 },
-                      { label: "Mid-project review", percentage: 30 },
-                      { label: "Final delivery", percentage: 30 },
-                    ])
-                  }
-                >
-                  Use 40 / 30 / 30
-                </Button>
-              </div>
-            </CardContent>
-          </GradientCard>
-
-          {/* Workflow Snapshot */}
-          <GradientCard tone="teal">
-            <CardHeader className="pb-3">
-              <SectionHeader title="Workflow" icon={<Activity className="w-4 h-4" />} />
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-3">
-                <div className="flex flex-wrap gap-2">
-                  {data.workflow.map((step, idx) => (
-                    <Badge key={idx} variant="secondary" className="pl-3 pr-1 py-1 gap-2 rounded-lg bg-muted/40">
-                      <span className="text-[8px] opacity-40 font-mono">{idx + 1}</span>
-                      {step}
-                      <button
-                        onClick={() =>
-                          updateWorkflow(data.workflow.filter((_, i) => i !== idx))
-                        }
-                        className="text-muted-foreground hover:text-foreground"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    </Badge>
-                  ))}
-                </div>
-                <Input placeholder="Add lifecycle step..." className="h-9 text-xs border-dashed" onKeyDown={e => {
-                  if (e.key === 'Enter') {
-                    const val = e.currentTarget.value;
-                    if (val) {
-                      updateWorkflow([...data.workflow, val]);
-                      e.currentTarget.value = "";
-                    }
-                  }
-                }} />
-              </div>
-            </CardContent>
-          </GradientCard>
+                <Save className="w-4 h-4 mr-2" /> Save Internal Draft
+              </PrimaryButton>
+            </div>
+          </div>
         </div>
       </div>
+
+      {recipientModalOpen ? (
+        <div
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
+          role="dialog"
+          aria-modal="true"
+        >
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/40"
+            onClick={() => setRecipientModalOpen(false)}
+            aria-label="Close"
+          />
+          <div className="relative w-full sm:max-w-lg rounded-t-2xl sm:rounded-2xl border bg-card p-5 shadow-xl">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <div className="text-lg font-semibold">Send quotation</div>
+                <div className="text-sm text-muted-foreground">
+                  Select one or more recipient emails.
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setRecipientModalOpen(false)}
+                className="h-9 w-9 inline-flex items-center justify-center rounded-md border bg-background hover:bg-muted/40"
+                aria-label="Close"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="mt-4 space-y-2 max-h-[50vh] overflow-auto rounded-xl border bg-background/40 p-3">
+              {emailOptions.length === 0 ? (
+                <div className="text-sm text-muted-foreground">
+                  No emails found for this client. Add emails in the client profile first.
+                </div>
+              ) : (
+                emailOptions.map((opt) => {
+                  const checked = selectedEmails.includes(opt.email);
+                  return (
+                    <label
+                      key={opt.email}
+                      className="flex items-start gap-3 rounded-lg border bg-card p-3 hover:bg-muted/20 cursor-pointer"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={(e) => {
+                          const next = e.target.checked
+                            ? Array.from(new Set([...selectedEmails, opt.email]))
+                            : selectedEmails.filter((x) => x !== opt.email);
+                          setSelectedEmails(next);
+                        }}
+                        className="mt-1 h-4 w-4 rounded border bg-background text-primary focus:ring-2 focus:ring-ring/30"
+                      />
+                      <div className="min-w-0">
+                        <div className="text-sm font-medium truncate">{opt.email}</div>
+                        <div className="text-xs text-muted-foreground">{opt.label}</div>
+                      </div>
+                    </label>
+                  );
+                })
+              )}
+            </div>
+
+            <div className="mt-4 flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
+              <button
+                type="button"
+                className="inline-flex h-11 items-center justify-center rounded-md border bg-background px-4 text-sm font-semibold hover:bg-muted/40"
+                onClick={() => setRecipientModalOpen(false)}
+                disabled={isSending}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="inline-flex h-11 items-center justify-center rounded-md bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
+                onClick={confirmDispatch}
+                disabled={isSending || selectedEmails.length === 0 || emailOptions.length === 0}
+              >
+                {isSending ? "Sending..." : "Send"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

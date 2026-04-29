@@ -164,33 +164,37 @@ export class QuotationService {
         const quotation = await QuotationModel.findById(id);
         if (!quotation) throw new AppError('Quotation not found', 404);
 
-        // Idempotent: already sent/viewed => return existing link (or re-issue if missing/expired)
-        if (quotation.status === 'sent' || quotation.status === 'viewed') {
-            const hasValidToken =
-                Boolean(quotation.secureToken) &&
-                (!quotation.tokenExpiresAt || quotation.tokenExpiresAt >= new Date());
-
-            if (hasValidToken) return quotation;
-            // token missing/expired: allow re-issuing while staying in sent/viewed
-        } else {
+        // Resend semantics:
+        // - If already sent/viewed, keep status as-is, reuse token if still valid (otherwise re-issue).
+        // - Always attempt to send email when this endpoint is called.
+        if (quotation.status !== 'sent' && quotation.status !== 'viewed') {
             assertTransition(quotation.status, 'sent');
         }
 
-        const tokenExpiresAt = new Date();
-        tokenExpiresAt.setDate(tokenExpiresAt.getDate() + TOKEN_EXPIRY_DAYS);
+        const hasValidToken =
+            Boolean(quotation.secureToken) &&
+            (!quotation.tokenExpiresAt || quotation.tokenExpiresAt >= new Date());
 
-        const secureToken = signQuotationToken({
-            quotationGroupId: quotation.quotationGroupId,
-            quotationId: quotation._id.toString(),
-            version: quotation.version,
-        });
+        const tokenExpiresAt = hasValidToken
+            ? quotation.tokenExpiresAt
+            : (() => {
+                  const d = new Date();
+                  d.setDate(d.getDate() + TOKEN_EXPIRY_DAYS);
+                  return d;
+              })();
 
         // Only move to `sent` when transitioning from draft; otherwise preserve viewed state.
         if (quotation.status === 'draft') {
             quotation.status = 'sent';
         }
-        quotation.secureToken = secureToken;
-        quotation.tokenExpiresAt = tokenExpiresAt;
+        if (!hasValidToken) {
+            quotation.secureToken = signQuotationToken({
+                quotationGroupId: quotation.quotationGroupId,
+                quotationId: quotation._id.toString(),
+                version: quotation.version,
+            });
+            quotation.tokenExpiresAt = tokenExpiresAt;
+        }
 
         const saved = await quotation.save();
 

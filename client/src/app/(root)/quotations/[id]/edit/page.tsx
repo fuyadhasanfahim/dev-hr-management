@@ -5,8 +5,6 @@ import { useParams, useRouter } from "next/navigation";
 import { useGetQuotationByIdQuery } from "@/redux/features/quotation/quotationApi";
 import { useQuotationStore } from "@/store/useQuotationStore";
 import QuotationBuilder from "../../components/forms/QuotationBuilder";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { ArrowLeft, Loader2, ReceiptText } from "lucide-react";
 
 export default function EditQuotationPage() {
@@ -43,7 +41,7 @@ export default function EditQuotationPage() {
   if (isLoading) {
     return (
       <div className="flex h-full items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-teal-600" />
+        <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
       </div>
     );
   }
@@ -57,9 +55,13 @@ export default function EditQuotationPage() {
             We couldn&apos;t load this quotation. It may have been deleted or the
             link is incorrect.
           </p>
-          <Button variant="outline" onClick={() => router.push("/quotations")}>
+          <button
+            type="button"
+            onClick={() => router.push("/quotations")}
+            className="inline-flex h-11 items-center justify-center rounded-md border bg-background px-4 text-sm font-semibold hover:bg-muted/40"
+          >
             Back to Quotations
-          </Button>
+          </button>
         </div>
       </div>
     );
@@ -70,14 +72,13 @@ export default function EditQuotationPage() {
       {/* Header (Orders-like) */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
-          <Button
-            variant="outline"
-            size="icon"
+          <button
+            type="button"
             onClick={() => router.push(`/quotations/${id}`)}
-            className="rounded-full shadow-sm"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-full border bg-background shadow-sm hover:bg-muted/40"
           >
             <ArrowLeft className="h-5 w-5" />
-          </Button>
+          </button>
 
           <div>
             <div className="flex items-center gap-2">
@@ -94,11 +95,9 @@ export default function EditQuotationPage() {
         </div>
       </div>
 
-      <Card>
-        <CardContent className="p-6">
-          <QuotationBuilder hideHeader />
-        </CardContent>
-      </Card>
+      <div className="rounded-xl border bg-card p-6">
+        <QuotationBuilder hideHeader />
+      </div>
     </div>
   );
 }

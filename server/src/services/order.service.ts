@@ -13,6 +13,7 @@ import { AppError } from '../utils/AppError.js';
 import { InvoiceCounter } from '../models/invoice-counter.model.js';
 import type { IQuotation } from '../types/quotation.type.js';
 import { logger } from '../lib/logger.js';
+import emailService from './email.service.js';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -229,6 +230,26 @@ async function markDelivered(orderId: string, userId: string): Promise<IOrder> {
     );
 
     if (!updated) throw new AppError('Order was modified concurrently. Please retry.', 409);
+
+    // Best-effort: notify client via email (do not block delivery status change if SMTP fails).
+    try {
+        const to = updated.quotationSnapshot?.clientEmail;
+        if (to) {
+            await emailService.sendOrderStatusEmail({
+                to,
+                clientName: updated.quotationSnapshot?.clientName || 'Client',
+                orderName: updated.quotationSnapshot?.templateName || updated.orderNumber,
+                status: OrderStatus.DELIVERED,
+                message:
+                    'Your order has been marked as delivered. If any payment is still pending, please complete it to unlock deliverables.',
+            });
+        } else {
+            logger.warn({ orderId }, 'order.delivered.email_skipped_missing_client_email');
+        }
+    } catch (err) {
+        logger.error({ err, orderId }, 'order.delivered.email_failed');
+    }
+
     return updated;
 }
 

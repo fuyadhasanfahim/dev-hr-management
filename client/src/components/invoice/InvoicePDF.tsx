@@ -1,5 +1,5 @@
-"use client";
-import * as React from "react";
+'use client';
+import * as React from 'react';
 
 import {
     Document,
@@ -13,24 +13,24 @@ import {
     Font,
     pdf,
     Link,
-} from "@react-pdf/renderer";
-import type { IOrder } from "@/types/order.type";
-import type { Client } from "@/types/client.type";
-import { Mail, Download } from "lucide-react";
-import { toast } from "sonner";
+} from '@react-pdf/renderer';
+import type { IOrder } from '@/types/order.type';
+import type { Client } from '@/types/client.type';
+import { Mail, Download } from 'lucide-react';
+import { toast } from 'sonner';
 import {
     Select,
     SelectContent,
     SelectItem,
     SelectTrigger,
     SelectValue,
-} from "@/components/ui/select";
+} from '@/components/ui/select';
 import {
     useSendInvoiceEmailMutation,
     useRecordInvoiceMutation,
-} from "@/redux/features/invoice/invoiceApi";
-import { format } from "date-fns";
-import { Button } from "../ui/button";
+} from '@/redux/features/invoice/invoiceApi';
+import { format } from 'date-fns';
+import { Button } from '../ui/button';
 import {
     Dialog,
     DialogContent,
@@ -38,72 +38,72 @@ import {
     DialogFooter,
     DialogHeader,
     DialogTitle,
-} from "@/components/ui/dialog";
+} from '@/components/ui/dialog';
 
 // Register fonts if needed (optional)
 Font.register({
-    family: "Open Sans",
+    family: 'Open Sans',
     fonts: [
         {
-            src: "https://cdn.jsdelivr.net/npm/open-sans-all@0.1.3/fonts/open-sans-regular.ttf",
+            src: 'https://cdn.jsdelivr.net/npm/open-sans-all@0.1.3/fonts/open-sans-regular.ttf',
         },
         {
-            src: "https://cdn.jsdelivr.net/npm/open-sans-all@0.1.3/fonts/open-sans-600.ttf",
+            src: 'https://cdn.jsdelivr.net/npm/open-sans-all@0.1.3/fonts/open-sans-600.ttf',
             fontWeight: 600,
         },
         {
-            src: "https://cdn.jsdelivr.net/npm/open-sans-all@0.1.3/fonts/open-sans-700.ttf",
+            src: 'https://cdn.jsdelivr.net/npm/open-sans-all@0.1.3/fonts/open-sans-700.ttf',
             fontWeight: 700,
         },
     ],
 });
 
 const colors = {
-    orange: "#FF8A00",
-    teal: "#009999",
-    gray: "#464646",
-    lightGray: "#F0F0F0",
-    white: "#FFFFFF",
-    border: "#E0E0E0",
+    orange: '#FF8A00',
+    teal: '#009999',
+    gray: '#464646',
+    lightGray: '#F0F0F0',
+    white: '#FFFFFF',
+    border: '#E0E0E0',
 };
 
 const styles = StyleSheet.create({
     page: {
-        flexDirection: "column",
-        backgroundColor: "#FFFFFF",
-        fontFamily: "Helvetica",
+        flexDirection: 'column',
+        backgroundColor: '#FFFFFF',
+        fontFamily: 'Helvetica',
         paddingBottom: 60, // Space for footer
     },
     // Top Orange Bar
     topBar: {
         height: 8,
         backgroundColor: colors.orange,
-        width: "100%",
+        width: '100%',
         marginBottom: 20, // Adds gap on all pages (especially needed for page 2+)
     },
     // Header Section
     headerContainer: {
         marginHorizontal: 40,
         marginTop: 10, // Reduced from 30 to account for topBar.marginBottom
-        flexDirection: "row",
-        justifyContent: "space-between",
+        flexDirection: 'row',
+        justifyContent: 'space-between',
         height: 100, // Fixed height for header area
     },
     logoContainer: {
         width: 150,
         height: 70,
-        justifyContent: "center",
+        justifyContent: 'center',
     },
     logo: {
-        width: "100%",
-        objectFit: "contain",
+        width: '100%',
+        objectFit: 'contain',
     },
     invoiceDetailsContainer: {
-        alignItems: "flex-end",
+        alignItems: 'flex-end',
     },
     invoiceTitle: {
         fontSize: 32,
-        fontWeight: "bold", // Helvetica bold
+        fontWeight: 'bold', // Helvetica bold
         color: colors.teal,
         marginBottom: 5,
     },
@@ -121,20 +121,20 @@ const styles = StyleSheet.create({
 
     // Bill From / Bill To Section
     addressContainer: {
-        flexDirection: "row",
+        flexDirection: 'row',
         marginHorizontal: 40,
         marginTop: 40,
-        justifyContent: "space-between",
+        justifyContent: 'space-between',
         gap: 30, // Gap between boxes
     },
     addressBox: {
         flex: 1,
-        flexDirection: "row", // For the left accent bar
+        flexDirection: 'row', // For the left accent bar
         height: 90, // Fixed height or minHeight
     },
     accentBar: {
         width: 8,
-        height: "100%",
+        height: '100%',
     },
     addressContent: {
         flex: 1,
@@ -163,7 +163,7 @@ const styles = StyleSheet.create({
 
     boxTitle: {
         fontSize: 11,
-        fontWeight: "bold",
+        fontWeight: 'bold',
         marginBottom: 10,
     },
     boxText: {
@@ -181,21 +181,21 @@ const styles = StyleSheet.create({
         borderColor: colors.border,
     },
     tableHeader: {
-        flexDirection: "row",
+        flexDirection: 'row',
         backgroundColor: colors.teal,
     },
     tableHeaderText: {
         color: colors.white,
         fontSize: 9,
-        fontWeight: "bold",
-        textAlign: "center",
+        fontWeight: 'bold',
+        textAlign: 'center',
         paddingVertical: 8,
         borderRightWidth: 0.5,
         borderBottomWidth: 0.5,
         borderColor: colors.border,
     },
     tableRow: {
-        flexDirection: "row",
+        flexDirection: 'row',
     },
     tableRowEven: {
         backgroundColor: colors.lightGray,
@@ -203,7 +203,7 @@ const styles = StyleSheet.create({
     tableCell: {
         fontSize: 9,
         color: colors.gray,
-        textAlign: "center",
+        textAlign: 'center',
         paddingVertical: 8,
         borderRightWidth: 0.5,
         borderBottomWidth: 0.5,
@@ -211,69 +211,69 @@ const styles = StyleSheet.create({
     },
 
     // Column Widths
-    colNo: { width: "8%" },
-    colDate: { width: "17%" },
-    colName: { width: "35%", textAlign: "left", paddingLeft: 5 },
-    colQty: { width: "10%" },
-    colRate: { width: "15%" },
-    colTotal: { width: "15%" },
+    colNo: { width: '8%' },
+    colDate: { width: '17%' },
+    colName: { width: '35%', textAlign: 'left', paddingLeft: 5 },
+    colQty: { width: '10%' },
+    colRate: { width: '15%' },
+    colTotal: { width: '15%' },
 
     // Total Section
     totalContainer: {
-        flexDirection: "row",
-        justifyContent: "flex-end",
+        flexDirection: 'row',
+        justifyContent: 'flex-end',
         marginTop: 25,
         marginHorizontal: 40,
     },
     totalBox: {
         width: 180,
         height: 40,
-        flexDirection: "row",
+        flexDirection: 'row',
         backgroundColor: colors.orange,
     },
     totalAccent: {
         width: 8,
-        height: "100%",
+        height: '100%',
         backgroundColor: colors.teal,
     },
     totalContent: {
         flex: 1,
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "space-between",
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
         paddingHorizontal: 15,
     },
     totalLabel: {
         color: colors.white,
         fontSize: 10,
-        fontWeight: "bold",
+        fontWeight: 'bold',
     },
     totalValue: {
         color: colors.white,
         fontSize: 12,
-        fontWeight: "bold",
+        fontWeight: 'bold',
     },
 
     // Footer Section
     footer: {
-        position: "absolute",
+        position: 'absolute',
         bottom: 0,
         left: 0,
         right: 0,
         height: 30,
         backgroundColor: colors.teal,
-        justifyContent: "center",
-        alignItems: "center",
+        justifyContent: 'center',
+        alignItems: 'center',
     },
     footerText: {
         fontSize: 9,
         color: colors.white,
-        textAlign: "center",
+        textAlign: 'center',
     },
 
     // Page number
     pageNumber: {
-        position: "absolute",
+        position: 'absolute',
         bottom: 35,
         right: 40,
         fontSize: 8,
@@ -282,9 +282,9 @@ const styles = StyleSheet.create({
 
     // Pay Now Section
     payNowSection: {
-        flexDirection: "row",
-        justifyContent: "space-between",
-        alignItems: "center",
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
         marginHorizontal: 40,
         marginTop: 30,
         paddingTop: 15,
@@ -293,7 +293,7 @@ const styles = StyleSheet.create({
         borderBottomWidth: 1,
         borderBottomColor: colors.border,
         paddingBottom: 15,
-        backgroundColor: "#fdfdfd",
+        backgroundColor: '#fdfdfd',
         paddingHorizontal: 15,
         borderRadius: 4,
     },
@@ -303,7 +303,7 @@ const styles = StyleSheet.create({
     },
     payNowHeading: {
         fontSize: 10,
-        fontWeight: "bold",
+        fontWeight: 'bold',
         color: colors.teal,
         marginBottom: 4,
     },
@@ -323,21 +323,21 @@ const styles = StyleSheet.create({
     payNowText: {
         color: colors.white,
         fontSize: 10,
-        fontWeight: "bold",
-        textAlign: "center",
+        fontWeight: 'bold',
+        textAlign: 'center',
     },
 });
 
 export interface InvoicePDFProps {
     client: Pick<
         Client,
-        | "_id"
-        | "clientId"
-        | "name"
-        | "emails"
-        | "currency"
-        | "address"
-        | "officeAddress"
+        | '_id'
+        | 'clientId'
+        | 'name'
+        | 'emails'
+        | 'currency'
+        | 'address'
+        | 'officeAddress'
     >;
     orders: IOrder[];
     month: string;
@@ -378,7 +378,7 @@ const TableRow = ({
     >
         <Text style={[styles.tableCell, styles.colNo]}>{index + 1}</Text>
         <Text style={[styles.tableCell, styles.colDate]}>
-            {format(new Date(order.orderDate), "PPP")}
+            {format(new Date(order.orderDate), 'PPP')}
         </Text>
         <Text style={[styles.tableCell, styles.colName]}>
             {order.orderName}
@@ -402,14 +402,14 @@ export const InvoiceDocument = ({
     invoiceNumber,
     paymentToken,
 }: InvoicePDFProps) => {
-    const issueDate = format(new Date(), "MMMM do, yyyy");
+    const issueDate = format(new Date(), 'MMMM do, yyyy');
     const logoUrl =
-        "https://res.cloudinary.com/dny7zfbg9/image/upload/v1755954483/mqontecf1xao7znsh6cx.png";
+        'https://res.cloudinary.com/dny7zfbg9/image/upload/v1755954483/mqontecf1xao7znsh6cx.png';
 
     const formatCurrency = (amount: number) => {
-        return new Intl.NumberFormat("en-US", {
-            style: "currency",
-            currency: client.currency || "USD",
+        return new Intl.NumberFormat('en-US', {
+            style: 'currency',
+            currency: client.currency || 'USD',
         }).format(amount);
     };
 
@@ -477,12 +477,12 @@ export const InvoiceDocument = ({
                                 {client.name}
                             </Text>
                             <Text style={[styles.boxText, styles.billToText]}>
-                                {client.address && client.address !== "N/A"
+                                {client.address && client.address !== 'N/A'
                                     ? client.address
                                     : client.officeAddress &&
-                                        client.officeAddress !== "N/A"
-                                        ? client.officeAddress
-                                        : "Address not provided"}
+                                        client.officeAddress !== 'N/A'
+                                      ? client.officeAddress
+                                      : 'Address not provided'}
                             </Text>
                         </View>
                     </View>
@@ -529,8 +529,8 @@ export const InvoiceDocument = ({
                     </View>
                     <View style={styles.payNowButtonContainer}>
                         <Link
-                            src={`${process.env.NEXT_PUBLIC_PAYMENT_URL || "http://localhost:3002"}/payment/${invoiceNumber}?token=${paymentToken || ""}`}
-                            style={{ textDecoration: "none" }}
+                            src={`${process.env.NEXT_PUBLIC_PAYMENT_URL!}/payment/${invoiceNumber}?token=${paymentToken || ''}`}
+                            style={{ textDecoration: 'none' }}
                         >
                             <View style={styles.payNowButton}>
                                 <Text style={styles.payNowText}>
@@ -568,13 +568,13 @@ export default function InvoicePDF(props: InvoicePDFProps) {
         useSendInvoiceEmailMutation();
     const [recordInvoice] = useRecordInvoiceMutation();
     const [selectedEmail, setSelectedEmail] = React.useState<string>(
-        (props.client.emails && props.client.emails[0]) || ""
+        (props.client.emails && props.client.emails[0]) || '',
     );
     const [isDialogOpen, setIsDialogOpen] = React.useState(false);
 
     const performEmailSend = async (email: string) => {
         if (!email) {
-            toast.error("Client email is missing or not selected.");
+            toast.error('Client email is missing or not selected.');
             return;
         }
 
@@ -585,9 +585,9 @@ export default function InvoicePDF(props: InvoicePDFProps) {
                 clientName: props.client.name,
                 clientId: props.client.clientId,
                 clientAddress:
-                    props.client.address || props.client.officeAddress || "N/A",
+                    props.client.address || props.client.officeAddress || 'N/A',
                 totalAmount: props.totals.totalAmount,
-                currency: props.client.currency || "USD",
+                currency: props.client.currency || 'USD',
                 dueDate: new Date(
                     new Date().getTime() + 7 * 24 * 60 * 60 * 1000,
                 ).toISOString(),
@@ -611,35 +611,41 @@ export default function InvoicePDF(props: InvoicePDFProps) {
             ).toBlob();
 
             const formData = new FormData();
-            formData.append("file", blob, fileName);
-            formData.append("to", email);
-            formData.append("clientName", props.client.name);
-            formData.append("month", props.month);
-            formData.append("year", props.year);
+            formData.append('file', blob, fileName);
+            formData.append('to', email);
+            formData.append('clientName', props.client.name);
+            formData.append('month', props.month);
+            formData.append('year', props.year);
 
             const result = await sendInvoiceEmail(formData).unwrap();
 
             // RTK Query throws on non-200 responses, so reaching here implies success.
             toast.success(
-                result.message || "Invoice sent successfully to " + email,
+                result.message || 'Invoice sent successfully to ' + email,
             );
             setIsDialogOpen(false);
         } catch (error) {
-            console.error("Error sending email:", error);
-            toast.error((error as Error).message || "Failed to send email");
+            console.error('Error sending email:', error);
+            toast.error((error as Error).message || 'Failed to send email');
         }
     };
 
     const handleSendEmail = async () => {
-        if ((!props.client.emails || props.client.emails.length === 0) && !props.client.officeAddress) {
-            toast.error("Client email not found");
+        if (
+            (!props.client.emails || props.client.emails.length === 0) &&
+            !props.client.officeAddress
+        ) {
+            toast.error('Client email not found');
             return;
         }
 
         if (props.client.emails && props.client.emails.length > 1) {
             setIsDialogOpen(true);
         } else {
-            const email = selectedEmail || (props.client.emails && props.client.emails[0]) || "";
+            const email =
+                selectedEmail ||
+                (props.client.emails && props.client.emails[0]) ||
+                '';
             await performEmailSend(email);
         }
     };
@@ -654,13 +660,14 @@ export default function InvoicePDF(props: InvoicePDFProps) {
                         onClick={handleSendEmail}
                     >
                         <Mail className="h-4 w-4 " />
-                        {isSending ? "Sending..." : "Send to Client"}
+                        {isSending ? 'Sending...' : 'Send to Client'}
                     </Button>
                     <DialogContent className="sm:max-w-md">
                         <DialogHeader>
                             <DialogTitle>Select Recipient Email</DialogTitle>
                             <DialogDescription>
-                                This client has multiple email addresses. Please select which one to send the invoice to.
+                                This client has multiple email addresses. Please
+                                select which one to send the invoice to.
                             </DialogDescription>
                         </DialogHeader>
                         <div className="flex items-center space-x-2 py-4">
@@ -693,7 +700,7 @@ export default function InvoicePDF(props: InvoicePDFProps) {
                                 disabled={isSending}
                                 onClick={() => performEmailSend(selectedEmail)}
                             >
-                                {isSending ? "Sending..." : "Send Invoice"}
+                                {isSending ? 'Sending...' : 'Send Invoice'}
                             </Button>
                         </DialogFooter>
                     </DialogContent>
@@ -708,7 +715,7 @@ export default function InvoicePDF(props: InvoicePDFProps) {
                             disabled={loading || isSending}
                         >
                             <Download className="h-4 w-4 " />
-                            {loading ? "Generating PDF..." : "Download PDF"}
+                            {loading ? 'Generating PDF...' : 'Download PDF'}
                         </Button>
                     )}
                 </PDFDownloadLink>

@@ -4,8 +4,6 @@ import { useEffect } from "react";
 import { useQuotationStore } from "@/store/useQuotationStore";
 import QuotationBuilder from "../components/forms/QuotationBuilder";
 import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { ArrowLeft, ReceiptText } from "lucide-react";
 
 export default function NewQuotationPage() {
@@ -21,14 +19,13 @@ export default function NewQuotationPage() {
       {/* Header (Orders-like) */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
-          <Button
-            variant="outline"
-            size="icon"
+          <button
             onClick={() => router.push("/quotations")}
-            className="rounded-full shadow-sm"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-full border bg-background shadow-sm hover:bg-muted/40"
+            type="button"
           >
             <ArrowLeft className="h-5 w-5" />
-          </Button>
+          </button>
 
           <div>
             <div className="flex items-center gap-2">
@@ -44,11 +41,9 @@ export default function NewQuotationPage() {
         </div>
       </div>
 
-      <Card>
-        <CardContent className="p-6">
-          <QuotationBuilder hideHeader />
-        </CardContent>
-      </Card>
+      <div className="rounded-xl border bg-card p-6">
+        <QuotationBuilder hideHeader />
+      </div>
     </div>
   );
 }

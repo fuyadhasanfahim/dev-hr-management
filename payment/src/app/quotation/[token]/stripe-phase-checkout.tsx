@@ -1,10 +1,16 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
-import { PaymentElement, useElements, useStripe } from "@stripe/react-stripe-js";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import {
+    Elements,
+    PaymentElement,
+    useElements,
+    useStripe,
+} from "@stripe/react-stripe-js";
 import { Button } from "@/components/ui/button";
 import { Loader2, CreditCard } from "lucide-react";
 import { useRouter } from "next/navigation";
+import type { Stripe } from "@stripe/stripe-js";
 
 type Phase = "upfront" | "delivery" | "final";
 
@@ -14,21 +20,21 @@ export default function StripePhaseCheckout({
     phase,
     currency,
     onPaid,
+    stripe,
 }: {
     apiBase: string;
     token: string;
     phase: Phase;
     currency: string;
     onPaid: () => Promise<void> | void;
+    stripe: Promise<Stripe | null>;
 }) {
-    const stripe = useStripe();
-    const elements = useElements();
     const router = useRouter();
 
     const [clientSecret, setClientSecret] = useState<string>("");
     const [isLoading, setIsLoading] = useState(true);
-    const [isPaying, setIsPaying] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const initKeyRef = useRef<string | null>(null);
 
     const returnUrl = useMemo(() => {
         if (typeof window === "undefined") return "";
@@ -39,6 +45,12 @@ export default function StripePhaseCheckout({
     }, [phase]);
 
     useEffect(() => {
+        const initKey = `${apiBase}|${token}|${phase}`;
+        // React 18 Strict Mode (dev) runs effects twice to surface unsafe side effects.
+        // This endpoint is a "create intent" POST, so we make the call idempotent client-side.
+        if (initKeyRef.current === initKey) return;
+        initKeyRef.current = initKey;
+
         let cancelled = false;
         setIsLoading(true);
         setError(null);
@@ -53,7 +65,7 @@ export default function StripePhaseCheckout({
                         body: JSON.stringify({ phase, provider: "stripe" }),
                     },
                 );
-                const json = await res.json();
+                const json = await res.json().catch(() => ({}));
                 if (!res.ok) {
                     const msg = String(json?.message || "Failed to initialize Stripe payment");
                     // If already paid, route to success with the correct message.
@@ -77,34 +89,20 @@ export default function StripePhaseCheckout({
         return () => {
             cancelled = true;
         };
-    }, [apiBase, token, phase]);
+    }, [apiBase, token, phase, router]);
 
-    const handlePay = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setError(null);
-
-        if (!stripe || !elements) return;
-
-        setIsPaying(true);
-        try {
-            const { error: stripeError } = await stripe.confirmPayment({
-                elements,
-                clientSecret,
-                confirmParams: { return_url: returnUrl },
-            });
-
-            if (stripeError) {
-                throw new Error(stripeError.message || "Stripe confirmation failed");
-            }
-
-            await onPaid();
-            router.push("/success?from=quotation");
-        } catch (e) {
-            setError((e as Error).message);
-        } finally {
-            setIsPaying(false);
-        }
-    };
+    const appearance = useMemo(
+        () => ({
+            theme: "stripe" as const,
+            variables: {
+                colorPrimary: "#0d9488",
+                fontFamily:
+                    'Inter, system-ui, -apple-system, "Segoe UI", sans-serif',
+                borderRadius: "14px",
+            },
+        }),
+        [],
+    );
 
     if (isLoading) {
         return (
@@ -132,6 +130,60 @@ export default function StripePhaseCheckout({
             </div>
         );
     }
+
+    return (
+        <Elements stripe={stripe} options={{ clientSecret, appearance }}>
+            <StripePaymentForm
+                returnUrl={returnUrl}
+                currency={currency}
+                onPaid={onPaid}
+            />
+        </Elements>
+    );
+}
+
+function StripePaymentForm({
+    returnUrl,
+    currency,
+    onPaid,
+}: {
+    returnUrl: string;
+    currency: string;
+    onPaid: () => Promise<void> | void;
+}) {
+    const stripe = useStripe();
+    const elements = useElements();
+    const router = useRouter();
+
+    const [isPaying, setIsPaying] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    const handlePay = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setError(null);
+
+        if (!stripe || !elements) return;
+
+        setIsPaying(true);
+        try {
+            const { error: stripeError } = await stripe.confirmPayment({
+                elements,
+                confirmParams: { return_url: returnUrl },
+                redirect: "if_required",
+            });
+
+            if (stripeError) {
+                throw new Error(stripeError.message || "Stripe confirmation failed");
+            }
+
+            await onPaid();
+            router.push("/success?from=quotation");
+        } catch (e) {
+            setError((e as Error).message);
+        } finally {
+            setIsPaying(false);
+        }
+    };
 
     return (
         <form onSubmit={handlePay} className="space-y-5">

@@ -3,6 +3,7 @@ import { QuotationPaymentService } from '../services/quotation-payment.service.j
 import { AppError } from '../utils/AppError.js';
 import { logger } from '../lib/logger.js';
 import { QuotationService } from '../services/quotation.service.js';
+import envConfig from '../config/env.config.js';
 
 const VALID_PHASES = ['upfront', 'delivery', 'final'] as const;
 type Phase = typeof VALID_PHASES[number];
@@ -100,7 +101,11 @@ async function createClientPaymentIntent(req: Request, res: Response, next: Next
             return res.status(200).json({ success: true, data: result });
         }
 
-        const result = await QuotationPaymentService.createPayPalOrder(quotationGroupId, phase as Phase);
+        const base = String(envConfig.payment_client_url || '').replace(/\/+$/, '');
+        const result = await QuotationPaymentService.createPayPalOrder(quotationGroupId, phase as Phase, {
+            returnUrl: `${base}/success?from=quotation&method=paypal`,
+            cancelUrl: `${base}/quotation/${encodeURIComponent(token)}?cancelled=true`,
+        });
         return res.status(200).json({ success: true, data: result });
     } catch (err) {
         return next(err);
@@ -117,13 +122,32 @@ async function getClientPaymentStatus(req: Request, res: Response, next: NextFun
         if (!token) return next(new AppError('token is required', 400));
 
         const quotation = await QuotationService.getQuotationByToken(token);
-        const result = await QuotationPaymentService.getPaymentStatus(quotation.quotationGroupId);
+        let result = await QuotationPaymentService.getPaymentStatus(quotation.quotationGroupId);
+
+        // Dev/ops resilience: if the async worker hasn't initialized yet, self-heal here.
+        // Only allowed once quotation is accepted.
+        if (!result && quotation.status === 'accepted') {
+            const clientId =
+                typeof (quotation as any).clientId === 'object' && (quotation as any).clientId?._id
+                    ? (quotation as any).clientId._id.toString()
+                    : quotation.clientId.toString();
+            result = await QuotationPaymentService.initializePaymentTracker(
+                quotation.quotationGroupId,
+                quotation._id.toString(),
+                quotation.version,
+                clientId,
+                quotation.totals.grandTotal,
+                quotation.currency || '৳',
+            );
+        }
+
         if (!result) {
             return res.status(404).json({
                 success: false,
                 message: 'No payment tracker found. Quotation may not have been accepted yet.',
             });
         }
+
         return res.status(200).json({ success: true, data: result });
     } catch (err) {
         return next(err);

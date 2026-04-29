@@ -16,8 +16,8 @@ router.post('/client/:token/changes',   QuotationController.requestChanges);
 
 // ─── Staff / Admin Routes ─────────────────────────────────────────────────────
 router.get('/',                         authorize(...STAFF_ROLES), QuotationController.getAllQuotations);
-router.get('/:id',                      authorize(...STAFF_ROLES), QuotationController.getQuotationById);
 router.get('/group/:groupId/versions',  authorize(...STAFF_ROLES), QuotationController.getGroupVersions);
+router.get('/:id',                      authorize(...STAFF_ROLES), QuotationController.getQuotationById);
 
 router.post('/',                        authorize(...STAFF_ROLES), QuotationController.createQuotation);
 router.post('/:id/send',                authorize(...STAFF_ROLES), QuotationController.sendQuotation);

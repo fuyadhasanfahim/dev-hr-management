@@ -2,14 +2,7 @@
 
 /* eslint-disable jsx-a11y/alt-text */
 import React from 'react';
-import {
-    Document,
-    Page,
-    Text,
-    View,
-    Image,
-    Link,
-} from '@react-pdf/renderer';
+import { Document, Page, Text, View, Image, Link } from '@react-pdf/renderer';
 import { styles } from './styles';
 import { QuotationData, IPaymentMilestone } from '@/types/quotation.type';
 import { format } from 'date-fns';
@@ -19,7 +12,7 @@ import { formatMoney } from '@/lib/money';
 
 function buildPaymentLink(data: QuotationData) {
     const base =
-        process.env.NEXT_PUBLIC_PAYMENT_CLIENT_URL || 'http://localhost:3002';
+        process.env.NEXT_PUBLIC_PAYMENT_URL!;
     if (!data.secureToken) return null;
     return `${base.replace(/\/$/, '')}/quotation/${data.secureToken}`;
 }
@@ -126,7 +119,9 @@ export const QuotationPDF = ({ data }: QuotationPDFProps) => {
 
     const items: LineItem[] = [
         {
-            name: details?.title ? `${baseTitle} — ${details.title}` : baseTitle,
+            name: details?.title
+                ? `${baseTitle} — ${details.title}`
+                : baseTitle,
             qty: 1,
             rate: pricing?.basePrice ?? 0,
             total: pricing?.basePrice ?? 0,
@@ -209,26 +204,47 @@ export const QuotationPDF = ({ data }: QuotationPDFProps) => {
                 {/* Bill From / To */}
                 <View style={styles.addressContainer} wrap={false}>
                     <View style={styles.addressBox}>
-                        <View style={[styles.accentBar, styles.billFromAccent]} />
-                        <View style={[styles.addressContent, styles.billFromBox]}>
-                            <Text style={[styles.boxTitle, styles.billFromText]}>
+                        <View
+                            style={[styles.accentBar, styles.billFromAccent]}
+                        />
+                        <View
+                            style={[styles.addressContent, styles.billFromBox]}
+                        >
+                            <Text
+                                style={[styles.boxTitle, styles.billFromText]}
+                            >
                                 BILL FROM
                             </Text>
                             <Text style={[styles.boxText, styles.billFromText]}>
                                 {company?.name || 'Company'}
                             </Text>
                             {company?.address ? (
-                                <Text style={[styles.boxText, styles.billFromText]}>
+                                <Text
+                                    style={[
+                                        styles.boxText,
+                                        styles.billFromText,
+                                    ]}
+                                >
                                     {company.address}
                                 </Text>
                             ) : null}
                             {company?.email ? (
-                                <Text style={[styles.boxText, styles.billFromText]}>
+                                <Text
+                                    style={[
+                                        styles.boxText,
+                                        styles.billFromText,
+                                    ]}
+                                >
                                     {company.email}
                                 </Text>
                             ) : null}
                             {company?.phone ? (
-                                <Text style={[styles.boxText, styles.billFromText]}>
+                                <Text
+                                    style={[
+                                        styles.boxText,
+                                        styles.billFromText,
+                                    ]}
+                                >
                                     {company.phone}
                                 </Text>
                             ) : null}
@@ -245,22 +261,30 @@ export const QuotationPDF = ({ data }: QuotationPDFProps) => {
                                 {client.contactName}
                             </Text>
                             {client.companyName ? (
-                                <Text style={[styles.boxText, styles.billToText]}>
+                                <Text
+                                    style={[styles.boxText, styles.billToText]}
+                                >
                                     {client.companyName}
                                 </Text>
                             ) : null}
                             {client.address ? (
-                                <Text style={[styles.boxText, styles.billToText]}>
+                                <Text
+                                    style={[styles.boxText, styles.billToText]}
+                                >
                                     {client.address}
                                 </Text>
                             ) : null}
                             {client.email ? (
-                                <Text style={[styles.boxText, styles.billToText]}>
+                                <Text
+                                    style={[styles.boxText, styles.billToText]}
+                                >
                                     {client.email}
                                 </Text>
                             ) : null}
                             {client.phone ? (
-                                <Text style={[styles.boxText, styles.billToText]}>
+                                <Text
+                                    style={[styles.boxText, styles.billToText]}
+                                >
                                     {client.phone}
                                 </Text>
                             ) : null}
@@ -304,7 +328,9 @@ export const QuotationPDF = ({ data }: QuotationPDFProps) => {
                     <>
                         <Text style={styles.sectionTitle}>Overview</Text>
                         <View style={styles.sectionBox} wrap={false}>
-                            <Text style={styles.sectionText}>{data.overview}</Text>
+                            <Text style={styles.sectionText}>
+                                {data.overview}
+                            </Text>
                         </View>
                     </>
                 ) : null}
@@ -320,12 +346,17 @@ export const QuotationPDF = ({ data }: QuotationPDFProps) => {
                                 // Allow breaking inside a phase to avoid orphaned headers
                                 wrap
                             >
-                                <View style={styles.scopeHeaderRow} wrap={false}>
+                                <View
+                                    style={styles.scopeHeaderRow}
+                                    wrap={false}
+                                >
                                     <Text style={styles.scopeTitle}>
                                         Phase {idx + 1}: {phase.title}
                                     </Text>
                                     <View style={styles.scopeCountBadge}>
-                                        <Text style={styles.scopeCountBadgeText}>
+                                        <Text
+                                            style={styles.scopeCountBadgeText}
+                                        >
                                             {phase.items?.length || 0} items
                                         </Text>
                                     </View>
@@ -338,9 +369,15 @@ export const QuotationPDF = ({ data }: QuotationPDFProps) => {
                                 ) : null}
 
                                 {(phase.items || []).map((item, i) => (
-                                    <View key={i} style={styles.bulletRow} wrap={false}>
+                                    <View
+                                        key={i}
+                                        style={styles.bulletRow}
+                                        wrap={false}
+                                    >
                                         <View style={styles.bulletDot} />
-                                        <Text style={styles.bulletText}>{item}</Text>
+                                        <Text style={styles.bulletText}>
+                                            {item}
+                                        </Text>
                                     </View>
                                 ))}
                             </View>
@@ -375,7 +412,9 @@ export const QuotationPDF = ({ data }: QuotationPDFProps) => {
                 {/* Technology Stack */}
                 {techTags.length ? (
                     <>
-                        <Text style={styles.sectionTitle}>Technology stack</Text>
+                        <Text style={styles.sectionTitle}>
+                            Technology stack
+                        </Text>
                         <View style={styles.sectionBox} wrap>
                             <View style={styles.tagsWrap}>
                                 {techTags.map((t) => (
@@ -397,12 +436,16 @@ export const QuotationPDF = ({ data }: QuotationPDFProps) => {
                                 {workflowSteps.map((step, i) => (
                                     <React.Fragment key={`${i}-${step}`}>
                                         <View style={styles.workflowStep}>
-                                            <Text style={styles.workflowStepText}>
+                                            <Text
+                                                style={styles.workflowStepText}
+                                            >
                                                 {i + 1}. {step}
                                             </Text>
                                         </View>
                                         {i < workflowSteps.length - 1 ? (
-                                            <Text style={styles.workflowArrow}>→</Text>
+                                            <Text style={styles.workflowArrow}>
+                                                →
+                                            </Text>
                                         ) : null}
                                     </React.Fragment>
                                 ))}
@@ -447,7 +490,9 @@ export const QuotationPDF = ({ data }: QuotationPDFProps) => {
                             </View>
                         ) : (
                             <View style={styles.pricingRowLast}>
-                                <Text style={styles.pricingLabel}>Discount</Text>
+                                <Text style={styles.pricingLabel}>
+                                    Discount
+                                </Text>
                                 <Text style={styles.pricingValue}>
                                     {formatMoney(0, currency)}
                                 </Text>
@@ -472,7 +517,8 @@ export const QuotationPDF = ({ data }: QuotationPDFProps) => {
                     </View>
                     {milestones.map((m, idx) => {
                         const isLast = idx === milestones.length - 1;
-                        const amount = (pricingTotal * (m.percentage || 0)) / 100;
+                        const amount =
+                            (pricingTotal * (m.percentage || 0)) / 100;
                         return (
                             <View
                                 key={`${idx}-${m.label}`}
@@ -497,26 +543,30 @@ export const QuotationPDF = ({ data }: QuotationPDFProps) => {
                 <View style={styles.trustBand} wrap={false}>
                     <Text style={styles.trustTitle}>Why partner with us</Text>
                     <Text style={styles.trustText}>
-                        We combine product strategy, modern engineering and reliable
-                        delivery to scale your business with confidence. This proposal
-                        reflects a phased, accountable delivery approach with
-                        transparent pricing.
+                        We combine product strategy, modern engineering and
+                        reliable delivery to scale your business with
+                        confidence. This proposal reflects a phased, accountable
+                        delivery approach with transparent pricing.
                     </Text>
                 </View>
 
                 {/* Pay Now Section */}
                 <View style={styles.payNowSection} wrap={false}>
                     <View style={styles.payNowTextContainer}>
-                        <Text style={styles.payNowHeading}>SECURE ONLINE PAYMENT</Text>
+                        <Text style={styles.payNowHeading}>
+                            SECURE ONLINE PAYMENT
+                        </Text>
                         <Text style={styles.payNowDescription}>
-                            Use the secure online portal to review and accept this
-                            quotation, then proceed to the first milestone payment.
+                            Use the secure online portal to review and accept
+                            this quotation, then proceed to the first milestone
+                            payment.
                         </Text>
                         {firstMilestone ? (
                             <Text style={styles.payNowDescription}>
                                 On acceptance: {firstMilestone.percentage}% (
                                 {formatMoney(
-                                    (pricingTotal * firstMilestone.percentage) / 100,
+                                    (pricingTotal * firstMilestone.percentage) /
+                                        100,
                                     currency,
                                 )}
                                 ) — {firstMilestone.label}.
@@ -526,16 +576,24 @@ export const QuotationPDF = ({ data }: QuotationPDFProps) => {
                     <View style={styles.payNowButtonContainer}>
                         {payLink ? (
                             <>
-                                <Link src={payLink} style={{ textDecoration: 'none' }}>
+                                <Link
+                                    src={payLink}
+                                    style={{ textDecoration: 'none' }}
+                                >
                                     <View style={styles.payNowButton}>
                                         <Text style={styles.payNowText}>
                                             {ctaPrimary}
                                         </Text>
                                     </View>
                                 </Link>
-                                <Link src={payLink} style={{ textDecoration: 'none' }}>
+                                <Link
+                                    src={payLink}
+                                    style={{ textDecoration: 'none' }}
+                                >
                                     <View style={styles.payNowSecondaryButton}>
-                                        <Text style={styles.payNowSecondaryText}>
+                                        <Text
+                                            style={styles.payNowSecondaryText}
+                                        >
                                             VIEW FULL QUOTATION
                                         </Text>
                                     </View>
@@ -543,7 +601,9 @@ export const QuotationPDF = ({ data }: QuotationPDFProps) => {
                             </>
                         ) : (
                             <View style={styles.payNowButton}>
-                                <Text style={styles.payNowText}>LINK PENDING</Text>
+                                <Text style={styles.payNowText}>
+                                    LINK PENDING
+                                </Text>
                             </View>
                         )}
                     </View>
@@ -553,9 +613,14 @@ export const QuotationPDF = ({ data }: QuotationPDFProps) => {
                 <View style={styles.signatureSection} wrap={false}>
                     <View style={styles.signatureRow}>
                         <View style={styles.signatureBlock}>
-                            <Image src={{ uri: sigUrl }} style={styles.signatureImage} />
+                            <Image
+                                src={{ uri: sigUrl }}
+                                style={styles.signatureImage}
+                            />
                             <View style={styles.signatureLine} />
-                            <Text style={styles.signatureName}>Md. Ashaduzzaman</Text>
+                            <Text style={styles.signatureName}>
+                                Md. Ashaduzzaman
+                            </Text>
                             <Text style={styles.signatureRole}>
                                 Founder &amp; CEO, {company?.name || 'Company'}
                             </Text>
@@ -566,7 +631,9 @@ export const QuotationPDF = ({ data }: QuotationPDFProps) => {
                             <Text style={styles.signatureName}>
                                 {client.contactName}
                             </Text>
-                            <Text style={styles.signatureRole}>Client signature</Text>
+                            <Text style={styles.signatureRole}>
+                                Client signature
+                            </Text>
                         </View>
                     </View>
                 </View>

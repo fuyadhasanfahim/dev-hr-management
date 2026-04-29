@@ -1,11 +1,12 @@
 import React from "react";
 import QuotationPayClient from "./quotation-pay-client";
 
-export default function QuotationPayPage({
+export default async function QuotationPayPage({
     params,
 }: {
-    params: { token: string };
+    params: Promise<{ token: string }>;
 }) {
-    return <QuotationPayClient token={params.token} />;
+    const { token } = await params;
+    return <QuotationPayClient token={token} />;
 }
 

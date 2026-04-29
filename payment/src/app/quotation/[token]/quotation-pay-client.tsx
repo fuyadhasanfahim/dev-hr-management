@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
@@ -16,7 +16,6 @@ import {
     Wallet,
 } from "lucide-react";
 import { loadStripe } from "@stripe/stripe-js";
-import { Elements } from "@stripe/react-stripe-js";
 import StripePhaseCheckout from "./stripe-phase-checkout";
 import PayPalPhaseCheckout from "./paypal-phase-checkout";
 import { useRouter } from "next/navigation";
@@ -76,16 +75,22 @@ function statusBadgeVariant(status: string) {
     return "outline";
 }
 
+function phasePrerequisitesMet(phase: Phase, tracker: QuotationPaymentTracker | null) {
+    if (!tracker) return false;
+    if (phase === "upfront") return true;
+    if (phase === "delivery") return tracker.phases.upfront.status === "paid";
+    return tracker.phases.delivery.status === "paid";
+}
+
 export default function QuotationPayClient({ token }: { token: string }) {
     const apiBase = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
-    const router = useRouter();
 
     const [quotation, setQuotation] = useState<Quotation | null>(null);
     const [tracker, setTracker] = useState<QuotationPaymentTracker | null>(null);
 
     const [activeProvider, setActiveProvider] =
         useState<PaymentProvider>("stripe");
-    const activePhase: Phase = "upfront";
+    const [activePhase, setActivePhase] = useState<Phase>("upfront");
 
     const [isLoading, setIsLoading] = useState(true);
     const [isAccepting, setIsAccepting] = useState(false);
@@ -124,24 +129,24 @@ export default function QuotationPayClient({ token }: { token: string }) {
     }, [loadAll]);
 
     const canPay = quotation?.status === "accepted";
-    const upfrontPaid = tracker?.phases?.upfront?.status === "paid";
 
-    const currency =
-        (tracker?.currency && tracker.currency !== "BDT" ? tracker.currency : "USD") || "USD";
+    const currency = tracker?.currency || quotation?.currency || "USD";
 
     const milestoneText = useMemo(() => {
         if (!tracker) return null;
-        const p = tracker.phases.upfront;
+        const p = tracker.phases[activePhase];
         return `${formatMoney(p.amountDue / 100, currency)} (${p.percentage}%)`;
-    }, [tracker, currency]);
+    }, [tracker, currency, activePhase]);
 
     useEffect(() => {
-        if (!upfrontPaid) return;
-        const t = setTimeout(() => {
-            router.push("/success?already_paid=true");
-        }, 1400);
-        return () => clearTimeout(t);
-    }, [upfrontPaid, router]);
+        // If user is on a locked phase, auto-fallback to the earliest eligible.
+        if (!tracker) return;
+        if (!phasePrerequisitesMet(activePhase, tracker)) {
+            if (tracker.phases.upfront.status !== "paid") setActivePhase("upfront");
+            else if (tracker.phases.delivery.status !== "paid") setActivePhase("delivery");
+            else setActivePhase("final");
+        }
+    }, [tracker, activePhase]);
 
     const acceptQuotation = async () => {
         setIsAccepting(true);
@@ -185,23 +190,6 @@ export default function QuotationPayClient({ token }: { token: string }) {
                             <div className="text-sm text-muted-foreground mt-1">
                                 {error || "The link may be invalid or expired."}
                             </div>
-                        </div>
-                    </div>
-                </Card>
-            </div>
-        );
-    }
-
-    if (upfrontPaid) {
-        return (
-            <div className="min-h-[70vh] flex items-center justify-center px-6">
-                <Card className="w-full max-w-xl p-6">
-                    <div className="space-y-2">
-                        <div className="font-semibold text-gray-900">
-                            You have already completed the payment.
-                        </div>
-                        <div className="text-sm text-muted-foreground">
-                            You can proceed to the next step. Redirecting you now…
                         </div>
                     </div>
                 </Card>
@@ -269,7 +257,7 @@ export default function QuotationPayClient({ token }: { token: string }) {
                                         Payment plan
                                     </div>
                                     <div className="text-xl font-semibold mt-1">
-                                        Payment milestone
+                                        Payment milestones
                                     </div>
                                 </div>
                                 <div className="text-xs text-muted-foreground flex items-center gap-1">
@@ -282,15 +270,32 @@ export default function QuotationPayClient({ token }: { token: string }) {
 
                             {tracker ? (
                                 <div className="space-y-3">
-                                    {(() => {
-                                        const row = tracker.phases.upfront;
+                                    {(["upfront", "delivery", "final"] as const).map((phase) => {
+                                        const row = tracker.phases[phase];
+                                        const disabled =
+                                            !canPay ||
+                                            !phasePrerequisitesMet(phase, tracker) ||
+                                            row.status === "paid";
+
                                         return (
-                                            <div className="w-full text-left rounded-2xl border border-gray-900/20 bg-gray-900/5 p-4">
+                                            <button
+                                                key={phase}
+                                                type="button"
+                                                onClick={() => setActivePhase(phase)}
+                                                disabled={disabled}
+                                                className={[
+                                                    "w-full text-left rounded-2xl border p-4 transition",
+                                                    activePhase === phase
+                                                        ? "border-teal-600 bg-teal-50/40"
+                                                        : "border-gray-900/15 bg-gray-900/5",
+                                                    disabled ? "opacity-60 cursor-not-allowed" : "hover:border-teal-600/60",
+                                                ].join(" ")}
+                                            >
                                                 <div className="flex items-start justify-between gap-3">
                                                     <div className="space-y-1">
                                                         <div className="flex items-center gap-2">
                                                             <div className="font-semibold text-gray-900">
-                                                                {phaseLabel("upfront")}
+                                                                {phaseLabel(phase)}
                                                             </div>
                                                             <Badge
                                                                 variant={statusBadgeVariant(row.status)}
@@ -298,15 +303,20 @@ export default function QuotationPayClient({ token }: { token: string }) {
                                                             >
                                                                 {row.status}
                                                             </Badge>
+                                                            {!phasePrerequisitesMet(phase, tracker) && (
+                                                                <Badge variant="outline" className="rounded-full">
+                                                                    locked
+                                                                </Badge>
+                                                            )}
                                                         </div>
                                                         <div className="text-sm text-muted-foreground">
                                                             {formatMoney(row.amountDue / 100, currency)} • {row.percentage}%
                                                         </div>
                                                     </div>
                                                 </div>
-                                            </div>
+                                            </button>
                                         );
-                                    })()}
+                                    })}
                                 </div>
                             ) : (
                                 <div className="text-sm text-muted-foreground">
@@ -322,7 +332,7 @@ export default function QuotationPayClient({ token }: { token: string }) {
                                         Payment method
                                     </div>
                                     <div className="text-xl font-semibold mt-1">
-                                        Pay {milestoneText || "securely"}
+                                        Pay {milestoneText || "securely"} ({phaseLabel(activePhase)})
                                     </div>
                                 </div>
                             </div>
@@ -357,68 +367,54 @@ export default function QuotationPayClient({ token }: { token: string }) {
 
                                 <div className="mt-6">
                                     <AnimatePresence mode="wait">
-                                        <TabsContent value="stripe" className="mt-0">
-                                            <motion.div
-                                                key="stripe"
-                                                initial={{ opacity: 0, y: 6 }}
-                                                animate={{ opacity: 1, y: 0 }}
-                                                exit={{ opacity: 0, y: 6 }}
-                                                transition={{ duration: 0.25 }}
-                                            >
-                                                {canPay && tracker ? (
-                                                    <Elements
-                                                        stripe={stripePromise}
-                                                        options={{
-                                                            appearance: {
-                                                                theme: "stripe",
-                                                                variables: {
-                                                                    colorPrimary: "#0d9488",
-                                                                    fontFamily:
-                                                                        'Inter, system-ui, -apple-system, "Segoe UI", sans-serif',
-                                                                    borderRadius: "14px",
-                                                                },
-                                                            },
-                                                        }}
-                                                    >
-                                                        <StripePhaseCheckout
-                                                            apiBase={apiBase}
-                                                            token={token}
-                                                            phase="upfront"
-                                                            currency={currency}
-                                                            onPaid={loadAll}
-                                                        />
-                                                    </Elements>
-                                                ) : (
-                                                    <div className="rounded-2xl border border-dashed border-gray-200 p-6 text-sm text-muted-foreground">
-                                                        Accept the quotation to enable payment.
-                                                    </div>
-                                                )}
-                                            </motion.div>
-                                        </TabsContent>
-
-                                        <TabsContent value="paypal" className="mt-0">
-                                            <motion.div
-                                                key="paypal"
-                                                initial={{ opacity: 0, y: 6 }}
-                                                animate={{ opacity: 1, y: 0 }}
-                                                exit={{ opacity: 0, y: 6 }}
-                                                transition={{ duration: 0.25 }}
-                                            >
-                                                {canPay && tracker ? (
-                                                    <PayPalPhaseCheckout
+                                        <motion.div
+                                            key={activeProvider}
+                                            initial={{ opacity: 0, y: 6 }}
+                                            animate={{ opacity: 1, y: 0 }}
+                                            exit={{ opacity: 0, y: 6 }}
+                                            transition={{ duration: 0.25 }}
+                                        >
+                                            {activeProvider === "stripe" ? (
+                                                canPay && tracker ? (
+                                                    tracker.phases[activePhase].status === "paid" ? (
+                                                        <div className="rounded-2xl border border-gray-200 p-6 text-sm text-muted-foreground">
+                                                            This phase is already paid. Select another milestone.
+                                                        </div>
+                                                    ) : (
+                                                    <StripePhaseCheckout
                                                         apiBase={apiBase}
                                                         token={token}
-                                                        phase="upfront"
+                                                        phase={activePhase}
                                                         currency={currency}
                                                         onPaid={loadAll}
+                                                        stripe={stripePromise}
                                                     />
+                                                    )
                                                 ) : (
                                                     <div className="rounded-2xl border border-dashed border-gray-200 p-6 text-sm text-muted-foreground">
                                                         Accept the quotation to enable payment.
                                                     </div>
-                                                )}
-                                            </motion.div>
-                                        </TabsContent>
+                                                )
+                                            ) : canPay && tracker ? (
+                                                tracker.phases[activePhase].status === "paid" ? (
+                                                    <div className="rounded-2xl border border-gray-200 p-6 text-sm text-muted-foreground">
+                                                        This phase is already paid. Select another milestone.
+                                                    </div>
+                                                ) : (
+                                                <PayPalPhaseCheckout
+                                                    apiBase={apiBase}
+                                                    token={token}
+                                                    phase={activePhase}
+                                                    currency={currency}
+                                                    onPaid={loadAll}
+                                                />
+                                                )
+                                            ) : (
+                                                <div className="rounded-2xl border border-dashed border-gray-200 p-6 text-sm text-muted-foreground">
+                                                    Accept the quotation to enable payment.
+                                                </div>
+                                            )}
+                                        </motion.div>
                                     </AnimatePresence>
                                 </div>
                             </Tabs>

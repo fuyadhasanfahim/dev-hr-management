@@ -37,6 +37,7 @@ export default function RootLayout({
                             alt="Web Briks Logo"
                             width={150}
                             height={32}
+                            style={{ width: "auto", height: "auto" }}
                             priority
                         />
                     </div>

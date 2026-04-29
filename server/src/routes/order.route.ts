@@ -28,7 +28,10 @@ router.get('/:id',      authorize(...STAFF_ROLES), OrderController.getOrderById)
 router.patch('/:id/status',         authorize(...STAFF_ROLES), OrderController.updateOrderStatus);
 router.post('/:id/deliver',         authorize(...STAFF_ROLES), OrderController.markDelivered);
 
-// Asset delivery endpoint — client presents accessToken query param
+// Public asset delivery endpoint — accessToken is the credential (no JWT).
+router.get('/client/:id/assets/:assetId', OrderController.getAssetPublic);
+
+// Staff asset delivery endpoint (debug/admin use)
 router.get('/:id/assets/:assetId',  authorize(...STAFF_ROLES), OrderController.getAsset);
 
 export const OrderRoutes = router;

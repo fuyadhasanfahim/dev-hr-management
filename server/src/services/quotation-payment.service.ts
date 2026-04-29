@@ -257,6 +257,7 @@ export class QuotationPaymentService {
     static async createPayPalOrder(
         quotationGroupId: string,
         phase: QuotationPaymentPhase,
+        urls: { returnUrl: string; cancelUrl: string },
     ) {
         const quotation = await QuotationModel.findOne({ quotationGroupId, isLatestVersion: true });
         if (!quotation || quotation.status !== 'accepted') {
@@ -310,8 +311,8 @@ export class QuotationPaymentService {
                 brand_name: 'Dev HR Agency',
                 landing_page: 'BILLING',
                 user_action: 'PAY_NOW',
-                return_url: `${process.env.CLIENT_URL}/payment/success`,
-                cancel_url: `${process.env.CLIENT_URL}/payment/cancel`,
+                return_url: urls.returnUrl,
+                cancel_url: urls.cancelUrl,
             },
         });
 

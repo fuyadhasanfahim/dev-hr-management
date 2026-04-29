@@ -53,7 +53,7 @@ export default function ViewQuotationPage() {
 
   const handleSend = async () => {
     try {
-      const result = await sendQuotation(id as string).unwrap();
+      const result = await sendQuotation({ id: id as string }).unwrap();
       if (result.data.clientLink) {
         await navigator.clipboard.writeText(result.data.clientLink);
         toast.success("Client link copied to clipboard!");

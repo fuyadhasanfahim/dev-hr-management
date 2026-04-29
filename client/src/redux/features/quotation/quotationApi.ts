@@ -86,11 +86,12 @@ export const quotationApi = apiSlice.injectEndpoints({
      */
     sendQuotation: builder.mutation<
       { data: { clientLink: string; emailSent: boolean; emailedTo?: string[]; emailError?: string } },
-      string
+      { id: string; emails?: string[] }
     >({
-      query: (id) => ({
+      query: ({ id, emails }) => ({
         url: `/quotations/${id}/send`,
         method: 'POST',
+        body: emails?.length ? { emails } : undefined,
       }),
       invalidatesTags: ['Quotation'],
     }),

@@ -58,7 +58,7 @@ export default function QuotationsPage() {
   const handleSend = async (id: string) => {
     try {
       setSendingId(id);
-      const result = await sendQuotation(id).unwrap();
+      const result = await sendQuotation({ id }).unwrap();
       
       // Copy to clipboard
       if (result.data.clientLink) {

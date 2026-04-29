@@ -135,24 +135,24 @@ quotationPaymentSchema.index(
 quotationPaymentSchema.index({ quotationId: 1 }, { unique: true });
 
 // Guard: delivery phase cannot be initiated before upfront is paid
-(quotationPaymentSchema as any).pre('save', function (this: any, next: (err?: any) => void) {
+(quotationPaymentSchema as any).pre('save', function () {
+    const doc = this as any;
     if (
-        this.phases.delivery.status === 'processing' ||
-        this.phases.delivery.status === 'paid'
+        doc.phases.delivery.status === 'processing' ||
+        doc.phases.delivery.status === 'paid'
     ) {
-        if (this.phases.upfront.status !== 'paid') {
-            return next(new Error('Delivery phase cannot be initiated before upfront payment is completed'));
+        if (doc.phases.upfront.status !== 'paid') {
+            throw new Error('Delivery phase cannot be initiated before upfront payment is completed');
         }
     }
     if (
-        this.phases.final.status === 'processing' ||
-        this.phases.final.status === 'paid'
+        doc.phases.final.status === 'processing' ||
+        doc.phases.final.status === 'paid'
     ) {
-        if (this.phases.delivery.status !== 'paid') {
-            return next(new Error('Final phase cannot be initiated before delivery payment is completed'));
+        if (doc.phases.delivery.status !== 'paid') {
+            throw new Error('Final phase cannot be initiated before delivery payment is completed');
         }
     }
-    next();
 });
 
 const QuotationPaymentModel = model<IQuotationPayment>('QuotationPayment', quotationPaymentSchema);

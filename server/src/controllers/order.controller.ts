@@ -11,7 +11,7 @@ import { AppError } from '../utils/AppError.js';
  * Any attempt to POST /api/orders directly is blocked at the router level with a 405.
  */
 
-async function getAllOrders(req: Request, res: Response, next: NextFunction) {
+async function getAllOrders(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
         const result = await OrderService.getAllOrdersFromDB(req.query);
         res.status(200).json({
@@ -24,14 +24,20 @@ async function getAllOrders(req: Request, res: Response, next: NextFunction) {
     }
 }
 
-async function getOrderById(req: Request, res: Response, next: NextFunction) {
+async function getOrderById(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
         const { id } = req.params;
-        if (!id) return next(new AppError('Order id is required', 400));
+        if (!id) {
+            next(new AppError('Order id is required', 400));
+            return;
+        }
 
         const result = await OrderService.getOrderByIdFromDB(id);
-        if (!result) return res.status(404).json({ success: false, message: 'Order not found' });
-        return res.status(200).json({ success: true, data: result });
+        if (!result) {
+            res.status(404).json({ success: false, message: 'Order not found' });
+            return;
+        }
+        res.status(200).json({ success: true, data: result });
     } catch (err) {
         next(err);
     }
@@ -41,12 +47,22 @@ async function getOrderById(req: Request, res: Response, next: NextFunction) {
  * Update order status via the state machine.
  * Only valid transitions are accepted — invalid ones throw 409.
  */
-async function updateOrderStatus(req: Request, res: Response, next: NextFunction) {
+async function updateOrderStatus(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
         const { status, note } = req.body;
         const userId = req.user?.id;
-        if (!userId) return next(new AppError('Unauthorized', 401));
-        if (!status) return next(new AppError('Status is required', 400));
+        if (!userId) {
+            next(new AppError('Unauthorized', 401));
+            return;
+        }
+        if (!req.params.id) {
+            next(new AppError('Order id is required', 400));
+            return;
+        }
+        if (!status) {
+            next(new AppError('Status is required', 400));
+            return;
+        }
 
         const result = await OrderService.transitionStatus(
             req.params.id,
@@ -64,10 +80,17 @@ async function updateOrderStatus(req: Request, res: Response, next: NextFunction
  * Staff marks an order as delivered.
  * Requires at least one asset to be uploaded first.
  */
-async function markDelivered(req: Request, res: Response, next: NextFunction) {
+async function markDelivered(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
         const userId = req.user?.id;
-        if (!userId) return next(new AppError('Unauthorized', 401));
+        if (!userId) {
+            next(new AppError('Unauthorized', 401));
+            return;
+        }
+        if (!req.params.id) {
+            next(new AppError('Order id is required', 400));
+            return;
+        }
 
         const result = await OrderService.markDelivered(req.params.id, userId);
         res.status(200).json({
@@ -86,12 +109,52 @@ async function markDelivered(req: Request, res: Response, next: NextFunction) {
  *  1. isLocked = false (delivery payment completed)
  *  2. accessToken is valid and not expired
  */
-async function getAsset(req: Request, res: Response, next: NextFunction) {
+async function getAsset(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
         const { id, assetId } = req.params;
         const { accessToken } = req.query as { accessToken: string };
 
-        if (!accessToken) return next(new AppError('accessToken query parameter is required', 400));
+        if (!id) {
+            next(new AppError('Order id is required', 400));
+            return;
+        }
+        if (!assetId) {
+            next(new AppError('assetId is required', 400));
+            return;
+        }
+        if (!accessToken) {
+            next(new AppError('accessToken query parameter is required', 400));
+            return;
+        }
+
+        const asset = await OrderService.getAssetByAccessToken(id, assetId, accessToken);
+        res.status(200).json({ success: true, data: asset });
+    } catch (err) {
+        next(err);
+    }
+}
+
+/**
+ * Public/client endpoint: serve an unlocked asset using accessToken only.
+ * No JWT required; the accessToken is the credential.
+ */
+async function getAssetPublic(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+        const { id, assetId } = req.params;
+        const { accessToken } = req.query as { accessToken: string };
+
+        if (!id) {
+            next(new AppError('Order id is required', 400));
+            return;
+        }
+        if (!assetId) {
+            next(new AppError('assetId is required', 400));
+            return;
+        }
+        if (!accessToken) {
+            next(new AppError('accessToken query parameter is required', 400));
+            return;
+        }
 
         const asset = await OrderService.getAssetByAccessToken(id, assetId, accessToken);
         res.status(200).json({ success: true, data: asset });
@@ -106,4 +169,5 @@ export default {
     updateOrderStatus,
     markDelivered,
     getAsset,
+    getAssetPublic,
 };

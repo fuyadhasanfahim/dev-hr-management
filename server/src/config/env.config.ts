@@ -82,6 +82,8 @@ const envConfig = {
 
     // Quotation pipeline
     quotation_token_secret: process.env.QUOTATION_TOKEN_SECRET!,
-    payment_client_url: process.env.PAYMENT_CLIENT_URL || process.env.CLIENT_URL || 'http://localhost:3001',
+    // Public payment app (Next.js) base URL
+    // Used for quotation secure links + payment provider callbacks.
+    payment_client_url: process.env.PAYMENT_CLIENT_URL || 'http://localhost:3001',
 };
 export default envConfig;
