@@ -1,21 +1,21 @@
 import { Document, Types } from 'mongoose';
 
-export type ServiceType = 'web-development' | 'product-photography';
-
-export type QuotationStatus =
-    | 'draft'
-    | 'sent'
-    | 'viewed'
-    | 'change_requested'
-    | 'accepted'
-    | 'rejected'
-    | 'expired'
-    | 'superseded';
+export type QuotationStatus = 
+    | 'draft' 
+    | 'sent' 
+    | 'viewed' 
+    | 'accepted' 
+    | 'change_requested' 
+    | 'rejected' 
+    | 'superseded' 
+    | 'expired';
 
 export interface IQuotationPhase {
     title: string;
     description?: string;
-    items: string[]; // Checklist items
+    items: string[];
+    startDate?: string;
+    endDate?: string;
 }
 
 export interface IAdditionalService {
@@ -26,17 +26,15 @@ export interface IAdditionalService {
 }
 
 export interface IQuotation extends Document {
-    // ── Versioning ────────────────────────────────────────────────────────────
+    _id: Types.ObjectId;
+    quotationNumber: string;
     quotationGroupId: string;
     version: number;
     isLatestVersion: boolean;
-
-    // ── Identity ──────────────────────────────────────────────────────────────
-    quotationNumber: string;
-    serviceType: ServiceType;
+    
+    serviceType: 'web-development' | 'product-photography';
     clientId: Types.ObjectId;
-
-    // ── Snapshots ─────────────────────────────────────────────────────────────
+    
     company: {
         name: string;
         address?: string;
@@ -54,13 +52,12 @@ export interface IQuotation extends Document {
     };
     details: {
         title: string;
-        date: Date;
-        validUntil: Date;
+        date: string;
+        validUntil: string;
     };
 
-    // ── Refactored Content (Strict Alignment) ──────────────────────────────────
     overview?: string;
-    phases: IQuotationPhase[]; // Replaces separate feature arrays
+    phases: IQuotationPhase[];
     
     techStack: {
         frontend: string;
@@ -71,24 +68,23 @@ export interface IQuotation extends Document {
 
     pricing: {
         basePrice: number;
-        taxRate: number;
-        discount: number;
+        taxRate: number; // Percentage
+        discount: number; // Percentage
     };
 
-    additionalServices: IAdditionalService[]; // Renamed from optionalServices
+    additionalServices: IAdditionalService[];
     workflow: string[];
 
-    // ── Computed Totals ────────────────────────────────────────────────────────
     totals: {
         subtotal: number;
         taxAmount: number;
         grandTotal: number;
     };
 
-    // ── Status & Metadata ──────────────────────────────────────────────────────
     status: QuotationStatus;
     secureToken?: string;
     tokenExpiresAt?: Date;
+    changeRequestReason?: string;
     orderId?: Types.ObjectId;
     createdBy: Types.ObjectId;
     createdAt: Date;

@@ -187,6 +187,10 @@ export class QuotationService {
             );
 
             const newVersion = createdDocs[0];
+            if (!newVersion) {
+                throw new Error('Failed to create new quotation version');
+            }
+
             await session.commitTransaction();
 
             await quotationPaymentEventQueue.add('quotation.superseded', {

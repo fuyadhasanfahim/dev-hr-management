@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { format } from 'date-fns';
 import { Megaphone, Pin, Calendar, Filter } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -32,6 +32,11 @@ import {
 export default function NoticesPage() {
     const [selectedCategory, setSelectedCategory] = useState<string>('all');
     const [selectedNotice, setSelectedNotice] = useState<INotice | null>(null);
+    const [isMounted, setIsMounted] = useState(false);
+
+    useEffect(() => {
+        setIsMounted(true);
+    }, []);
 
     const { data, isLoading } = useGetPublishedNoticesQuery(
         selectedCategory !== 'all' ? { category: selectedCategory as NoticeCategory } : undefined
@@ -143,7 +148,7 @@ export default function NoticesPage() {
             {/* Notice Detail Modal */}
             <Dialog open={!!selectedNotice} onOpenChange={(open) => !open && setSelectedNotice(null)}>
                 <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-                    {selectedNotice && (
+                    {isMounted && selectedNotice && (
                         <>
                             <DialogHeader>
                                 <div className="flex items-start gap-2">

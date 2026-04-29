@@ -24,6 +24,11 @@ export function GlobalPolicyPrompt() {
     
     const [currentPolicyIndex, setCurrentPolicyIndex] = useState(0);
     const [isOpen, setIsOpen] = useState(false);
+    const [isMounted, setIsMounted] = useState(false);
+
+    useEffect(() => {
+        setIsMounted(true);
+    }, []);
 
     const pendingPolicies = data?.policies || [];
     const currentPolicy = pendingPolicies[currentPolicyIndex];
@@ -55,7 +60,7 @@ export function GlobalPolicyPrompt() {
         }
     };
 
-    if (isLoading || pendingPolicies.length === 0) return null;
+    if (!isMounted || isLoading || pendingPolicies.length === 0) return null;
 
     return (
         <Dialog open={isOpen} onOpenChange={(open) => {

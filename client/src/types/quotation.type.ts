@@ -13,6 +13,8 @@ export interface IQuotationPhase {
   title: string;
   description?: string;
   items: string[];
+  startDate?: string;
+  endDate?: string;
 }
 
 export interface IAdditionalService {
@@ -66,8 +68,8 @@ export interface QuotationData {
 
   pricing: {
     basePrice: number;
-    taxRate: number;
-    discount: number;
+    taxRate: number; // Percentage
+    discount: number; // Percentage
   };
 
   additionalServices: IAdditionalService[];

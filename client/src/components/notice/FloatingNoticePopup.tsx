@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { format } from 'date-fns';
 import { Megaphone, X, ChevronLeft, ChevronRight, Pin } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -24,6 +24,11 @@ export function FloatingNoticePopup() {
     const [currentIndex, setCurrentIndex] = useState(0);
     const [isVisible, setIsVisible] = useState(false);
     const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
+    const [isMounted, setIsMounted] = useState(false);
+
+    useEffect(() => {
+        setIsMounted(true);
+    }, []);
 
     const unreadNotices = data?.data || [];
     const visibleNotices = unreadNotices.filter((n) => !dismissedIds.has(n._id));
@@ -74,7 +79,7 @@ export function FloatingNoticePopup() {
         setCurrentIndex((prev) => Math.min(visibleNotices.length - 1, prev + 1));
     };
 
-    if (!isVisible || !currentNotice) {
+    if (!isMounted || !isVisible || !currentNotice) {
         return null;
     }
 
