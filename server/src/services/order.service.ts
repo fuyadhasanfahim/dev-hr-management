@@ -357,55 +357,43 @@ async function transitionStatus(
         );
     }
 
-    // [NEW] Payment-Aware Auto-Jump Logic
-    // If transitioning to a payment-gated status but the phase is already paid, jump forward.
-    let effectiveStatus = newStatus;
-    let effectiveNote = note;
-
-    if (['pending_delivery', 'pending_final'].includes(newStatus)) {
-        const tracker = await QuotationPaymentModel.findOne({ 
-            quotationGroupId: order.quotationGroupId, 
-            isActive: true 
-        });
-
-        if (tracker) {
-            if (newStatus === OrderStatus.PENDING_DELIVERY && tracker.phases.delivery.status === 'paid') {
-                effectiveStatus = OrderStatus.DELIVERED;
-                effectiveNote = (note ? note + ' | ' : '') + 'Automatically moved to delivered as delivery payment is already confirmed.';
-                logger.info({ orderId, status: effectiveStatus }, 'order.transition.auto_jump_to_delivered');
-            } else if (newStatus === OrderStatus.PENDING_FINAL && tracker.phases.final.status === 'paid') {
-                effectiveStatus = OrderStatus.COMPLETED;
-                effectiveNote = (note ? note + ' | ' : '') + 'Automatically moved to completed as final payment is already confirmed.';
-                logger.info({ orderId, status: effectiveStatus }, 'order.transition.auto_jump_to_completed');
-            }
-        }
-    }
-
     const updated = await OrderModel.findOneAndUpdate(
         { _id: order._id, __v: order.__v },
         {
             $set: { 
-                status: effectiveStatus,
-                ...(effectiveStatus === OrderStatus.DELIVERED ? { deliveredAt: new Date() } : {}),
-                ...(effectiveStatus === OrderStatus.COMPLETED ? { completedAt: new Date() } : {}),
+                status: newStatus,
+                ...(newStatus === OrderStatus.DELIVERED ? { deliveredAt: new Date() } : {}),
+                ...(newStatus === OrderStatus.COMPLETED ? { completedAt: new Date() } : {}),
             },
             $push: {
                 statusHistory: {
-                    status: effectiveStatus,
+                    status: newStatus,
                     changedBy: new Types.ObjectId(userId),
                     updatedAt: new Date(),
-                    note: effectiveNote,
+                    note: note || `Status updated to ${newStatus}`,
                 },
             },
         },
         { new: true },
     );
 
+
     if (!updated)
         throw new AppError(
             'Order was modified concurrently. Please retry.',
             409,
         );
+
+    // [NEW] Asset Unlocking Side Effect for manual transitions
+    // If staff manually moves to delivered/completed, ensure assets are unlocked
+    if (newStatus === OrderStatus.DELIVERED || newStatus === OrderStatus.COMPLETED) {
+        const needsUnlock = updated.assets.some(a => a.isLocked);
+        if (needsUnlock) {
+            logger.info({ orderId, newStatus }, 'order.transition.triggering_manual_unlock');
+            await unlockAssets(orderId);
+        }
+    }
+
 
     // Feature: Send email notification to client if requested
     if (emailOptions?.sendEmail) {
@@ -425,16 +413,29 @@ async function transitionStatus(
                     }
                 }
 
+                // Check if already paid to send a more encouraging message
+                const tracker = await QuotationPaymentModel.findOne({ 
+                    quotationGroupId: updated.quotationGroupId, 
+                    isActive: true 
+                });
+                const isAlreadyPaid = tracker && (
+                    (newStatus === OrderStatus.PENDING_DELIVERY && tracker.phases.delivery.status === 'paid')
+                    || (newStatus === OrderStatus.PENDING_FINAL && tracker.phases.final.status === 'paid')
+                );
+
                 await emailService.sendOrderStatusEmail({
                     to: recipients,
                     clientName: updated.quotationSnapshot?.clientName || 'Client',
                     orderName: updated.quotationSnapshot?.templateName || updated.orderNumber,
                     status: newStatus.toUpperCase().replace('_', ' '),
-                    message: emailOptions.customEmailMessage || `Your order status has been updated to ${newStatus}.`,
+                    message: isAlreadyPaid 
+                        ? `Good news! Your deliverables are ready for review. Since you've already completed the payment for this milestone, you can access and approve them immediately in the portal.`
+                        : emailOptions.customEmailMessage || `Your order status has been updated to ${newStatus.toUpperCase().replace('_', ' ')}.`,
                     paymentLink,
                 });
                 logger.info({ orderId, recipients, newStatus }, 'order.transition.email_sent');
             }
+
         } catch (err) {
             logger.error({ err, orderId }, 'order.transition.email_failed');
         }

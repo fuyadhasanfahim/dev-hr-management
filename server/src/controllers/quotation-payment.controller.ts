@@ -250,11 +250,6 @@ async function getClientPaymentStatus(req: Request, res: Response, next: NextFun
  * Public client route (token-authenticated via secure link).
  * POST /api/quotation-payments/client/:token/confirm
  *
- * Purpose:
- * - In local/dev, webhooks may not be configured; this endpoint confirms the payment
- *   directly and records it so trackers + orders update immediately.
- * - In prod, it is still safe: recordPhasePayment is idempotent by intent/capture id.
- *
  * Body:
  *  - phase: 'upfront' | 'delivery' | 'final'
  *  - provider: 'stripe' | 'paypal'
@@ -483,10 +478,6 @@ async function confirmClientPayment(req: Request, res: Response, next: NextFunct
 
 /**
  * Staff-only utility endpoint.
- * POST /api/quotation-payments/reconcile-orders
- *
- * Backfills missing orders for trackers where upfront is paid but orderId is missing.
- * Optional body: { systemActorId?: string }
  */
 async function reconcileMissingOrders(req: Request, res: Response, next: NextFunction) {
     try {
@@ -498,6 +489,59 @@ async function reconcileMissingOrders(req: Request, res: Response, next: NextFun
     }
 }
 
+/**
+ * Client approves a milestone delivery.
+ * Moves order from PENDING_DELIVERY -> DELIVERED or PENDING_FINAL -> COMPLETED.
+ */
+async function approveMilestone(req: Request, res: Response, next: NextFunction) {
+    try {
+        const { token } = req.params;
+        const { phase } = req.body; // 'delivery' | 'final'
+
+        if (!token) return next(new AppError('token is required', 400));
+        if (!phase) return next(new AppError('phase is required', 400));
+
+        const quotation = await QuotationService.getQuotationByToken(token);
+        const quotationGroupId = quotation.quotationGroupId;
+
+        const tracker = await QuotationPaymentService.getPaymentStatus(quotationGroupId);
+        if (!tracker || !tracker.orderId) {
+            return next(new AppError('No active order found for this quotation', 404));
+        }
+
+        const order = await mongoose.model('Order').findById(tracker.orderId);
+        if (!order) return next(new AppError('Order not found', 404));
+
+        let newStatus: string | null = null;
+        if (phase === 'delivery' && order.status === 'pending_delivery') {
+            if (tracker.phases.delivery.status !== 'paid') {
+                return next(new AppError('Delivery phase must be paid before acceptance', 400));
+            }
+            newStatus = 'delivered';
+        } else if (phase === 'final' && order.status === 'pending_final') {
+            if (tracker.phases.final.status !== 'paid') {
+                return next(new AppError('Final phase must be paid before completion', 400));
+            }
+            newStatus = 'completed';
+        }
+
+        if (!newStatus) {
+            return next(new AppError('Invalid phase transition for current order status', 400));
+        }
+
+        const updated = await OrderService.transitionStatus(
+            order._id.toString(),
+            newStatus as any,
+            '000000000000000000000000', // system actor
+            `Client approved ${phase} via portal`,
+        );
+
+        res.status(200).json({ success: true, data: updated });
+    } catch (err) {
+        next(err);
+    }
+}
+
 export default {
     createPaymentIntent,
     getPaymentStatus,
@@ -505,5 +549,6 @@ export default {
     captureClientPayPalOrder,
     getClientPaymentStatus,
     confirmClientPayment,
+    approveMilestone,
     reconcileMissingOrders,
 };

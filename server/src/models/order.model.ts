@@ -38,11 +38,13 @@ export const ALLOWED_STATUS_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
     [OrderStatus.PENDING_UPFRONT]:   [OrderStatus.ACTIVE, OrderStatus.CANCELLED],
     [OrderStatus.ACTIVE]:            [OrderStatus.IN_PROGRESS, OrderStatus.CANCELLED],
     [OrderStatus.IN_PROGRESS]:       [OrderStatus.QUALITY_CHECK, OrderStatus.REVISION, OrderStatus.CANCELLED],
-    [OrderStatus.QUALITY_CHECK]:     [OrderStatus.PENDING_DELIVERY, OrderStatus.REVISION, OrderStatus.IN_PROGRESS, OrderStatus.CANCELLED],
+    [OrderStatus.QUALITY_CHECK]:     [OrderStatus.PENDING_DELIVERY, OrderStatus.DELIVERED, OrderStatus.COMPLETED, OrderStatus.REVISION, OrderStatus.IN_PROGRESS, OrderStatus.CANCELLED],
     [OrderStatus.REVISION]:          [OrderStatus.IN_PROGRESS, OrderStatus.CANCELLED],
-    [OrderStatus.PENDING_DELIVERY]:  [OrderStatus.REVISION, OrderStatus.CANCELLED], // Manual bypass to 'delivered' blocked
-    [OrderStatus.DELIVERED]:         [OrderStatus.PENDING_FINAL, OrderStatus.REVISION, OrderStatus.CANCELLED],
-    [OrderStatus.PENDING_FINAL]:     [OrderStatus.CANCELLED], // Manual bypass to 'completed' blocked
+    [OrderStatus.PENDING_DELIVERY]:  [OrderStatus.DELIVERED, OrderStatus.REVISION, OrderStatus.CANCELLED],
+    [OrderStatus.DELIVERED]:         [OrderStatus.PENDING_FINAL, OrderStatus.COMPLETED, OrderStatus.REVISION, OrderStatus.CANCELLED],
+    [OrderStatus.PENDING_FINAL]:     [OrderStatus.COMPLETED, OrderStatus.CANCELLED],
+
+
     [OrderStatus.AWAITING_APPROVAL]: [OrderStatus.APPROVED, OrderStatus.IN_PROGRESS],
     [OrderStatus.APPROVED]:          [OrderStatus.COMPLETED],
     [OrderStatus.COMPLETED]:         [OrderStatus.REVISION],

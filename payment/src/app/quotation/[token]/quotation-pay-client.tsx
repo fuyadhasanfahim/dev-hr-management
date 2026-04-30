@@ -98,6 +98,7 @@ type QuotationPaymentTracker = {
         remainingAmount: number;
         nextPayablePhase: Phase | null;
         progressPercent: number;
+
         allPaid: boolean;
     };
     order?: {
@@ -302,12 +303,19 @@ function SuccessCard({
 
 function DeliverablesSection({ 
     order, 
-    isDeliveryPaid 
+    isDeliveryPaid,
+    isAccepting,
+    onAccept
 }: { 
     order: QuotationPaymentTracker['order'], 
-    isDeliveryPaid: boolean 
+    isDeliveryPaid: boolean,
+    isAccepting: boolean,
+    onAccept: () => void
 }) {
     if (!order || !order.assets?.length) return null;
+
+    const isPendingApproval = order.status === 'pending_delivery' && isDeliveryPaid;
+
 
     return (
         <SectionShell
@@ -361,7 +369,32 @@ function DeliverablesSection({
                     </p>
                 </div>
             )}
+            {isPendingApproval && (
+
+                <div className="mt-6 pt-6 border-t border-slate-100">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-teal-50/50 rounded-2xl p-5 border border-teal-100">
+                        <div className="space-y-1">
+                            <p className="text-sm font-semibold text-teal-900">Review complete?</p>
+                            <p className="text-xs text-teal-700/80">Confirm delivery to finalize this stage of the project.</p>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={onAccept}
+                            disabled={isAccepting}
+                            className="inline-flex items-center justify-center gap-2 rounded-xl bg-teal-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-60 transition-colors shadow-sm"
+                        >
+                            {isAccepting ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                                <CheckCircle2 className="h-4 w-4" />
+                            )}
+                            Accept Delivery
+                        </button>
+                    </div>
+                </div>
+            )}
         </SectionShell>
+
     );
 }
 
@@ -560,6 +593,31 @@ export default function QuotationPayClient({ token }: { token: string }) {
             setIsAccepting(false);
         }
     };
+
+    const handleApproveMilestone = async (phase: Phase) => {
+        if (isAccepting) return;
+        setIsAccepting(true);
+        setError(null);
+        try {
+            const res = await fetch(
+                `${apiBase}/api/quotation-payments/client/${token}/approve-milestone`,
+                {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ phase }),
+                },
+            );
+            const json = await res.json();
+            if (!res.ok) throw new Error(json?.message || "Failed to approve milestone");
+
+            await loadAll({ silent: true });
+        } catch (e) {
+            setError((e as Error).message);
+        } finally {
+            setIsAccepting(false);
+        }
+    };
+
 
     // ── Loading / error gates ─────────────────────────────────────────────
     if (isLoading) {
@@ -789,8 +847,11 @@ export default function QuotationPayClient({ token }: { token: string }) {
                             <DeliverablesSection 
                                 order={tracker.order} 
                                 isDeliveryPaid={tracker.phases.delivery.status === "paid"} 
+                                isAccepting={isAccepting}
+                                onAccept={() => handleApproveMilestone("delivery")}
                             />
                         )}
+
 
                         <SectionShell
                             icon={<ReceiptText className="h-5 w-5" />}
@@ -1168,11 +1229,36 @@ export default function QuotationPayClient({ token }: { token: string }) {
                                                             transition={{ duration: 0.2 }}
                                                         >
                                                             {tracker.phases[activePhase].status === "paid" ? (
-                                                                <div className="rounded-2xl border border-teal-200 bg-teal-50/40 p-5 text-sm text-teal-800">
-                                                                    This milestone is already paid. Select another
-                                                                    milestone above.
+                                                                <div className="space-y-4">
+                                                                    <div className="rounded-2xl border border-teal-200 bg-teal-50/40 p-5 text-sm text-teal-800">
+                                                                        {activePhase === "delivery" && tracker.order?.status === "pending_delivery" ? (
+                                                                            <p>Your deliverables are ready! Please review and click <strong>Accept Delivery</strong> below to move forward.</p>
+                                                                        ) : activePhase === "final" && tracker.order?.status === "pending_final" ? (
+                                                                            <p>Your final payment is confirmed! Click <strong>Complete Order</strong> below to finalize the project.</p>
+                                                                        ) : (
+                                                                            <p>This milestone is already paid. Select another milestone above.</p>
+                                                                        )}
+                                                                    </div>
+                                                                    
+                                                                    {((activePhase === "delivery" && tracker.order?.status === "pending_delivery") || 
+                                                                      (activePhase === "final" && tracker.order?.status === "pending_final")) && (
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => handleApproveMilestone(activePhase)}
+                                                                            disabled={isAccepting}
+                                                                            className="w-full inline-flex items-center justify-center gap-2 rounded-2xl bg-teal-600 px-5 py-3.5 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-60 transition-colors shadow-md"
+                                                                        >
+                                                                            {isAccepting ? (
+                                                                                <Loader2 className="h-4 w-4 animate-spin" />
+                                                                            ) : (
+                                                                                <CheckCircle2 className="h-4 w-4" />
+                                                                            )}
+                                                                            {activePhase === "delivery" ? "Accept Delivery" : "Complete Order"}
+                                                                        </button>
+                                                                    )}
                                                                 </div>
                                                             ) : !phasePrerequisitesMet(activePhase, tracker) ? (
+
                                                                 <div className="rounded-2xl border border-dashed border-slate-200 p-5 text-sm text-slate-500 flex items-start gap-2">
                                                                     <Lock className="h-4 w-4 mt-0.5 shrink-0" />
                                                                     <span>

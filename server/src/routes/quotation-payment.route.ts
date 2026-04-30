@@ -12,7 +12,10 @@ const STAFF_ROLES = [Role.SUPER_ADMIN, Role.ADMIN, Role.HR_MANAGER, Role.TEAM_LE
 router.post('/client/:token/intent', QuotationPaymentController.createClientPaymentIntent);
 router.post('/client/:token/capture', QuotationPaymentController.captureClientPayPalOrder);
 router.get('/client/:token/status', QuotationPaymentController.getClientPaymentStatus);
+
 router.post('/client/:token/confirm', QuotationPaymentController.confirmClientPayment);
+router.post('/client/:token/approve-milestone', QuotationPaymentController.approveMilestone);
+
 
 /**
  * POST /api/quotation-payments/intent
