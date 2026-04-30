@@ -307,6 +307,11 @@ async function transitionStatus(
     newStatus: OrderStatus,
     userId: string,
     note?: string,
+    emailOptions?: {
+        sendEmail?: boolean;
+        customEmailMessage?: string;
+        selectedEmails?: string[];
+    },
 ): Promise<IOrder> {
     const order = await OrderModel.findById(orderId);
     if (!order) throw new AppError('Order not found', 404);
@@ -341,6 +346,29 @@ async function transitionStatus(
             'Order was modified concurrently. Please retry.',
             409,
         );
+
+    // Feature: Send email notification to client if requested
+    if (emailOptions?.sendEmail) {
+        try {
+            const recipients = emailOptions.selectedEmails?.length
+                ? emailOptions.selectedEmails.join(', ')
+                : updated.quotationSnapshot?.clientEmail;
+
+            if (recipients) {
+                await emailService.sendOrderStatusEmail({
+                    to: recipients,
+                    clientName: updated.quotationSnapshot?.clientName || 'Client',
+                    orderName: updated.quotationSnapshot?.templateName || updated.orderNumber,
+                    status: newStatus.toUpperCase().replace('_', ' '),
+                    message: emailOptions.customEmailMessage || `Your order status has been updated to ${newStatus}.`,
+                });
+                logger.info({ orderId, recipients, newStatus }, 'order.transition.email_sent');
+            }
+        } catch (err) {
+            logger.error({ err, orderId }, 'order.transition.email_failed');
+        }
+    }
+
     return updated;
 }
 

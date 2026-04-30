@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
 import {
   useGetOrdersQuery,
   useCreateOrderMutation,
@@ -126,16 +127,16 @@ import { Role } from "@/constants/role";
 const statusWorkflow: Record<OrderStatus, OrderStatus[]> = {
   pending: ["in_progress", "cancelled"],
   in_progress: ["quality_check", "revision", "cancelled"],
-  quality_check: ["completed", "revision", "in_progress"],
+  quality_check: ["pending_delivery", "revision", "in_progress"],
   revision: ["in_progress", "cancelled"],
-  completed: ["delivered", "revision"],
-  delivered: [], 
-  cancelled: [],
-  // ── New Pipeline Transitions ──────────────────────────────────────
-  pending_upfront: ["cancelled"], // Moves to 'active' via webhook
-  active: ["pending_delivery", "cancelled"], // Staff triggers delivery
-  pending_delivery: ["cancelled"], // Moves to 'delivered' via webhook
-  pending_final: ["completed"], // Moves to 'completed' via webhook
+  completed: ["revision"],
+  delivered: ["pending_final", "revision", "cancelled"], 
+  cancelled: ["pending_upfront"],
+  // ── Manual Bypass Transitions ──────────────────────────────────────
+  pending_upfront: ["active", "cancelled"], 
+  active: ["in_progress", "cancelled"], 
+  pending_delivery: ["delivered", "cancelled"], 
+  pending_final: ["completed", "cancelled"], 
 };
 
 // Helper function to check if a status transition is allowed
@@ -165,6 +166,7 @@ interface ApiErrorResponse {
 }
 
 export default function OrdersPage() {
+  const router = useRouter();
   const { data: session } = useSession();
   const { data: meData } = useGetMeQuery({});
   const apiBase =
@@ -523,15 +525,14 @@ export default function OrdersPage() {
       return;
     }
 
-    // Feature: send emails on specific status changes
-    if (["cancelled", "completed", "delivered"].includes(newStatus)) {
-      const orderObj = orderData?.data.find((o) => o._id === orderId);
-      if (orderObj) {
-        setEmailPendingStatus(newStatus);
-        setEmailPendingOrder(orderObj);
-        setIsEmailDialogOpen(true);
-        return;
-      }
+    // Feature: send emails on status changes
+    // We now prompt for email selection and customization for ALL manual status changes
+    const orderObj = orderData?.data.find((o: any) => o._id === orderId);
+    if (orderObj) {
+      setEmailPendingStatus(newStatus);
+      setEmailPendingOrder(orderObj);
+      setIsEmailDialogOpen(true);
+      return;
     }
 
     try {
@@ -631,8 +632,7 @@ export default function OrdersPage() {
   };
 
   const openViewDialog = (order: IOrder) => {
-    setSelectedOrder(order);
-    setIsViewDialogOpen(true);
+    router.push(`/orders/${order._id}`);
   };
 
   const openTimelineDialog = (order: IOrder) => {
@@ -1181,7 +1181,7 @@ export default function OrdersPage() {
                               onCheckedChange={() =>
                                 toggleOrderSelection(order._id)
                               }
-                              aria-label={`Select ${order.title || order.orderName}`}
+                              aria-label={`Select ${order.quotationSnapshot?.templateName || order.orderName || "Order"}`}
                             />
                           </TableCell>
                         )}
@@ -1204,7 +1204,7 @@ export default function OrdersPage() {
                         </TableCell>
                         <TableCell className="max-w-[200px]">
                           <span className="font-medium text-sm line-clamp-1 group-hover:text-primary transition-colors">
-                            {order.title ||
+                            {order.quotationSnapshot?.templateName ||
                               order.orderName ||
                               "Untitled Project"}
                           </span>
@@ -1219,13 +1219,14 @@ export default function OrdersPage() {
                         </TableCell>
                         <TableCell className="text-center">
                           <div className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-muted text-[11px] font-bold">
-                            {order.items?.length || 0}
+                            {order.quotationSnapshot?.scopeOfWork?.length || 0}
                           </div>
                         </TableCell>
                         <TableCell className="text-right">
                           <span className="font-bold text-sm">
-                            $
+                            {order.quotationSnapshot?.currency === "USD" ? "$" : order.quotationSnapshot?.currency || "$"}
                             {(
+                              order.quotationSnapshot?.grandTotal ||
                               order.totalAmount ||
                               order.totalPrice ||
                               0
@@ -1255,23 +1256,18 @@ export default function OrdersPage() {
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
-                                {Object.entries(ORDER_STATUS_LABELS).map(
-                                  ([value, label]) => (
-                                    <SelectItem
-                                      key={value}
-                                      value={value}
-                                      disabled={
-                                        !canTransitionTo(
-                                          order.status,
-                                          value as OrderStatus,
-                                        )
-                                      }
-                                      className="text-xs uppercase tracking-wider"
-                                    >
-                                      {label}
-                                    </SelectItem>
-                                  ),
-                                )}
+                                <SelectItem value={order.status} className="text-xs uppercase tracking-wider font-bold">
+                                  {ORDER_STATUS_LABELS[order.status]} (Current)
+                                </SelectItem>
+                                {statusWorkflow[order.status]?.map((statusValue) => (
+                                  <SelectItem
+                                    key={statusValue}
+                                    value={statusValue}
+                                    className="text-xs uppercase tracking-wider"
+                                  >
+                                    {ORDER_STATUS_LABELS[statusValue]}
+                                  </SelectItem>
+                                ))}
                               </SelectContent>
                             </Select>
                           </div>

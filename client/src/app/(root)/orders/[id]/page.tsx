@@ -95,15 +95,15 @@ export default function OrderDetailsPage() {
                     <div>
                         <div className="flex items-center gap-2">
                             <h1 className="text-3xl font-bold tracking-tight text-foreground">
-                                {order.title || order.orderName || "Untitled Order"}
+                                {order.quotationSnapshot?.templateName || order.orderNumber || "Untitled Order"}
                             </h1>
                             <Badge className={`${getStatusColor(order.status)} flex items-center shadow-sm`}>
                                 {getStatusIcon(order.status)}
-                                {order.status.toUpperCase()}
+                                {order.status?.toUpperCase()?.replace("_", " ")}
                             </Badge>
                         </div>
                         <p className="text-muted-foreground flex items-center gap-2 mt-1">
-                            <span className="font-mono text-sm bg-muted px-1.5 py-0.5 rounded">{order._id}</span>
+                            <span className="font-mono text-sm bg-muted px-1.5 py-0.5 rounded">{order.orderNumber}</span>
                             <span className="text-xs">•</span>
                             <span className="text-sm">Placed on {format(new Date(order.createdAt), "PPP")}</span>
                         </p>
@@ -134,40 +134,31 @@ export default function OrderDetailsPage() {
                             <div>
                                 <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Description</h3>
                                 <div className="mt-2 text-foreground/90 leading-relaxed bg-muted/20 p-4 rounded-lg border border-dashed">
-                                    {order.description || "No detailed description provided for this order."}
+                                    {order.quotationSnapshot?.overview || "No detailed description provided for this order."}
                                 </div>
                             </div>
                             
                             <div>
-                                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4">Service Breakdown</h3>
+                                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4">Service Breakdown (Scope of Work)</h3>
                                 <div className="grid gap-4">
-                                    {order.items?.map((item, index: number) => (
+                                    {order.quotationSnapshot?.scopeOfWork?.map((item: any, index: number) => (
                                         <div key={index} className="flex flex-col md:flex-row justify-between items-start md:items-center p-5 rounded-xl border bg-card hover:shadow-md transition-shadow">
                                             <div className="flex items-start gap-4">
                                                 <div className="p-3 bg-primary/5 rounded-lg">
                                                     <Package className="h-6 w-6 text-primary" />
                                                 </div>
                                                 <div>
-                                                    <p className="font-bold text-lg">{item.name}</p>
+                                                    <p className="font-bold text-lg">{item.title}</p>
                                                     <div className="flex items-center gap-2 mt-1">
-                                                        <Badge variant="outline" className="text-[10px] font-bold uppercase tracking-tighter">
-                                                            {item.pricingModel}
-                                                        </Badge>
-                                                        {item.quantity && <span className="text-sm text-muted-foreground">Qty: {item.quantity}</span>}
-                                                        {item.hours && <span className="text-sm text-muted-foreground">Hours: {item.hours}</span>}
+                                                        <span className="text-sm text-muted-foreground line-clamp-2">{item.description}</span>
                                                     </div>
                                                 </div>
                                             </div>
-                                            <div className="mt-4 md:mt-0 text-right">
-                                                <p className="text-xl font-black text-foreground">
-                                                    {order.currency || "$"}{item.totalPrice.toLocaleString()}
-                                                </p>
-                                                <p className="text-xs text-muted-foreground font-medium">
-                                                    Unit Price: {order.currency || "$"}{item.unitPrice}
-                                                </p>
-                                            </div>
                                         </div>
                                     ))}
+                                    {(!order.quotationSnapshot?.scopeOfWork || order.quotationSnapshot.scopeOfWork.length === 0) && (
+                                        <div className="text-muted-foreground text-sm italic">No specific scope of work items found.</div>
+                                    )}
                                 </div>
                             </div>
                         </CardContent>
@@ -186,7 +177,8 @@ export default function OrderDetailsPage() {
                             <div className="p-4 bg-primary/10 rounded-2xl border border-primary/20 text-center">
                                 <span className="text-muted-foreground text-sm font-medium">Grand Total</span>
                                 <h2 className="text-4xl font-black text-primary mt-1">
-                                    {order.currency || "$"}{(order.totalAmount || 0).toLocaleString()}
+                                    {order.quotationSnapshot?.currency === "USD" ? "$" : order.quotationSnapshot?.currency || "$"}
+                                    {(order.quotationSnapshot?.grandTotal || 0).toLocaleString()}
                                 </h2>
                             </div>
 
@@ -194,20 +186,22 @@ export default function OrderDetailsPage() {
                                 <div className="flex justify-between items-center py-2 border-b border-dashed">
                                     <span className="text-muted-foreground text-sm">Client</span>
                                     <span className="font-bold text-sm">
-                                        {typeof order.clientId === "object" ? order.clientId.name : "N/A"}
+                                        {order.quotationSnapshot?.clientName || (typeof order.clientId === "object" ? order.clientId.name : "N/A")}
                                     </span>
                                 </div>
                                 <div className="flex justify-between items-center py-2 border-b border-dashed">
                                     <span className="text-muted-foreground text-sm">Order Type</span>
                                     <Badge variant="secondary" className="capitalize font-bold text-[10px]">
-                                        {order.orderType}
+                                        {order.orderType?.replace("_", " ") || "Project"}
                                     </Badge>
                                 </div>
                                 <div className="flex justify-between items-center py-2 border-b border-dashed">
                                     <span className="text-muted-foreground text-sm">Payment Status</span>
-                                    <Badge variant={order.isPaid ? "default" : "destructive"} className="font-bold text-[10px]">
-                                        {order.isPaid ? "PAID" : "UNPAID"}
-                                    </Badge>
+                                    {order.status === "pending_upfront" ? (
+                                        <Badge variant="destructive" className="font-bold text-[10px]">AWAITING UPFRONT</Badge>
+                                    ) : (
+                                        <Badge variant="default" className="font-bold text-[10px] bg-green-500">PAID</Badge>
+                                    )}
                                 </div>
                                 <div className="flex justify-between items-center py-2">
                                     <span className="text-muted-foreground text-sm">Last Update</span>

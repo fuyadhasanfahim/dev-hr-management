@@ -32,6 +32,18 @@ interface ClientEmail {
 }
 
 const defaultTemplates: Partial<Record<OrderStatus, string>> = {
+    active:
+        "Hi {clientName},\n\nWe have received your upfront payment, and your project '{orderName}' is now ACTIVE!\n\nOur team has started working on your requirements. We will keep you updated on the progress.\n\nBest regards,\nWeb Briks Team",
+    in_progress:
+        "Hi {clientName},\n\nWe wanted to let you know that your order '{orderName}' is now IN PROGRESS.\n\nOur designers and developers are currently working on the implementation. You can expect further updates soon.\n\nBest regards,\nWeb Briks Team",
+    quality_check:
+        "Hi {clientName},\n\nYour order '{orderName}' has moved to the QUALITY CHECK stage.\n\nWe are currently reviewing the work to ensure it meets our high standards before delivering it to you.\n\nBest regards,\nWeb Briks Team",
+    revision:
+        "Hi {clientName},\n\nWe have started working on the REVISIONS for your order '{orderName}'.\n\nWe will notify you once the requested changes have been implemented and are ready for another review.\n\nBest regards,\nWeb Briks Team",
+    pending_delivery:
+        "Hi {clientName},\n\nYour order '{orderName}' is ready for delivery!\n\nPlease complete the scheduled 30% delivery payment to unlock and access your files.\n\nBest regards,\nWeb Briks Team",
+    pending_final:
+        "Hi {clientName},\n\nWe are reaching the final stages of your project '{orderName}'.\n\nPlease complete the final 20% payment to close the project and receive all final assets and documentation.\n\nBest regards,\nWeb Briks Team",
     cancelled:
         "Hi {clientName},\n\nUnfortunately, your order '{orderName}' has been cancelled.\n\nOur team has stopped work on this order. If you have any questions or feel this is a mistake, please reach out to us by replying to this email.\n\nBest regards,\nWeb Briks Team",
     completed:

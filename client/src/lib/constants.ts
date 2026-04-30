@@ -3,14 +3,14 @@ import { OrderStatus, OrderPriority } from "@/types/order.type";
 export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
   pending: "Pending",
   in_progress: "In Progress",
-  quality_check: "Quality Check",
+  quality_check: "QC Review",
   revision: "Revision",
   completed: "Completed",
   delivered: "Delivered",
   cancelled: "Cancelled",
-  // ── New Pipeline Statuses ───────────────────────────────────────────
+  // ── Team-Clear Pipeline Statuses ───────────────────────────────────
   pending_upfront: "Awaiting 50% Upfront",
-  active: "Active (Paid)",
+  active: "Active (50% Paid)",
   pending_delivery: "Awaiting 30% Delivery",
   pending_final: "Awaiting 20% Final",
 };

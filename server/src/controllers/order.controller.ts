@@ -49,7 +49,7 @@ async function getOrderById(req: Request, res: Response, next: NextFunction): Pr
  */
 async function updateOrderStatus(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-        const { status, note } = req.body;
+        const { status, note, sendEmail, customEmailMessage, selectedEmails } = req.body;
         const userId = req.user?.id;
         if (!userId) {
             next(new AppError('Unauthorized', 401));
@@ -69,6 +69,11 @@ async function updateOrderStatus(req: Request, res: Response, next: NextFunction
             status,
             userId,
             note,
+            {
+                sendEmail,
+                customEmailMessage,
+                selectedEmails,
+            },
         );
         res.status(200).json({ success: true, data: result });
     } catch (err) {
