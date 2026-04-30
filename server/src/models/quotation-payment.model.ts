@@ -71,7 +71,6 @@ const quotationPaymentSchema = new Schema<IQuotationPayment>(
             type: Schema.Types.ObjectId,
             ref: 'Quotation',
             required: true,
-            index: true,
         },
         quotationVersion: {
             type: Number,
