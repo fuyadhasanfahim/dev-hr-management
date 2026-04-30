@@ -5,7 +5,9 @@ import ShiftAssignmentModel from '../models/shift-assignment.model.js';
 import StaffModel from '../models/staff.model.js';
 import notificationService from './notification.service.js';
 import analyticsService from './analytics.service.js';
+import meetingService from './meeting.service.js';
 import { sendBulkSMS } from '../utils/sms.util.js';
+
 import {
     getBDNow,
     getBDStartOfDay,
@@ -610,7 +612,11 @@ function startAllSchedulers() {
         ) {
             processMonthlyFinanceSMSReport().catch(console.error);
         }
+
+        // Meeting reminders — every minute check
+        meetingService.processMeetingReminders().catch(console.error);
     };
+
     
     // Check every minute for scheduled tasks
     runScheduledTasksIfTime();

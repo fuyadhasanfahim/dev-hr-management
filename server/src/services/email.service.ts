@@ -459,6 +459,111 @@ const sendQuotationPaymentAdminEmail = async (data: SendQuotationPaymentAdminDat
     return await transporter.sendMail(mailOptions);
 };
 
+// ─── Meeting Emails ───────────────────────────────────────────────────────────
+
+interface SendMeetingInviteData {
+    to: string;
+    clientName: string;
+    meetingTitle: string;
+    scheduledAt: string;
+    durationMinutes: number;
+    meetLink: string;
+    description: string;
+}
+
+const sendMeetingInviteEmail = async (data: SendMeetingInviteData) => {
+    const meetSection = data.meetLink
+        ? `<p style="margin:16px 0"><a href="${data.meetLink}" style="background:#1a73e8;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600;display:inline-block">Join Google Meet</a></p><p style="font-size:13px;color:#666">Or paste: ${data.meetLink}</p>`
+        : '';
+
+    const html = `
+        <div style="font-family:'Segoe UI',Arial,sans-serif;max-width:600px;margin:0 auto;padding:32px;background:#f8fafc;border-radius:12px">
+            <div style="background:#fff;border-radius:8px;padding:32px;box-shadow:0 1px 3px rgba(0,0,0,0.08)">
+                <h2 style="color:#1e293b;margin:0 0 8px">📅 Meeting Scheduled</h2>
+                <p style="color:#64748b;margin:0 0 24px">You have a meeting with WebBriks</p>
+                <table style="width:100%;border-collapse:collapse;margin:0 0 24px">
+                    <tr><td style="padding:8px 0;color:#64748b;width:120px">Title</td><td style="padding:8px 0;font-weight:600;color:#1e293b">${data.meetingTitle}</td></tr>
+                    <tr><td style="padding:8px 0;color:#64748b">Client</td><td style="padding:8px 0;color:#1e293b">${data.clientName}</td></tr>
+                    <tr><td style="padding:8px 0;color:#64748b">When</td><td style="padding:8px 0;color:#1e293b">${data.scheduledAt}</td></tr>
+                    <tr><td style="padding:8px 0;color:#64748b">Duration</td><td style="padding:8px 0;color:#1e293b">${data.durationMinutes} minutes</td></tr>
+                    ${data.description ? `<tr><td style="padding:8px 0;color:#64748b;vertical-align:top">Details</td><td style="padding:8px 0;color:#1e293b">${data.description}</td></tr>` : ''}
+                </table>
+                ${meetSection}
+            </div>
+        </div>`;
+
+    return await transporter.sendMail({
+        from: 'Meetings | WebBriks',
+        to: data.to,
+        subject: `Meeting: ${data.meetingTitle} — ${data.scheduledAt}`,
+        html,
+    });
+};
+
+interface SendMeetingReminderData {
+    to: string;
+    clientName: string;
+    meetingTitle: string;
+    scheduledAt: string;
+    meetLink: string;
+}
+
+const sendMeetingReminderEmail = async (data: SendMeetingReminderData) => {
+    const meetSection = data.meetLink
+        ? `<p style="margin:16px 0"><a href="${data.meetLink}" style="background:#1a73e8;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600;display:inline-block">Join Google Meet Now</a></p>`
+        : '';
+
+    const html = `
+        <div style="font-family:'Segoe UI',Arial,sans-serif;max-width:600px;margin:0 auto;padding:32px;background:#fffbeb;border-radius:12px">
+            <div style="background:#fff;border-radius:8px;padding:32px;box-shadow:0 1px 3px rgba(0,0,0,0.08)">
+                <h2 style="color:#92400e;margin:0 0 8px">⏰ Meeting Reminder — 30 Minutes</h2>
+                <p style="color:#64748b;margin:0 0 24px">Your meeting is starting soon!</p>
+                <table style="width:100%;border-collapse:collapse;margin:0 0 24px">
+                    <tr><td style="padding:8px 0;color:#64748b;width:120px">Title</td><td style="padding:8px 0;font-weight:600;color:#1e293b">${data.meetingTitle}</td></tr>
+                    <tr><td style="padding:8px 0;color:#64748b">Client</td><td style="padding:8px 0;color:#1e293b">${data.clientName}</td></tr>
+                    <tr><td style="padding:8px 0;color:#64748b">When</td><td style="padding:8px 0;color:#1e293b">${data.scheduledAt}</td></tr>
+                </table>
+                ${meetSection}
+            </div>
+        </div>`;
+
+    return await transporter.sendMail({
+        from: 'Meetings | WebBriks',
+        to: data.to,
+        subject: `⏰ Reminder: ${data.meetingTitle} starts in 30 minutes`,
+        html,
+    });
+};
+
+interface SendMeetingCancellationData {
+    to: string;
+    clientName: string;
+    meetingTitle: string;
+    scheduledAt: string;
+}
+
+const sendMeetingCancellationEmail = async (data: SendMeetingCancellationData) => {
+    const html = `
+        <div style="font-family:'Segoe UI',Arial,sans-serif;max-width:600px;margin:0 auto;padding:32px;background:#fef2f2;border-radius:12px">
+            <div style="background:#fff;border-radius:8px;padding:32px;box-shadow:0 1px 3px rgba(0,0,0,0.08)">
+                <h2 style="color:#991b1b;margin:0 0 8px">❌ Meeting Cancelled</h2>
+                <p style="color:#64748b;margin:0 0 24px">The following meeting has been cancelled.</p>
+                <table style="width:100%;border-collapse:collapse">
+                    <tr><td style="padding:8px 0;color:#64748b;width:120px">Title</td><td style="padding:8px 0;font-weight:600;color:#1e293b">${data.meetingTitle}</td></tr>
+                    <tr><td style="padding:8px 0;color:#64748b">Client</td><td style="padding:8px 0;color:#1e293b">${data.clientName}</td></tr>
+                    <tr><td style="padding:8px 0;color:#64748b">Was scheduled</td><td style="padding:8px 0;color:#1e293b">${data.scheduledAt}</td></tr>
+                </table>
+            </div>
+        </div>`;
+
+    return await transporter.sendMail({
+        from: 'Meetings | WebBriks',
+        to: data.to,
+        subject: `Meeting Cancelled: ${data.meetingTitle}`,
+        html,
+    });
+};
+
 export default {
     sendInvoiceEmail,
     sendPinResetEmail,
@@ -471,4 +576,8 @@ export default {
     sendAdminPaymentEmail,
     sendQuotationPaymentReceiptEmail,
     sendQuotationPaymentAdminEmail,
+    sendMeetingInviteEmail,
+    sendMeetingReminderEmail,
+    sendMeetingCancellationEmail,
 };
+

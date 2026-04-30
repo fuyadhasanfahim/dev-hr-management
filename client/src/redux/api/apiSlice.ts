@@ -44,6 +44,7 @@ export const apiSlice = createApi({
         "Policy",
         "PendingPolicy",
         "Quotation",
+        "Meeting",
     ],
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars

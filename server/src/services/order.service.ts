@@ -15,6 +15,8 @@ import type { IQuotation } from '../types/quotation.type.js';
 import { logger } from '../lib/logger.js';
 import emailService from './email.service.js';
 import { QuotationService } from './quotation.service.js';
+import { sendClientSmsIfBDT } from './sms-notification.service.js';
+
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -438,6 +440,16 @@ async function transitionStatus(
                     paymentLink,
                 });
                 logger.info({ orderId, recipients, newStatus }, 'order.transition.email_sent');
+
+                // SMS for BDT-currency clients
+                if (updated.clientId) {
+                    const orderLabel = updated.quotationSnapshot?.templateName || updated.orderNumber;
+                    const smsMsg = `Order update: ${orderLabel} status changed to ${newStatus.toUpperCase().replace('_', ' ')}. Check your email for details. - WebBriks`;
+                    sendClientSmsIfBDT(updated.clientId.toString(), smsMsg).catch((err) =>
+                        logger.error({ err, orderId }, 'order.transition.sms_failed'),
+                    );
+                }
+
             }
 
         } catch (err) {

@@ -14,6 +14,8 @@ import ClientModel from '../models/client.model.js';
 import envConfig from '../config/env.config.js';
 import emailService from './email.service.js';
 import QuotationPaymentModel from '../models/quotation-payment.model.js';
+import { sendClientSmsIfBDT } from './sms-notification.service.js';
+
 import type { PaymentPhaseEmailInfo, QuotationMilestoneEmailInfo } from '../templates/QuotationEmail.js';
 import * as React from 'react';
 import { renderToBuffer } from '@react-pdf/renderer';
@@ -531,7 +533,16 @@ export class QuotationService {
                 } else if (failures.length > 0) {
                     emailError = `Email sent to ${successes.length} recipient(s); failed for ${failures.length}.`;
                 }
+
+                // SMS for BDT-currency clients
+                if (emailSent && saved.clientId) {
+                    const smsMsg = `New quotation (${saved.quotationNumber}) from WebBriks. Please check your email for details and review. - WebBriks`;
+                    sendClientSmsIfBDT(saved.clientId.toString(), smsMsg).catch((err: any) =>
+                        logger.error({ err }, 'quotation.send_sms.failed'),
+                    );
+                }
             }
+
         } catch (err: any) {
             emailError = err?.message || String(err);
         }

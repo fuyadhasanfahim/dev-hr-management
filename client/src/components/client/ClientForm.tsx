@@ -110,6 +110,7 @@ const currencyOptions = [
     { value: 'GBP', label: 'British Pound (£)' },
     { value: 'AUD', label: 'Australian Dollar (A$)' },
     { value: 'CAD', label: 'Canadian Dollar (C$)' },
+    { value: 'BDT', label: 'Bangladeshi Taka (৳)' },
 ];
 
 // --- MAIN COMPONENT ---

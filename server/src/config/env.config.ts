@@ -88,5 +88,10 @@ const envConfig = {
     // Public payment app (Next.js) base URL
     // Used for quotation secure links + payment provider callbacks.
     payment_client_url: process.env.PAYMENT_CLIENT_URL || 'http://localhost:3001',
+
+    // Google Calendar / Meet integration
+    google_service_account_email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || '',
+    google_service_account_private_key: process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY || '',
+    google_calendar_id: process.env.GOOGLE_CALENDAR_ID || 'primary',
 };
 export default envConfig;

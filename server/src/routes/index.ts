@@ -30,6 +30,8 @@ import { PaymentRoutes } from "./payment.route.js";
 import { policyRoute } from "./policy.route.js";
 import { quotationRoute } from "./quotation.route.js";
 import { quotationPaymentRoute } from "./quotation-payment.route.js";
+import { meetingRoute } from "./meeting.route.js";
+
 
 
 const router: Router = Router();
@@ -159,7 +161,12 @@ const moduleRoutes = [
         path: "/quotation-payments",
         route: quotationPaymentRoute,
     },
+    {
+        path: "/meetings",
+        route: meetingRoute,
+    },
 ];
+
 
 
 moduleRoutes.forEach(({ path, route }) => {

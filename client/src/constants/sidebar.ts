@@ -18,7 +18,9 @@ import {
     IconCash,
     IconWallet,
     IconShieldLock,
+    IconCalendarEvent,
 } from "@tabler/icons-react";
+
 
 export interface SidebarItem {
     title: string;
@@ -116,6 +118,13 @@ export const sidebarGroups: SidebarGroup[] = [
                 icon: IconReceipt,
                 access: [Role.SUPER_ADMIN, Role.ADMIN],
             },
+            {
+                title: "Meetings",
+                url: "/meetings",
+                icon: IconCalendarEvent,
+                access: [Role.SUPER_ADMIN, Role.ADMIN, Role.TEAM_LEADER],
+            },
+
             {
                 title: "Profit Share",
                 url: "/profit-share",
