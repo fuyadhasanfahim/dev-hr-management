@@ -6,8 +6,78 @@ import { OutboxService } from './outbox.service.js';
 import OutboxEventModel from '../models/outbox-event.model.js';
 import QuotationModel from '../models/quotation.model.js';
 import QuotationPaymentModel from '../models/quotation-payment.model.js';
-import OrderModel from '../models/order.model.js';
+import OrderModel, { OrderStatus } from '../models/order.model.js';
 import { QuotationService } from './quotation.service.js';
+import emailService from './email.service.js';
+import ClientModel from '../models/client.model.js';
+import envConfig from '../config/env.config.js';
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+async function sendReceiptEmails(
+    tracker: any,
+    phase: string,
+    amountCents: number,
+    referenceId: string,
+    provider: string
+) {
+    try {
+        const quotation = await QuotationModel.findOne({ 
+            _id: tracker.quotationId 
+        }).lean();
+        
+        if (!quotation) return;
+
+        const client = await ClientModel.findById(quotation.clientId).lean();
+        
+        const toList = Array.from(
+            new Set(
+                (client?.emails?.length ? client.emails : [quotation.client?.email])
+                    .map((e: any) => String(e || '').trim())
+                    .filter(Boolean),
+            ),
+        );
+
+        await Promise.all(
+            toList.map((to) =>
+                emailService.sendQuotationPaymentReceiptEmail({
+                    to,
+                    clientName: quotation.client?.contactName || client?.name || 'Client',
+                    quotationNumber: quotation.quotationNumber,
+                    phase,
+                    amountCents,
+                    currency: tracker.currency || quotation.currency || 'USD',
+                    referenceId,
+                    provider,
+                    paidAt: new Date(),
+                }),
+            ),
+        );
+
+        const adminList = String(envConfig.payment_admin_emails || envConfig.smtp_user || '')
+            .split(',')
+            .map((e) => e.trim())
+            .filter(Boolean);
+
+        await Promise.all(
+            adminList.map((to) =>
+                emailService.sendQuotationPaymentAdminEmail({
+                    to,
+                    clientName: quotation.client?.contactName || client?.name || 'Client',
+                    quotationNumber: quotation.quotationNumber,
+                    phase,
+                    amountCents,
+                    currency: tracker.currency || quotation.currency || 'USD',
+                    referenceId,
+                    provider,
+                    paidAt: new Date(),
+                }),
+            ),
+        );
+    } catch (err: any) {
+        logger.error({ err, phase, referenceId }, 'Failed to send payment receipt emails');
+    }
+}
 
 // ─── Event Handlers ───────────────────────────────────────────────────────────
 
@@ -54,13 +124,23 @@ export async function handleUpfrontPaymentSucceeded(data: any) {
 
     log.info({ amountReceived: data.amountReceived }, 'payment.upfront.received');
 
-    const { tracker } = await QuotationPaymentService.recordPhasePayment(
+    const { tracker, wasApplied } = await QuotationPaymentService.recordPhasePayment(
         data.quotationGroupId,
         'upfront',
         data.amountReceived,
-        data.paymentIntentId,
+        data.paymentIntentId || data.paypalCaptureId,
         data.quotationId,
     );
+
+    if (wasApplied) {
+        await sendReceiptEmails(
+            tracker,
+            'upfront',
+            data.amountReceived,
+            data.paymentIntentId || data.paypalCaptureId || 'unknown',
+            data.paymentIntentId ? 'stripe' : data.paypalCaptureId ? 'paypal' : 'unknown'
+        );
+    }
 
     // Guard: phase must be fully paid before advancing status
     if (tracker.phases.upfront.status !== 'paid') {
@@ -79,7 +159,7 @@ export async function handleUpfrontPaymentSucceeded(data: any) {
         try {
             await OrderService.transitionStatus(
                 orderId,
-                'active', // New pipeline status
+                OrderStatus.ACTIVE, // New pipeline status
                 systemActorId,
                 'Order activated automatically after upfront payment confirmation'
             );
@@ -106,7 +186,7 @@ export async function handleUpfrontPaymentSucceeded(data: any) {
         // Immediately transition to active
         await OrderService.transitionStatus(
             order._id.toString(),
-            'active',
+            OrderStatus.ACTIVE,
             systemActorId,
             'Order activated automatically after creation (upfront already paid)'
         );
@@ -121,9 +201,19 @@ export async function handleDeliveryPaymentSucceeded(data: any) {
         data.quotationGroupId,
         'delivery',
         data.amountReceived,
-        data.paymentIntentId,
+        data.paymentIntentId || data.paypalCaptureId,
         data.quotationId,
     );
+
+    if (wasApplied) {
+        await sendReceiptEmails(
+            tracker,
+            'delivery',
+            data.amountReceived,
+            data.paymentIntentId || data.paypalCaptureId || 'unknown',
+            data.paymentIntentId ? 'stripe' : data.paypalCaptureId ? 'paypal' : 'unknown'
+        );
+    }
 
     if (!wasApplied) {
         logger.info(
@@ -147,9 +237,19 @@ export async function handleFinalPaymentSucceeded(data: any) {
         data.quotationGroupId,
         'final',
         data.amountReceived,
-        data.paymentIntentId,
+        data.paymentIntentId || data.paypalCaptureId,
         data.quotationId,
     );
+
+    if (wasApplied) {
+        await sendReceiptEmails(
+            tracker,
+            'final',
+            data.amountReceived,
+            data.paymentIntentId || data.paypalCaptureId || 'unknown',
+            data.paymentIntentId ? 'stripe' : data.paypalCaptureId ? 'paypal' : 'unknown'
+        );
+    }
 
     if (!wasApplied) {
         logger.info(

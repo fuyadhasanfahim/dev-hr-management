@@ -379,7 +379,6 @@ export class QuotationPaymentService {
                         phase,
                         quotationId: quotation._id.toString(),
                         quotationVersion: String(quotation.version),
-                        ...(getCorrelationId() ? { correlationId: getCorrelationId()! } : {}),
                     },
                     description: `${phase.toUpperCase()} payment (${tracker.phases[phase].percentage}%) — Quotation ${quotation.quotationNumber}`,
                 },

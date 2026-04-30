@@ -6,7 +6,6 @@ import OrderModel, {
     OrderStatus,
     OrderType,
     ALLOWED_STATUS_TRANSITIONS,
-    AssetType,
 } from '../models/order.model.js';
 import QuotationModel from '../models/quotation.model.js';
 import { AppError } from '../utils/AppError.js';
@@ -44,30 +43,62 @@ async function generateOrderNumber(): Promise<string> {
     return `ORD-${year}-${counter.seq.toString().padStart(5, '0')}`;
 }
 
-function buildQuotationSnapshot(quotation: IQuotation): Readonly<IQuotationSnapshot> {
+function buildQuotationSnapshot(
+    quotation: IQuotation,
+): Readonly<IQuotationSnapshot> {
     // ── Critical field guards ─────────────────────────────────────────────────
     if (!quotation._id)
-        throw new AppError('Snapshot build failed: quotation._id is missing', 500);
+        throw new AppError(
+            'Snapshot build failed: quotation._id is missing',
+            500,
+        );
     if (!quotation.quotationGroupId)
-        throw new AppError('Snapshot build failed: quotationGroupId is missing', 500);
+        throw new AppError(
+            'Snapshot build failed: quotationGroupId is missing',
+            500,
+        );
     if (!quotation.quotationNumber)
-        throw new AppError('Snapshot build failed: quotationNumber is missing', 500);
+        throw new AppError(
+            'Snapshot build failed: quotationNumber is missing',
+            500,
+        );
     if (!quotation.serviceType)
-        throw new AppError('Snapshot build failed: serviceType is missing', 500);
+        throw new AppError(
+            'Snapshot build failed: serviceType is missing',
+            500,
+        );
     if (quotation.version == null || quotation.version < 1)
-        throw new AppError('Snapshot build failed: version is missing or invalid', 500);
+        throw new AppError(
+            'Snapshot build failed: version is missing or invalid',
+            500,
+        );
     if (!quotation.clientId)
         throw new AppError('Snapshot build failed: clientId is missing', 500);
     if (!quotation.client?.contactName)
-        throw new AppError('Snapshot build failed: client.contactName is missing', 500);
+        throw new AppError(
+            'Snapshot build failed: client.contactName is missing',
+            500,
+        );
     if (!quotation.client?.email)
-        throw new AppError('Snapshot build failed: client.email is missing', 500);
+        throw new AppError(
+            'Snapshot build failed: client.email is missing',
+            500,
+        );
     if (!quotation.details?.title)
-        throw new AppError('Snapshot build failed: details.title is missing', 500);
+        throw new AppError(
+            'Snapshot build failed: details.title is missing',
+            500,
+        );
     if (quotation.totals?.grandTotal == null)
-        throw new AppError('Snapshot build failed: totals.grandTotal is missing', 500);
+        throw new AppError(
+            'Snapshot build failed: totals.grandTotal is missing',
+            500,
+        );
     if (quotation.totals?.taxAmount == null)
-        throw new AppError('Snapshot build failed: totals.taxAmount is missing', 500);
+        throw new AppError(
+            'Snapshot build failed: totals.taxAmount is missing',
+            500,
+        );
 
     // ── Phase validation — fail loud on any invalid phase entry ──────────────
     const phases = quotation.phases ?? [];
@@ -81,15 +112,19 @@ function buildQuotationSnapshot(quotation: IQuotation): Readonly<IQuotationSnaps
     });
 
     const scopeOfWork = phases.map((p) => ({
-        title:       p.title,
+        title: p.title,
         description: typeof p.description === 'string' ? p.description : '',
-        items:       Array.isArray(p.items) ? [...p.items] : [],
+        items: Array.isArray(p.items) ? [...p.items] : [],
     }));
 
     // ── additionalServices — optional; each entry must have a numeric price ───
     const additionalServicesTotal = Array.isArray(quotation.additionalServices)
         ? quotation.additionalServices.reduce((sum, svc, i) => {
-              if (svc == null || typeof svc.price !== 'number' || isNaN(svc.price)) {
+              if (
+                  svc == null ||
+                  typeof svc.price !== 'number' ||
+                  isNaN(svc.price)
+              ) {
                   throw new AppError(
                       `Snapshot build failed: additionalServices[${i}].price is invalid`,
                       500,
@@ -100,33 +135,42 @@ function buildQuotationSnapshot(quotation: IQuotation): Readonly<IQuotationSnaps
         : 0;
 
     // ── Currency: trim → uppercase → fallback USD ─────────────────────────────
-    const rawCurrency = typeof quotation.currency === 'string' ? quotation.currency.trim() : '';
+    const rawCurrency =
+        typeof quotation.currency === 'string' ? quotation.currency.trim() : '';
     const currency = rawCurrency !== '' ? rawCurrency.toUpperCase() : 'USD';
 
     // ── Pricing fields must be present ────────────────────────────────────────
     if (quotation.pricing?.taxRate == null)
-        throw new AppError('Snapshot build failed: pricing.taxRate is missing', 500);
+        throw new AppError(
+            'Snapshot build failed: pricing.taxRate is missing',
+            500,
+        );
     if (quotation.pricing?.discount == null)
-        throw new AppError('Snapshot build failed: pricing.discount is missing', 500);
+        throw new AppError(
+            'Snapshot build failed: pricing.discount is missing',
+            500,
+        );
 
     return deepFreeze<IQuotationSnapshot>({
-        quotationId:            quotation._id as Types.ObjectId,
-        quotationGroupId:       quotation.quotationGroupId,
-        version:                quotation.version,
-        quotationNumber:        quotation.quotationNumber,
-        serviceType:            quotation.serviceType,
-        templateName:           quotation.details.title,
-        clientId:               quotation.clientId,
-        clientName:             quotation.client.contactName,
-        clientEmail:            quotation.client.email,
-        overview:               typeof quotation.overview === 'string' ? quotation.overview : undefined,
+        quotationId: quotation._id as Types.ObjectId,
+        quotationGroupId: quotation.quotationGroupId,
+        version: quotation.version,
+        quotationNumber: quotation.quotationNumber,
+        serviceType: quotation.serviceType,
+        templateName: quotation.details.title,
+        clientId: quotation.clientId,
+        clientName: quotation.client.contactName,
+        clientEmail: quotation.client.email,
+        ...(typeof quotation.overview === 'string'
+            ? { overview: quotation.overview }
+            : {}),
         scopeOfWork,
         currency,
-        grandTotal:             quotation.totals.grandTotal,
-        taxRate:                quotation.pricing.taxRate,
-        discount:               quotation.pricing.discount,
+        grandTotal: quotation.totals.grandTotal,
+        taxRate: quotation.pricing.taxRate,
+        discount: quotation.pricing.discount,
         additionalServicesTotal,
-        taxAmount:              quotation.totals.taxAmount,
+        taxAmount: quotation.totals.taxAmount,
     });
 }
 
@@ -139,18 +183,30 @@ function buildQuotationSnapshot(quotation: IQuotation): Readonly<IQuotationSnaps
  * IDEMPOTENCY GUARD: Checks for existing order with this quotationGroupId
  * inside the transaction. If one already exists, returns it without creating a duplicate.
  */
-async function createOrderFromQuotation(quotationGroupId: string, createdBy: string): Promise<IOrder> {
-    logger.info({ quotationGroupId, createdBy }, 'order.create_from_quotation.requested');
+async function createOrderFromQuotation(
+    quotationGroupId: string,
+    createdBy: string,
+): Promise<IOrder> {
+    logger.info(
+        { quotationGroupId, createdBy },
+        'order.create_from_quotation.requested',
+    );
     const session = await mongoose.startSession();
     session.startTransaction();
 
     try {
         // Idempotency: if order already exists for this group, return it
-        const existing = await OrderModel.findOne({ quotationGroupId }).session(session);
+        const existing = await OrderModel.findOne({ quotationGroupId }).session(
+            session,
+        );
         if (existing) {
             await session.abortTransaction();
             logger.info(
-                { quotationGroupId, orderId: existing._id.toString(), orderNumber: existing.orderNumber },
+                {
+                    quotationGroupId,
+                    orderId: existing._id.toString(),
+                    orderNumber: existing.orderNumber,
+                },
                 'order.create_from_quotation.idempotent_hit',
             );
             return existing;
@@ -173,9 +229,16 @@ async function createOrderFromQuotation(quotationGroupId: string, createdBy: str
         const orderNumber = await generateOrderNumber();
         const snapshot = buildQuotationSnapshot(quotation);
 
-        const orderType = quotation.serviceType === 'web-development'
-            ? OrderType.PROJECT
-            : OrderType.SERVICE;
+        const orderType =
+            quotation.serviceType === 'web-development'
+                ? OrderType.PROJECT
+                : OrderType.SERVICE;
+
+        // If triggered by a public webhook/client action, use the staff member who created the quotation
+        const actualCreatedBy =
+            createdBy && createdBy !== '000000000000000000000000'
+                ? createdBy
+                : quotation.createdBy.toString();
 
         const [order] = await OrderModel.create(
             [
@@ -189,18 +252,22 @@ async function createOrderFromQuotation(quotationGroupId: string, createdBy: str
                     statusHistory: [
                         {
                             status: OrderStatus.PENDING_UPFRONT,
-                            changedBy: new Types.ObjectId(createdBy),
+                            changedBy: new Types.ObjectId(actualCreatedBy),
                             updatedAt: new Date(),
                             note: 'Order created automatically after quotation acceptance',
                         },
                     ],
                     assets: [],
                     milestones: [],
-                    createdBy: new Types.ObjectId(createdBy),
+                    createdBy: new Types.ObjectId(actualCreatedBy),
                 },
             ],
             { session },
         );
+
+        if (!order) {
+            throw new AppError('Failed to create order document', 500);
+        }
 
         // Back-reference: write orderId onto the quotation
         await QuotationModel.findByIdAndUpdate(
@@ -211,13 +278,20 @@ async function createOrderFromQuotation(quotationGroupId: string, createdBy: str
 
         await session.commitTransaction();
         logger.info(
-            { quotationGroupId, orderId: order._id.toString(), orderNumber: order.orderNumber },
+            {
+                quotationGroupId,
+                orderId: order._id.toString(),
+                orderNumber: order.orderNumber,
+            },
             'order.create_from_quotation.completed',
         );
         return order;
     } catch (err) {
         await session.abortTransaction();
-        logger.error({ err, quotationGroupId }, 'order.create_from_quotation.failed');
+        logger.error(
+            { err, quotationGroupId },
+            'order.create_from_quotation.failed',
+        );
         throw err;
     } finally {
         session.endSession();
@@ -241,7 +315,7 @@ async function transitionStatus(
     if (!allowed.includes(newStatus)) {
         throw new AppError(
             `Invalid status transition: ${order.status} → ${newStatus}. ` +
-            `Allowed next states: [${allowed.join(', ')}]`,
+                `Allowed next states: [${allowed.join(', ')}]`,
             409,
         );
     }
@@ -262,7 +336,11 @@ async function transitionStatus(
         { new: true },
     );
 
-    if (!updated) throw new AppError('Order was modified concurrently. Please retry.', 409);
+    if (!updated)
+        throw new AppError(
+            'Order was modified concurrently. Please retry.',
+            409,
+        );
     return updated;
 }
 
@@ -275,7 +353,10 @@ async function markDelivered(orderId: string, userId: string): Promise<IOrder> {
     if (!order) throw new AppError('Order not found', 404);
 
     if (order.status !== OrderStatus.IN_PROGRESS) {
-        throw new AppError(`Order must be in_progress to mark as delivered. Current: ${order.status}`, 409);
+        throw new AppError(
+            `Order must be in_progress to mark as delivered. Current: ${order.status}`,
+            409,
+        );
     }
 
     if (!order.assets || order.assets.length === 0) {
@@ -304,7 +385,11 @@ async function markDelivered(orderId: string, userId: string): Promise<IOrder> {
         { new: true },
     );
 
-    if (!updated) throw new AppError('Order was modified concurrently. Please retry.', 409);
+    if (!updated)
+        throw new AppError(
+            'Order was modified concurrently. Please retry.',
+            409,
+        );
 
     // Best-effort: notify client via email (do not block delivery status change if SMTP fails).
     try {
@@ -313,13 +398,18 @@ async function markDelivered(orderId: string, userId: string): Promise<IOrder> {
             await emailService.sendOrderStatusEmail({
                 to,
                 clientName: updated.quotationSnapshot?.clientName || 'Client',
-                orderName: updated.quotationSnapshot?.templateName || updated.orderNumber,
+                orderName:
+                    updated.quotationSnapshot?.templateName ||
+                    updated.orderNumber,
                 status: OrderStatus.DELIVERED,
                 message:
                     'Your order has been marked as delivered. If any payment is still pending, please complete it to unlock deliverables.',
             });
         } else {
-            logger.warn({ orderId }, 'order.delivered.email_skipped_missing_client_email');
+            logger.warn(
+                { orderId },
+                'order.delivered.email_skipped_missing_client_email',
+            );
         }
     } catch (err) {
         logger.error({ err, orderId }, 'order.delivered.email_failed');
@@ -344,8 +434,9 @@ async function unlockAssets(orderId: string): Promise<IOrder> {
     const accessTokenExpiresAt = new Date();
     accessTokenExpiresAt.setDate(accessTokenExpiresAt.getDate() + 7); // 7-day access window
 
-    const updatedAssets = order.assets.map((asset) => ({
-        ...asset.toObject(),
+    const plainAssets = order.toObject().assets || [];
+    const updatedAssets = plainAssets.map((asset) => ({
+        ...asset,
         isLocked: false,
         accessToken: crypto.randomBytes(32).toString('hex'),
         accessTokenExpiresAt,
@@ -371,7 +462,8 @@ async function unlockAssets(orderId: string): Promise<IOrder> {
         { new: true },
     );
 
-    if (!updated) throw new AppError('Order not found during asset unlock', 404);
+    if (!updated)
+        throw new AppError('Order not found during asset unlock', 404);
     return updated;
 }
 
@@ -383,7 +475,10 @@ async function completeOrder(orderId: string): Promise<IOrder> {
     if (!order) throw new AppError('Order not found', 404);
 
     if (order.status !== OrderStatus.DELIVERED) {
-        throw new AppError(`Order must be in delivered state to complete. Current: ${order.status}`, 409);
+        throw new AppError(
+            `Order must be in delivered state to complete. Current: ${order.status}`,
+            409,
+        );
     }
 
     const updated = await OrderModel.findOneAndUpdate(
@@ -405,7 +500,11 @@ async function completeOrder(orderId: string): Promise<IOrder> {
         { new: true },
     );
 
-    if (!updated) throw new AppError('Order was modified concurrently during completion.', 409);
+    if (!updated)
+        throw new AppError(
+            'Order was modified concurrently during completion.',
+            409,
+        );
     return updated;
 }
 
@@ -413,7 +512,11 @@ async function getAllOrdersFromDB(query: any) {
     const { page = 1, limit = 10, search, status, orderType, clientId } = query;
     const filter: any = {};
 
-    if (search) filter['quotationSnapshot.templateName'] = { $regex: search, $options: 'i' };
+    if (search)
+        filter['quotationSnapshot.templateName'] = {
+            $regex: search,
+            $options: 'i',
+        };
     if (status) filter.status = status;
     if (orderType) filter.orderType = orderType;
     if (clientId) filter.clientId = clientId;
@@ -446,17 +549,28 @@ async function getOrderByIdFromDB(id: string) {
  * Serve a single asset value after validating the client's accessToken.
  * NEVER returns the encryptedValue directly.
  */
-async function getAssetByAccessToken(orderId: string, assetId: string, accessToken: string) {
-    const order = await OrderModel.findById(orderId).select('+assets.accessToken');
+async function getAssetByAccessToken(
+    orderId: string,
+    assetId: string,
+    accessToken: string,
+) {
+    const order = await OrderModel.findById(orderId).select(
+        '+assets.accessToken',
+    );
     if (!order) throw new AppError('Order not found', 404);
 
-    const asset = order.assets.id(assetId);
+    const asset = order.assets.find((a: any) => a._id?.toString() === assetId);
     if (!asset) throw new AppError('Asset not found', 404);
-    if (asset.isLocked) throw new AppError('Asset is locked pending delivery payment', 403);
+    if (asset.isLocked)
+        throw new AppError('Asset is locked pending delivery payment', 403);
 
-    if (asset.accessToken !== accessToken) throw new AppError('Invalid asset access token', 403);
+    if (asset.accessToken !== accessToken)
+        throw new AppError('Invalid asset access token', 403);
     if (asset.accessTokenExpiresAt && asset.accessTokenExpiresAt < new Date()) {
-        throw new AppError('Asset access token has expired. Please request asset re-delivery.', 403);
+        throw new AppError(
+            'Asset access token has expired. Please request asset re-delivery.',
+            403,
+        );
     }
 
     // In production: decrypt asset.encryptedValue here using KMS key
