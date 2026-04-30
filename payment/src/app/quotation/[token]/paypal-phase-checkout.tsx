@@ -89,8 +89,23 @@ export default function PayPalPhaseCheckout({
                                 if (!actions.order) throw new Error("PayPal order missing");
                                 const details = await actions.order.capture();
                                 await onPaid();
+                                const cap = (details as any)?.purchase_units?.[0]?.payments?.captures?.[0];
+                                const capValue = Number(cap?.amount?.value);
+                                const capCurrency = String(cap?.amount?.currency_code || currency || "").toUpperCase();
+                                const amountCents =
+                                    Number.isFinite(capValue) && capValue > 0
+                                        ? Math.round(capValue * 100)
+                                        : undefined;
                                 router.push(
-                                    `/success?from=quotation&method=paypal&id=${encodeURIComponent(String(details?.id || ""))}`,
+                                    `/success?from=quotation&method=paypal&token=${encodeURIComponent(
+                                        token,
+                                    )}&phase=${encodeURIComponent(
+                                        phase,
+                                    )}&id=${encodeURIComponent(String(details?.id || ""))}${
+                                        amountCents ? `&amount=${encodeURIComponent(String(amountCents))}` : ""
+                                    }${
+                                        capCurrency ? `&currency=${encodeURIComponent(capCurrency)}` : ""
+                                    }`,
                                 );
                             } catch (e) {
                                 setError(

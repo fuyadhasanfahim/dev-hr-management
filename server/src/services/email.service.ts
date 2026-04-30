@@ -7,7 +7,9 @@ import { InvitationEmail } from '../templates/InvitationEmail.js';
 import { ApplicationStatusEmail } from '../templates/ApplicationStatusEmail.js';
 import { OrderStatusUpdateEmail } from '../templates/OrderStatusUpdateEmail.js';
 import { AdminPaymentEmail } from '../templates/AdminPaymentEmail.js';
-import { QuotationEmail, type PaymentPhaseEmailInfo } from '../templates/QuotationEmail.js';
+import { QuotationEmail, type PaymentPhaseEmailInfo, type QuotationMilestoneEmailInfo } from '../templates/QuotationEmail.js';
+import { QuotationPaymentReceiptEmail } from '../templates/QuotationPaymentReceiptEmail.js';
+import { QuotationPaymentAdminEmail } from '../templates/QuotationPaymentAdminEmail.js';
 import * as React from 'react';
 import envConfig from '../config/env.config.js';
 
@@ -240,10 +242,19 @@ interface SendQuotationEmailData {
     quotationNumber: string;
     clientLink: string;
     validUntil?: string;
+    /** Formatted grand total, e.g. "$1,250.00". Always shown when provided. */
+    totalAmountFormatted?: string;
+    milestones?: QuotationMilestoneEmailInfo[];
+    hasPdfAttachment?: boolean;
     /** Present when resending to a client who has already accepted — triggers reminder mode. */
     paymentPhases?: PaymentPhaseEmailInfo[];
     /** Formatted remaining amount, e.g. "$500.00" */
     remainingAmountFormatted?: string;
+    attachment?: {
+        filename: string;
+        content: Buffer;
+        contentType: string;
+    };
 }
 
 const sendQuotationEmail = async (data: SendQuotationEmailData) => {
@@ -254,9 +265,16 @@ const sendQuotationEmail = async (data: SendQuotationEmailData) => {
                 quotationTitle: data.quotationTitle,
                 quotationNumber: data.quotationNumber,
                 clientLink: data.clientLink,
-                validUntil: data.validUntil,
-                paymentPhases: data.paymentPhases,
-                remainingAmountFormatted: data.remainingAmountFormatted,
+                ...(data.validUntil ? { validUntil: data.validUntil } : {}),
+                ...(data.totalAmountFormatted
+                    ? { totalAmountFormatted: data.totalAmountFormatted }
+                    : {}),
+                ...(data.milestones ? { milestones: data.milestones } : {}),
+                ...(data.hasPdfAttachment ? { hasPdfAttachment: true } : {}),
+                ...(data.paymentPhases ? { paymentPhases: data.paymentPhases } : {}),
+                ...(data.remainingAmountFormatted
+                    ? { remainingAmountFormatted: data.remainingAmountFormatted }
+                    : {}),
             }),
         );
 
@@ -268,9 +286,29 @@ const sendQuotationEmail = async (data: SendQuotationEmailData) => {
                 ? `Payment reminder — Quotation ${data.quotationNumber} (${data.remainingAmountFormatted ?? 'balance'} remaining)`
                 : `Quotation ${data.quotationNumber} — ${data.quotationTitle}`,
             html: emailHtml,
+            ...(data.attachment
+                ? {
+                      attachments: [
+                          {
+                              filename: data.attachment.filename,
+                              content: data.attachment.content,
+                              contentType: data.attachment.contentType,
+                          },
+                      ],
+                  }
+                : {}),
         };
 
         const info = await transporter.sendMail(mailOptions);
+        // Helpful runtime signal for delivery troubleshooting.
+        // (Do not include full html or attachment bytes in logs.)
+        console.log('[email] quotation sent', {
+            to: data.to,
+            messageId: (info as any)?.messageId,
+            accepted: (info as any)?.accepted,
+            hasAttachment: Boolean(data.attachment),
+            attachmentBytes: data.attachment?.content?.length,
+        });
         return info;
     } catch (error) {
         console.error('Error sending quotation email:', error);
@@ -346,6 +384,79 @@ const sendAdminPaymentEmail = async (data: SendAdminPaymentData) => {
     }
 };
 
+interface SendQuotationPaymentReceiptData {
+    to: string;
+    clientName: string;
+    quotationNumber: string;
+    phase: string;
+    amountCents: number;
+    currency: string;
+    referenceId: string;
+    provider: string;
+    paidAt: Date;
+}
+
+const sendQuotationPaymentReceiptEmail = async (data: SendQuotationPaymentReceiptData) => {
+    const emailHtml = await render(
+        React.createElement(QuotationPaymentReceiptEmail, {
+            clientName: data.clientName,
+            quotationNumber: data.quotationNumber,
+            phase: data.phase,
+            amountCents: data.amountCents,
+            currency: data.currency,
+            referenceId: data.referenceId,
+            provider: data.provider,
+            paidAt: data.paidAt,
+        }),
+    );
+
+    const mailOptions = {
+        from: 'Payment receipt | WebBriks',
+        to: data.to,
+        subject: `Payment receipt — ${data.quotationNumber} (${data.phase})`,
+        html: emailHtml,
+    };
+
+    return await transporter.sendMail(mailOptions);
+};
+
+interface SendQuotationPaymentAdminData {
+    to: string;
+    clientName: string;
+    quotationNumber: string;
+    phase: string;
+    amountCents: number;
+    currency: string;
+    referenceId: string;
+    provider: string;
+    paidAt: Date;
+}
+
+const sendQuotationPaymentAdminEmail = async (data: SendQuotationPaymentAdminData) => {
+    const emailHtml = await render(
+        React.createElement(QuotationPaymentAdminEmail, {
+            clientName: data.clientName,
+            quotationNumber: data.quotationNumber,
+            phase: data.phase,
+            amountCents: data.amountCents,
+            currency: data.currency,
+            referenceId: data.referenceId,
+            provider: data.provider,
+            paidAt: data.paidAt,
+            ordersUrl: `${envConfig.client_url}/orders`,
+        }),
+    );
+
+    const mailOptions = {
+        from: 'Payment received | WebBriks',
+        to: data.to,
+        subject: `Payment received — ${data.quotationNumber} (${data.phase})`,
+        html: emailHtml,
+    };
+
+    return await transporter.sendMail(mailOptions);
+};
+
 export default {
     sendInvoiceEmail,
     sendPinResetEmail,
@@ -356,4 +467,6 @@ export default {
     sendQuotationEmail,
     sendApplicationStatusEmail,
     sendAdminPaymentEmail,
+    sendQuotationPaymentReceiptEmail,
+    sendQuotationPaymentAdminEmail,
 };

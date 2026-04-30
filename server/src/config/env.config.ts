@@ -79,6 +79,9 @@ const envConfig = {
     paypal_client_id: process.env.PAYPAL_CLIENT_ID,
     paypal_client_secret: process.env.PAYPAL_CLIENT_SECRET,
     paypal_webhook_id: process.env.PAYPAL_WEBHOOK_ID,
+    // Comma-separated list of admin recipients for payment receipts/notifications.
+    // Falls back to SMTP_USER when unset.
+    payment_admin_emails: process.env.PAYMENT_ADMIN_EMAILS,
 
     // Quotation pipeline
     quotation_token_secret: process.env.QUOTATION_TOKEN_SECRET!,

@@ -95,6 +95,8 @@ const quotationSchema = new Schema<IQuotation>(
         // ── Idempotency / Provenance ─────────────────────────────────────────────
         // Used to make createNewVersion safe to retry (and safe under concurrency).
         versionCreationKey: { type: String, sparse: true, index: true },
+        // Used to prevent rapid duplicate creations (same payload within a time window).
+        creationFingerprint: { type: String, sparse: true, index: true },
         derivedFromQuotationId: { type: Schema.Types.ObjectId, ref: 'Quotation', sparse: true, index: true },
     },
     {
@@ -107,6 +109,7 @@ const quotationSchema = new Schema<IQuotation>(
 
 quotationSchema.index({ quotationGroupId: 1, version: -1 });
 quotationSchema.index({ quotationGroupId: 1, versionCreationKey: 1 }, { unique: true, sparse: true });
+quotationSchema.index({ createdBy: 1, creationFingerprint: 1, createdAt: -1 });
 
 quotationSchema.virtual('viewed').get(function (this: IQuotation) {
     return this.status !== 'draft' && this.status !== 'sent';

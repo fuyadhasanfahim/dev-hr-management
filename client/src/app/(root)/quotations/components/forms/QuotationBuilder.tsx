@@ -32,7 +32,7 @@ import { useRouter } from "next/navigation";
 import { QUOTATION_TEMPLATES } from "@/constants/quotation-templates";
 import { format } from "date-fns";
 import { formatMoney } from "@/lib/money";
-import { useGetClientEmailsQuery } from "@/redux/features/client/clientApi";
+import { QuotationEmailDialog } from "../QuotationEmailDialog";
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -229,67 +229,6 @@ export default function QuotationBuilder({
   const [sendQuotation, { isLoading: isSending }] = useSendQuotationMutation();
 
   const [recipientModalOpen, setRecipientModalOpen] = useState(false);
-  const [selectedEmails, setSelectedEmails] = useState<string[]>([]);
-
-  const { data: clientEmails } = useGetClientEmailsQuery(data.clientId || "", {
-    skip: !data.clientId || !recipientModalOpen,
-  });
-
-  const selectedClient = useMemo(() => {
-    if (!data.clientId) return null;
-    return clientsData?.clients?.find((c) => c._id === data.clientId) || null;
-  }, [clientsData?.clients, data.clientId]);
-
-  const emailOptions = useMemo(() => {
-    const map = new Map<string, { email: string; label: string }>();
-
-    // Labeled emails endpoint (preferred)
-    (clientEmails || []).forEach((e) => {
-      const email = (e.email || "").trim();
-      if (!email) return;
-      map.set(email.toLowerCase(), {
-        email,
-        label: e.label ? `${e.label}` : "Email",
-      });
-    });
-
-    // Client profile emails
-    (selectedClient?.emails || []).forEach((email, idx) => {
-      const v = (email || "").trim();
-      if (!v) return;
-      const key = v.toLowerCase();
-      if (!map.has(key)) {
-        map.set(key, { email: v, label: idx === 0 ? "Primary" : "Email" });
-      }
-    });
-
-    // Team members
-    (selectedClient?.teamMembers || []).forEach((m) => {
-      const v = (m.email || "").trim();
-      if (!v) return;
-      const key = v.toLowerCase();
-      if (!map.has(key)) {
-        map.set(key, { email: v, label: m.name ? `Team: ${m.name}` : "Team" });
-      }
-    });
-
-    // Fallback: manually filled email field
-    const manual = (data.client.email || "").trim();
-    if (manual) {
-      const key = manual.toLowerCase();
-      if (!map.has(key)) map.set(key, { email: manual, label: "Manual" });
-    }
-
-    return Array.from(map.values());
-  }, [clientEmails, data.client.email, selectedClient?.emails, selectedClient?.teamMembers]);
-
-  useEffect(() => {
-    if (!recipientModalOpen) return;
-    if (selectedEmails.length) return;
-    // Preselect: all known emails (or at least first)
-    const all = emailOptions.map((o) => o.email);
-    setSelectedEmails(all.length ? all : []);
-  }, [emailOptions, recipientModalOpen, selectedEmails.length]);
 
   // ── Pricing Logic ──
   const computedTotals = useMemo(() => {
@@ -336,34 +275,68 @@ export default function QuotationBuilder({
     setRecipientModalOpen(true);
   };
 
-  const confirmDispatch = async () => {
-    if (!data.clientId) return toast.error("Please select a client first");
-    if (selectedEmails.length === 0) return toast.error("Select at least one recipient email");
+  const confirmDispatch = async (selectedEmails: string[]) => {
+    if (!data.clientId) {
+      toast.error("Please select a client first");
+      return [];
+    }
+    if (selectedEmails.length === 0) {
+      toast.warning("Please select at least one recipient");
+      return [];
+    }
+    if (isSending || isCreating || isUpdating) return [];
 
-    // Ensure saved first (as draft), then send
     const id = data._id || (await saveQuotation("draft"));
-    if (!id) return;
+    if (!id) return [];
 
     try {
-      const result = await sendQuotation({ id, emails: selectedEmails }).unwrap();
+      const result = await sendQuotation({ id: String(id), emails: selectedEmails }).unwrap();
       if (result.data.clientLink) {
-        await navigator.clipboard.writeText(result.data.clientLink);
-        toast.success("Client link copied to clipboard!");
-      }
-      if (result.data.emailSent) {
-        toast.success(
-          `Quotation email sent${result.data.emailedTo?.length ? ` to ${result.data.emailedTo.join(", ")}` : ""}`,
-        );
-      } else {
-        toast.warning(result.data.emailError || "Email was not sent. Link was generated only.");
+        try {
+          await navigator.clipboard.writeText(result.data.clientLink);
+          toast.success("Client link copied to clipboard!");
+        } catch {
+          // Clipboard not always permitted — non-fatal.
+        }
       }
 
-      setRecipientModalOpen(false);
-      setSelectedEmails([]);
-      reset();
-      router.push("/quotations");
+      const recipients = result.data.recipients ?? [];
+      const failed = recipients.filter((r) => r.status === "failed");
+      const sent = recipients.filter((r) => r.status === "sent");
+
+      if (sent.length > 0 && failed.length === 0) {
+        toast.success(`Quotation sent to ${sent.length} recipient${sent.length === 1 ? "" : "s"}`);
+      } else if (sent.length > 0 && failed.length > 0) {
+        toast.warning(
+          `Sent to ${sent.length}, failed for ${failed.length}. See dialog for details.`,
+        );
+      } else if (failed.length > 0) {
+        toast.error(
+          result.data.emailError ||
+            `Failed to send to ${failed.length} recipient${failed.length === 1 ? "" : "s"}`,
+        );
+      } else {
+        toast.warning(
+          result.data.emailError || "Email was not sent. Link was generated only.",
+        );
+      }
+
+      // If at least one email succeeded, navigate away after the user closes the
+      // results view (they'll click "Done" — handled by the dialog itself). For
+      // total failures we keep the user on the builder so they can retry.
+      if (sent.length > 0 && failed.length === 0) {
+        // Deferring slightly so the dialog can show the success state before nav.
+        setTimeout(() => {
+          setRecipientModalOpen(false);
+          reset();
+          router.push("/quotations");
+        }, 1500);
+      }
+
+      return recipients;
     } catch (err) {
       toast.error((err as Error).message || "Failed to send quotation");
+      return [];
     }
   };
 
@@ -795,6 +768,33 @@ export default function QuotationBuilder({
                   <ChevronDown className="ml-auto h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200 group-open:rotate-180" />
                 </summary>
                 <div className="pt-3 pb-4 space-y-4">
+                  <div className="space-y-2">
+                    <FieldLabel className="text-[10px]">Selected</FieldLabel>
+                    {data.techStack.tools.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">No tools selected yet.</p>
+                    ) : (
+                      <div className="flex flex-wrap gap-2">
+                        {data.techStack.tools.map((tool, idx) => (
+                          <SoftBadge key={`${tool}-${idx}`}>
+                            {tool}
+                            <button
+                              onClick={() =>
+                                updateTechStack({
+                                  tools: data.techStack.tools.filter((t) => t !== tool),
+                                })
+                              }
+                              className="text-muted-foreground hover:text-foreground"
+                              aria-label={`Remove ${tool}`}
+                              type="button"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </SoftBadge>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <hr className="border-border" />
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-y-3 gap-x-6">
                     {PREDEFINED_TOOLS.map((tool) => (
                       <div key={tool} className="flex items-center space-x-2">
@@ -828,7 +828,8 @@ export default function QuotationBuilder({
                       className="h-9 text-sm"
                       onKeyDown={(e) => {
                         if (e.key === "Enter") {
-                          const val = e.currentTarget.value;
+                          e.preventDefault();
+                          const val = e.currentTarget.value.trim();
                           if (val && !data.techStack.tools.includes(val)) {
                             updateTechStack({ tools: [...data.techStack.tools, val] });
                             e.currentTarget.value = "";
@@ -1012,19 +1013,39 @@ export default function QuotationBuilder({
                   <FieldLabel className="tracking-widest">Base Investment</FieldLabel>
                   <TextInput
                     type="number"
-                    value={data.pricing.basePrice}
-                    onChange={(e) => updatePricing({ basePrice: Number(e.target.value) })}
+                    value={data.pricing.basePrice === 0 ? "" : String(data.pricing.basePrice)}
+                    onChange={(e) =>
+                      updatePricing({
+                        basePrice: e.target.value === "" ? 0 : Number(e.target.value),
+                      })
+                    }
                     className="font-semibold text-lg h-11"
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <label className="text-[10px] font-bold uppercase text-muted-foreground">Tax (%)</label>
-                    <TextInput type="number" value={data.pricing.taxRate} onChange={e => updatePricing({ taxRate: Number(e.target.value) })} />
+                    <TextInput
+                      type="number"
+                      value={data.pricing.taxRate === 0 ? "" : String(data.pricing.taxRate)}
+                      onChange={(e) =>
+                        updatePricing({
+                          taxRate: e.target.value === "" ? 0 : Number(e.target.value),
+                        })
+                      }
+                    />
                   </div>
                   <div className="space-y-2">
                     <label className="text-[10px] font-bold uppercase text-muted-foreground">Discount (%)</label>
-                    <TextInput type="number" value={data.pricing.discount} onChange={e => updatePricing({ discount: Number(e.target.value) })} />
+                    <TextInput
+                      type="number"
+                      value={data.pricing.discount === 0 ? "" : String(data.pricing.discount)}
+                      onChange={(e) =>
+                        updatePricing({
+                          discount: e.target.value === "" ? 0 : Number(e.target.value),
+                        })
+                      }
+                    />
                   </div>
                 </div>
               </div>
@@ -1085,91 +1106,15 @@ export default function QuotationBuilder({
         </div>
       </div>
 
-      {recipientModalOpen ? (
-        <div
-          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
-          role="dialog"
-          aria-modal="true"
-        >
-          <button
-            type="button"
-            className="absolute inset-0 bg-black/40"
-            onClick={() => setRecipientModalOpen(false)}
-            aria-label="Close"
-          />
-          <div className="relative w-full sm:max-w-lg rounded-t-2xl sm:rounded-2xl border bg-card p-5 shadow-xl">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <div className="text-lg font-semibold">Send quotation</div>
-                <div className="text-sm text-muted-foreground">
-                  Select one or more recipient emails.
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setRecipientModalOpen(false)}
-                className="h-9 w-9 inline-flex items-center justify-center rounded-md border bg-background hover:bg-muted/40"
-                aria-label="Close"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-
-            <div className="mt-4 space-y-2 max-h-[50vh] overflow-auto rounded-xl border bg-background/40 p-3">
-              {emailOptions.length === 0 ? (
-                <div className="text-sm text-muted-foreground">
-                  No emails found for this client. Add emails in the client profile first.
-                </div>
-              ) : (
-                emailOptions.map((opt) => {
-                  const checked = selectedEmails.includes(opt.email);
-                  return (
-                    <label
-                      key={opt.email}
-                      className="flex items-start gap-3 rounded-lg border bg-card p-3 hover:bg-muted/20 cursor-pointer"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={(e) => {
-                          const next = e.target.checked
-                            ? Array.from(new Set([...selectedEmails, opt.email]))
-                            : selectedEmails.filter((x) => x !== opt.email);
-                          setSelectedEmails(next);
-                        }}
-                        className="mt-1 h-4 w-4 rounded border bg-background text-primary focus:ring-2 focus:ring-ring/30"
-                      />
-                      <div className="min-w-0">
-                        <div className="text-sm font-medium truncate">{opt.email}</div>
-                        <div className="text-xs text-muted-foreground">{opt.label}</div>
-                      </div>
-                    </label>
-                  );
-                })
-              )}
-            </div>
-
-            <div className="mt-4 flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
-              <button
-                type="button"
-                className="inline-flex h-11 items-center justify-center rounded-md border bg-background px-4 text-sm font-semibold hover:bg-muted/40"
-                onClick={() => setRecipientModalOpen(false)}
-                disabled={isSending}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="inline-flex h-11 items-center justify-center rounded-md bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
-                onClick={confirmDispatch}
-                disabled={isSending || selectedEmails.length === 0 || emailOptions.length === 0}
-              >
-                {isSending ? "Sending..." : "Send"}
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
+      <QuotationEmailDialog
+        open={recipientModalOpen}
+        clientId={data.clientId || ""}
+        quotationLabel={data.details?.title || "this quotation"}
+        extraEmails={data.client?.email ? [data.client.email] : []}
+        onClose={() => !isSending && setRecipientModalOpen(false)}
+        onSend={confirmDispatch}
+        isSending={isSending}
+      />
     </div>
   );
 }

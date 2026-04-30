@@ -21,14 +21,20 @@ function SuccessContent() {
     const [status, setStatus] = useState<"loading" | "success" | "error">(
         "loading",
     );
+    const [referenceId, setReferenceId] = useState<string | null>(null);
 
     // URL params
+    const from = searchParams.get("from");
     const method = searchParams.get("method");
     const orderId = searchParams.get("id");
     const paymentIntent = searchParams.get("payment_intent"); // Stripe Intent ID
     const redirectStatus = searchParams.get("redirect_status"); // Stripe Status
     const invoiceNumber = searchParams.get("invoice");
     const alreadyPaid = searchParams.get("already_paid") === "true";
+    const token = searchParams.get("token");
+    const phase = searchParams.get("phase");
+    const amount = searchParams.get("amount");
+    const currency = searchParams.get("currency");
 
     useEffect(() => {
         const verifyAndConfirm = async () => {
@@ -45,8 +51,40 @@ function SuccessContent() {
             if (isSuccess) {
                 setStatus("success");
 
-                // 2. Synchronize with the backend to mark invoice as PAID
-                if (invoiceNumber) {
+                // 2. Synchronize with the backend
+                if (from === "quotation" && token && phase) {
+                    try {
+                        const provider = method === "paypal" ? "paypal" : "stripe";
+                        const confirmRes = await fetch(
+                            `${process.env.NEXT_PUBLIC_API_URL}/api/quotation-payments/client/${encodeURIComponent(
+                                token,
+                            )}/confirm`,
+                            {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({
+                                    phase,
+                                    provider,
+                                    paymentIntentId: paymentIntent || undefined,
+                                    paypalCaptureId: provider === "paypal" ? orderId : undefined,
+                                    amountCents: amount ? Number(amount) : undefined,
+                                    currency: currency || undefined,
+                                }),
+                            },
+                        );
+                        const confirmJson = await confirmRes.json().catch(() => ({}));
+                        if (confirmRes.ok) {
+                            const ref =
+                                confirmJson?.data?.referenceId ||
+                                confirmJson?.data?.paymentIntentId ||
+                                confirmJson?.data?.paypalCaptureId;
+                            if (ref) setReferenceId(String(ref));
+                        }
+                    } catch {
+                        // UI already shows success; backend sync is best-effort here.
+                    }
+                } else if (invoiceNumber) {
+                    // Legacy invoice flow (non-quotation payments)
                     try {
                         console.log("Confirming payment with backend...");
                         const confirmRes = await fetch(
@@ -102,12 +140,17 @@ function SuccessContent() {
 
         verifyAndConfirm();
     }, [
+        from,
         redirectStatus,
         method,
         orderId,
         invoiceNumber,
         paymentIntent,
         alreadyPaid,
+        token,
+        phase,
+        amount,
+        currency,
     ]);
 
     if (status === "loading") {
@@ -214,7 +257,7 @@ function SuccessContent() {
                                 Reference ID
                             </span>
                             <span className="font-mono text-sm font-semibold text-teal-600 dark:text-teal-400">
-                                {paymentIntent || orderId || "WB-PAY-SUCCESS"}
+                                {referenceId || paymentIntent || orderId || "—"}
                             </span>
                         </div>
                     </CardContent>

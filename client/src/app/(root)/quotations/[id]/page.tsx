@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { 
   useGetQuotationByIdQuery, 
@@ -9,6 +9,7 @@ import {
   useDeleteQuotationMutation,
   useGetGroupVersionsQuery
 } from "@/redux/features/quotation/quotationApi";
+import { QuotationEmailDialog } from "../components/QuotationEmailDialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
@@ -51,20 +52,68 @@ export default function ViewQuotationPage() {
   const [createNewVersion, { isLoading: isVersionCreating }] = useCreateNewVersionMutation();
   const [deleteQuotation, { isLoading: isDeleting }] = useDeleteQuotationMutation();
 
-  const handleSend = async () => {
+  const [pickerOpen, setPickerOpen] = useState(false);
+
+  const dialogClientId = useMemo(() => {
+    if (!data?.clientId) return "";
+    if (typeof data.clientId === "string") return data.clientId;
+    const populated = data.clientId as unknown as { _id?: string };
+    return populated?._id ?? "";
+  }, [data?.clientId]);
+
+  const openSendPicker = () => {
+    if (!dialogClientId) {
+      toast.error(
+        "This quotation has no linked client — cannot pick recipient emails.",
+      );
+      return;
+    }
+    setPickerOpen(true);
+  };
+
+  const handleConfirmSend = async (selected: string[]) => {
+    if (!id) return [];
+    if (selected.length === 0) {
+      toast.warning("Please select at least one recipient");
+      return [];
+    }
+    if (isSending) return [];
     try {
-      const result = await sendQuotation({ id: id as string }).unwrap();
+      const result = await sendQuotation({ id: id as string, emails: selected }).unwrap();
       if (result.data.clientLink) {
-        await navigator.clipboard.writeText(result.data.clientLink);
-        toast.success("Client link copied to clipboard!");
+        try {
+          await navigator.clipboard.writeText(result.data.clientLink);
+          toast.success("Client link copied to clipboard!");
+        } catch {
+          // Non-fatal: clipboard not always permitted.
+        }
       }
-      if (result.data.emailSent) {
-        toast.success(`Quotation email sent${result.data.emailedTo?.length ? ` to ${result.data.emailedTo.join(", ")}` : ""}`);
+
+      const recipients = result.data.recipients ?? [];
+      const failed = recipients.filter((r) => r.status === "failed");
+      const sent = recipients.filter((r) => r.status === "sent");
+
+      if (sent.length > 0 && failed.length === 0) {
+        toast.success(`Quotation sent to ${sent.length} recipient${sent.length === 1 ? "" : "s"}`);
+      } else if (sent.length > 0 && failed.length > 0) {
+        toast.warning(
+          `Sent to ${sent.length}, failed for ${failed.length}. See dialog for details.`,
+        );
+      } else if (failed.length > 0) {
+        toast.error(
+          result.data.emailError ||
+            `Failed to send to ${failed.length} recipient${failed.length === 1 ? "" : "s"}`,
+        );
       } else {
-        toast.warning(result.data.emailError || "Email was not sent. Link was generated only.");
+        toast.warning(
+          result.data.emailError ||
+            "Email was not sent. Link was generated only.",
+        );
       }
+      return recipients;
     } catch (err) {
       toast.error((err as Error).message || "Failed to send quotation");
+      return [];
     }
   };
 
@@ -183,7 +232,7 @@ export default function ViewQuotationPage() {
 
           {data.isLatestVersion &&
             (data.status === "draft" || data.status === "change_requested") && (
-              <Button onClick={handleSend} disabled={isSending}>
+              <Button onClick={openSendPicker} disabled={isSending}>
                 {isSending ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
@@ -665,7 +714,7 @@ export default function ViewQuotationPage() {
                       size="sm"
                       variant="outline"
                       className="w-full text-[11px]"
-                      onClick={handleSend}
+                      onClick={openSendPicker}
                     >
                       Generate & Share Link
                     </Button>
@@ -687,7 +736,7 @@ export default function ViewQuotationPage() {
                       size="sm"
                       variant="outline"
                       className="w-full gap-2 text-[11px]"
-                      onClick={handleSend}
+                      onClick={openSendPicker}
                     >
                       <Copy className="w-3.5 h-3.5" />
                       Copy Link Again
@@ -698,6 +747,16 @@ export default function ViewQuotationPage() {
             </Card>
           </div>
         </div>
+
+      <QuotationEmailDialog
+        open={pickerOpen}
+        clientId={dialogClientId}
+        quotationLabel={`${data.quotationNumber ?? "QTN"} • ${data.details?.title ?? ""}`.trim()}
+        extraEmails={data.client?.email ? [data.client.email] : []}
+        onClose={() => !isSending && setPickerOpen(false)}
+        onSend={handleConfirmSend}
+        isSending={isSending}
+      />
       </div>
   );
 }

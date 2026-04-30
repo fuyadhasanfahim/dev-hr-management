@@ -312,7 +312,11 @@ export const quotationEventHandlers: Record<string, (payload: any) => Promise<vo
             return;
         }
 
-        await QuotationService.sendQuotation(latest._id.toString(), String(actorUserId || '000000000000000000000000'));
+        await QuotationService.sendQuotation(
+            latest._id.toString(),
+            String(actorUserId || '000000000000000000000000'),
+            undefined,
+        );
         logger.info({ quotationGroupId, quotationId: latest._id.toString() }, 'admin.regenerate_link.completed');
     },
 };

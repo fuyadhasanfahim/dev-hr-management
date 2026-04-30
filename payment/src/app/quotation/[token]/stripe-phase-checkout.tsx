@@ -32,6 +32,8 @@ export default function StripePhaseCheckout({
     const router = useRouter();
 
     const [clientSecret, setClientSecret] = useState<string>("");
+    const [initialPaymentIntentId, setInitialPaymentIntentId] = useState<string>("");
+    const [amountCents, setAmountCents] = useState<number | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const initKeyRef = useRef<string | null>(null);
@@ -40,9 +42,11 @@ export default function StripePhaseCheckout({
         if (typeof window === "undefined") return "";
         const u = new URL(`${window.location.origin}/success`);
         u.searchParams.set("from", "quotation");
+        u.searchParams.set("method", "stripe");
+        u.searchParams.set("token", token);
         u.searchParams.set("phase", phase);
         return u.toString();
-    }, [phase]);
+    }, [phase, token]);
 
     useEffect(() => {
         const initKey = `${apiBase}|${token}|${phase}`;
@@ -77,7 +81,13 @@ export default function StripePhaseCheckout({
                 }
                 const secret = json?.data?.clientSecret;
                 if (!secret) throw new Error("Missing Stripe client secret");
+                const pi = json?.data?.paymentIntentId;
+                const cents = json?.data?.amountCents;
                 if (!cancelled) setClientSecret(String(secret));
+                if (!cancelled && pi) setInitialPaymentIntentId(String(pi));
+                if (!cancelled && Number.isFinite(Number(cents))) {
+                    setAmountCents(Number(cents));
+                }
             } catch (e) {
                 if (!cancelled) setError((e as Error).message);
             } finally {
@@ -88,6 +98,9 @@ export default function StripePhaseCheckout({
         void run();
         return () => {
             cancelled = true;
+            // Strict Mode remounts after cleanup; without this, `initKeyRef` blocks the real
+            // mount’s fetch while the aborted run leaves `isLoading` true forever.
+            initKeyRef.current = null;
         };
     }, [apiBase, token, phase, router]);
 
@@ -136,6 +149,10 @@ export default function StripePhaseCheckout({
             <StripePaymentForm
                 returnUrl={returnUrl}
                 currency={currency}
+                token={token}
+                phase={phase}
+                initialPaymentIntentId={initialPaymentIntentId}
+                amountCents={amountCents}
                 onPaid={onPaid}
             />
         </Elements>
@@ -145,10 +162,18 @@ export default function StripePhaseCheckout({
 function StripePaymentForm({
     returnUrl,
     currency,
+    token,
+    phase,
+    initialPaymentIntentId,
+    amountCents,
     onPaid,
 }: {
     returnUrl: string;
     currency: string;
+    token: string;
+    phase: Phase;
+    initialPaymentIntentId: string;
+    amountCents: number | null;
     onPaid: () => Promise<void> | void;
 }) {
     const stripe = useStripe();
@@ -166,7 +191,7 @@ function StripePaymentForm({
 
         setIsPaying(true);
         try {
-            const { error: stripeError } = await stripe.confirmPayment({
+            const { error: stripeError, paymentIntent } = await stripe.confirmPayment({
                 elements,
                 confirmParams: { return_url: returnUrl },
                 redirect: "if_required",
@@ -177,7 +202,17 @@ function StripePaymentForm({
             }
 
             await onPaid();
-            router.push("/success?from=quotation");
+            const intentId = paymentIntent?.id || initialPaymentIntentId;
+            const u = new URL("/success", window.location.origin);
+            u.searchParams.set("from", "quotation");
+            u.searchParams.set("method", "stripe");
+            u.searchParams.set("token", token);
+            u.searchParams.set("phase", phase);
+            if (intentId) u.searchParams.set("payment_intent", intentId);
+            u.searchParams.set("redirect_status", "succeeded");
+            if (amountCents != null) u.searchParams.set("amount", String(amountCents));
+            if (currency) u.searchParams.set("currency", currency);
+            router.push(u.pathname + "?" + u.searchParams.toString());
         } catch (e) {
             setError((e as Error).message);
         } finally {

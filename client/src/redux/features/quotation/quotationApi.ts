@@ -1,6 +1,12 @@
 import { apiSlice } from '@/redux/api/apiSlice';
 import { QuotationData } from '@/types/quotation.type';
 
+export interface RecipientSendStatus {
+  email: string;
+  status: 'sent' | 'failed';
+  error?: string;
+}
+
 export interface QuotationsResponse {
   items: QuotationData[];
   total: number;
@@ -85,7 +91,20 @@ export const quotationApi = apiSlice.injectEndpoints({
      * POST /quotations/:id/send
      */
     sendQuotation: builder.mutation<
-      { data: { clientLink: string; emailSent: boolean; emailedTo?: string[]; emailError?: string } },
+      {
+        data: {
+          quotationId?: string;
+          quotationNumber?: string;
+          secureToken?: string;
+          tokenExpiresAt?: string;
+          clientLink: string;
+          emailSent: boolean;
+          emailedTo?: string[];
+          emailError?: string;
+          /** Per-recipient delivery result. Order matches the requested list. */
+          recipients: RecipientSendStatus[];
+        };
+      },
       { id: string; emails?: string[] }
     >({
       query: ({ id, emails }) => ({

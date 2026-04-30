@@ -14,7 +14,16 @@ import ClientModel from '../models/client.model.js';
 import envConfig from '../config/env.config.js';
 import emailService from './email.service.js';
 import QuotationPaymentModel from '../models/quotation-payment.model.js';
-import type { PaymentPhaseEmailInfo } from '../templates/QuotationEmail.js';
+import type { PaymentPhaseEmailInfo, QuotationMilestoneEmailInfo } from '../templates/QuotationEmail.js';
+import * as React from 'react';
+import { renderToBuffer } from '@react-pdf/renderer';
+import { QuotationPdf } from '../templates/QuotationPdf.js';
+
+export type RecipientSendStatus = {
+    email: string;
+    status: 'sent' | 'failed';
+    error?: string;
+};
 
 type SendQuotationResult = {
     quotation: IQuotation;
@@ -22,6 +31,7 @@ type SendQuotationResult = {
     emailSent: boolean;
     emailedTo?: string[];
     emailError?: string;
+    recipients: RecipientSendStatus[];
 };
 
 const QUOTATION_TOKEN_SECRET = process.env.QUOTATION_TOKEN_SECRET;
@@ -63,15 +73,75 @@ interface QuotationTokenPayload {
 function signQuotationToken(payload: QuotationTokenPayload): string {
     return jwt.sign(payload, QUOTATION_TOKEN_SECRET!, {
         expiresIn: `${TOKEN_EXPIRY_DAYS}d`,
+        algorithm: 'HS256',
     });
 }
 
 function verifyQuotationToken(token: string): QuotationTokenPayload {
     try {
-        return jwt.verify(token, QUOTATION_TOKEN_SECRET!) as QuotationTokenPayload;
-    } catch {
-        throw new AppError('Invalid or expired quotation link', 410);
+        return jwt.verify(token, QUOTATION_TOKEN_SECRET!, {
+            algorithms: ['HS256'],
+        }) as QuotationTokenPayload;
+    } catch (err: any) {
+        const expired = err?.name === 'TokenExpiredError';
+        throw new AppError(
+            expired ? 'Quotation link has expired.' : 'Invalid quotation link.',
+            410,
+        );
     }
+}
+
+/**
+ * Centralised token-based lookup that combines:
+ *   1. JWT signature + expiry verification
+ *   2. Token rotation guard (rejects forwarded/old tokens once a newer one is issued)
+ *   3. Payload ↔ document consistency (group + version)
+ *   4. tokenExpiresAt (DB) check, with status auto-flip to "expired"
+ *   5. isLatestVersion / superseded gating
+ *
+ * Every public client endpoint must go through this — never `findById(payload.quotationId)`
+ * directly — to keep all token guarantees consistent.
+ */
+async function resolveQuotationByToken(
+    token: string,
+    { populate = false }: { populate?: boolean } = {},
+): Promise<IQuotation> {
+    const payload = verifyQuotationToken(token);
+    if (!payload?.quotationId) {
+        throw new AppError('Invalid quotation link.', 410);
+    }
+
+    const query = QuotationModel.findById(payload.quotationId);
+    if (populate) query.populate('clientId', 'name emails');
+    const quotation = await query;
+    if (!quotation) throw new AppError('Quotation not found', 404);
+
+    // Token rotation guard — rejects any token that no longer matches what was last
+    // emailed for this quotation (e.g. forwarded link from a previous email).
+    if (!quotation.secureToken || quotation.secureToken !== token) {
+        throw new AppError('This link has been replaced by a newer one.', 410);
+    }
+
+    if (payload.quotationGroupId && payload.quotationGroupId !== quotation.quotationGroupId) {
+        throw new AppError('Invalid quotation link.', 410);
+    }
+    if (typeof payload.version === 'number' && payload.version !== quotation.version) {
+        throw new AppError('Invalid quotation link.', 410);
+    }
+
+    if (quotation.tokenExpiresAt && quotation.tokenExpiresAt < new Date()) {
+        if (quotation.isLatestVersion && quotation.status !== 'expired') {
+            quotation.status = 'expired';
+            await quotation.save();
+        }
+        throw new AppError('Quotation link has expired.', 410);
+    }
+
+    if (!quotation.isLatestVersion || quotation.status === 'superseded') {
+        throw new AppError('This quotation link is no longer active.', 410);
+    }
+
+    return quotation;
 }
 
 // ─── State machine (simple but explicit) ──────────────────────────────────────
@@ -123,6 +193,47 @@ export class QuotationService {
         data: Partial<IQuotation>,
         userId: string,
     ): Promise<IQuotation> {
+        // Prevent accidental rapid duplicates: identical payload by same user within 5 minutes.
+        const fingerprintPayload = (() => {
+            const d: any = { ...(data as any) };
+            // Strip fields that must not affect "same quotation" detection.
+            delete d._id;
+            delete d.__v;
+            delete d.totals;
+            delete d.status;
+            delete d.secureToken;
+            delete d.tokenExpiresAt;
+            delete d.quotationNumber;
+            delete d.quotationGroupId;
+            delete d.version;
+            delete d.isLatestVersion;
+            delete d.createdBy;
+            delete d.createdAt;
+            delete d.updatedAt;
+            delete d.versionCreationKey;
+            delete d.derivedFromQuotationId;
+            return d;
+        })();
+
+        const creationFingerprint = crypto
+            .createHash('sha256')
+            .update(stableStringify(fingerprintPayload))
+            .digest('hex');
+
+        const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+        const existing = await QuotationModel.findOne({
+            createdBy: new Types.ObjectId(userId),
+            creationFingerprint,
+            createdAt: { $gte: fiveMinutesAgo },
+        }).sort({ createdAt: -1 });
+
+        if (existing) {
+            throw new AppError(
+                'A quotation with the same information was created recently. Please change at least one field and try again.',
+                409,
+            );
+        }
+
         const quotationNumber = await generateQuotationNumber();
         const quotationGroupId = crypto.randomUUID();
 
@@ -138,6 +249,7 @@ export class QuotationService {
             isLatestVersion: true,
             status: 'draft',
             createdBy: new Types.ObjectId(userId),
+            creationFingerprint,
         });
 
         return await quotation.save();
@@ -162,7 +274,11 @@ export class QuotationService {
         return await quotation.save();
     }
 
-    static async sendQuotation(id: string, _userId: string): Promise<SendQuotationResult> {
+    static async sendQuotation(
+        id: string,
+        _userId: string,
+        recipientEmails?: string[],
+    ): Promise<SendQuotationResult> {
         const quotation = await QuotationModel.findById(id);
         if (!quotation) throw new AppError('Quotation not found', 404);
 
@@ -178,7 +294,11 @@ export class QuotationService {
             (!quotation.tokenExpiresAt || quotation.tokenExpiresAt >= new Date());
 
         const tokenExpiresAt = hasValidToken
-            ? quotation.tokenExpiresAt
+            ? quotation.tokenExpiresAt ?? (() => {
+                  const d = new Date();
+                  d.setDate(d.getDate() + TOKEN_EXPIRY_DAYS);
+                  return d;
+              })()
             : (() => {
                   const d = new Date();
                   d.setDate(d.getDate() + TOKEN_EXPIRY_DAYS);
@@ -205,14 +325,41 @@ export class QuotationService {
         let emailSent = false;
         let emailedTo: string[] | undefined;
         let emailError: string | undefined;
+        const recipients: RecipientSendStatus[] = [];
 
         try {
             const client = await ClientModel.findById(saved.clientId).lean();
-            const toList = (client?.emails ?? []).filter(Boolean);
+            const fromRequest = (recipientEmails ?? [])
+                .map((e) => String(e || '').trim())
+                .filter(Boolean);
+            const fromClient = (client?.emails ?? []).map((e) => String(e || '').trim()).filter(Boolean);
+            const toList = Array.from(new Set((fromRequest.length ? fromRequest : fromClient).filter(Boolean)));
 
             if (toList.length === 0) {
                 emailError = 'Client has no emails on record';
             } else {
+                let pdfBuffer: Buffer | undefined;
+                try {
+                    // Keep PDF generation server-side; attach to each recipient email.
+                    const raw = await renderToBuffer(
+                        React.createElement(QuotationPdf, {
+                            quotation: saved.toObject ? saved.toObject() : saved,
+                            clientName: saved.client?.contactName || client?.name || 'Client',
+                            currency: saved.currency || 'USD',
+                        }) as any,
+                    );
+                    // Some renderer versions return Uint8Array-like; nodemailer expects Buffer.
+                    pdfBuffer = Buffer.isBuffer(raw) ? raw : Buffer.from(raw as any);
+                } catch (e: any) {
+                    logger.warn(
+                        {
+                            quotationId: saved._id.toString(),
+                            error: e?.message || String(e),
+                        },
+                        'quotation.pdf_generation_failed',
+                    );
+                }
+
                 // Build payment reminder context when the quotation is already accepted —
                 // this means the client is being re-sent the link to continue paying.
                 let paymentPhases: PaymentPhaseEmailInfo[] | undefined;
@@ -267,22 +414,98 @@ export class QuotationService {
                     }
                 }
 
-                // Send to the first email; the UI/link can be shared further if needed.
-                const to = toList[0]!;
-                await emailService.sendQuotationEmail({
-                    to,
-                    clientName: saved.client?.contactName || client?.name || 'Client',
+                const clientName = saved.client?.contactName || client?.name || 'Client';
+
+                // Format the grand total in the quotation's currency for the email
+                // summary card. Falls back gracefully if the currency code is invalid.
+                const emailCurrency = saved.currency || 'USD';
+                const grandTotal = saved.totals?.grandTotal ?? 0;
+                let totalAmountFormatted: string | undefined;
+                try {
+                    totalAmountFormatted = new Intl.NumberFormat('en-US', {
+                        style: 'currency',
+                        currency: emailCurrency,
+                    }).format(grandTotal);
+                } catch {
+                    totalAmountFormatted = `${grandTotal} ${emailCurrency}`;
+                }
+
+                const commonPayload = {
+                    clientName,
                     quotationTitle: saved.details?.title || 'Quotation',
                     quotationNumber: saved.quotationNumber,
                     clientLink,
-                    validUntil: saved.details?.validUntil
-                        ? new Date(saved.details.validUntil).toLocaleDateString('en-GB')
-                        : undefined,
-                    paymentPhases,
-                    remainingAmountFormatted,
-                });
-                emailSent = true;
-                emailedTo = [to];
+                    totalAmountFormatted,
+                    ...(saved.details?.validUntil
+                        ? { validUntil: new Date(saved.details.validUntil).toLocaleDateString('en-GB') }
+                        : {}),
+                    ...(paymentPhases ? { paymentPhases } : {}),
+                    ...(remainingAmountFormatted ? { remainingAmountFormatted } : {}),
+                    // Initial email: show milestone breakdown (still shows reminder table when accepted).
+                    ...(!paymentPhases && Array.isArray(saved.paymentMilestones) && saved.paymentMilestones.length > 0
+                        ? (() => {
+                              const currency = (saved.currency || 'USD').toUpperCase();
+                              const fmt = (amount: number) => {
+                                  try {
+                                      return new Intl.NumberFormat('en-US', {
+                                          style: 'currency',
+                                          currency,
+                                      }).format(amount);
+                                  } catch {
+                                      return `${amount} ${currency}`;
+                                  }
+                              };
+                              const milestones: QuotationMilestoneEmailInfo[] = saved.paymentMilestones.map(
+                                  (m: any) => ({
+                                      label: String(m?.label || 'Milestone'),
+                                      percentageLabel: `${Number(m?.percentage || 0)}%`,
+                                      amountFormatted: fmt(((saved.totals?.grandTotal ?? 0) * Number(m?.percentage || 0)) / 100),
+                                      ...(m?.note ? { note: String(m.note) } : {}),
+                                  }),
+                              );
+                              return { milestones };
+                          })()
+                        : {}),
+                    ...(pdfBuffer
+                        ? {
+                              attachment: {
+                                  filename: `quotation_${saved.quotationNumber || saved._id.toString()}.pdf`,
+                                  content: pdfBuffer,
+                                  contentType: 'application/pdf',
+                              },
+                              hasPdfAttachment: true,
+                          }
+                        : {}),
+                };
+
+                for (const to of toList) {
+                    try {
+                        await emailService.sendQuotationEmail({ to, ...commonPayload });
+                        recipients.push({ email: to, status: 'sent' });
+                    } catch (e: any) {
+                        recipients.push({
+                            email: to,
+                            status: 'failed',
+                            error: e?.message || String(e),
+                        });
+                    }
+                }
+
+                const successes = recipients.filter((r) => r.status === 'sent');
+                const failures = recipients.filter((r) => r.status === 'failed');
+
+                emailSent = successes.length > 0;
+                emailedTo = successes.length ? successes.map((r) => r.email) : undefined;
+                if (!emailSent) {
+                    emailError =
+                        failures.length > 0
+                            ? `Failed to send email: ${failures
+                                  .map((f) => `${f.email} (${f.error ?? 'unknown error'})`)
+                                  .join('; ')}`
+                            : 'Failed to send email';
+                } else if (failures.length > 0) {
+                    emailError = `Email sent to ${successes.length} recipient(s); failed for ${failures.length}.`;
+                }
             }
         } catch (err: any) {
             emailError = err?.message || String(err);
@@ -307,6 +530,7 @@ export class QuotationService {
             quotation: saved,
             clientLink,
             emailSent,
+            recipients,
             ...(emailedTo ? { emailedTo } : {}),
             ...(emailError ? { emailError } : {}),
         };
@@ -412,19 +636,7 @@ export class QuotationService {
     }
 
     static async getQuotationByToken(token: string): Promise<IQuotation> {
-        const payload = verifyQuotationToken(token);
-        const quotation = await QuotationModel.findById(payload.quotationId).populate('clientId', 'name emails');
-        if (!quotation) throw new AppError('Quotation not found', 404);
-
-        if (!quotation.isLatestVersion || quotation.status === 'superseded') {
-            throw new AppError('Link no longer active.', 410);
-        }
-
-        if (quotation.tokenExpiresAt && quotation.tokenExpiresAt < new Date()) {
-            quotation.status = 'expired';
-            await quotation.save();
-            throw new AppError('Link expired.', 410);
-        }
+        const quotation = await resolveQuotationByToken(token, { populate: true });
 
         if (quotation.status === 'sent') {
             assertTransition(quotation.status, 'viewed');
@@ -446,13 +658,7 @@ export class QuotationService {
     }
 
     static async acceptQuotation(token: string): Promise<IQuotation> {
-        const payload = verifyQuotationToken(token);
-        const quotation = await QuotationModel.findById(payload.quotationId);
-        if (!quotation) throw new AppError('Quotation not found', 404);
-
-        if (!quotation.isLatestVersion || quotation.status === 'superseded') {
-            throw new AppError('Version inactive.', 410);
-        }
+        const quotation = await resolveQuotationByToken(token);
 
         // Idempotent: already accepted => return without side effects
         if (quotation.status === 'accepted') return quotation;
@@ -467,7 +673,7 @@ export class QuotationService {
 
         if (!updated) {
             // Retry-safe: if the quotation became accepted between read and update, return it.
-            const latest = await QuotationModel.findById(payload.quotationId);
+            const latest = await QuotationModel.findById(quotation._id);
             if (latest && latest.isLatestVersion && latest.status === 'accepted') return latest;
             throw new AppError('State changed concurrently', 409);
         }
@@ -498,13 +704,7 @@ export class QuotationService {
     }
 
     static async requestChanges(token: string, reason: string): Promise<IQuotation> {
-        const payload = verifyQuotationToken(token);
-        const quotation = await QuotationModel.findById(payload.quotationId);
-        if (!quotation) throw new AppError('Quotation not found', 404);
-
-        if (!quotation.isLatestVersion || quotation.status === 'superseded') {
-            throw new AppError('Version inactive.', 410);
-        }
+        const quotation = await resolveQuotationByToken(token);
 
         // Idempotent: already requested changes with same reason
         if (quotation.status === 'change_requested' && quotation.changeRequestReason === reason) {
@@ -521,7 +721,7 @@ export class QuotationService {
 
         if (!updated) {
             // Retry-safe: if already moved to change_requested, return it
-            const latest = await QuotationModel.findById(payload.quotationId);
+            const latest = await QuotationModel.findById(quotation._id);
             if (latest && latest.isLatestVersion && latest.status === 'change_requested') return latest;
             throw new AppError('State changed concurrently', 409);
         }

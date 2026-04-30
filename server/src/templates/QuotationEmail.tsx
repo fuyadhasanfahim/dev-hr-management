@@ -9,6 +9,8 @@ import {
     Text,
     Img,
     Button,
+    Row,
+    Column,
 } from '@react-email/components';
 // @ts-ignore
 import * as React from 'react';
@@ -24,12 +26,29 @@ export interface PaymentPhaseEmailInfo {
     state: 'paid' | 'next' | 'locked';
 }
 
+export interface QuotationMilestoneEmailInfo {
+    label: string;
+    percentageLabel: string;
+    amountFormatted: string;
+    note?: string;
+}
+
 interface QuotationEmailProps {
     clientName: string;
     quotationTitle: string;
     quotationNumber: string;
+    /**
+     * Secure link the client uses to review the quotation. Rendered as a CTA
+     * only — never as bare text — to avoid the "shady raw URL" feel.
+     */
     clientLink: string;
     validUntil?: string;
+    /** Formatted grand total, e.g. "$1,250.00". Always shown when provided. */
+    totalAmountFormatted?: string;
+    /** Initial email (non-reminder) only: show milestone breakdown. */
+    milestones?: QuotationMilestoneEmailInfo[];
+    /** When a PDF is attached, show a short callout. */
+    hasPdfAttachment?: boolean;
     /**
      * When set, the email switches to payment-reminder mode.
      * Populated when re-sending the payment link to a client who has already
@@ -46,6 +65,9 @@ export const QuotationEmail = ({
     quotationNumber,
     clientLink,
     validUntil,
+    totalAmountFormatted,
+    milestones,
+    hasPdfAttachment,
     paymentPhases,
     remainingAmountFormatted,
 }: QuotationEmailProps) => {
@@ -69,36 +91,98 @@ export const QuotationEmail = ({
                             src={logoUrl}
                             width="120"
                             height="56"
-                            alt="Web Briks Logo"
+                            alt="Web Briks"
                             style={logo}
                         />
                     </Section>
 
                     <Section style={content}>
+                        <Text style={eyebrow}>
+                            {isReminder ? 'Payment reminder' : 'Quotation ready'}
+                        </Text>
                         <Text style={heading}>
-                            {isReminder ? 'Payment reminder' : 'Your quotation is ready'}
+                            {isReminder
+                                ? 'Continue your project payment'
+                                : 'Your quotation is ready to review'}
                         </Text>
 
                         <Text style={paragraph}>Hi {clientName || 'there'},</Text>
 
                         {isReminder ? (
                             <Text style={paragraph}>
-                                This is a friendly reminder that your payment for quotation{' '}
-                                <strong>{quotationNumber}</strong> —{' '}
-                                <strong>{quotationTitle}</strong> is not yet complete.
+                                This is a friendly reminder that the payment for your project{' '}
+                                <strong>{quotationTitle}</strong> (quotation{' '}
+                                <strong>{quotationNumber}</strong>) is not yet complete. Use
+                                the secure link below to continue with the next milestone.
                             </Text>
                         ) : (
                             <Text style={paragraph}>
-                                We've prepared your quotation <strong>{quotationNumber}</strong>{' '}
-                                for <strong>{quotationTitle}</strong>.
+                                We&apos;ve prepared your quotation{' '}
+                                <strong>{quotationNumber}</strong> for{' '}
+                                <strong>{quotationTitle}</strong>. Tap{' '}
+                                <em>Review quotation</em> below to view the full proposal —
+                                project overview, scope of work, pricing, and payment
+                                milestones — in one secure place.
                             </Text>
                         )}
 
-                        {validUntil && !isReminder ? (
-                            <Text style={muted}>
-                                Valid until: <strong>{validUntil}</strong>
-                            </Text>
+                        {!isReminder && hasPdfAttachment ? (
+                            <Section style={pdfCallout}>
+                                <Text style={pdfCalloutText}>
+                                    A PDF copy of your quotation is attached for easy sharing and printing.
+                                </Text>
+                            </Section>
                         ) : null}
+
+                        {/* Summary card */}
+                        <Section style={summaryCard}>
+                            <Row>
+                                <Column>
+                                    <Text style={summaryLabel}>Quotation</Text>
+                                    <Text style={summaryValue}>{quotationNumber}</Text>
+                                </Column>
+                                {totalAmountFormatted ? (
+                                    <Column align="right">
+                                        <Text style={summaryLabel}>
+                                            {isReminder ? 'Project total' : 'Total'}
+                                        </Text>
+                                        <Text style={summaryValue}>
+                                            {totalAmountFormatted}
+                                        </Text>
+                                    </Column>
+                                ) : null}
+                            </Row>
+                            {(isReminder && remainingAmountFormatted) || validUntil ? (
+                                <>
+                                    <Hr style={summaryDivider} />
+                                    <Row>
+                                        {isReminder && remainingAmountFormatted ? (
+                                            <Column>
+                                                <Text style={summaryLabel}>Remaining</Text>
+                                                <Text style={summaryValueAccent}>
+                                                    {remainingAmountFormatted}
+                                                </Text>
+                                            </Column>
+                                        ) : (
+                                            <Column>
+                                                <Text style={summaryLabel}>Project</Text>
+                                                <Text style={summaryValueMuted}>
+                                                    {quotationTitle}
+                                                </Text>
+                                            </Column>
+                                        )}
+                                        {validUntil && !isReminder ? (
+                                            <Column align="right">
+                                                <Text style={summaryLabel}>Valid until</Text>
+                                                <Text style={summaryValueMuted}>
+                                                    {validUntil}
+                                                </Text>
+                                            </Column>
+                                        ) : null}
+                                    </Row>
+                                </>
+                            ) : null}
+                        </Section>
 
                         {/* Payment phase table — reminder mode only */}
                         {isReminder && paymentPhases && paymentPhases.length > 0 ? (
@@ -107,48 +191,81 @@ export const QuotationEmail = ({
 
                                 {paymentPhases.map((ph) => (
                                     <Section key={ph.label} style={phaseRowStyle(ph.state)}>
-                                        <Text style={phaseCell}>
-                                            {ph.state === 'paid'  ? '✅'
-                                            : ph.state === 'next' ? '⏳'
-                                            :                       '🔒'}{' '}
-                                            <strong>{ph.label}</strong> ({ph.percentageLabel}) —{' '}
-                                            {ph.amountFormatted}
-                                        </Text>
-                                        <Text style={phaseStatusStyle(ph.state)}>
-                                            {ph.state === 'paid'  ? 'Paid'
-                                            : ph.state === 'next' ? 'Due next'
-                                            :                       'Locked'}
-                                        </Text>
+                                        <Row>
+                                            <Column>
+                                                <Text style={phaseCell}>
+                                                    {ph.state === 'paid'
+                                                        ? '✅'
+                                                        : ph.state === 'next'
+                                                            ? '⏳'
+                                                            : '🔒'}{' '}
+                                                    <strong>{ph.label}</strong> (
+                                                    {ph.percentageLabel}) —{' '}
+                                                    {ph.amountFormatted}
+                                                </Text>
+                                            </Column>
+                                            <Column align="right">
+                                                <Text style={phaseStatusStyle(ph.state)}>
+                                                    {ph.state === 'paid'
+                                                        ? 'Paid'
+                                                        : ph.state === 'next'
+                                                            ? 'Due next'
+                                                            : 'Locked'}
+                                                </Text>
+                                            </Column>
+                                        </Row>
                                     </Section>
                                 ))}
+                            </Section>
+                        ) : null}
 
-                                {remainingAmountFormatted ? (
-                                    <Section style={remainingRow}>
-                                        <Text style={remainingLabel}>
-                                            Remaining balance:{' '}
-                                            <strong>{remainingAmountFormatted}</strong>
-                                        </Text>
+                        {/* Milestones table — initial email only */}
+                        {!isReminder && milestones && milestones.length > 0 ? (
+                            <Section style={phaseTable}>
+                                <Text style={phaseTableHeading}>Payment milestones</Text>
+                                {milestones.map((m, idx) => (
+                                    <Section
+                                        key={`${m.label}-${idx}`}
+                                        style={{
+                                            padding: '10px 0',
+                                            borderBottom:
+                                                idx === milestones.length - 1
+                                                    ? '0px solid transparent'
+                                                    : '1px solid #e2e8f0',
+                                        }}
+                                    >
+                                        <Row>
+                                            <Column>
+                                                <Text style={phaseCell}>
+                                                    <strong>{m.label}</strong> ({m.percentageLabel}) — {m.amountFormatted}
+                                                </Text>
+                                                {m.note ? (
+                                                    <Text style={{ ...phaseCell, color: '#64748b', fontSize: '12px', marginTop: '4px' }}>
+                                                        {m.note}
+                                                    </Text>
+                                                ) : null}
+                                            </Column>
+                                        </Row>
                                     </Section>
-                                ) : null}
+                                ))}
                             </Section>
                         ) : null}
 
                         <Section style={btnContainer}>
                             <Button style={button} href={clientLink}>
-                                {isReminder ? 'Complete payment' : 'View quotation'}
+                                {isReminder ? 'Continue payment →' : 'Review quotation →'}
                             </Button>
                         </Section>
 
-                        <Text style={small}>
-                            If the button doesn't work, copy and paste this link into your browser:
-                            <br />
-                            {clientLink}
+                        <Text style={tinyMuted}>
+                            This is a secure, single-use link tied to your account. Please
+                            don&apos;t share it with anyone outside your team.
                         </Text>
 
                         <Hr style={hr} />
 
                         <Text style={footerText}>
-                            Best regards,
+                            Questions? Just reply to this email — we&apos;re happy to help.
                             <br />
                             <strong>Web Briks LLC</strong>
                         </Text>
@@ -164,7 +281,7 @@ export default QuotationEmail;
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const main = {
-    backgroundColor: '#f2f2f7',
+    backgroundColor: '#f4f5f7',
     fontFamily:
         'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
     padding: '40px 0',
@@ -174,13 +291,13 @@ const container = {
     backgroundColor: '#ffffff',
     margin: '0 auto',
     padding: '40px',
-    borderRadius: '24px',
-    boxShadow: '0 4px 24px rgba(0, 0, 0, 0.04)',
+    borderRadius: '20px',
+    boxShadow: '0 4px 24px rgba(15, 23, 42, 0.06)',
     maxWidth: '600px',
 };
 
 const header = {
-    marginBottom: '32px',
+    marginBottom: '28px',
 };
 
 const logo = {
@@ -190,123 +307,177 @@ const logo = {
 };
 
 const content = {
-    paddingBottom: '16px',
+    paddingBottom: '8px',
+};
+
+const eyebrow = {
+    fontSize: '11px',
+    letterSpacing: '0.16em',
+    textTransform: 'uppercase' as const,
+    color: '#0f766e',
+    fontWeight: '700',
+    marginTop: '0',
+    marginBottom: '8px',
 };
 
 const heading = {
-    fontSize: '24px',
+    fontSize: '26px',
     fontWeight: '700',
-    color: '#1c1c1e',
-    marginBottom: '24px',
+    color: '#0f172a',
+    marginTop: '0',
+    marginBottom: '20px',
     letterSpacing: '-0.5px',
+    lineHeight: '32px',
 };
 
 const paragraph = {
-    fontSize: '17px',
+    fontSize: '16px',
     lineHeight: '26px',
-    color: '#3a3a3c',
+    color: '#334155',
     marginBottom: '16px',
 };
 
-const muted = {
-    fontSize: '14px',
-    lineHeight: '22px',
-    color: '#6b7280',
-    marginBottom: '24px',
+const tinyMuted = {
+    fontSize: '12px',
+    lineHeight: '18px',
+    color: '#94a3b8',
+    marginTop: '4px',
+    marginBottom: '0',
 };
 
 const btnContainer = {
     textAlign: 'center' as const,
-    margin: '28px 0 22px',
+    margin: '28px 0 14px',
 };
 
 const button = {
-    backgroundColor: '#009999',
-    borderRadius: '9999px',
+    backgroundColor: '#0d9488',
+    borderRadius: '12px',
     color: '#ffffff',
-    fontSize: '17px',
+    fontSize: '16px',
     fontWeight: '600',
     textDecoration: 'none',
     textAlign: 'center' as const,
     display: 'inline-block',
-    padding: '14px 32px',
-    boxShadow: '0 4px 12px rgba(0, 153, 153, 0.25)',
-};
-
-const small = {
-    fontSize: '13px',
-    lineHeight: '20px',
-    color: '#6b7280',
-    marginBottom: '0',
-    wordBreak: 'break-word' as const,
+    padding: '14px 36px',
+    boxShadow: '0 6px 14px rgba(13, 148, 136, 0.25)',
 };
 
 const hr = {
-    borderColor: '#e5e5ea',
+    borderColor: '#e2e8f0',
     margin: '28px 0 20px',
 };
 
+const pdfCallout = {
+    backgroundColor: '#ecfeff',
+    border: '1px solid #a5f3fc',
+    borderRadius: '14px',
+    padding: '12px 14px',
+    marginBottom: '18px',
+};
+
+const pdfCalloutText = {
+    fontSize: '13px',
+    lineHeight: '20px',
+    color: '#0f766e',
+    margin: '0',
+    fontWeight: '600',
+};
+
 const footerText = {
-    fontSize: '15px',
-    lineHeight: '24px',
-    color: '#3a3a3c',
+    fontSize: '14px',
+    lineHeight: '22px',
+    color: '#475569',
+};
+
+// ─── Summary card styles ─────────────────────────────────────────────────────
+
+const summaryCard = {
+    backgroundColor: '#f8fafc',
+    border: '1px solid #e2e8f0',
+    borderRadius: '14px',
+    padding: '18px',
+    marginBottom: '20px',
+};
+
+const summaryLabel = {
+    fontSize: '11px',
+    letterSpacing: '0.08em',
+    textTransform: 'uppercase' as const,
+    color: '#64748b',
+    fontWeight: '600',
+    margin: '0 0 4px',
+};
+
+const summaryValue = {
+    fontSize: '18px',
+    fontWeight: '700',
+    color: '#0f172a',
+    margin: '0',
+};
+
+const summaryValueAccent = {
+    fontSize: '18px',
+    fontWeight: '700',
+    color: '#b45309',
+    margin: '0',
+};
+
+const summaryValueMuted = {
+    fontSize: '14px',
+    fontWeight: '500',
+    color: '#475569',
+    margin: '0',
+};
+
+const summaryDivider = {
+    borderColor: '#e2e8f0',
+    margin: '14px 0',
 };
 
 // ─── Phase table styles ───────────────────────────────────────────────────────
 
 const phaseTable = {
-    backgroundColor: '#f9fafb',
-    borderRadius: '12px',
+    backgroundColor: '#f8fafc',
+    border: '1px solid #e2e8f0',
+    borderRadius: '14px',
     padding: '16px',
-    marginBottom: '24px',
+    marginBottom: '20px',
 };
 
 const phaseTableHeading = {
-    fontSize: '13px',
-    fontWeight: '600',
-    color: '#6b7280',
+    fontSize: '11px',
+    fontWeight: '700',
+    color: '#64748b',
     textTransform: 'uppercase' as const,
-    letterSpacing: '0.06em',
+    letterSpacing: '0.08em',
     marginBottom: '12px',
     marginTop: '0',
 };
 
 function phaseRowStyle(state: 'paid' | 'next' | 'locked') {
     return {
-        display: 'flex' as const,
-        justifyContent: 'space-between' as const,
-        alignItems: 'center' as const,
-        padding: '8px 0',
-        borderBottom: '1px solid #e5e7eb',
-        opacity: state === 'locked' ? 0.55 : 1,
+        padding: '10px 0',
+        borderBottom: '1px solid #e2e8f0',
+        opacity: state === 'locked' ? 0.6 : 1,
     };
 }
 
 const phaseCell = {
-    fontSize: '15px',
-    color: '#1c1c1e',
+    fontSize: '14px',
+    color: '#1e293b',
     margin: '0',
 };
 
 function phaseStatusStyle(state: 'paid' | 'next' | 'locked') {
-    const colorMap = { paid: '#16a34a', next: '#d97706', locked: '#9ca3af' };
+    const colorMap = { paid: '#16a34a', next: '#d97706', locked: '#94a3b8' };
     return {
-        fontSize: '13px',
-        fontWeight: '600',
+        fontSize: '12px',
+        fontWeight: '700',
         color: colorMap[state],
         margin: '0',
-        minWidth: '70px',
         textAlign: 'right' as const,
+        textTransform: 'uppercase' as const,
+        letterSpacing: '0.06em',
     };
 }
-
-const remainingRow = {
-    paddingTop: '12px',
-    marginTop: '4px',
-};
-
-const remainingLabel = {
-    fontSize: '15px',
-    color: '#1c1c1e',
-    margin: '0',
-};

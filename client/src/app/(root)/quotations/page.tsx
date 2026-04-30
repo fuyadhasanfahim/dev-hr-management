@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,6 +16,7 @@ import {
   useSendQuotationMutation,
 } from "@/redux/features/quotation/quotationApi";
 import { QuotationTable } from "./components/QuotationTable";
+import { QuotationEmailDialog } from "./components/QuotationEmailDialog";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { useQuotationStore } from "@/store/useQuotationStore";
@@ -39,6 +40,14 @@ import {
   X,
 } from "lucide-react";
 
+/** Resolve the client `_id` even when the API populates `clientId` as an object. */
+function resolveClientId(q: QuotationData): string | undefined {
+  if (!q.clientId) return undefined;
+  if (typeof q.clientId === "string") return q.clientId;
+  const populated = q.clientId as unknown as { _id?: string };
+  return populated?._id;
+}
+
 export default function QuotationsPage() {
   const router = useRouter();
   const [page] = useState(1);
@@ -55,31 +64,90 @@ export default function QuotationsPage() {
   const [sendQuotation] = useSendQuotationMutation();
   const [sendingId, setSendingId] = useState<string | null>(null);
 
-  const handleSend = async (id: string) => {
+  // ── Email recipient picker state ────────────────────────────────────────
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerQuotation, setPickerQuotation] = useState<QuotationData | null>(
+    null,
+  );
+
+  const pickerClientId = useMemo(
+    () => (pickerQuotation ? resolveClientId(pickerQuotation) ?? "" : ""),
+    [pickerQuotation],
+  );
+
+  const handleOpenPicker = (q: QuotationData) => {
+    if (!q._id) return;
+    const cid = resolveClientId(q);
+    if (!cid) {
+      toast.error(
+        "This quotation has no linked client — cannot pick recipient emails.",
+      );
+      return;
+    }
+    setPickerQuotation(q);
+    setPickerOpen(true);
+  };
+
+  const handleConfirmSend = async (selected: string[]) => {
+    if (!pickerQuotation?._id) return [];
+    if (selected.length === 0) {
+      toast.warning("Please select at least one recipient");
+      return [];
+    }
+    if (sendingId) return [];
     try {
-      setSendingId(id);
-      const result = await sendQuotation({ id }).unwrap();
-      
-      // Copy to clipboard
+      setSendingId(pickerQuotation._id);
+      const result = await sendQuotation({
+        id: pickerQuotation._id,
+        emails: selected,
+      }).unwrap();
+
       if (result.data.clientLink) {
-        await navigator.clipboard.writeText(result.data.clientLink);
-        toast.success("Client link copied to clipboard!");
+        try {
+          await navigator.clipboard.writeText(result.data.clientLink);
+          toast.success("Client link copied to clipboard!");
+        } catch {
+          // Clipboard not always permitted — non-fatal.
+        }
       }
-      
-      if (result.data.emailSent) {
-        toast.success(`Quotation email sent${result.data.emailedTo?.length ? ` to ${result.data.emailedTo.join(", ")}` : ""}`);
+
+      const recipients = result.data.recipients ?? [];
+      const failed = recipients.filter((r) => r.status === "failed");
+      const sent = recipients.filter((r) => r.status === "sent");
+
+      if (sent.length > 0 && failed.length === 0) {
+        toast.success(`Quotation sent to ${sent.length} recipient${sent.length === 1 ? "" : "s"}`);
+      } else if (sent.length > 0 && failed.length > 0) {
+        toast.warning(
+          `Sent to ${sent.length}, failed for ${failed.length}. See dialog for details.`,
+        );
+      } else if (failed.length > 0) {
+        toast.error(
+          result.data.emailError ||
+            `Failed to send to ${failed.length} recipient${failed.length === 1 ? "" : "s"}`,
+        );
       } else {
-        toast.warning(result.data.emailError || "Email was not sent. Link was generated only.");
+        toast.warning(
+          result.data.emailError ||
+            "Email was not sent. Link was generated only.",
+        );
       }
+
+      return recipients;
     } catch (err) {
       toast.error((err as Error).message || "Failed to send quotation");
+      return [];
     } finally {
       setSendingId(null);
     }
   };
 
   const handleDelete = async (id: string) => {
-    if (confirm("Are you sure? This will also delete any associated order and payment logs.")) {
+    if (
+      confirm(
+        "Are you sure? This will also delete any associated order and payment logs.",
+      )
+    ) {
       try {
         await deleteQuotation(id).unwrap();
         toast.success("Quotation and associated records deleted");
@@ -102,19 +170,27 @@ export default function QuotationsPage() {
     },
     {
       label: "Latest Drafts",
-      value: qData?.items.filter((i) => i.status === "draft" && i.isLatestVersion).length || 0,
+      value:
+        qData?.items.filter((i) => i.status === "draft" && i.isLatestVersion)
+          .length || 0,
       icon: <Clock className="h-5 w-5" />,
       color: "text-amber-600 bg-amber-50",
     },
     {
       label: "Active Links",
-      value: qData?.items.filter((i) => i.status === "sent" && i.isLatestVersion).length || 0,
+      value:
+        qData?.items.filter((i) => i.status === "sent" && i.isLatestVersion)
+          .length || 0,
       icon: <CheckCircle className="h-5 w-5" />,
       color: "text-emerald-600 bg-emerald-50",
     },
     {
       label: "Project Value",
-      value: `৳${(qData?.items.filter(i => i.isLatestVersion).reduce((acc, i) => acc + i.totals.grandTotal, 0) || 0).toLocaleString()}`,
+      value: `৳${(
+        qData?.items
+          .filter((i) => i.isLatestVersion)
+          .reduce((acc, i) => acc + i.totals.grandTotal, 0) || 0
+      ).toLocaleString()}`,
       icon: <ReceiptText className="h-5 w-5" />,
       color: "text-teal-600 bg-teal-50",
     },
@@ -122,7 +198,6 @@ export default function QuotationsPage() {
 
   return (
     <div className="space-y-6">
-      {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {stats.map((stat, idx) => (
           <div
@@ -144,7 +219,6 @@ export default function QuotationsPage() {
         ))}
       </div>
 
-      {/* Main card (Orders-like) */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <div>
@@ -167,7 +241,6 @@ export default function QuotationsPage() {
         </CardHeader>
 
         <CardContent className="space-y-4">
-          {/* Filters (Orders-like) */}
           <div className="rounded-xl border bg-muted/30 p-4">
             <div className="flex items-center gap-2 mb-4">
               <Filter className="h-4 w-4 text-muted-foreground" />
@@ -214,19 +287,44 @@ export default function QuotationsPage() {
             </div>
           </div>
 
-          {/* Table */}
           <div className="rounded-xl border overflow-hidden bg-card">
             <QuotationTable
               quotations={qData?.items || []}
               isLoading={isLoading}
               onEdit={handleEdit}
               onDelete={handleDelete}
-              onSend={handleSend}
+              onSend={(id) => {
+                const q = qData?.items.find((x) => x._id === id);
+                if (q) handleOpenPicker(q);
+              }}
               sendingId={sendingId}
             />
           </div>
         </CardContent>
       </Card>
+
+      <QuotationEmailDialog
+        open={pickerOpen}
+        clientId={pickerClientId}
+        quotationLabel={
+          pickerQuotation
+            ? `${pickerQuotation.quotationNumber ?? "QTN"} • ${
+                pickerQuotation.details?.title ?? ""
+              }`.trim()
+            : undefined
+        }
+        extraEmails={
+          pickerQuotation?.client?.email ? [pickerQuotation.client.email] : []
+        }
+        onClose={() => {
+          if (!sendingId) {
+            setPickerOpen(false);
+            setPickerQuotation(null);
+          }
+        }}
+        onSend={handleConfirmSend}
+        isSending={Boolean(sendingId)}
+      />
     </div>
   );
 }

@@ -11,6 +11,7 @@ const STAFF_ROLES = [Role.SUPER_ADMIN, Role.ADMIN, Role.HR_MANAGER, Role.TEAM_LE
 // Token itself is the credential, enforced server-side.
 router.post('/client/:token/intent', QuotationPaymentController.createClientPaymentIntent);
 router.get('/client/:token/status', QuotationPaymentController.getClientPaymentStatus);
+router.post('/client/:token/confirm', QuotationPaymentController.confirmClientPayment);
 
 /**
  * POST /api/quotation-payments/intent
@@ -27,5 +28,8 @@ router.post('/intent', authorize(...STAFF_ROLES), QuotationPaymentController.cre
  * Returns full payment phase breakdown for a quotation group.
  */
 router.get('/:groupId/status', authorize(...STAFF_ROLES), QuotationPaymentController.getPaymentStatus);
+
+// Utility: backfill missing orders (upfront paid but no orderId)
+router.post('/reconcile-orders', authorize(...STAFF_ROLES), QuotationPaymentController.reconcileMissingOrders);
 
 export const quotationPaymentRoute = router;

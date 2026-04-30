@@ -30,8 +30,12 @@ const sendQuotation = async (req: Request, res: Response, next: NextFunction) =>
     try {
         const userId = req.user?.id;
         if (!userId) return next(new Error('Unauthorized'));
+        const emails =
+            Array.isArray((req as any)?.body?.emails) && (req as any).body.emails.length
+                ? (req as any).body.emails
+                : undefined;
         logger.info({ quotationId: req.params.id }, 'quotation.send.requested');
-        const result = await QuotationService.sendQuotation(req.params.id, userId);
+        const result = await QuotationService.sendQuotation(req.params.id, userId, emails);
         const q = result.quotation;
         logger.info(
             {
@@ -41,6 +45,7 @@ const sendQuotation = async (req: Request, res: Response, next: NextFunction) =>
                 tokenExpiresAt: q.tokenExpiresAt,
                 emailSent: result.emailSent,
                 emailedTo: result.emailedTo,
+                failedCount: result.recipients.filter((r) => r.status === 'failed').length,
             },
             'quotation.send.completed',
         );
@@ -58,6 +63,7 @@ const sendQuotation = async (req: Request, res: Response, next: NextFunction) =>
                 emailSent: result.emailSent,
                 emailedTo: result.emailedTo,
                 emailError: result.emailError,
+                recipients: result.recipients,
             },
         });
     } catch (err) {

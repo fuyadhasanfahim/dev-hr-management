@@ -101,6 +101,8 @@ export interface IQuotation extends Document {
 
     // Idempotency / provenance
     versionCreationKey?: string;
+    /** Fingerprint of create payload to prevent rapid duplicates */
+    creationFingerprint?: string;
     derivedFromQuotationId?: Types.ObjectId;
     createdAt: Date;
     updatedAt: Date;

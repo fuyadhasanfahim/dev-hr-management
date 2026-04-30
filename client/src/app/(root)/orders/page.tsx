@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   useGetOrdersQuery,
   useCreateOrderMutation,
@@ -293,6 +293,7 @@ export default function OrdersPage() {
     data: orderData,
     isLoading,
     isFetching,
+    refetch,
   } = useGetOrdersQuery({
     ...filters,
     page,
@@ -318,6 +319,35 @@ export default function OrdersPage() {
   const meta = orderData?.meta;
   const stats = statsData?.data;
   const clients = useMemo(() => clientsData?.clients || [], [clientsData]);
+
+  // Self-heal: in environments where the payment webhook worker isn't running,
+  // orders may not be backfilled even after upfront payment is confirmed.
+  // If we see 0 orders, run a single reconcile pass and refetch.
+  const reconcileAttemptedRef = useRef(false);
+  useEffect(() => {
+    if (reconcileAttemptedRef.current) return;
+    if (isLoading || isFetching) return;
+    if (!meta) return;
+    if (meta.total > 0) return;
+
+    reconcileAttemptedRef.current = true;
+    (async () => {
+      try {
+        await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL}/api/quotation-payments/reconcile-orders`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({}),
+          },
+        );
+      } catch {
+        // best-effort
+      } finally {
+        refetch();
+      }
+    })();
+  }, [isLoading, isFetching, meta, refetch]);
 
   // Check if all current page orders are selected
   const allOrdersSelected = useMemo(() => {
