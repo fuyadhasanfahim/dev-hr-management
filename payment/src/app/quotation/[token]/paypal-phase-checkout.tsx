@@ -71,7 +71,44 @@ export default function PayPalPhaseCheckout({
                                 const json = await res.json();
                                 if (!res.ok) {
                                     if (res.status === 409) {
-                                        router.push("/success?already_paid=true");
+                                        // Best-effort: fetch tracker so we can display the reference/payment id.
+                                        let paidRef: string | null = null;
+                                        let paidAmount: string | null = null;
+                                        let paidCurrency: string | null = null;
+                                        try {
+                                            const sRes = await fetch(
+                                                `${apiBase}/api/quotation-payments/client/${token}/status`,
+                                                { cache: "no-store" },
+                                            );
+                                            if (sRes.ok) {
+                                                const sJson = await sRes.json().catch(() => ({}));
+                                                const row = sJson?.data?.phases?.[phase];
+                                                const cur = sJson?.data?.currency;
+                                                const lastPaid =
+                                                    Array.isArray(row?.paidIntentIds) && row.paidIntentIds.length
+                                                        ? row.paidIntentIds[row.paidIntentIds.length - 1]
+                                                        : null;
+                                                paidRef = String(row?.paymentIntentId || lastPaid || "") || null;
+                                                const cents = row?.amountPaid ?? row?.amountDue;
+                                                if (Number.isFinite(Number(cents))) {
+                                                    paidAmount = String(Number(cents));
+                                                }
+                                                if (cur) paidCurrency = String(cur);
+                                            }
+                                        } catch {
+                                            // ignore
+                                        }
+
+                                        const u = new URL("/success", window.location.origin);
+                                        u.searchParams.set("already_paid", "true");
+                                        u.searchParams.set("from", "quotation");
+                                        u.searchParams.set("method", "paypal");
+                                        u.searchParams.set("token", token);
+                                        u.searchParams.set("phase", phase);
+                                        if (paidRef) u.searchParams.set("id", paidRef);
+                                        if (paidAmount) u.searchParams.set("amount", paidAmount);
+                                        if (paidCurrency) u.searchParams.set("currency", paidCurrency);
+                                        router.push(u.pathname + "?" + u.searchParams.toString());
                                         return "";
                                     }
                                     throw new Error(json?.message || "Failed to create PayPal order");

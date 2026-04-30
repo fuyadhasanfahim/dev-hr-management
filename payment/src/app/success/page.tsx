@@ -38,13 +38,9 @@ function SuccessContent() {
 
     useEffect(() => {
         const verifyAndConfirm = async () => {
-            if (alreadyPaid) {
-                setStatus("success");
-                return;
-            }
-
             // 1. Client-side verification based on URL params
             const isSuccess =
+                alreadyPaid ||
                 redirectStatus === "succeeded" ||
                 (method === "paypal" && orderId);
 
@@ -55,30 +51,74 @@ function SuccessContent() {
                 if (from === "quotation" && token && phase) {
                     try {
                         const provider = method === "paypal" ? "paypal" : "stripe";
-                        const confirmRes = await fetch(
-                            `${process.env.NEXT_PUBLIC_API_URL}/api/quotation-payments/client/${encodeURIComponent(
-                                token,
-                            )}/confirm`,
-                            {
-                                method: "POST",
-                                headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({
-                                    phase,
-                                    provider,
-                                    paymentIntentId: paymentIntent || undefined,
-                                    paypalCaptureId: provider === "paypal" ? orderId : undefined,
-                                    amountCents: amount ? Number(amount) : undefined,
-                                    currency: currency || undefined,
-                                }),
-                            },
-                        );
-                        const confirmJson = await confirmRes.json().catch(() => ({}));
-                        if (confirmRes.ok) {
-                            const ref =
-                                confirmJson?.data?.referenceId ||
-                                confirmJson?.data?.paymentIntentId ||
-                                confirmJson?.data?.paypalCaptureId;
-                            if (ref) setReferenceId(String(ref));
+                        if (provider === "stripe" && paymentIntent) {
+                            const confirmRes = await fetch(
+                                `${process.env.NEXT_PUBLIC_API_URL}/api/quotation-payments/client/${encodeURIComponent(
+                                    token,
+                                )}/confirm`,
+                                {
+                                    method: "POST",
+                                    headers: { "Content-Type": "application/json" },
+                                    body: JSON.stringify({
+                                        phase,
+                                        provider,
+                                        paymentIntentId: paymentIntent,
+                                        amountCents: amount ? Number(amount) : undefined,
+                                        currency: currency || undefined,
+                                    }),
+                                },
+                            );
+                            const confirmJson = await confirmRes.json().catch(() => ({}));
+                            if (confirmRes.ok) {
+                                const ref =
+                                    confirmJson?.data?.referenceId ||
+                                    confirmJson?.data?.paymentIntentId ||
+                                    confirmJson?.data?.paypalCaptureId;
+                                if (ref) setReferenceId(String(ref));
+                            }
+                        } else if (provider === "paypal" && orderId) {
+                            const confirmRes = await fetch(
+                                `${process.env.NEXT_PUBLIC_API_URL}/api/quotation-payments/client/${encodeURIComponent(
+                                    token,
+                                )}/confirm`,
+                                {
+                                    method: "POST",
+                                    headers: { "Content-Type": "application/json" },
+                                    body: JSON.stringify({
+                                        phase,
+                                        provider,
+                                        paypalCaptureId: orderId,
+                                        amountCents: amount ? Number(amount) : undefined,
+                                        currency: currency || undefined,
+                                    }),
+                                },
+                            );
+                            const confirmJson = await confirmRes.json().catch(() => ({}));
+                            if (confirmRes.ok) {
+                                const ref =
+                                    confirmJson?.data?.referenceId ||
+                                    confirmJson?.data?.paymentIntentId ||
+                                    confirmJson?.data?.paypalCaptureId;
+                                if (ref) setReferenceId(String(ref));
+                            }
+                        } else {
+                            // Already-paid paths may arrive without an id; fall back to tracker status.
+                            const sRes = await fetch(
+                                `${process.env.NEXT_PUBLIC_API_URL}/api/quotation-payments/client/${encodeURIComponent(
+                                    token,
+                                )}/status`,
+                                { cache: "no-store" },
+                            );
+                            const sJson = await sRes.json().catch(() => ({}));
+                            if (sRes.ok) {
+                                const row = sJson?.data?.phases?.[phase];
+                                const lastPaid =
+                                    Array.isArray(row?.paidIntentIds) && row.paidIntentIds.length
+                                        ? row.paidIntentIds[row.paidIntentIds.length - 1]
+                                        : null;
+                                const ref = row?.paymentIntentId || lastPaid;
+                                if (ref) setReferenceId(String(ref));
+                            }
                         }
                     } catch {
                         // UI already shows success; backend sync is best-effort here.

@@ -74,7 +74,34 @@ export default function StripePhaseCheckout({
                     const msg = String(json?.message || "Failed to initialize Stripe payment");
                     // If already paid, route to success with the correct message.
                     if (res.status === 409) {
-                        router.push("/success?already_paid=true");
+                        // Best-effort: fetch tracker so we can display the reference/payment id.
+                        let paidRef: string | null = null;
+                        try {
+                            const sRes = await fetch(
+                                `${apiBase}/api/quotation-payments/client/${token}/status`,
+                                { cache: "no-store" },
+                            );
+                            if (sRes.ok) {
+                                const sJson = await sRes.json().catch(() => ({}));
+                                const row = sJson?.data?.phases?.[phase];
+                                const lastPaid =
+                                    Array.isArray(row?.paidIntentIds) && row.paidIntentIds.length
+                                        ? row.paidIntentIds[row.paidIntentIds.length - 1]
+                                        : null;
+                                paidRef = String(row?.paymentIntentId || lastPaid || "") || null;
+                            }
+                        } catch {
+                            // ignore
+                        }
+
+                        const u = new URL("/success", window.location.origin);
+                        u.searchParams.set("already_paid", "true");
+                        u.searchParams.set("from", "quotation");
+                        u.searchParams.set("method", "stripe");
+                        u.searchParams.set("token", token);
+                        u.searchParams.set("phase", phase);
+                        if (paidRef) u.searchParams.set("payment_intent", paidRef);
+                        router.push(u.pathname + "?" + u.searchParams.toString());
                         return;
                     }
                     throw new Error(msg);

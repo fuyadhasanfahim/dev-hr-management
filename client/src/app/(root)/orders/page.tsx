@@ -167,6 +167,8 @@ interface ApiErrorResponse {
 export default function OrdersPage() {
   const { data: session } = useSession();
   const { data: meData } = useGetMeQuery({});
+  const apiBase =
+    process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
   const isTelemarketer = useMemo(() => {
     return (
       (session?.user?.role === Role.STAFF ||
@@ -334,10 +336,11 @@ export default function OrdersPage() {
     (async () => {
       try {
         await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/api/quotation-payments/reconcile-orders`,
+          `${apiBase}/api/quotation-payments/reconcile-orders`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
+            credentials: "include",
             body: JSON.stringify({}),
           },
         );
@@ -347,7 +350,7 @@ export default function OrdersPage() {
         refetch();
       }
     })();
-  }, [isLoading, isFetching, meta, refetch]);
+  }, [apiBase, isLoading, isFetching, meta, refetch]);
 
   // Check if all current page orders are selected
   const allOrdersSelected = useMemo(() => {
