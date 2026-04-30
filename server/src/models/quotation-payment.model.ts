@@ -1,14 +1,19 @@
 import { Schema, model, Document, Types } from 'mongoose';
 
-export type PaymentPhaseStatus = 'pending' | 'processing' | 'paid' | 'failed';
+export type PaymentPhaseStatus = 'pending' | 'processing' | 'partial' | 'paid' | 'failed';
 export type QuotationPaymentPhase = 'upfront' | 'delivery' | 'final';
 
 export interface IPaymentPhase {
     status: PaymentPhaseStatus;
     percentage: number;    // 50 | 30 | 20
     amountDue: number;     // in smallest currency unit (cents)
-    amountPaid: number;
-    paymentIntentId?: string;  // Stripe PaymentIntent ID or PayPal Order ID
+    amountPaid: number;    // cumulative; incremented on each partial/full receipt
+    paymentIntentId?: string;  // most recent Stripe PaymentIntent ID or PayPal Order ID
+    /**
+     * All payment-intent IDs already applied to this phase.
+     * Used to detect and reject duplicate webhook deliveries.
+     */
+    paidIntentIds: string[];
     idempotencyKey?: string;   // stored for reference
     paidAt?: Date;
 }
@@ -41,13 +46,14 @@ const paymentPhaseSchema = new Schema<IPaymentPhase>(
     {
         status: {
             type: String,
-            enum: ['pending', 'processing', 'paid', 'failed'],
+            enum: ['pending', 'processing', 'partial', 'paid', 'failed'],
             default: 'pending',
         },
         percentage: { type: Number, required: true },
         amountDue: { type: Number, required: true, min: 0 },
         amountPaid: { type: Number, default: 0, min: 0 },
         paymentIntentId: { type: String, sparse: true },
+        paidIntentIds: { type: [String], default: [] },
         idempotencyKey: { type: String },
         paidAt: { type: Date },
     },
@@ -134,11 +140,12 @@ quotationPaymentSchema.index(
  */
 quotationPaymentSchema.index({ quotationId: 1 }, { unique: true });
 
-// Guard: delivery phase cannot be initiated before upfront is paid
+// Guard: phases must be fully paid (not just partial) before the next phase can be initiated
 (quotationPaymentSchema as any).pre('save', function () {
     const doc = this as any;
     if (
         doc.phases.delivery.status === 'processing' ||
+        doc.phases.delivery.status === 'partial' ||
         doc.phases.delivery.status === 'paid'
     ) {
         if (doc.phases.upfront.status !== 'paid') {
@@ -147,6 +154,7 @@ quotationPaymentSchema.index({ quotationId: 1 }, { unique: true });
     }
     if (
         doc.phases.final.status === 'processing' ||
+        doc.phases.final.status === 'partial' ||
         doc.phases.final.status === 'paid'
     ) {
         if (doc.phases.delivery.status !== 'paid') {

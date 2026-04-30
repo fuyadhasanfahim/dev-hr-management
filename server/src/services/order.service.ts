@@ -17,6 +17,16 @@ import emailService from './email.service.js';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+function deepFreeze<T extends object>(obj: T): Readonly<T> {
+    Object.getOwnPropertyNames(obj).forEach((name) => {
+        const value = (obj as Record<string, unknown>)[name];
+        if (value !== null && typeof value === 'object') {
+            deepFreeze(value as object);
+        }
+    });
+    return Object.freeze(obj);
+}
+
 async function generateOrderNumber(): Promise<string> {
     const year = new Date().getFullYear();
     const counter = await InvoiceCounter.findByIdAndUpdate(
@@ -27,32 +37,90 @@ async function generateOrderNumber(): Promise<string> {
     return `ORD-${year}-${counter.seq.toString().padStart(5, '0')}`;
 }
 
-function buildQuotationSnapshot(quotation: IQuotation): IQuotationSnapshot {
-    return {
-        quotationId: quotation._id as Types.ObjectId,
-        quotationGroupId: quotation.quotationGroupId,
-        version: quotation.version,
-        quotationNumber: quotation.quotationNumber,
-        serviceType: quotation.serviceType,
-        templateName: quotation.details.title,
-        clientId: quotation.clientId,
-        clientName: quotation.client.contactName,
-        clientEmail: quotation.client.email,
-        overview: quotation.overview,
-        scopeOfWork: (quotation.scopeOfWork || []).map((s) => ({
-            title: s.title,
-            description: s.description,
-            items: s.items,
-        })),
-        deliveryTimeline: quotation.deliveryTimeline,
-        currency: quotation.settings.currency || 'USD',
-        grandTotal: quotation.totals.grandTotal,
-        taxRate: quotation.settings.taxRate,
-        discount: quotation.settings.discount,
-        packagePrice: quotation.totals.packagePrice,
-        additionalTotal: quotation.totals.additionalTotal,
-        taxAmount: quotation.totals.taxAmount,
-    };
+function buildQuotationSnapshot(quotation: IQuotation): Readonly<IQuotationSnapshot> {
+    // ── Critical field guards ─────────────────────────────────────────────────
+    if (!quotation._id)
+        throw new AppError('Snapshot build failed: quotation._id is missing', 500);
+    if (!quotation.quotationGroupId)
+        throw new AppError('Snapshot build failed: quotationGroupId is missing', 500);
+    if (!quotation.quotationNumber)
+        throw new AppError('Snapshot build failed: quotationNumber is missing', 500);
+    if (!quotation.serviceType)
+        throw new AppError('Snapshot build failed: serviceType is missing', 500);
+    if (quotation.version == null || quotation.version < 1)
+        throw new AppError('Snapshot build failed: version is missing or invalid', 500);
+    if (!quotation.clientId)
+        throw new AppError('Snapshot build failed: clientId is missing', 500);
+    if (!quotation.client?.contactName)
+        throw new AppError('Snapshot build failed: client.contactName is missing', 500);
+    if (!quotation.client?.email)
+        throw new AppError('Snapshot build failed: client.email is missing', 500);
+    if (!quotation.details?.title)
+        throw new AppError('Snapshot build failed: details.title is missing', 500);
+    if (quotation.totals?.grandTotal == null)
+        throw new AppError('Snapshot build failed: totals.grandTotal is missing', 500);
+    if (quotation.totals?.taxAmount == null)
+        throw new AppError('Snapshot build failed: totals.taxAmount is missing', 500);
+
+    // ── Phase validation — fail loud on any invalid phase entry ──────────────
+    const phases = quotation.phases ?? [];
+    phases.forEach((p, i) => {
+        if (p == null || typeof p.title !== 'string' || p.title.trim() === '') {
+            throw new AppError(
+                `Snapshot build failed: phases[${i}] is invalid or missing title`,
+                500,
+            );
+        }
+    });
+
+    const scopeOfWork = phases.map((p) => ({
+        title:       p.title,
+        description: typeof p.description === 'string' ? p.description : '',
+        items:       Array.isArray(p.items) ? [...p.items] : [],
+    }));
+
+    // ── additionalServices — optional; each entry must have a numeric price ───
+    const additionalServicesTotal = Array.isArray(quotation.additionalServices)
+        ? quotation.additionalServices.reduce((sum, svc, i) => {
+              if (svc == null || typeof svc.price !== 'number' || isNaN(svc.price)) {
+                  throw new AppError(
+                      `Snapshot build failed: additionalServices[${i}].price is invalid`,
+                      500,
+                  );
+              }
+              return sum + svc.price;
+          }, 0)
+        : 0;
+
+    // ── Currency: trim → uppercase → fallback USD ─────────────────────────────
+    const rawCurrency = typeof quotation.currency === 'string' ? quotation.currency.trim() : '';
+    const currency = rawCurrency !== '' ? rawCurrency.toUpperCase() : 'USD';
+
+    // ── Pricing fields must be present ────────────────────────────────────────
+    if (quotation.pricing?.taxRate == null)
+        throw new AppError('Snapshot build failed: pricing.taxRate is missing', 500);
+    if (quotation.pricing?.discount == null)
+        throw new AppError('Snapshot build failed: pricing.discount is missing', 500);
+
+    return deepFreeze<IQuotationSnapshot>({
+        quotationId:            quotation._id as Types.ObjectId,
+        quotationGroupId:       quotation.quotationGroupId,
+        version:                quotation.version,
+        quotationNumber:        quotation.quotationNumber,
+        serviceType:            quotation.serviceType,
+        templateName:           quotation.details.title,
+        clientId:               quotation.clientId,
+        clientName:             quotation.client.contactName,
+        clientEmail:            quotation.client.email,
+        overview:               typeof quotation.overview === 'string' ? quotation.overview : undefined,
+        scopeOfWork,
+        currency,
+        grandTotal:             quotation.totals.grandTotal,
+        taxRate:                quotation.pricing.taxRate,
+        discount:               quotation.pricing.discount,
+        additionalServicesTotal,
+        taxAmount:              quotation.totals.taxAmount,
+    });
 }
 
 // ─── OrderService ─────────────────────────────────────────────────────────────

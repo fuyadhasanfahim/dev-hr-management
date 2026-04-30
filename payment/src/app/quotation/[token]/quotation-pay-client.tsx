@@ -13,6 +13,7 @@ import {
     FileText,
     Loader2,
     Lock,
+    PartyPopper,
     Wallet,
 } from "lucide-react";
 import { loadStripe } from "@stripe/stripe-js";
@@ -42,13 +43,21 @@ type QuotationPaymentTracker = {
     phases: Record<
         Phase,
         {
-            status: "pending" | "processing" | "paid" | "failed";
+            status: "pending" | "processing" | "partial" | "paid" | "failed";
             percentage: number;
             amountDue: number;
             amountPaid: number;
             paidAt?: string;
         }
     >;
+    summary?: {
+        paidPhases: Phase[];
+        totalPaid: number;
+        remainingAmount: number;
+        nextPayablePhase: Phase | null;
+        progressPercent: number;
+        allPaid: boolean;
+    };
 };
 
 const stripePromise = loadStripe(
@@ -80,6 +89,40 @@ function phasePrerequisitesMet(phase: Phase, tracker: QuotationPaymentTracker | 
     if (phase === "upfront") return true;
     if (phase === "delivery") return tracker.phases.upfront.status === "paid";
     return tracker.phases.delivery.status === "paid";
+}
+
+/** Derive summary locally — used when the API hasn't returned one yet. */
+function computeSummary(tracker: QuotationPaymentTracker) {
+    if (tracker.summary) return tracker.summary;
+    const phases: Phase[] = ["upfront", "delivery", "final"];
+    const paidPhases = phases.filter((p) => tracker.phases[p].status === "paid");
+    const totalPaid = phases.reduce((s, p) => s + tracker.phases[p].amountPaid, 0);
+    const remainingAmount = tracker.totalAmount - totalPaid;
+    const nextPayablePhase: Phase | null =
+        tracker.phases.upfront.status !== "paid"   ? "upfront"
+        : tracker.phases.delivery.status !== "paid" ? "delivery"
+        : tracker.phases.final.status !== "paid"    ? "final"
+        : null;
+    const progressPercent =
+        tracker.totalAmount > 0 ? Math.round((totalPaid / tracker.totalAmount) * 100) : 0;
+    return { paidPhases, totalPaid, remainingAmount, nextPayablePhase, progressPercent, allPaid: paidPhases.length === 3 };
+}
+
+function PaymentProgressBar({ progressPercent, paidCount }: { progressPercent: number; paidCount: number }) {
+    return (
+        <div className="space-y-2">
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <span>{paidCount} of 3 phases paid</span>
+                <span>{progressPercent}%</span>
+            </div>
+            <div className="h-2 w-full rounded-full bg-gray-100 overflow-hidden">
+                <div
+                    className="h-full rounded-full bg-teal-500 transition-all duration-700"
+                    style={{ width: `${progressPercent}%` }}
+                />
+            </div>
+        </div>
+    );
 }
 
 export default function QuotationPayClient({ token }: { token: string }) {
@@ -268,57 +311,94 @@ export default function QuotationPayClient({ token }: { token: string }) {
 
                             <Separator className="my-5" />
 
-                            {tracker ? (
-                                <div className="space-y-3">
-                                    {(["upfront", "delivery", "final"] as const).map((phase) => {
-                                        const row = tracker.phases[phase];
-                                        const disabled =
-                                            !canPay ||
-                                            !phasePrerequisitesMet(phase, tracker) ||
-                                            row.status === "paid";
+                            {tracker ? (() => {
+                                const summary = computeSummary(tracker);
 
-                                        return (
-                                            <button
-                                                key={phase}
-                                                type="button"
-                                                onClick={() => setActivePhase(phase)}
-                                                disabled={disabled}
-                                                className={[
-                                                    "w-full text-left rounded-2xl border p-4 transition",
-                                                    activePhase === phase
-                                                        ? "border-teal-600 bg-teal-50/40"
-                                                        : "border-gray-900/15 bg-gray-900/5",
-                                                    disabled ? "opacity-60 cursor-not-allowed" : "hover:border-teal-600/60",
-                                                ].join(" ")}
-                                            >
-                                                <div className="flex items-start justify-between gap-3">
-                                                    <div className="space-y-1">
-                                                        <div className="flex items-center gap-2">
-                                                            <div className="font-semibold text-gray-900">
-                                                                {phaseLabel(phase)}
+                                if (summary.allPaid) {
+                                    return (
+                                        <div className="flex flex-col items-center gap-3 py-6 text-center">
+                                            <div className="rounded-full bg-teal-50 p-3">
+                                                <PartyPopper className="h-6 w-6 text-teal-600" />
+                                            </div>
+                                            <div className="font-semibold text-gray-900">All phases complete!</div>
+                                            <div className="text-sm text-muted-foreground">
+                                                {formatMoney(tracker.totalAmount / 100, currency)} paid in full.
+                                            </div>
+                                        </div>
+                                    );
+                                }
+
+                                return (
+                                    <div className="space-y-4">
+                                        <PaymentProgressBar
+                                            progressPercent={summary.progressPercent}
+                                            paidCount={summary.paidPhases.length}
+                                        />
+
+                                        {summary.remainingAmount > 0 && (
+                                            <div className="rounded-xl bg-amber-50 border border-amber-100 px-4 py-2.5 flex items-center justify-between">
+                                                <span className="text-xs text-amber-700 font-medium">Remaining</span>
+                                                <span className="text-sm font-semibold text-amber-800">
+                                                    {formatMoney(summary.remainingAmount / 100, currency)}
+                                                </span>
+                                            </div>
+                                        )}
+
+                                        <div className="space-y-3">
+                                            {(["upfront", "delivery", "final"] as const).map((phase) => {
+                                                const row = tracker.phases[phase];
+                                                const prereqMet = phasePrerequisitesMet(phase, tracker);
+                                                const isPaid = row.status === "paid";
+                                                const isNext = prereqMet && !isPaid;
+                                                const disabled = !canPay || !prereqMet || isPaid;
+
+                                                return (
+                                                    <button
+                                                        key={phase}
+                                                        type="button"
+                                                        onClick={() => setActivePhase(phase)}
+                                                        disabled={disabled}
+                                                        className={[
+                                                            "w-full text-left rounded-2xl border p-4 transition",
+                                                            isPaid
+                                                                ? "border-teal-200 bg-teal-50/50 cursor-default"
+                                                                : activePhase === phase
+                                                                    ? "border-teal-600 bg-teal-50/40"
+                                                                    : "border-gray-900/15 bg-gray-900/5",
+                                                            !isPaid && disabled ? "opacity-50 cursor-not-allowed" : "",
+                                                            !disabled && !isPaid ? "hover:border-teal-600/60" : "",
+                                                        ].join(" ")}
+                                                    >
+                                                        <div className="flex items-center justify-between gap-3">
+                                                            <div className="space-y-0.5">
+                                                                <div className="flex items-center gap-2">
+                                                                    {isPaid ? (
+                                                                        <CheckCircle2 className="h-4 w-4 text-teal-600 shrink-0" />
+                                                                    ) : !prereqMet ? (
+                                                                        <Lock className="h-4 w-4 text-gray-400 shrink-0" />
+                                                                    ) : null}
+                                                                    <span className="font-semibold text-gray-900">
+                                                                        {phaseLabel(phase)}
+                                                                    </span>
+                                                                    <Badge
+                                                                        variant={statusBadgeVariant(row.status)}
+                                                                        className="rounded-full text-[11px]"
+                                                                    >
+                                                                        {isPaid ? "paid" : isNext ? "due next" : "locked"}
+                                                                    </Badge>
+                                                                </div>
+                                                                <div className="text-sm text-muted-foreground pl-6">
+                                                                    {formatMoney(row.amountDue / 100, currency)} • {row.percentage}%
+                                                                </div>
                                                             </div>
-                                                            <Badge
-                                                                variant={statusBadgeVariant(row.status)}
-                                                                className="rounded-full"
-                                                            >
-                                                                {row.status}
-                                                            </Badge>
-                                                            {!phasePrerequisitesMet(phase, tracker) && (
-                                                                <Badge variant="outline" className="rounded-full">
-                                                                    locked
-                                                                </Badge>
-                                                            )}
                                                         </div>
-                                                        <div className="text-sm text-muted-foreground">
-                                                            {formatMoney(row.amountDue / 100, currency)} • {row.percentage}%
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </button>
-                                        );
-                                    })}
-                                </div>
-                            ) : (
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                );
+                            })() : (
                                 <div className="text-sm text-muted-foreground">
                                     Accept the quotation to enable payments.
                                 </div>
@@ -332,9 +412,24 @@ export default function QuotationPayClient({ token }: { token: string }) {
                                         Payment method
                                     </div>
                                     <div className="text-xl font-semibold mt-1">
-                                        Pay {milestoneText || "securely"} ({phaseLabel(activePhase)})
+                                        Pay {milestoneText || "securely"}
+                                        <span className="ml-2 text-sm font-normal text-muted-foreground">
+                                            ({phaseLabel(activePhase)})
+                                        </span>
                                     </div>
                                 </div>
+                                {tracker && (() => {
+                                    const s = computeSummary(tracker);
+                                    if (s.allPaid) return null;
+                                    return (
+                                        <div className="text-right shrink-0">
+                                            <div className="text-xs text-muted-foreground">Remaining</div>
+                                            <div className="text-sm font-semibold text-amber-700">
+                                                {formatMoney(s.remainingAmount / 100, currency)}
+                                            </div>
+                                        </div>
+                                    );
+                                })()}
                             </div>
 
                             <Separator className="my-5" />

@@ -13,12 +13,31 @@ import {
 // @ts-ignore
 import * as React from 'react';
 
+export interface PaymentPhaseEmailInfo {
+    /** Display label, e.g. "Upfront" */
+    label: string;
+    /** "50%" */
+    percentageLabel: string;
+    /** "$500.00" */
+    amountFormatted: string;
+    /** 'paid' | 'next' | 'locked' */
+    state: 'paid' | 'next' | 'locked';
+}
+
 interface QuotationEmailProps {
     clientName: string;
     quotationTitle: string;
     quotationNumber: string;
     clientLink: string;
     validUntil?: string;
+    /**
+     * When set, the email switches to payment-reminder mode.
+     * Populated when re-sending the payment link to a client who has already
+     * accepted the quotation but hasn't finished paying.
+     */
+    paymentPhases?: PaymentPhaseEmailInfo[];
+    /** Formatted remaining amount, e.g. "$500.00" */
+    remainingAmountFormatted?: string;
 }
 
 export const QuotationEmail = ({
@@ -27,8 +46,15 @@ export const QuotationEmail = ({
     quotationNumber,
     clientLink,
     validUntil,
+    paymentPhases,
+    remainingAmountFormatted,
 }: QuotationEmailProps) => {
-    const previewText = `Quotation ${quotationNumber} is ready to review`;
+    const isReminder = Boolean(paymentPhases && paymentPhases.length > 0);
+
+    const previewText = isReminder
+        ? `Payment reminder — ${remainingAmountFormatted ?? 'balance'} remaining on quotation ${quotationNumber}`
+        : `Quotation ${quotationNumber} is ready to review`;
+
     const logoUrl =
         'https://res.cloudinary.com/dny7zfbg9/image/upload/v1755954483/mqontecf1xao7znsh6cx.png';
 
@@ -49,29 +75,72 @@ export const QuotationEmail = ({
                     </Section>
 
                     <Section style={content}>
-                        <Text style={heading}>Your quotation is ready</Text>
+                        <Text style={heading}>
+                            {isReminder ? 'Payment reminder' : 'Your quotation is ready'}
+                        </Text>
 
                         <Text style={paragraph}>Hi {clientName || 'there'},</Text>
 
-                        <Text style={paragraph}>
-                            We’ve prepared your quotation <strong>{quotationNumber}</strong> for{' '}
-                            <strong>{quotationTitle}</strong>.
-                        </Text>
+                        {isReminder ? (
+                            <Text style={paragraph}>
+                                This is a friendly reminder that your payment for quotation{' '}
+                                <strong>{quotationNumber}</strong> —{' '}
+                                <strong>{quotationTitle}</strong> is not yet complete.
+                            </Text>
+                        ) : (
+                            <Text style={paragraph}>
+                                We've prepared your quotation <strong>{quotationNumber}</strong>{' '}
+                                for <strong>{quotationTitle}</strong>.
+                            </Text>
+                        )}
 
-                        {validUntil ? (
+                        {validUntil && !isReminder ? (
                             <Text style={muted}>
                                 Valid until: <strong>{validUntil}</strong>
                             </Text>
                         ) : null}
 
+                        {/* Payment phase table — reminder mode only */}
+                        {isReminder && paymentPhases && paymentPhases.length > 0 ? (
+                            <Section style={phaseTable}>
+                                <Text style={phaseTableHeading}>Payment milestones</Text>
+
+                                {paymentPhases.map((ph) => (
+                                    <Section key={ph.label} style={phaseRowStyle(ph.state)}>
+                                        <Text style={phaseCell}>
+                                            {ph.state === 'paid'  ? '✅'
+                                            : ph.state === 'next' ? '⏳'
+                                            :                       '🔒'}{' '}
+                                            <strong>{ph.label}</strong> ({ph.percentageLabel}) —{' '}
+                                            {ph.amountFormatted}
+                                        </Text>
+                                        <Text style={phaseStatusStyle(ph.state)}>
+                                            {ph.state === 'paid'  ? 'Paid'
+                                            : ph.state === 'next' ? 'Due next'
+                                            :                       'Locked'}
+                                        </Text>
+                                    </Section>
+                                ))}
+
+                                {remainingAmountFormatted ? (
+                                    <Section style={remainingRow}>
+                                        <Text style={remainingLabel}>
+                                            Remaining balance:{' '}
+                                            <strong>{remainingAmountFormatted}</strong>
+                                        </Text>
+                                    </Section>
+                                ) : null}
+                            </Section>
+                        ) : null}
+
                         <Section style={btnContainer}>
                             <Button style={button} href={clientLink}>
-                                View quotation
+                                {isReminder ? 'Complete payment' : 'View quotation'}
                             </Button>
                         </Section>
 
                         <Text style={small}>
-                            If the button doesn’t work, copy and paste this link into your browser:
+                            If the button doesn't work, copy and paste this link into your browser:
                             <br />
                             {clientLink}
                         </Text>
@@ -91,6 +160,8 @@ export const QuotationEmail = ({
 };
 
 export default QuotationEmail;
+
+// ─── Styles ───────────────────────────────────────────────────────────────────
 
 const main = {
     backgroundColor: '#f2f2f7',
@@ -181,3 +252,61 @@ const footerText = {
     color: '#3a3a3c',
 };
 
+// ─── Phase table styles ───────────────────────────────────────────────────────
+
+const phaseTable = {
+    backgroundColor: '#f9fafb',
+    borderRadius: '12px',
+    padding: '16px',
+    marginBottom: '24px',
+};
+
+const phaseTableHeading = {
+    fontSize: '13px',
+    fontWeight: '600',
+    color: '#6b7280',
+    textTransform: 'uppercase' as const,
+    letterSpacing: '0.06em',
+    marginBottom: '12px',
+    marginTop: '0',
+};
+
+function phaseRowStyle(state: 'paid' | 'next' | 'locked') {
+    return {
+        display: 'flex' as const,
+        justifyContent: 'space-between' as const,
+        alignItems: 'center' as const,
+        padding: '8px 0',
+        borderBottom: '1px solid #e5e7eb',
+        opacity: state === 'locked' ? 0.55 : 1,
+    };
+}
+
+const phaseCell = {
+    fontSize: '15px',
+    color: '#1c1c1e',
+    margin: '0',
+};
+
+function phaseStatusStyle(state: 'paid' | 'next' | 'locked') {
+    const colorMap = { paid: '#16a34a', next: '#d97706', locked: '#9ca3af' };
+    return {
+        fontSize: '13px',
+        fontWeight: '600',
+        color: colorMap[state],
+        margin: '0',
+        minWidth: '70px',
+        textAlign: 'right' as const,
+    };
+}
+
+const remainingRow = {
+    paddingTop: '12px',
+    marginTop: '4px',
+};
+
+const remainingLabel = {
+    fontSize: '15px',
+    color: '#1c1c1e',
+    margin: '0',
+};

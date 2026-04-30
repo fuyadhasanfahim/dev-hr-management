@@ -5,6 +5,8 @@ import mongoose from 'mongoose';
 import { OutboxService } from './outbox.service.js';
 import OutboxEventModel from '../models/outbox-event.model.js';
 import QuotationModel from '../models/quotation.model.js';
+import QuotationPaymentModel from '../models/quotation-payment.model.js';
+import OrderModel from '../models/order.model.js';
 import { QuotationService } from './quotation.service.js';
 
 // ─── Event Handlers ───────────────────────────────────────────────────────────
@@ -29,7 +31,19 @@ export async function handleQuotationAccepted(data: any) {
 }
 
 export async function handleUpfrontPaymentSucceeded(data: any) {
-    await QuotationPaymentService.recordPhasePayment(
+    const log = logger.child({
+        quotationGroupId: data.quotationGroupId,
+        paymentIntentId: data.paymentIntentId,
+        quotationId: data.quotationId,
+    });
+
+    log.info({ amountReceived: data.amountReceived }, 'payment.upfront.received');
+
+    // Record the payment. Returns current tracker state regardless of wasApplied.
+    // wasApplied=false means a duplicate/replay — but a prior run may have crashed
+    // AFTER recording the payment and BEFORE creating the order. We must not skip
+    // order creation based on wasApplied alone; use tracker.orderId as ground truth.
+    const { tracker } = await QuotationPaymentService.recordPhasePayment(
         data.quotationGroupId,
         'upfront',
         data.amountReceived,
@@ -37,30 +51,50 @@ export async function handleUpfrontPaymentSucceeded(data: any) {
         data.quotationId,
     );
 
-    const order = await OrderService.createOrderFromQuotation(
-        data.quotationGroupId,
-        data.systemActorId,
-    );
+    // Guard: phase must be fully paid before creating an order (handles partial payments)
+    if (tracker.phases.upfront.status !== 'paid') {
+        log.info(
+            { upfrontStatus: tracker.phases.upfront.status },
+            'payment.upfront.succeeded.phase_not_fully_paid — order creation deferred',
+        );
+        return;
+    }
 
-    // Update tracker with orderId
-    const QuotationPaymentModel = (await import('../models/quotation-payment.model.js')).default;
-    await QuotationPaymentModel.findOneAndUpdate(
-        { quotationGroupId: data.quotationGroupId },
-        { $set: { orderId: order._id } },
-    );
+    // Idempotency guard: order already exists and is linked — nothing left to do
+    if (tracker.orderId) {
+        log.info(
+            { orderId: tracker.orderId.toString() },
+            'payment.upfront.succeeded.order_already_linked — skipping creation',
+        );
+        return;
+    }
 
-    logger.info(
-        {
-            quotationGroupId: data.quotationGroupId,
-            orderId: order._id.toString(),
-            orderNumber: order.orderNumber,
-        },
-        'payment.upfront.succeeded.order_created',
-    );
+    log.info('payment.upfront.succeeded.creating_order');
+
+    try {
+        const order = await OrderService.createOrderFromQuotation(
+            data.quotationGroupId,
+            data.systemActorId,
+        );
+
+        await QuotationPaymentModel.findOneAndUpdate(
+            { quotationGroupId: data.quotationGroupId, isActive: true },
+            { $set: { orderId: order._id } },
+        );
+
+        log.info(
+            { orderId: order._id.toString(), orderNumber: order.orderNumber },
+            'payment.upfront.succeeded.order_created',
+        );
+    } catch (err) {
+        log.error({ err }, 'payment.upfront.succeeded.order_creation_failed');
+        // Re-throw so the outbox worker retries this event
+        throw err;
+    }
 }
 
 export async function handleDeliveryPaymentSucceeded(data: any) {
-    await QuotationPaymentService.recordPhasePayment(
+    const { tracker, wasApplied } = await QuotationPaymentService.recordPhasePayment(
         data.quotationGroupId,
         'delivery',
         data.amountReceived,
@@ -68,10 +102,15 @@ export async function handleDeliveryPaymentSucceeded(data: any) {
         data.quotationId,
     );
 
-    const QuotationPaymentModel = (await import('../models/quotation-payment.model.js')).default;
-    const tracker = await QuotationPaymentModel.findOne({ quotationGroupId: data.quotationGroupId });
+    if (!wasApplied) {
+        logger.info(
+            { quotationGroupId: data.quotationGroupId, paymentIntentId: data.paymentIntentId },
+            'payment.delivery.succeeded.replay — asset unlock skipped',
+        );
+        return;
+    }
 
-    if (tracker?.orderId) {
+    if (tracker.orderId) {
         await OrderService.unlockAssets(tracker.orderId.toString());
         logger.info(
             { quotationGroupId: data.quotationGroupId, orderId: tracker.orderId.toString() },
@@ -81,7 +120,7 @@ export async function handleDeliveryPaymentSucceeded(data: any) {
 }
 
 export async function handleFinalPaymentSucceeded(data: any) {
-    await QuotationPaymentService.recordPhasePayment(
+    const { tracker, wasApplied } = await QuotationPaymentService.recordPhasePayment(
         data.quotationGroupId,
         'final',
         data.amountReceived,
@@ -89,10 +128,15 @@ export async function handleFinalPaymentSucceeded(data: any) {
         data.quotationId,
     );
 
-    const QuotationPaymentModel = (await import('../models/quotation-payment.model.js')).default;
-    const tracker = await QuotationPaymentModel.findOne({ quotationGroupId: data.quotationGroupId });
+    if (!wasApplied) {
+        logger.info(
+            { quotationGroupId: data.quotationGroupId, paymentIntentId: data.paymentIntentId },
+            'payment.final.succeeded.replay — order completion skipped',
+        );
+        return;
+    }
 
-    if (tracker?.orderId) {
+    if (tracker.orderId) {
         await OrderService.completeOrder(tracker.orderId.toString());
         logger.info(
             { quotationGroupId: data.quotationGroupId, orderId: tracker.orderId.toString() },
@@ -109,8 +153,79 @@ export async function handleQuotationChangeRequested(data: any) {
     logger.info({ quotationGroupId: data?.quotationGroupId, reason: data?.reason }, 'quotation.change_requested');
 }
 
+/**
+ * Reconciliation safety net.
+ *
+ * Finds every active payment tracker whose upfront phase is fully paid but has
+ * no orderId, then creates the missing order and links it.
+ *
+ * Two sub-cases handled:
+ *  1. Order was never created (prior worker crash after payment recording).
+ *  2. Order was created but the orderId back-reference was never written.
+ *
+ * Safe to call repeatedly — createOrderFromQuotation is idempotent.
+ */
+export async function reconcileOrders(systemActorId?: string): Promise<{
+    fixed: number;
+    repaired: number;
+    errors: number;
+}> {
+    const log = logger.child({ fn: 'reconcileOrders' });
+    log.info('reconcile.orders.start');
+
+    const SYSTEM_ACTOR = systemActorId ?? '000000000000000000000000';
+
+    const trackers = await QuotationPaymentModel.find({
+        isActive: true,
+        'phases.upfront.status': 'paid',
+        orderId: { $exists: false },
+    }).lean();
+
+    log.info({ count: trackers.length }, 'reconcile.orders.candidates_found');
+
+    let fixed = 0;
+    let repaired = 0;
+    let errors = 0;
+
+    for (const tracker of trackers) {
+        const quotationGroupId = tracker.quotationGroupId;
+        const reconcileLog = log.child({ quotationGroupId });
+
+        try {
+            // Check whether the order already exists but just wasn't linked
+            const existingOrder = await OrderModel.findOne({ quotationGroupId });
+            if (existingOrder) {
+                await QuotationPaymentModel.findByIdAndUpdate(tracker._id, {
+                    $set: { orderId: existingOrder._id },
+                });
+                reconcileLog.info(
+                    { orderId: existingOrder._id.toString() },
+                    'reconcile.orders.link_repaired',
+                );
+                repaired++;
+                continue;
+            }
+
+            const order = await OrderService.createOrderFromQuotation(quotationGroupId, SYSTEM_ACTOR);
+            await QuotationPaymentModel.findByIdAndUpdate(tracker._id, {
+                $set: { orderId: order._id },
+            });
+            reconcileLog.info(
+                { orderId: order._id.toString(), orderNumber: order.orderNumber },
+                'reconcile.orders.order_created',
+            );
+            fixed++;
+        } catch (err) {
+            reconcileLog.error({ err }, 'reconcile.orders.failed_for_group');
+            errors++;
+        }
+    }
+
+    log.info({ fixed, repaired, errors }, 'reconcile.orders.done');
+    return { fixed, repaired, errors };
+}
+
 async function markPhaseFailed(data: any) {
-    const QuotationPaymentModel = (await import('../models/quotation-payment.model.js')).default;
     const phase = data?.phase;
     if (!phase) {
         logger.warn({ quotationGroupId: data?.quotationGroupId }, 'payment.failed.missing_phase');

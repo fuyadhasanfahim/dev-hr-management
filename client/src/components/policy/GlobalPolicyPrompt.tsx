@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import DOMPurify from "dompurify";
 import { useGetPendingPoliciesQuery, useAcceptPolicyMutation } from "@/redux/features/policy/policyApi";
 import { useSession } from "@/lib/auth-client";
 import {
@@ -80,7 +81,7 @@ export function GlobalPolicyPrompt() {
                     <ScrollArea className="flex-1 pr-4">
                         <div 
                             className="prose prose-sm dark:prose-invert max-w-none"
-                            dangerouslySetInnerHTML={{ __html: currentPolicy?.description || "" }} 
+                            dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(currentPolicy?.description || "") }} 
                         />
                     </ScrollArea>
 

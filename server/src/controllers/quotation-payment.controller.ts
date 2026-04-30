@@ -8,6 +8,45 @@ import envConfig from '../config/env.config.js';
 const VALID_PHASES = ['upfront', 'delivery', 'final'] as const;
 type Phase = typeof VALID_PHASES[number];
 
+// ─── Payment summary helper ────────────────────────────────────────────────────
+
+/**
+ * Derive frontend-ready computed fields from the raw tracker document.
+ * All amounts are in the tracker's smallest currency unit (cents).
+ */
+function buildPaymentSummary(tracker: any) {
+    const phases = VALID_PHASES;
+
+    const paidPhases = phases.filter((p) => tracker.phases[p].status === 'paid');
+
+    const totalPaid = phases.reduce(
+        (sum, p) => sum + (tracker.phases[p].amountPaid ?? 0),
+        0,
+    );
+
+    const remainingAmount = (tracker.totalAmount ?? 0) - totalPaid;
+
+    const nextPayablePhase: Phase | null =
+        tracker.phases.upfront.status !== 'paid'   ? 'upfront'
+        : tracker.phases.delivery.status !== 'paid' ? 'delivery'
+        : tracker.phases.final.status !== 'paid'    ? 'final'
+        : null;
+
+    const progressPercent =
+        tracker.totalAmount > 0
+            ? Math.round((totalPaid / tracker.totalAmount) * 100)
+            : 0;
+
+    return {
+        paidPhases,
+        totalPaid,
+        remainingAmount,
+        nextPayablePhase,
+        progressPercent,
+        allPaid: paidPhases.length === phases.length,
+    };
+}
+
 /**
  * Create a Stripe PaymentIntent for a specific payment phase.
  *
@@ -63,7 +102,10 @@ async function getPaymentStatus(req: Request, res: Response, next: NextFunction)
                 message: 'No payment tracker found. Quotation may not have been accepted yet.',
             });
         }
-        return res.status(200).json({ success: true, data: result });
+        return res.status(200).json({
+            success: true,
+            data: { ...result.toObject(), summary: buildPaymentSummary(result) },
+        });
     } catch (err) {
         return next(err);
     }
@@ -148,7 +190,10 @@ async function getClientPaymentStatus(req: Request, res: Response, next: NextFun
             });
         }
 
-        return res.status(200).json({ success: true, data: result });
+        return res.status(200).json({
+            success: true,
+            data: { ...result.toObject(), summary: buildPaymentSummary(result) },
+        });
     } catch (err) {
         return next(err);
     }

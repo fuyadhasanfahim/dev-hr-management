@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import DOMPurify from 'dompurify';
 import { format } from 'date-fns';
 import { Megaphone, Pin, Calendar, Filter } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -167,7 +168,7 @@ export default function NoticesPage() {
                             <div className="mt-4">
                                 <div
                                     className="prose prose-sm max-w-none dark:prose-invert"
-                                    dangerouslySetInnerHTML={{ __html: selectedNotice.content }}
+                                    dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(selectedNotice.content) }}
                                 />
                                 <div className="flex items-center gap-4 text-xs text-muted-foreground mt-6 pt-4 border-t">
                                     <span>

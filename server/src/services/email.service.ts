@@ -7,7 +7,7 @@ import { InvitationEmail } from '../templates/InvitationEmail.js';
 import { ApplicationStatusEmail } from '../templates/ApplicationStatusEmail.js';
 import { OrderStatusUpdateEmail } from '../templates/OrderStatusUpdateEmail.js';
 import { AdminPaymentEmail } from '../templates/AdminPaymentEmail.js';
-import { QuotationEmail } from '../templates/QuotationEmail.js';
+import { QuotationEmail, type PaymentPhaseEmailInfo } from '../templates/QuotationEmail.js';
 import * as React from 'react';
 import envConfig from '../config/env.config.js';
 
@@ -240,6 +240,10 @@ interface SendQuotationEmailData {
     quotationNumber: string;
     clientLink: string;
     validUntil?: string;
+    /** Present when resending to a client who has already accepted — triggers reminder mode. */
+    paymentPhases?: PaymentPhaseEmailInfo[];
+    /** Formatted remaining amount, e.g. "$500.00" */
+    remainingAmountFormatted?: string;
 }
 
 const sendQuotationEmail = async (data: SendQuotationEmailData) => {
@@ -251,13 +255,18 @@ const sendQuotationEmail = async (data: SendQuotationEmailData) => {
                 quotationNumber: data.quotationNumber,
                 clientLink: data.clientLink,
                 validUntil: data.validUntil,
+                paymentPhases: data.paymentPhases,
+                remainingAmountFormatted: data.remainingAmountFormatted,
             }),
         );
 
+        const isReminder = Boolean(data.paymentPhases && data.paymentPhases.length > 0);
         const mailOptions = {
             from: 'Quotation | WebBriks',
             to: data.to,
-            subject: `Quotation ${data.quotationNumber} — ${data.quotationTitle}`,
+            subject: isReminder
+                ? `Payment reminder — Quotation ${data.quotationNumber} (${data.remainingAmountFormatted ?? 'balance'} remaining)`
+                : `Quotation ${data.quotationNumber} — ${data.quotationTitle}`,
             html: emailHtml,
         };
 

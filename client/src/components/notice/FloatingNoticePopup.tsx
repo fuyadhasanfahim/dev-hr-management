@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import DOMPurify from 'dompurify';
 import { format } from 'date-fns';
 import { Megaphone, X, ChevronLeft, ChevronRight, Pin } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -125,7 +126,7 @@ export function FloatingNoticePopup() {
 
                     <div
                         className="prose prose-sm max-w-none dark:prose-invert max-h-60 overflow-y-auto"
-                        dangerouslySetInnerHTML={{ __html: currentNotice.content }}
+                        dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(currentNotice.content) }}
                     />
 
                     <div className="flex items-center gap-4 text-xs text-muted-foreground mt-4 pt-4 border-t">

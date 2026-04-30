@@ -13,6 +13,8 @@ import { logger } from '../lib/logger.js';
 import ClientModel from '../models/client.model.js';
 import envConfig from '../config/env.config.js';
 import emailService from './email.service.js';
+import QuotationPaymentModel from '../models/quotation-payment.model.js';
+import type { PaymentPhaseEmailInfo } from '../templates/QuotationEmail.js';
 
 type SendQuotationResult = {
     quotation: IQuotation;
@@ -211,6 +213,60 @@ export class QuotationService {
             if (toList.length === 0) {
                 emailError = 'Client has no emails on record';
             } else {
+                // Build payment reminder context when the quotation is already accepted —
+                // this means the client is being re-sent the link to continue paying.
+                let paymentPhases: PaymentPhaseEmailInfo[] | undefined;
+                let remainingAmountFormatted: string | undefined;
+
+                if (saved.status === 'accepted') {
+                    const tracker = await QuotationPaymentModel.findOne({
+                        quotationGroupId: saved.quotationGroupId,
+                        isActive: true,
+                    }).lean();
+
+                    if (tracker) {
+                        const currency = tracker.currency || 'USD';
+                        const fmt = (cents: number) =>
+                            new Intl.NumberFormat('en-US', {
+                                style: 'currency',
+                                currency,
+                            }).format(cents / 100);
+
+                        const upfront  = tracker.phases.upfront;
+                        const delivery = tracker.phases.delivery;
+                        const final    = tracker.phases.final;
+
+                        const upfrontPaid   = upfront.status === 'paid';
+                        const deliveryPaid  = delivery.status === 'paid';
+
+                        paymentPhases = [
+                            {
+                                label: 'Upfront',
+                                percentageLabel: `${upfront.percentage}%`,
+                                amountFormatted: fmt(upfront.amountDue),
+                                state: upfrontPaid ? 'paid' : 'next',
+                            },
+                            {
+                                label: 'Delivery',
+                                percentageLabel: `${delivery.percentage}%`,
+                                amountFormatted: fmt(delivery.amountDue),
+                                state: deliveryPaid ? 'paid' : upfrontPaid ? 'next' : 'locked',
+                            },
+                            {
+                                label: 'Final',
+                                percentageLabel: `${final.percentage}%`,
+                                amountFormatted: fmt(final.amountDue),
+                                state: final.status === 'paid' ? 'paid' : deliveryPaid ? 'next' : 'locked',
+                            },
+                        ];
+
+                        const totalPaid = [upfront, delivery, final].reduce(
+                            (s, p) => s + (p.amountPaid ?? 0), 0,
+                        );
+                        remainingAmountFormatted = fmt(tracker.totalAmount - totalPaid);
+                    }
+                }
+
                 // Send to the first email; the UI/link can be shared further if needed.
                 const to = toList[0]!;
                 await emailService.sendQuotationEmail({
@@ -222,6 +278,8 @@ export class QuotationService {
                     validUntil: saved.details?.validUntil
                         ? new Date(saved.details.validUntil).toLocaleDateString('en-GB')
                         : undefined,
+                    paymentPhases,
+                    remainingAmountFormatted,
                 });
                 emailSent = true;
                 emailedTo = [to];

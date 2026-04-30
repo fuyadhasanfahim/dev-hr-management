@@ -87,13 +87,11 @@ export interface IQuotationSnapshot {
     clientEmail: string;
     overview?: string;
     scopeOfWork: Array<{ title: string; description: string; items: string[] }>;
-    deliveryTimeline?: string;
     currency: string;
     grandTotal: number;       // in original currency unit (not cents)
     taxRate: number;
     discount: number;
-    packagePrice: number;
-    additionalTotal: number;
+    additionalServicesTotal: number;
     taxAmount: number;
 }
 
@@ -167,13 +165,11 @@ const snapshotSchema = new Schema<IQuotationSnapshot>(
                 _id: false,
             },
         ],
-        deliveryTimeline: { type: String },
         currency: { type: String, required: true },
         grandTotal: { type: Number, required: true },
         taxRate: { type: Number, required: true },
         discount: { type: Number, required: true },
-        packagePrice: { type: Number, required: true },
-        additionalTotal: { type: Number, required: true },
+        additionalServicesTotal: { type: Number, required: true },
         taxAmount: { type: Number, required: true },
     },
     { _id: false },
