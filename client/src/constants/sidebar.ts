@@ -67,20 +67,9 @@ export const sidebarGroups: SidebarGroup[] = [
                 icon: IconChartBar,
                 access: [Role.SUPER_ADMIN, Role.ADMIN],
             },
-            {
-                title: "Outbox",
-                url: "/admin/outbox",
-                icon: IconArrowsShuffle,
-                access: [Role.SUPER_ADMIN, Role.ADMIN, Role.HR_MANAGER],
-            },
-            {
-                title: "Quotation Timeline",
-                url: "/admin/quotation-timeline",
-                icon: IconClock,
-                access: [Role.SUPER_ADMIN, Role.ADMIN, Role.HR_MANAGER],
-            },
         ],
     },
+
     {
         groupLabel: "Business",
         items: [
