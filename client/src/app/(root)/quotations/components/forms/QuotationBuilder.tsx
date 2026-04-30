@@ -33,6 +33,9 @@ import { QUOTATION_TEMPLATES } from "@/constants/quotation-templates";
 import { format } from "date-fns";
 import { formatMoney } from "@/lib/money";
 import { QuotationEmailDialog } from "../QuotationEmailDialog";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Button } from "@/components/ui/button";
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -110,6 +113,46 @@ function TextArea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
         className,
       ].join(" ")}
     />
+  );
+}
+
+function DatePickerInput({
+  value,
+  onChange,
+  placeholder = "Pick a date",
+}: {
+  value: string | undefined;
+  onChange: (dateStr: string) => void;
+  placeholder?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const dateObj = value ? new Date(value) : undefined;
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          data-empty={!dateObj}
+          className="w-full justify-between text-left font-normal data-[empty=true]:text-muted-foreground"
+        >
+          {dateObj ? format(dateObj, "PPP") : <span>{placeholder}</span>}
+          <ChevronDown className="h-4 w-4 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-auto p-0" align="start">
+        <Calendar
+          mode="single"
+          selected={dateObj}
+          onSelect={(date) => {
+            onChange(date ? format(date, "yyyy-MM-dd") : "");
+            setOpen(false);
+          }}
+          defaultMonth={dateObj}
+          initialFocus
+        />
+      </PopoverContent>
+    </Popover>
   );
 }
 
@@ -452,18 +495,18 @@ export default function QuotationBuilder({
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <FieldLabel>Issuance Date</FieldLabel>
-                  <TextInput
-                    type="date"
+                  <DatePickerInput
                     value={data.details.date}
-                    onChange={(e) => updateDetails({ date: e.target.value })}
+                    onChange={(date) => updateDetails({ date })}
+                    placeholder="dd-mm-yyyy"
                   />
                 </div>
                 <div className="space-y-2">
                   <FieldLabel>Valid Until</FieldLabel>
-                  <TextInput
-                    type="date"
+                  <DatePickerInput
                     value={data.details.validUntil}
-                    onChange={(e) => updateDetails({ validUntil: e.target.value })}
+                    onChange={(date) => updateDetails({ validUntil: date })}
+                    placeholder="dd-mm-yyyy"
                   />
                 </div>
               </div>
@@ -614,26 +657,18 @@ export default function QuotationBuilder({
                             <div className="grid grid-cols-2 gap-4">
                               <div className="space-y-2">
                                 <label className="text-[10px] text-muted-foreground">Start</label>
-                                <TextInput
-                                  type="date"
+                                <DatePickerInput
                                   value={phase.startDate || ""}
-                                  onChange={(e) =>
-                                    updatePhase(pIdx, {
-                                      startDate: e.target.value,
-                                    })
-                                  }
+                                  onChange={(date) => updatePhase(pIdx, { startDate: date })}
+                                  placeholder="dd-mm-yyyy"
                                 />
                               </div>
                               <div className="space-y-2">
                                 <label className="text-[10px] text-muted-foreground">End</label>
-                                <TextInput
-                                  type="date"
+                                <DatePickerInput
                                   value={phase.endDate || ""}
-                                  onChange={(e) =>
-                                    updatePhase(pIdx, {
-                                      endDate: e.target.value,
-                                    })
-                                  }
+                                  onChange={(date) => updatePhase(pIdx, { endDate: date })}
+                                  placeholder="dd-mm-yyyy"
                                 />
                               </div>
                             </div>
@@ -997,8 +1032,7 @@ export default function QuotationBuilder({
 
         {/* Sidebar: Financials */}
         <div className="space-y-6">
-          <div className="lg:sticky lg:top-10 shadow-sm border overflow-hidden rounded-xl bg-card">
-            <div className="absolute inset-x-0 top-0 h-0.5 bg-border" />
+          <div className="border overflow-hidden rounded-xl bg-card">
             <div className="bg-muted/20 border-b p-6">
               <div className="text-lg font-semibold flex items-center gap-2">
                 <span className="inline-flex w-9 h-9 items-center justify-center rounded-lg bg-muted text-muted-foreground ring-1 ring-border">
