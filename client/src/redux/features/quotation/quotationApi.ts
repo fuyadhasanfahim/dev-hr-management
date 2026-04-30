@@ -61,6 +61,7 @@ export const quotationApi = apiSlice.injectEndpoints({
         method: 'POST',
         body,
       }),
+      transformResponse: (response: { data: QuotationData }) => response.data,
       invalidatesTags: ['Quotation'],
     }),
 
@@ -83,6 +84,7 @@ export const quotationApi = apiSlice.injectEndpoints({
         method: 'PATCH',
         body,
       }),
+      transformResponse: (response: { data: QuotationData }) => response.data,
       invalidatesTags: ['Quotation'],
     }),
 
