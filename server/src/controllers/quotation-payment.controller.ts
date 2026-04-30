@@ -11,6 +11,7 @@ import emailService from '../services/email.service.js';
 import OrderService from '../services/order.service.js';
 import QuotationPaymentModel from '../models/quotation-payment.model.js';
 import { reconcileOrders } from '../services/quotation-event.worker.js';
+import OrderModel from '../models/order.model.js';
 
 const VALID_PHASES = ['upfront', 'delivery', 'final'] as const;
 type Phase = typeof VALID_PHASES[number];
@@ -294,6 +295,7 @@ async function confirmClientPayment(req: Request, res: Response, next: NextFunct
         let applied = false;
         let recordedAmountCents = 0;
         let recordedCurrency = '';
+        let tracker: any;
 
         if (provider === 'stripe') {
             if (!paymentIntentId) return next(new AppError('paymentIntentId is required for stripe', 400));
@@ -316,7 +318,7 @@ async function confirmClientPayment(req: Request, res: Response, next: NextFunct
             const amt = Number((pi as any).amount_received ?? pi.amount ?? 0);
             const cur = String((pi as any).currency || currency || '').toUpperCase();
 
-            const { tracker, wasApplied } = await QuotationPaymentService.recordPhasePayment(
+            const result = await QuotationPaymentService.recordPhasePayment(
                 quotationGroupId,
                 phase as Phase,
                 amt,
@@ -324,6 +326,8 @@ async function confirmClientPayment(req: Request, res: Response, next: NextFunct
                 quotationId,
                 cur,
             );
+            tracker = result.tracker;
+            const wasApplied = result.wasApplied;
 
             referenceId = String(pi.id);
             applied = wasApplied;
@@ -347,7 +351,7 @@ async function confirmClientPayment(req: Request, res: Response, next: NextFunct
             }
             const cur = String(currency || '').toUpperCase();
 
-            const { tracker, wasApplied } = await QuotationPaymentService.recordPhasePayment(
+            const result = await QuotationPaymentService.recordPhasePayment(
                 quotationGroupId,
                 phase as Phase,
                 Math.round(amt),
@@ -355,6 +359,8 @@ async function confirmClientPayment(req: Request, res: Response, next: NextFunct
                 quotationId,
                 cur || undefined,
             );
+            tracker = result.tracker;
+            const wasApplied = result.wasApplied;
 
             referenceId = String(paypalCaptureId);
             applied = wasApplied;
@@ -422,6 +428,38 @@ async function confirmClientPayment(req: Request, res: Response, next: NextFunct
                 logger.warn(
                     { quotationGroupId, phase, referenceId, err: err?.message || String(err) },
                     'payment.receipt_email_failed',
+                );
+            }
+        }
+
+        // Side effects for order-linked trackers (automated transitions)
+        if (tracker.orderId) {
+            const orderId = tracker.orderId.toString();
+            try {
+                if (phase === 'upfront' && tracker.phases.upfront.status === 'paid') {
+                    // Transition to ACTIVE if not already there
+                    const order = await OrderModel.findById(orderId);
+                    if (order && order.status === 'pending_upfront') {
+                        await OrderService.transitionStatus(
+                            orderId,
+                            'active' as any,
+                            '000000000000000000000000',
+                            'Order activated after manual upfront payment confirmation'
+                        );
+                    }
+                } else if (phase === 'delivery' && tracker.phases.delivery.status === 'paid') {
+                    // Unlock assets and transition to DELIVERED
+                    await OrderService.unlockAssets(orderId);
+                    logger.info({ orderId, phase }, 'payment.manual_confirm.delivery_side_effects_triggered');
+                } else if (phase === 'final' && tracker.phases.final.status === 'paid') {
+                    // Complete order
+                    await OrderService.completeOrder(orderId);
+                    logger.info({ orderId, phase }, 'payment.manual_confirm.final_side_effects_triggered');
+                }
+            } catch (err: any) {
+                logger.error(
+                    { orderId, phase, err: err?.message || String(err) },
+                    'payment.manual_confirm.side_effects_failed'
                 );
             }
         }
