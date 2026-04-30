@@ -68,6 +68,13 @@ type Quotation = {
     paymentMilestones?: PaymentMilestone[];
 };
 
+type OrderAsset = {
+    _id: string;
+    label: string;
+    type: string;
+    isLocked: boolean;
+};
+
 type QuotationPaymentTracker = {
     quotationGroupId: string;
     currency: string;
@@ -81,6 +88,8 @@ type QuotationPaymentTracker = {
             amountDue: number;
             amountPaid: number;
             paidAt?: string;
+            paymentIntentId?: string;
+            provider?: string;
         }
     >;
     summary?: {
@@ -91,6 +100,11 @@ type QuotationPaymentTracker = {
         progressPercent: number;
         allPaid: boolean;
     };
+    order?: {
+        status: string;
+        orderNumber: string;
+        assets: OrderAsset[];
+    } | null;
 };
 
 const stripePromise = loadStripe(
@@ -253,6 +267,104 @@ function StatusBadge({ status }: { status: string }) {
     );
 }
 
+function SuccessCard({ 
+    phase, 
+    data, 
+    currency 
+}: { 
+    phase: Phase; 
+    data: any; 
+    currency: string; 
+}) {
+    return (
+        <div className="mt-2 rounded-xl border border-teal-100 bg-teal-50/30 p-4 space-y-3 animate-in zoom-in-95 duration-300">
+            <div className="flex items-center gap-2 text-teal-700">
+                <CheckCircle2 className="h-4 w-4" />
+                <span className="text-xs font-bold uppercase tracking-wider">Payment Successful</span>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+                <div>
+                    <p className="text-[10px] text-slate-500 uppercase font-bold">Amount Paid</p>
+                    <p className="text-sm font-bold text-slate-900">{formatMoney(data.amountPaid / 100, currency)}</p>
+                </div>
+                <div>
+                    <p className="text-[10px] text-slate-500 uppercase font-bold">Paid On</p>
+                    <p className="text-sm font-medium text-slate-900">{formatDate(data.paidAt)}</p>
+                </div>
+                <div className="col-span-2">
+                    <p className="text-[10px] text-slate-500 uppercase font-bold">Transaction ID</p>
+                    <p className="text-[11px] font-mono text-slate-700 break-all">{data.paymentIntentId || "N/A"}</p>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function DeliverablesSection({ 
+    order, 
+    isDeliveryPaid 
+}: { 
+    order: QuotationPaymentTracker['order'], 
+    isDeliveryPaid: boolean 
+}) {
+    if (!order || !order.assets?.length) return null;
+
+    return (
+        <SectionShell
+            icon={<Layers className="h-5 w-5" />}
+            title="Project deliverables"
+            subtitle={isDeliveryPaid ? "Access your project assets below." : "Assets are locked until delivery payment is confirmed."}
+        >
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {order.assets.map((asset) => (
+                    <div 
+                        key={asset._id}
+                        className={`group relative overflow-hidden rounded-2xl border p-4 transition-all ${
+                            !isDeliveryPaid 
+                                ? "bg-slate-50/50 border-slate-200" 
+                                : "bg-white border-slate-100 hover:border-teal-200 hover:shadow-md"
+                        }`}
+                    >
+                        <div className="flex items-center gap-3">
+                            <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
+                                !isDeliveryPaid ? "bg-slate-200 text-slate-400" : "bg-teal-50 text-teal-600"
+                            }`}>
+                                <FileText className="h-5 w-5" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                                <p className={`text-sm font-semibold truncate ${!isDeliveryPaid ? "text-slate-400 blur-[2px]" : "text-slate-900"}`}>
+                                    {asset.label}
+                                </p>
+                                <p className="text-[10px] text-slate-500 uppercase font-bold tracking-tight">
+                                    {asset.type} Deliverable
+                                </p>
+                            </div>
+                            {!isDeliveryPaid && (
+                                <Lock className="h-4 w-4 text-slate-400 shrink-0" />
+                            )}
+                        </div>
+                        {!isDeliveryPaid && (
+                            <div className="absolute inset-0 bg-white/40 backdrop-blur-[1px] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                <span className="text-[10px] font-bold text-slate-600 bg-white px-2 py-1 rounded-full shadow-sm border border-slate-100">
+                                    Locked
+                                </span>
+                            </div>
+                        )}
+                    </div>
+                ))}
+            </div>
+            {!isDeliveryPaid && (
+                <div className="mt-4 rounded-xl bg-amber-50 border border-amber-100 p-3 flex items-start gap-3">
+                    <AlertCircle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+                    <p className="text-xs text-amber-800 leading-relaxed">
+                        The deliverables above are currently locked. Complete the <strong>Delivery (30%)</strong> milestone to unlock instant access to all files.
+                    </p>
+                </div>
+            )}
+        </SectionShell>
+    );
+}
+
 function CollapsibleCard({
     title,
     summary,
@@ -315,6 +427,7 @@ export default function QuotationPayClient({ token }: { token: string }) {
     const [isLoading, setIsLoading] = useState(true);
     const [isAccepting, setIsAccepting] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [expandedPaidPhase, setExpandedPaidPhase] = useState<Phase | null>(null);
 
     /**
      * Always pull canonical state from the backend. Two guarantees:
@@ -672,6 +785,13 @@ export default function QuotationPayClient({ token }: { token: string }) {
                             </SectionShell>
                         ) : null}
 
+                        {tracker?.order && (
+                            <DeliverablesSection 
+                                order={tracker.order} 
+                                isDeliveryPaid={tracker.phases.delivery.status === "paid"} 
+                            />
+                        )}
+
                         <SectionShell
                             icon={<ReceiptText className="h-5 w-5" />}
                             title="Pricing breakdown"
@@ -901,73 +1021,89 @@ export default function QuotationPayClient({ token }: { token: string }) {
                                                             const isPaid = row.status === "paid";
                                                             const isNext = prereqMet && !isPaid;
                                                             const isActive = activePhase === phase;
-                                                            const disabled = !prereqMet || isPaid;
+                                                            const isExpanded = expandedPaidPhase === phase;
+                                                            const disabled = !prereqMet;
 
                                                             return (
-                                                                <button
-                                                                    key={phase}
-                                                                    type="button"
-                                                                    onClick={() => !disabled && setActivePhase(phase)}
-                                                                    disabled={disabled}
-                                                                    className={[
-                                                                        "w-full text-left rounded-2xl border p-4 transition-all",
-                                                                        isPaid
-                                                                            ? "border-teal-200 bg-teal-50/50 cursor-default"
-                                                                            : isActive
-                                                                                ? "border-teal-500 bg-white ring-2 ring-teal-500/20"
-                                                                                : "border-slate-200 bg-white hover:border-slate-300",
-                                                                        disabled && !isPaid
-                                                                            ? "opacity-60 cursor-not-allowed"
-                                                                            : "",
-                                                                    ].join(" ")}
-                                                                >
-                                                                    <div className="flex items-center justify-between gap-3">
-                                                                        <div className="flex items-center gap-3 min-w-0">
-                                                                            <span
-                                                                                className={[
-                                                                                    "flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-xs font-bold",
-                                                                                    isPaid
-                                                                                        ? "bg-teal-600 text-white"
-                                                                                        : isNext
-                                                                                            ? "bg-amber-500 text-white"
-                                                                                            : "bg-slate-100 text-slate-400",
-                                                                                ].join(" ")}
-                                                                            >
-                                                                                {isPaid ? (
-                                                                                    <CheckCircle2 className="h-4 w-4" />
-                                                                                ) : !prereqMet ? (
-                                                                                    <Lock className="h-3.5 w-3.5" />
-                                                                                ) : (
-                                                                                    row.percentage + "%"
-                                                                                )}
-                                                                            </span>
-                                                                            <div className="min-w-0">
-                                                                                <div className="text-sm font-semibold text-slate-900 truncate">
-                                                                                    {phaseLabel(phase)}
-                                                                                </div>
-                                                                                <div className="text-xs text-slate-500 truncate">
-                                                                                    {formatMoney(
-                                                                                        row.amountDue / 100,
-                                                                                        currency,
-                                                                                    )}{" "}
-                                                                                    • {row.percentage}%
+                                                                <div key={phase} className="space-y-2">
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => {
+                                                                            if (isPaid) {
+                                                                                setExpandedPaidPhase(isExpanded ? null : phase);
+                                                                            } else if (!disabled) {
+                                                                                setActivePhase(phase);
+                                                                            }
+                                                                        }}
+                                                                        disabled={!isPaid && disabled}
+                                                                        className={[
+                                                                            "w-full text-left rounded-2xl border p-4 transition-all",
+                                                                            isPaid
+                                                                                ? "border-teal-200 bg-teal-50/50 cursor-pointer hover:bg-teal-100/40"
+                                                                                : isActive
+                                                                                    ? "border-teal-500 bg-white ring-2 ring-teal-500/20"
+                                                                                    : "border-slate-200 bg-white hover:border-slate-300",
+                                                                            !isPaid && disabled
+                                                                                ? "opacity-60 cursor-not-allowed"
+                                                                                : "",
+                                                                        ].join(" ")}
+                                                                    >
+                                                                        <div className="flex items-center justify-between gap-3">
+                                                                            <div className="flex items-center gap-3 min-w-0">
+                                                                                <span
+                                                                                    className={[
+                                                                                        "flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-xs font-bold",
+                                                                                        isPaid
+                                                                                            ? "bg-teal-600 text-white"
+                                                                                            : isNext
+                                                                                                ? "bg-amber-500 text-white"
+                                                                                                : "bg-slate-100 text-slate-400",
+                                                                                    ].join(" ")}
+                                                                                >
+                                                                                    {isPaid ? (
+                                                                                        <CheckCircle2 className="h-4 w-4" />
+                                                                                    ) : !prereqMet ? (
+                                                                                        <Lock className="h-3.5 w-3.5" />
+                                                                                    ) : (
+                                                                                        row.percentage + "%"
+                                                                                    )}
+                                                                                </span>
+                                                                                <div className="min-w-0">
+                                                                                    <div className="text-sm font-semibold text-slate-900 truncate">
+                                                                                        {phaseLabel(phase)}
+                                                                                    </div>
+                                                                                    <div className="text-xs text-slate-500 truncate">
+                                                                                        {formatMoney(
+                                                                                            row.amountDue / 100,
+                                                                                            currency,
+                                                                                        )}{" "}
+                                                                                        • {row.percentage}%
+                                                                                    </div>
                                                                                 </div>
                                                                             </div>
+                                                                            <div className="flex items-center gap-2">
+                                                                                <span
+                                                                                    className={[
+                                                                                        "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ring-1",
+                                                                                        isPaid
+                                                                                            ? "bg-teal-50 text-teal-700 ring-teal-200"
+                                                                                            : isNext
+                                                                                                ? "bg-amber-50 text-amber-700 ring-amber-200"
+                                                                                                : "bg-slate-50 text-slate-500 ring-slate-200",
+                                                                                    ].join(" ")}
+                                                                                >
+                                                                                    {isPaid ? "Paid" : isNext ? "Due next" : "Locked"}
+                                                                                </span>
+                                                                                {isPaid && (
+                                                                                    <ChevronDown className={`h-3 w-3 text-teal-600 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
+                                                                                )}
+                                                                            </div>
                                                                         </div>
-                                                                        <span
-                                                                            className={[
-                                                                                "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ring-1",
-                                                                                isPaid
-                                                                                    ? "bg-teal-50 text-teal-700 ring-teal-200"
-                                                                                    : isNext
-                                                                                        ? "bg-amber-50 text-amber-700 ring-amber-200"
-                                                                                        : "bg-slate-50 text-slate-500 ring-slate-200",
-                                                                            ].join(" ")}
-                                                                        >
-                                                                            {isPaid ? "Paid" : isNext ? "Due next" : "Locked"}
-                                                                        </span>
-                                                                    </div>
-                                                                </button>
+                                                                    </button>
+                                                                    {isPaid && isExpanded && (
+                                                                        <SuccessCard phase={phase} data={row} currency={currency} />
+                                                                    )}
+                                                                </div>
                                                             );
                                                         },
                                                     )}

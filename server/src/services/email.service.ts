@@ -109,6 +109,7 @@ interface SendOrderStatusData {
     orderName: string;
     status: string;
     message: string;
+    paymentLink?: string | undefined;
 }
 
 const sendOrderStatusEmail = async (data: SendOrderStatusData) => {
@@ -119,6 +120,7 @@ const sendOrderStatusEmail = async (data: SendOrderStatusData) => {
                 orderName: data.orderName,
                 status: data.status,
                 message: data.message,
+                paymentLink: data.paymentLink,
             }),
         );
 

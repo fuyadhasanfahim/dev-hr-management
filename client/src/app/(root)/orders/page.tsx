@@ -133,10 +133,12 @@ const statusWorkflow: Record<OrderStatus, OrderStatus[]> = {
   delivered: ["pending_final", "revision", "cancelled"], 
   cancelled: ["pending_upfront"],
   // ── Manual Bypass Transitions ──────────────────────────────────────
+  // These allow the team to move the process forward, but payment-critical
+  // transitions (to 'delivered' or 'completed') are removed to favor webhooks.
   pending_upfront: ["active", "cancelled"], 
   active: ["in_progress", "cancelled"], 
-  pending_delivery: ["delivered", "cancelled"], 
-  pending_final: ["completed", "cancelled"], 
+  pending_delivery: ["revision", "cancelled"], // Cannot manually mark delivered
+  pending_final: ["cancelled"], // Cannot manually mark completed
 };
 
 // Helper function to check if a status transition is allowed

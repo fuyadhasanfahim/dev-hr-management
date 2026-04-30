@@ -188,6 +188,31 @@ async function generateQuotationNumber(): Promise<string> {
 // ─── QuotationService ─────────────────────────────────────────────────────────
 
 export class QuotationService {
+    static async getClientLink(quotationGroupId: string): Promise<string> {
+        const quotation = await QuotationModel.findOne({ 
+            quotationGroupId, 
+            isLatestVersion: true 
+        });
+        if (!quotation) throw new AppError('Quotation not found', 404);
+
+        const hasValidToken =
+            Boolean(quotation.secureToken) &&
+            (!quotation.tokenExpiresAt || quotation.tokenExpiresAt >= new Date());
+
+        if (!hasValidToken) {
+            quotation.secureToken = signQuotationToken({
+                quotationGroupId: quotation.quotationGroupId,
+                quotationId: quotation._id.toString(),
+                version: quotation.version,
+            });
+            const d = new Date();
+            d.setDate(d.getDate() + TOKEN_EXPIRY_DAYS);
+            quotation.tokenExpiresAt = d;
+            await quotation.save();
+        }
+
+        return `${envConfig.payment_client_url}/quotation/${quotation.secureToken}`;
+    }
 
     static async createQuotation(
         data: Partial<IQuotation>,

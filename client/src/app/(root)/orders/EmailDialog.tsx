@@ -15,6 +15,7 @@ import { Loader2, Mail } from "lucide-react";
 import { IOrder, OrderStatus } from "@/types/order.type";
 import { useGetClientEmailsQuery } from "@/redux/features/client/clientApi";
 import { MultiSelect } from "@/components/ui/multi-select";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface EmailDialogProps {
     open: boolean;
@@ -41,7 +42,7 @@ const defaultTemplates: Partial<Record<OrderStatus, string>> = {
     revision:
         "Hi {clientName},\n\nWe have started working on the REVISIONS for your order '{orderName}'.\n\nWe will notify you once the requested changes have been implemented and are ready for another review.\n\nBest regards,\nWeb Briks Team",
     pending_delivery:
-        "Hi {clientName},\n\nYour order '{orderName}' is ready for delivery!\n\nPlease complete the scheduled 30% delivery payment to unlock and access your files.\n\nBest regards,\nWeb Briks Team",
+        "Hi {clientName},\n\nYour order '{orderName}' is ready for delivery!\n\nYou can review the project deliverables using the link below:\n{downloadLink}\n\nPlease complete the scheduled 30% delivery payment to unlock and access your final files.\n\nBest regards,\nWeb Briks Team",
     pending_final:
         "Hi {clientName},\n\nWe are reaching the final stages of your project '{orderName}'.\n\nPlease complete the final 20% payment to close the project and receive all final assets and documentation.\n\nBest regards,\nWeb Briks Team",
     cancelled:
@@ -99,7 +100,7 @@ export const EmailDialog: React.FC<EmailDialogProps> = ({
 
     const handleSend = () => {
         let finalMessage = message;
-        if (status === 'delivered') {
+        if (status === 'delivered' || status === 'pending_delivery') {
             finalMessage = finalMessage.replace("{downloadLink}", downloadLink || 'No link provided');
         }
         onSend(finalMessage, downloadLink, selectedEmails);
@@ -120,7 +121,8 @@ export const EmailDialog: React.FC<EmailDialogProps> = ({
                     </DialogDescription>
                 </DialogHeader>
 
-                <div className="space-y-4 py-4">
+                <ScrollArea className="max-h-[65vh] pr-4 -mr-4">
+                    <div className="space-y-4 py-4">
                     <div className="space-y-2">
                         <Label htmlFor="recipientEmails">Recipient Emails (Multi-select)</Label>
                         {isLoadingEmails ? (
@@ -142,9 +144,9 @@ export const EmailDialog: React.FC<EmailDialogProps> = ({
                         </p>
                     </div>
 
-                    {status === "delivered" && (
+                    {(status === "delivered" || status === "pending_delivery") && (
                         <div className="space-y-2 animate-in fade-in slide-in-from-top-1">
-                            <Label htmlFor="downloadLink">Download Link</Label>
+                            <Label htmlFor="downloadLink">Project Download Link</Label>
                             <Input
                                 id="downloadLink"
                                 placeholder="https://..."
@@ -152,6 +154,9 @@ export const EmailDialog: React.FC<EmailDialogProps> = ({
                                 onChange={(e) => setDownloadLink(e.target.value)}
                                 className="bg-muted/30 focus-visible:ring-primary/30"
                             />
+                            <p className="text-[10px] text-muted-foreground">
+                                Providing this link allows the client to view the deliverables. They will be prompted to pay the 30% delivery fee to unlock full access.
+                            </p>
                         </div>
                     )}
 
@@ -166,14 +171,15 @@ export const EmailDialog: React.FC<EmailDialogProps> = ({
                         />
                         <div className="flex justify-between items-center mt-2">
                             <p className="text-[10px] text-muted-foreground italic">
-                                {status === "delivered" && "Note: Ensure {downloadLink} remains in the text for auto-replacement."}
+                                {(status === "delivered" || status === "pending_delivery") && "Note: Ensure {downloadLink} remains in the text for auto-replacement."}
                             </p>
                             <span className="text-[10px] font-medium text-primary bg-primary/10 px-2 py-0.5 rounded">
                                 {selectedEmails.length} recipient(s) selected
                             </span>
                         </div>
                     </div>
-                </div>
+                    </div>
+                </ScrollArea>
 
                 <DialogFooter className="gap-2 sm:gap-0">
                     <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isLoading}>

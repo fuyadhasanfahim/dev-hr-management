@@ -13,6 +13,7 @@ import { InvoiceCounter } from '../models/invoice-counter.model.js';
 import type { IQuotation } from '../types/quotation.type.js';
 import { logger } from '../lib/logger.js';
 import emailService from './email.service.js';
+import { QuotationService } from './quotation.service.js';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -355,12 +356,23 @@ async function transitionStatus(
                 : updated.quotationSnapshot?.clientEmail;
 
             if (recipients) {
+                let paymentLink: string | undefined;
+                // Automatically include payment link for payment-gated statuses
+                if (['pending_delivery', 'pending_final'].includes(newStatus)) {
+                    try {
+                        paymentLink = await QuotationService.getClientLink(updated.quotationGroupId);
+                    } catch (err) {
+                        logger.warn({ orderId: updated._id, err }, 'failed to generate payment link for email');
+                    }
+                }
+
                 await emailService.sendOrderStatusEmail({
                     to: recipients,
                     clientName: updated.quotationSnapshot?.clientName || 'Client',
                     orderName: updated.quotationSnapshot?.templateName || updated.orderNumber,
                     status: newStatus.toUpperCase().replace('_', ' '),
                     message: emailOptions.customEmailMessage || `Your order status has been updated to ${newStatus}.`,
+                    paymentLink,
                 });
                 logger.info({ orderId, recipients, newStatus }, 'order.transition.email_sent');
             }

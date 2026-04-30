@@ -7,7 +7,7 @@ import QuotationPaymentModel, {
 import QuotationModel from '../models/quotation.model.js';
 import { AppError } from '../utils/AppError.js';
 import { stripe } from './stripe.service.js';
-import { paypalClient } from './paypal.service.js';
+import { paypalClient, capturePayPalOrder } from './paypal.service.js';
 import checkoutNodeJssdk from '@paypal/checkout-server-sdk';
 import { getCorrelationId } from '../lib/requestContext.js';
 import { logger } from '../lib/logger.js';
@@ -707,5 +707,9 @@ export class QuotationPaymentService {
 
     static async getPaymentStatus(quotationGroupId: string): Promise<IQuotationPayment | null> {
         return QuotationPaymentModel.findOne({ quotationGroupId, isActive: true });
+    }
+
+    static async capturePayPalOrder(orderId: string) {
+        return capturePayPalOrder(orderId);
     }
 }

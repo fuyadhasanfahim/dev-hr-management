@@ -120,13 +120,29 @@ export default function PayPalPhaseCheckout({
                                 throw e;
                             }
                         }}
-                        onApprove={async (_data, actions) => {
+                        onApprove={async (data, _actions) => {
                             setError(null);
                             try {
-                                if (!actions.order) throw new Error("PayPal order missing");
-                                const details = await actions.order.capture();
+                                if (!data.orderID) throw new Error("PayPal order ID missing");
+                                
+                                // Server-side capture to resolve "Buyer access token not present" (403)
+                                const captureRes = await fetch(
+                                    `${apiBase}/api/quotation-payments/client/${token}/capture`,
+                                    {
+                                        method: "POST",
+                                        headers: { "Content-Type": "application/json" },
+                                        body: JSON.stringify({ orderId: data.orderID }),
+                                    },
+                                );
+                                const captureJson = await captureRes.json();
+                                if (!captureRes.ok) {
+                                    throw new Error(captureJson?.message || "Failed to capture PayPal payment server-side");
+                                }
+
+                                const details = captureJson.data;
                                 await onPaid();
-                                const cap = (details as any)?.purchase_units?.[0]?.payments?.captures?.[0];
+                                
+                                const cap = details?.purchase_units?.[0]?.payments?.captures?.[0];
                                 const capValue = Number(cap?.amount?.value);
                                 const capCurrency = String(cap?.amount?.currency_code || currency || "").toUpperCase();
                                 const amountCents =

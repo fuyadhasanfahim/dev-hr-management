@@ -100,7 +100,7 @@ app.use(
         // Allow public access to quotation payment token routes (payment portal)
         const isPublicQuotationPaymentTokenRoute =
             (req.method === "GET" && /^\/quotation-payments\/client\/[^/]+\/status$/.test(req.path)) ||
-            (req.method === "POST" && /^\/quotation-payments\/client\/[^/]+\/intent$/.test(req.path));
+            (req.method === "POST" && /^\/quotation-payments\/client\/[^/]+\/(intent|capture|confirm)$/.test(req.path));
 
         if (
             isPublicInvitationRoute ||

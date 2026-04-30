@@ -125,3 +125,14 @@ export async function createPayPalOrder(invoice: IInvoice) {
         throw new Error(`PayPal Order Creation Failed: ${(err as Error).message}`);
     }
 }
+
+export async function capturePayPalOrder(orderId: string) {
+    const request = new checkoutNodeJssdk.orders.OrdersCaptureRequest(orderId);
+    request.requestBody({});
+    try {
+        const response = await paypalClient.execute(request);
+        return response.result;
+    } catch (err) {
+        throw new Error(`PayPal Order Capture Failed: ${(err as Error).message}`);
+    }
+}

@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import type { Request, Response, NextFunction } from 'express';
 import { QuotationPaymentService } from '../services/quotation-payment.service.js';
 import { AppError } from '../utils/AppError.js';
@@ -167,6 +168,32 @@ async function createClientPaymentIntent(req: Request, res: Response, next: Next
 
 /**
  * Public client route (token-authenticated via secure link).
+ * POST /api/quotation-payments/client/:token/capture
+ * Body: { orderId }
+ */
+async function captureClientPayPalOrder(req: Request, res: Response, next: NextFunction) {
+    try {
+        const { token } = req.params;
+        const { orderId } = req.body ?? {};
+
+        if (!token) return next(new AppError('token is required', 400));
+        if (!orderId) return next(new AppError('orderId is required', 400));
+
+        // Token validation
+        await QuotationService.getQuotationByToken(token);
+
+        logger.info({ token, orderId }, 'payment.client.paypal_capture.requested');
+        const result = await QuotationPaymentService.capturePayPalOrder(orderId);
+        logger.info({ token, orderId }, 'payment.client.paypal_capture.completed');
+
+        return res.status(200).json({ success: true, data: result });
+    } catch (err) {
+        return next(err);
+    }
+}
+
+/**
+ * Public client route (token-authenticated via secure link).
  * GET /api/quotation-payments/client/:token/status
  */
 async function getClientPaymentStatus(req: Request, res: Response, next: NextFunction) {
@@ -175,7 +202,11 @@ async function getClientPaymentStatus(req: Request, res: Response, next: NextFun
         if (!token) return next(new AppError('token is required', 400));
 
         const quotation = await QuotationService.getQuotationByToken(token);
-        let result = await QuotationPaymentService.getPaymentStatus(quotation.quotationGroupId);
+        const quotationGroupId = quotation.quotationGroupId;
+        let result = await QuotationPaymentService.getPaymentStatus(quotationGroupId);
+
+        // Fetch associated order to show assets/status in the payment UI
+        const order = await mongoose.model('Order').findOne({ quotationGroupId }).select('status assets orderNumber').lean();
 
         // Dev/ops resilience: if the async worker hasn't initialized yet, self-heal here.
         // Only allowed once quotation is accepted.
@@ -185,7 +216,7 @@ async function getClientPaymentStatus(req: Request, res: Response, next: NextFun
                     ? (quotation as any).clientId._id.toString()
                     : quotation.clientId.toString();
             result = await QuotationPaymentService.initializePaymentTracker(
-                quotation.quotationGroupId,
+                quotationGroupId,
                 quotation._id.toString(),
                 quotation.version,
                 clientId,
@@ -203,7 +234,11 @@ async function getClientPaymentStatus(req: Request, res: Response, next: NextFun
 
         return res.status(200).json({
             success: true,
-            data: { ...result.toObject(), summary: buildPaymentSummary(result) },
+            data: { 
+                ...result.toObject(), 
+                summary: buildPaymentSummary(result),
+                order: order || null,
+            },
         });
     } catch (err) {
         return next(err);
@@ -429,6 +464,7 @@ export default {
     createPaymentIntent,
     getPaymentStatus,
     createClientPaymentIntent,
+    captureClientPayPalOrder,
     getClientPaymentStatus,
     confirmClientPayment,
     reconcileMissingOrders,
