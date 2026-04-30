@@ -3,12 +3,17 @@ import { Schema, model, Document, Types } from 'mongoose';
 // ─── Enums ────────────────────────────────────────────────────────────────────
 
 export enum OrderStatus {
-    PENDING            = 'pending',           // upfront paid, order created
+    PENDING            = 'pending',           // Legacy/generic pending
+    PENDING_UPFRONT    = 'pending_upfront',    // New: accepted, awaiting upfront payment
+    ACTIVE             = 'active',            // New: upfront paid, project active
+    PENDING_DELIVERY   = 'pending_delivery',   // New: staff triggered delivery, awaiting payment
+    PENDING_FINAL      = 'pending_final',      // New: awaiting final payment
     IN_PROGRESS        = 'in_progress',       // team working
     DELIVERED          = 'delivered',          // team marked delivered
     AWAITING_APPROVAL  = 'awaiting_approval', // client notified
     APPROVED           = 'approved',           // client approved, delivery payment due
     COMPLETED          = 'completed',          // all payments done
+    CANCELLED          = 'cancelled',
 }
 
 export enum OrderType {
@@ -27,12 +32,16 @@ export enum AssetType {
 // ─── Valid Status Transitions ─────────────────────────────────────────────────
 // Enforced in OrderService.transitionStatus — not here (schema is not the place for flow logic)
 export const ALLOWED_STATUS_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
-    [OrderStatus.PENDING]:           [OrderStatus.IN_PROGRESS],
-    [OrderStatus.IN_PROGRESS]:       [OrderStatus.DELIVERED],
-    [OrderStatus.DELIVERED]:         [OrderStatus.AWAITING_APPROVAL],
+    [OrderStatus.PENDING]:           [OrderStatus.IN_PROGRESS, OrderStatus.CANCELLED],
+    [OrderStatus.PENDING_UPFRONT]:   [OrderStatus.ACTIVE, OrderStatus.CANCELLED],
+    [OrderStatus.ACTIVE]:            [OrderStatus.IN_PROGRESS, OrderStatus.CANCELLED],
+    [OrderStatus.IN_PROGRESS]:       [OrderStatus.PENDING_DELIVERY, OrderStatus.CANCELLED],
+    [OrderStatus.PENDING_DELIVERY]:  [OrderStatus.DELIVERED, OrderStatus.CANCELLED],
+    [OrderStatus.DELIVERED]:         [OrderStatus.COMPLETED, OrderStatus.CANCELLED],
     [OrderStatus.AWAITING_APPROVAL]: [OrderStatus.APPROVED, OrderStatus.IN_PROGRESS],
     [OrderStatus.APPROVED]:          [OrderStatus.COMPLETED],
     [OrderStatus.COMPLETED]:         [],
+    [OrderStatus.CANCELLED]:         [],
 };
 
 // ─── Interfaces ───────────────────────────────────────────────────────────────

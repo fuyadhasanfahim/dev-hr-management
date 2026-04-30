@@ -18,6 +18,13 @@ import emailService from './email.service.js';
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function deepFreeze<T extends object>(obj: T): Readonly<T> {
+    if (obj === null || typeof obj !== 'object') return obj;
+
+    // Do not freeze special objects like ObjectId, Date, Buffer, or Mongoose documents.
+    // We only want to freeze plain objects and arrays.
+    const proto = Object.getPrototypeOf(obj);
+    if (proto !== Object.prototype && proto !== Array.prototype) return obj;
+
     Object.getOwnPropertyNames(obj).forEach((name) => {
         const value = (obj as Record<string, unknown>)[name];
         if (value !== null && typeof value === 'object') {
@@ -178,13 +185,13 @@ async function createOrderFromQuotation(quotationGroupId: string, createdBy: str
                     quotationSnapshot: snapshot,
                     clientId: quotation.clientId,
                     orderType,
-                    status: OrderStatus.PENDING,
+                    status: OrderStatus.PENDING_UPFRONT,
                     statusHistory: [
                         {
-                            status: OrderStatus.PENDING,
+                            status: OrderStatus.PENDING_UPFRONT,
                             changedBy: new Types.ObjectId(createdBy),
                             updatedAt: new Date(),
-                            note: 'Order created automatically after upfront payment confirmation',
+                            note: 'Order created automatically after quotation acceptance',
                         },
                     ],
                     assets: [],
@@ -282,15 +289,15 @@ async function markDelivered(orderId: string, userId: string): Promise<IOrder> {
         { _id: order._id, __v: order.__v, status: OrderStatus.IN_PROGRESS },
         {
             $set: {
-                status: OrderStatus.DELIVERED,
+                status: OrderStatus.PENDING_DELIVERY,
                 deliveredAt: new Date(),
             },
             $push: {
                 statusHistory: {
-                    status: OrderStatus.DELIVERED,
+                    status: OrderStatus.PENDING_DELIVERY,
                     changedBy: new Types.ObjectId(userId),
                     updatedAt: new Date(),
-                    note: 'Delivery marked by team',
+                    note: 'Delivery initiated by team. Awaiting delivery phase payment.',
                 },
             },
         },
@@ -350,14 +357,14 @@ async function unlockAssets(orderId: string): Promise<IOrder> {
         {
             $set: {
                 assets: updatedAssets,
-                status: OrderStatus.APPROVED,
+                status: OrderStatus.DELIVERED,
             },
             $push: {
                 statusHistory: {
-                    status: OrderStatus.APPROVED,
+                    status: OrderStatus.DELIVERED,
                     changedBy: new Types.ObjectId('000000000000000000000000'), // system actor
                     updatedAt: new Date(),
-                    note: 'Assets unlocked after delivery payment confirmation',
+                    note: 'Assets unlocked after delivery payment confirmation. Order moved to delivered status.',
                 },
             },
         },
@@ -375,12 +382,12 @@ async function completeOrder(orderId: string): Promise<IOrder> {
     const order = await OrderModel.findById(orderId);
     if (!order) throw new AppError('Order not found', 404);
 
-    if (order.status !== OrderStatus.APPROVED) {
-        throw new AppError(`Order must be in approved state to complete. Current: ${order.status}`, 409);
+    if (order.status !== OrderStatus.DELIVERED) {
+        throw new AppError(`Order must be in delivered state to complete. Current: ${order.status}`, 409);
     }
 
     const updated = await OrderModel.findOneAndUpdate(
-        { _id: order._id, __v: order.__v, status: OrderStatus.APPROVED },
+        { _id: order._id, __v: order.__v, status: OrderStatus.DELIVERED },
         {
             $set: {
                 status: OrderStatus.COMPLETED,

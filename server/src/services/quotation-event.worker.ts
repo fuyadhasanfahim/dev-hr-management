@@ -12,7 +12,7 @@ import { QuotationService } from './quotation.service.js';
 // ─── Event Handlers ───────────────────────────────────────────────────────────
 
 export async function handleQuotationAccepted(data: any) {
-    await QuotationPaymentService.initializePaymentTracker(
+    const tracker = await QuotationPaymentService.initializePaymentTracker(
         data.quotationGroupId,
         data.quotationId,
         data.quotationVersion,
@@ -20,13 +20,28 @@ export async function handleQuotationAccepted(data: any) {
         data.grandTotal,
         data.currency,
     );
+
+    const systemActorId = data.systemActorId || '000000000000000000000000';
+
+    // CRITICAL: Create the order immediately upon acceptance.
+    // This ensures the order exists in 'pending_upfront' status as expected by the new pipeline.
+    const order = await OrderService.createOrderFromQuotation(
+        data.quotationGroupId,
+        systemActorId,
+    );
+
+    // Link the orderId back to the tracker
+    await QuotationPaymentModel.findByIdAndUpdate(tracker._id, {
+        $set: { orderId: order._id }
+    });
+
     logger.info(
         {
             quotationGroupId: data.quotationGroupId,
             quotationId: data.quotationId,
-            quotationVersion: data.quotationVersion,
+            orderId: order._id,
         },
-        'quotation.accepted.tracker_initialized',
+        'quotation.accepted.order_created',
     );
 }
 
@@ -39,10 +54,6 @@ export async function handleUpfrontPaymentSucceeded(data: any) {
 
     log.info({ amountReceived: data.amountReceived }, 'payment.upfront.received');
 
-    // Record the payment. Returns current tracker state regardless of wasApplied.
-    // wasApplied=false means a duplicate/replay — but a prior run may have crashed
-    // AFTER recording the payment and BEFORE creating the order. We must not skip
-    // order creation based on wasApplied alone; use tracker.orderId as ground truth.
     const { tracker } = await QuotationPaymentService.recordPhasePayment(
         data.quotationGroupId,
         'upfront',
@@ -51,30 +62,40 @@ export async function handleUpfrontPaymentSucceeded(data: any) {
         data.quotationId,
     );
 
-    // Guard: phase must be fully paid before creating an order (handles partial payments)
+    // Guard: phase must be fully paid before advancing status
     if (tracker.phases.upfront.status !== 'paid') {
         log.info(
             { upfrontStatus: tracker.phases.upfront.status },
-            'payment.upfront.succeeded.phase_not_fully_paid — order creation deferred',
+            'payment.upfront.succeeded.phase_not_fully_paid — order status transition deferred',
         );
         return;
     }
 
-    // Idempotency guard: order already exists and is linked — nothing left to do
-    if (tracker.orderId) {
-        log.info(
-            { orderId: tracker.orderId.toString() },
-            'payment.upfront.succeeded.order_already_linked — skipping creation',
-        );
+    const orderId = tracker.orderId?.toString();
+    const systemActorId = data.systemActorId || '000000000000000000000000';
+
+    if (orderId) {
+        log.info({ orderId }, 'payment.upfront.succeeded.transitioning_order_to_active');
+        try {
+            await OrderService.transitionStatus(
+                orderId,
+                'active', // New pipeline status
+                systemActorId,
+                'Order activated automatically after upfront payment confirmation'
+            );
+        } catch (err) {
+            // If transition fails (e.g. already active), just log it
+            log.warn({ err, orderId }, 'payment.upfront.succeeded.status_transition_skipped_or_failed');
+        }
         return;
     }
 
-    log.info('payment.upfront.succeeded.creating_order');
-
+    // Fallback for legacy trackers missing orderId
+    log.info('payment.upfront.succeeded.creating_missing_order');
     try {
         const order = await OrderService.createOrderFromQuotation(
             data.quotationGroupId,
-            data.systemActorId,
+            systemActorId,
         );
 
         await QuotationPaymentModel.findOneAndUpdate(
@@ -82,13 +103,15 @@ export async function handleUpfrontPaymentSucceeded(data: any) {
             { $set: { orderId: order._id } },
         );
 
-        log.info(
-            { orderId: order._id.toString(), orderNumber: order.orderNumber },
-            'payment.upfront.succeeded.order_created',
+        // Immediately transition to active
+        await OrderService.transitionStatus(
+            order._id.toString(),
+            'active',
+            systemActorId,
+            'Order activated automatically after creation (upfront already paid)'
         );
     } catch (err) {
         log.error({ err }, 'payment.upfront.succeeded.order_creation_failed');
-        // Re-throw so the outbox worker retries this event
         throw err;
     }
 }
@@ -177,7 +200,6 @@ export async function reconcileOrders(systemActorId?: string): Promise<{
 
     const trackers = await QuotationPaymentModel.find({
         isActive: true,
-        'phases.upfront.status': 'paid',
         orderId: { $exists: false },
     }).lean();
 
