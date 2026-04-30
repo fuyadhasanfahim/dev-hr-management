@@ -128,7 +128,8 @@ export async function createPayPalOrder(invoice: IInvoice) {
 
 export async function capturePayPalOrder(orderId: string) {
     const request = new checkoutNodeJssdk.orders.OrdersCaptureRequest(orderId);
-    request.requestBody({});
+    request.requestBody({} as any);
+
     try {
         const response = await paypalClient.execute(request);
         return response.result;

@@ -104,6 +104,8 @@ export interface IQuotation extends Document {
     /** Fingerprint of create payload to prevent rapid duplicates */
     creationFingerprint?: string;
     derivedFromQuotationId?: Types.ObjectId;
+    __v: number;
     createdAt: Date;
     updatedAt: Date;
 }
+

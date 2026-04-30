@@ -143,6 +143,8 @@ async function createClientPaymentIntent(req: Request, res: Response, next: Next
         }
 
         // Token is the credential. This also enforces expiry + latest-version constraints.
+
+
         const quotation = await QuotationService.getQuotationByToken(token);
         if (quotation.status !== 'accepted') {
             return next(new AppError('Quotation must be accepted before payment.', 409));
@@ -290,7 +292,8 @@ async function confirmClientPayment(req: Request, res: Response, next: NextFunct
         let applied = false;
         let recordedAmountCents = 0;
         let recordedCurrency = '';
-        let tracker: any;
+        let tracker: any = null;
+
 
         if (provider === 'stripe') {
             if (!paymentIntentId) return next(new AppError('paymentIntentId is required for stripe', 400));

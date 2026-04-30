@@ -7,9 +7,12 @@ declare module 'express-serve-static-core' {
         user?: {
             id?: string;
             role?: string;
+            name?: string;
+            email?: string;
         };
     }
 }
+
 
 import type { User } from 'better-auth';
 

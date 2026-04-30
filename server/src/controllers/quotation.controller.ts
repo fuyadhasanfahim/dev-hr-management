@@ -19,7 +19,10 @@ const updateQuotation = async (req: Request, res: Response, next: NextFunction) 
     try {
         const userId = req.user?.id;
         if (!userId) return next(new Error('Unauthorized'));
-        const result = await QuotationService.updateQuotation(req.params.id, req.body, userId);
+        const { id } = req.params;
+        if (!id) return next(new Error('Quotation ID is required'));
+        const result = await QuotationService.updateQuotation(id, req.body, userId);
+
         res.status(200).json({ success: true, message: 'Quotation updated successfully', data: result });
     } catch (err) {
         next(err);
@@ -34,8 +37,11 @@ const sendQuotation = async (req: Request, res: Response, next: NextFunction) =>
             Array.isArray((req as any)?.body?.emails) && (req as any).body.emails.length
                 ? (req as any).body.emails
                 : undefined;
-        logger.info({ quotationId: req.params.id }, 'quotation.send.requested');
-        const result = await QuotationService.sendQuotation(req.params.id, userId, emails);
+        const { id } = req.params;
+        if (!id) return next(new Error('Quotation ID is required'));
+        logger.info({ quotationId: id }, 'quotation.send.requested');
+        const result = await QuotationService.sendQuotation(id, userId, emails);
+
         const q = result.quotation;
         logger.info(
             {
@@ -78,12 +84,15 @@ const createNewVersion = async (req: Request, res: Response, next: NextFunction)
         const idempotencyKey = (req.header('x-idempotency-key') || req.header('idempotency-key') || undefined) as
             | string
             | undefined;
+        const { groupId } = req.params;
+        if (!groupId) return next(new Error('groupId is required'));
         const result = await QuotationService.createNewVersion(
-            req.params.groupId,
+            groupId,
             req.body,
             userId,
             idempotencyKey,
         );
+
         res.status(201).json({
             success: true,
             message: `New version v${result.version} created successfully`,
@@ -118,9 +127,12 @@ const getAllQuotations = async (req: Request, res: Response, next: NextFunction)
 
 const getQuotationById = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const result = await QuotationService.getQuotationById(req.params.id);
+        const { id } = req.params;
+        if (!id) return next(new Error('ID is required'));
+        const result = await QuotationService.getQuotationById(id);
         if (!result) return res.status(404).json({ success: false, message: 'Quotation not found' });
-        res.status(200).json({ success: true, data: result });
+        return res.status(200).json({ success: true, data: result });
+
     } catch (err) {
         next(err);
     }
@@ -128,8 +140,11 @@ const getQuotationById = async (req: Request, res: Response, next: NextFunction)
 
 const getGroupVersions = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const result = await QuotationService.getGroupVersions(req.params.groupId);
-        res.status(200).json({ success: true, data: result });
+        const { groupId } = req.params;
+        if (!groupId) return next(new Error('groupId is required'));
+        const result = await QuotationService.getGroupVersions(groupId);
+        return res.status(200).json({ success: true, data: result });
+
     } catch (err) {
         next(err);
     }
@@ -137,8 +152,11 @@ const getGroupVersions = async (req: Request, res: Response, next: NextFunction)
 
 const deleteQuotation = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        await QuotationService.deleteQuotation(req.params.id);
-        res.status(200).json({ success: true, message: 'Quotation deleted successfully' });
+        const { id } = req.params;
+        if (!id) return next(new Error('ID is required'));
+        await QuotationService.deleteQuotation(id);
+        return res.status(200).json({ success: true, message: 'Quotation deleted successfully' });
+
     } catch (err) {
         next(err);
     }
@@ -152,13 +170,16 @@ const deleteQuotation = async (req: Request, res: Response, next: NextFunction) 
  */
 const viewQuotationByToken = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        logger.info({ token: req.params.token ? 'present' : 'missing' }, 'quotation.view_by_token.requested');
-        const result = await QuotationService.getQuotationByToken(req.params.token);
+        const { token } = req.params;
+        if (!token) return next(new Error('token is required'));
+        logger.info({ token: 'present' }, 'quotation.view_by_token.requested');
+        const result = await QuotationService.getQuotationByToken(token);
         logger.info(
             { quotationId: result._id.toString(), quotationGroupId: result.quotationGroupId, status: result.status },
             'quotation.view_by_token.completed',
         );
-        res.status(200).json({ success: true, data: result });
+        return res.status(200).json({ success: true, data: result });
+
     } catch (err) {
         next(err);
     }
@@ -170,13 +191,15 @@ const viewQuotationByToken = async (req: Request, res: Response, next: NextFunct
  */
 const acceptQuotation = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        logger.info({ token: req.params.token ? 'present' : 'missing' }, 'quotation.accept.requested');
-        const result = await QuotationService.acceptQuotation(req.params.token);
+        const { token } = req.params;
+        if (!token) return next(new Error('token is required'));
+        logger.info({ token: 'present' }, 'quotation.accept.requested');
+        const result = await QuotationService.acceptQuotation(token);
         logger.info(
             { quotationId: result._id.toString(), quotationGroupId: result.quotationGroupId, status: result.status },
             'quotation.accept.completed',
         );
-        res.status(200).json({
+        return res.status(200).json({
             success: true,
             message: 'Quotation accepted. Proceed to payment.',
             data: {
@@ -184,6 +207,7 @@ const acceptQuotation = async (req: Request, res: Response, next: NextFunction) 
                 status: result.status,
             },
         });
+
     } catch (err) {
         next(err);
     }
@@ -202,17 +226,20 @@ const requestChanges = async (req: Request, res: Response, next: NextFunction) =
                 message: 'A reason for the change request is required (minimum 10 characters)',
             });
         }
-        logger.info({ token: req.params.token ? 'present' : 'missing' }, 'quotation.change_request.requested');
-        const result = await QuotationService.requestChanges(req.params.token, reason.trim());
+        const { token } = req.params;
+        if (!token) return next(new Error('token is required'));
+        logger.info({ token: 'present' }, 'quotation.change_request.requested');
+        const result = await QuotationService.requestChanges(token, reason.trim());
         logger.info(
             { quotationId: result._id.toString(), quotationGroupId: result.quotationGroupId, status: result.status },
             'quotation.change_request.completed',
         );
-        res.status(200).json({
+        return res.status(200).json({
             success: true,
             message: 'Change request submitted. The team will review and issue a new version.',
             data: { status: result.status, changeRequestReason: result.changeRequestReason },
         });
+
     } catch (err) {
         next(err);
     }

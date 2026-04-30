@@ -6,7 +6,7 @@ import { Role } from '../constants/role.js';
 const router = express.Router();
 
 const STAFF_ROLES = [Role.SUPER_ADMIN, Role.ADMIN, Role.HR_MANAGER, Role.TEAM_LEADER, Role.STAFF];
-const ADMIN_ROLES = [Role.SUPER_ADMIN, Role.ADMIN];
+
 
 /**
  * POST / is intentionally BLOCKED.

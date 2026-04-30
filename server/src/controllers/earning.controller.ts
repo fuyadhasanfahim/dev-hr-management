@@ -34,12 +34,14 @@ async function getAllEarnings(req: Request, res: Response) {
             req.user &&
             [Role.STAFF, Role.TEAM_LEADER].includes(req.user.role as Role)
         ) {
-            const isTM = await isTelemarketer(req.user.id);
+            const userId = req.user.id as string;
+            const isTM = await isTelemarketer(userId);
             if (isTM) {
                 // Find all clients created by this telemarketer
                 const clients = await ClientModel.find({
-                    createdBy: req.user.id,
+                    createdBy: userId,
                 })
+
                     .select("_id")
                     .lean();
                 params.clientIds = clients.map((c) => c._id.toString());
@@ -107,11 +109,13 @@ async function getEarningStats(req: Request, res: Response) {
             req.user &&
             [Role.STAFF, Role.TEAM_LEADER].includes(req.user.role as Role)
         ) {
-            const isTM = await isTelemarketer(req.user.id);
+            const userId = req.user.id as string;
+            const isTM = await isTelemarketer(userId);
             if (isTM) {
                 const clients = await ClientModel.find({
-                    createdBy: req.user.id,
+                    createdBy: userId,
                 })
+
                     .select("_id")
                     .lean();
                 params.clientIds = clients.map((c) => c._id.toString());

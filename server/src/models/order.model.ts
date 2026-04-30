@@ -127,10 +127,17 @@ export interface IOrder extends Document {
     completedAt?: Date;
     assets: IOrderAsset[];
     milestones: IOrderMilestone[];
+    
+    // Financial/Volume summary (redundant with snapshot for quick access)
+    totalPrice: number;
+    currency: string;
+    imageQuantity: number;
+
     createdBy: Types.ObjectId;
     createdAt: Date;
     updatedAt: Date;
 }
+
 
 // ─── Sub-schemas ──────────────────────────────────────────────────────────────
 
@@ -255,11 +262,17 @@ const orderSchema = new Schema<IOrder>(
         completedAt: { type: Date },
         assets: [assetSchema],
         milestones: [milestoneSchema],
+
+        totalPrice: { type: Number, default: 0 },
+        currency: { type: String, default: 'USD' },
+        imageQuantity: { type: Number, default: 0 },
+
         createdBy: {
             type: Schema.Types.ObjectId,
             ref: 'User',
             required: true,
         },
+
     },
     {
         timestamps: true,

@@ -116,6 +116,8 @@ export interface IQuotationSnapshot {
 
 export interface IOrder {
     _id: string;
+    orderNumber: string;
+
     
     // ── Pipeline Fields (New) ───────────────────────────────────────────
     quotationGroupId?: string;

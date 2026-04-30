@@ -639,8 +639,9 @@ export class QuotationService {
                     eventName: 'quotation.superseded',
                     aggregateType: 'quotationGroup',
                     aggregateId: quotationGroupId,
-                    correlationId: getCorrelationId(),
+                    correlationId: getCorrelationId() || '',
                     payload: {
+
                         quotationGroupId,
                         supersededVersion: currentLatest.version,
                         newVersion: newVersion.version,
@@ -710,8 +711,9 @@ export class QuotationService {
             clientId: updated.clientId.toString(),
             grandTotal: updated.totals.grandTotal,
             currency: updated.currency || '৳',
-            correlationId: getCorrelationId(),
+            correlationId: getCorrelationId() || '',
             aggregateType: 'quotationGroup',
+
             aggregateId: updated.quotationGroupId,
         });
 

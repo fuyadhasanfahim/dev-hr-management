@@ -132,11 +132,12 @@ async function updateEarningForOrder(
                         orderId,
                         clientId: (order.clientId as any)._id.toString(),
                         orderDate: newDate,
-                        orderAmount: data.orderAmount || order.totalAmount,
-                        imageQty: data.imageQty || 0,
+                        orderAmount: data.orderAmount || order.totalPrice,
+                        imageQty: data.imageQty || order.imageQuantity || 0,
                         currency,
                         createdBy: order.createdBy.toString(),
                     }, session);
+
                     if (!sessionParam) await session.commitTransaction();
                     return result;
                 }
@@ -1041,8 +1042,9 @@ async function syncEarningFromOrders(id: string): Promise<IEarning | null> {
         status: { $ne: 'cancelled' },
     });
 
-    const totalAmount = orders.reduce((sum, o) => sum + o.totalAmount, 0);
-    const imageQty = orders.reduce((sum) => sum + 0, 0);
+    const totalAmount = orders.reduce((sum, o) => sum + (o.totalPrice || 0), 0);
+    const imageQty = orders.reduce((sum, o) => sum + (o.imageQuantity || 0), 0);
+
     const orderIds = orders.map((o) => o._id);
 
     earning.totalAmount = totalAmount;

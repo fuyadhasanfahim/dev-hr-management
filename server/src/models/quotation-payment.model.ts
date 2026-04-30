@@ -141,8 +141,9 @@ quotationPaymentSchema.index(
 quotationPaymentSchema.index({ quotationId: 1 }, { unique: true });
 
 // Guard: phases must be fully paid (not just partial) before the next phase can be initiated
-(quotationPaymentSchema as any).pre('save', function () {
-    const doc = this as any;
+quotationPaymentSchema.pre('save', function (this: IQuotationPayment) {
+    const doc = this;
+
     if (
         doc.phases.delivery.status === 'processing' ||
         doc.phases.delivery.status === 'partial' ||

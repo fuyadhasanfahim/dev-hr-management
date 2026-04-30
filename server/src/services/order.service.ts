@@ -291,8 +291,12 @@ async function createOrderFromQuotation(
                     ],
                     assets: [],
                     milestones: [],
+                    totalPrice: snapshot.grandTotal,
+                    currency: snapshot.currency,
+                    imageQuantity: 0,
                     createdBy: new Types.ObjectId(actualCreatedBy),
                 },
+
             ],
             { session },
         );

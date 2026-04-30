@@ -17,14 +17,14 @@ async function createInvoiceFromOrder(orderId: string, dueDate: Date) {
 
     const invoiceNumber = await generateInvoiceNumber();
 
-    const invoiceItems = order.items.map(item => ({
-        name: item.name,
-        unitPrice: item.unitPrice,
-        quantity: item.quantity || item.hours || 1,
-        total: item.totalPrice,
+    const invoiceItems = [{
+        name: `Order: ${order.orderNumber}`,
+        unitPrice: order.totalPrice,
+        quantity: 1,
+        total: order.totalPrice,
         sourceType: 'order' as const,
         sourceId: order._id
-    }));
+    }];
 
     const invoice = await InvoiceModel.create({
         invoiceNumber,
@@ -32,11 +32,12 @@ async function createInvoiceFromOrder(orderId: string, dueDate: Date) {
         orderId: order._id,
         items: invoiceItems,
         currency: order.currency,
-        subtotal: order.totalAmount,
-        total: order.totalAmount,
-        dueAmount: order.totalAmount,
+        subtotal: order.totalPrice,
+        total: order.totalPrice,
+        dueAmount: order.totalPrice,
         dueDate
     });
+
 
     return invoice;
 }
