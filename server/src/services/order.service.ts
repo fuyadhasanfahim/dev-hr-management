@@ -8,6 +8,7 @@ import OrderModel, {
     ALLOWED_STATUS_TRANSITIONS,
 } from '../models/order.model.js';
 import QuotationModel from '../models/quotation.model.js';
+import QuotationPaymentModel from '../models/quotation-payment.model.js';
 import { AppError } from '../utils/AppError.js';
 import { InvoiceCounter } from '../models/invoice-counter.model.js';
 import type { IQuotation } from '../types/quotation.type.js';
@@ -175,6 +176,36 @@ function buildQuotationSnapshot(
     });
 }
 
+/**
+ * [NEW] Enriches order documents with their corresponding payment phase statuses.
+ * This is used to drive dynamic UI logic in the dashboard.
+ */
+async function enrichOrdersWithPaymentInfo(orders: any[]): Promise<any[]> {
+    if (!orders.length) return [];
+    
+    const groupIds = orders.map(o => o.quotationGroupId).filter(Boolean);
+    const trackers = await QuotationPaymentModel.find({
+        quotationGroupId: { $in: groupIds },
+        isActive: true
+    }).lean();
+
+    const trackerMap = new Map(trackers.map(t => [t.quotationGroupId, t]));
+
+    return orders.map(order => {
+        const orderObj = order.toObject ? order.toObject() : order;
+        const tracker = trackerMap.get(orderObj.quotationGroupId);
+        
+        return {
+            ...orderObj,
+            paymentPhases: tracker ? {
+                upfront: tracker.phases.upfront.status,
+                delivery: tracker.phases.delivery.status,
+                final: tracker.phases.final.status
+            } : null
+        };
+    });
+}
+
 // ─── OrderService ─────────────────────────────────────────────────────────────
 
 /**
@@ -326,16 +357,44 @@ async function transitionStatus(
         );
     }
 
+    // [NEW] Payment-Aware Auto-Jump Logic
+    // If transitioning to a payment-gated status but the phase is already paid, jump forward.
+    let effectiveStatus = newStatus;
+    let effectiveNote = note;
+
+    if (['pending_delivery', 'pending_final'].includes(newStatus)) {
+        const tracker = await QuotationPaymentModel.findOne({ 
+            quotationGroupId: order.quotationGroupId, 
+            isActive: true 
+        });
+
+        if (tracker) {
+            if (newStatus === OrderStatus.PENDING_DELIVERY && tracker.phases.delivery.status === 'paid') {
+                effectiveStatus = OrderStatus.DELIVERED;
+                effectiveNote = (note ? note + ' | ' : '') + 'Automatically moved to delivered as delivery payment is already confirmed.';
+                logger.info({ orderId, status: effectiveStatus }, 'order.transition.auto_jump_to_delivered');
+            } else if (newStatus === OrderStatus.PENDING_FINAL && tracker.phases.final.status === 'paid') {
+                effectiveStatus = OrderStatus.COMPLETED;
+                effectiveNote = (note ? note + ' | ' : '') + 'Automatically moved to completed as final payment is already confirmed.';
+                logger.info({ orderId, status: effectiveStatus }, 'order.transition.auto_jump_to_completed');
+            }
+        }
+    }
+
     const updated = await OrderModel.findOneAndUpdate(
         { _id: order._id, __v: order.__v },
         {
-            $set: { status: newStatus },
+            $set: { 
+                status: effectiveStatus,
+                ...(effectiveStatus === OrderStatus.DELIVERED ? { deliveredAt: new Date() } : {}),
+                ...(effectiveStatus === OrderStatus.COMPLETED ? { completedAt: new Date() } : {}),
+            },
             $push: {
                 statusHistory: {
-                    status: newStatus,
+                    status: effectiveStatus,
                     changedBy: new Types.ObjectId(userId),
                     updatedAt: new Date(),
-                    note,
+                    note: effectiveNote,
                 },
             },
         },
@@ -569,9 +628,10 @@ async function getAllOrdersFromDB(query: any) {
             .limit(Number(limit)),
         OrderModel.countDocuments(filter),
     ]);
+    const enrichedData = await enrichOrdersWithPaymentInfo(data);
 
     return {
-        data,
+        data: enrichedData,
         meta: {
             total,
             page: Number(page),
@@ -582,7 +642,10 @@ async function getAllOrdersFromDB(query: any) {
 }
 
 async function getOrderByIdFromDB(id: string) {
-    return OrderModel.findById(id).populate('clientId');
+    const order = await OrderModel.findById(id).populate('clientId');
+    if (!order) return null;
+    const [enriched] = await enrichOrdersWithPaymentInfo([order]);
+    return enriched;
 }
 
 /**

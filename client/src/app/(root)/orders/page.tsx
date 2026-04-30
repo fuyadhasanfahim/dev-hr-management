@@ -150,6 +150,41 @@ const canTransitionTo = (
   return statusWorkflow[currentStatus]?.includes(targetStatus) || false;
 };
 
+/**
+ * [NEW] Dynamically filters and upgrades status transition options based on payment state.
+ * If a phase is already paid, it 'upgrades' the option (e.g. pending_delivery -> delivered).
+ */
+const getFilteredStatusOptions = (order: IOrder): OrderStatus[] => {
+  const currentStatus = order.status;
+  const baseOptions = statusWorkflow[currentStatus] || [];
+  const payment = order.paymentPhases;
+
+  // For legacy orders without payment tracker, return defaults
+  if (!payment) return baseOptions;
+
+  const isUpfrontPaid = payment.upfront === "paid";
+  const isDeliveryPaid = payment.delivery === "paid";
+  const isFinalPaid = payment.final === "paid";
+
+  // Special Case: All phases paid
+  if (isUpfrontPaid && isDeliveryPaid && isFinalPaid) {
+    const restricted = ["delivered", "completed", "revision", "cancelled"] as OrderStatus[];
+    return restricted.filter(opt => opt !== currentStatus);
+  }
+
+  return baseOptions.map((opt) => {
+    // If staff wants to move to delivery phase but it's already paid, offer direct 'delivered'
+    if (opt === "pending_delivery" && isDeliveryPaid) return "delivered";
+    
+    // If staff wants to move to final phase but it's already paid, offer direct 'completed'
+    if (opt === "pending_final" && isFinalPaid) return "completed";
+    
+    return opt;
+  }).filter((opt, index, self) => 
+    self.indexOf(opt) === index && opt !== currentStatus
+  );
+};
+
 const safeFormat = (
   dateStr: string | undefined | null,
   formatStr: string = "PPP",
@@ -1261,15 +1296,15 @@ export default function OrdersPage() {
                                 <SelectItem value={order.status} className="text-xs uppercase tracking-wider font-bold">
                                   {ORDER_STATUS_LABELS[order.status]} (Current)
                                 </SelectItem>
-                                {statusWorkflow[order.status]?.map((statusValue) => (
-                                  <SelectItem
-                                    key={statusValue}
-                                    value={statusValue}
-                                    className="text-xs uppercase tracking-wider"
-                                  >
-                                    {ORDER_STATUS_LABELS[statusValue]}
-                                  </SelectItem>
-                                ))}
+                                  {getFilteredStatusOptions(order).map((statusValue) => (
+                                    <SelectItem
+                                      key={statusValue}
+                                      value={statusValue}
+                                      className="text-xs uppercase tracking-wider"
+                                    >
+                                      {ORDER_STATUS_LABELS[statusValue]}
+                                    </SelectItem>
+                                  ))}
                               </SelectContent>
                             </Select>
                           </div>

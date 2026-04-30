@@ -40,7 +40,7 @@ export interface CreateServiceInput {
     isActive?: boolean;
 }
 
-export interface UpdateServiceInput extends Partial<CreateServiceInput> {}
+export type UpdateServiceInput = Partial<CreateServiceInput>;
 
 export interface IReturnFileFormat {
     _id: string;
@@ -60,8 +60,7 @@ export interface CreateReturnFileFormatInput {
     isActive?: boolean;
 }
 
-export interface UpdateReturnFileFormatInput
-    extends Partial<CreateReturnFileFormatInput> {}
+export type UpdateReturnFileFormatInput = Partial<CreateReturnFileFormatInput>;
 
 export interface IRevisionInstruction {
     instruction: string;
@@ -95,12 +94,32 @@ export interface IOrderAsset {
     isLocked: boolean;
 }
 
+export interface IQuotationSnapshot {
+    quotationId: string;
+    quotationGroupId: string;
+    version: number;
+    quotationNumber: string;
+    serviceType: string;
+    templateName: string;
+    clientId: string;
+    clientName: string;
+    clientEmail: string;
+    overview?: string;
+    scopeOfWork: Array<{ title: string; description: string; items: string[] }>;
+    currency: string;
+    grandTotal: number;
+    taxRate: number;
+    discount: number;
+    additionalServicesTotal: number;
+    taxAmount: number;
+}
+
 export interface IOrder {
     _id: string;
     
     // ── Pipeline Fields (New) ───────────────────────────────────────────
     quotationGroupId?: string;
-    quotationSnapshot?: any;
+    quotationSnapshot?: IQuotationSnapshot;
     assets?: IOrderAsset[];
     // ──────────────────────────────────────────────────────────────────
 
@@ -144,6 +163,11 @@ export interface IOrder {
     deliveredAt?: string;
     invoiceNumber?: string;
     isPaid?: boolean;
+    paymentPhases?: {
+        upfront: string;
+        delivery: string;
+        final: string;
+    } | null;
     createdBy: string;
     createdAt: string;
     updatedAt: string;
