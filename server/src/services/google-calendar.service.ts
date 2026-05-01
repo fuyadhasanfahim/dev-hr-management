@@ -20,12 +20,16 @@ function getCalendarClient(): calendar_v3.Calendar {
         );
     }
 
-    const auth = new google.auth.JWT({
+    const jwtOptions: any = {
         email,
         key: privateKey.replace(/\\n/g, '\n'), // Handle escaped newlines from .env
         scopes: ['https://www.googleapis.com/auth/calendar'],
-        subject: envConfig.google_calendar_id && envConfig.google_calendar_id.includes('@') ? envConfig.google_calendar_id : undefined,
-    });
+    };
+    if (envConfig.google_calendar_id && envConfig.google_calendar_id.includes('@')) {
+        jwtOptions.subject = envConfig.google_calendar_id;
+    }
+
+    const auth = new google.auth.JWT(jwtOptions);
 
     calendarClient = google.calendar({ version: 'v3', auth });
     return calendarClient;

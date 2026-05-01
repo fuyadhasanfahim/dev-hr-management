@@ -23,12 +23,16 @@ async function run() {
         return;
     }
 
-    const auth = new google.auth.JWT({
+    const jwtOptions: any = {
         email,
         key: privateKey.replace(/\\n/g, '\n'),
         scopes: ['https://www.googleapis.com/auth/calendar'],
-        subject: customCalendarId && customCalendarId.includes('@') ? customCalendarId : undefined,
-    });
+    };
+    if (customCalendarId && customCalendarId.includes('@')) {
+        jwtOptions.subject = customCalendarId;
+    }
+
+    const auth = new google.auth.JWT(jwtOptions);
 
     const calendar = google.calendar({ version: 'v3', auth });
 
