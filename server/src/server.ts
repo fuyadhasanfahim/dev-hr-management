@@ -1,3 +1,4 @@
+import './lib/dns-init.js';
 import { connect } from "mongoose";
 import envConfig from "./config/env.config.js";
 import { createServer } from "http";
