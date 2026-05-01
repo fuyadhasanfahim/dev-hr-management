@@ -27,6 +27,7 @@ async function run() {
         email,
         key: privateKey.replace(/\\n/g, '\n'),
         scopes: ['https://www.googleapis.com/auth/calendar'],
+        subject: customCalendarId && customCalendarId.includes('@') ? customCalendarId : undefined,
     });
 
     const calendar = google.calendar({ version: 'v3', auth });

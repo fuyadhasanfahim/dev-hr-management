@@ -24,6 +24,7 @@ function getCalendarClient(): calendar_v3.Calendar {
         email,
         key: privateKey.replace(/\\n/g, '\n'), // Handle escaped newlines from .env
         scopes: ['https://www.googleapis.com/auth/calendar'],
+        subject: envConfig.google_calendar_id && envConfig.google_calendar_id.includes('@') ? envConfig.google_calendar_id : undefined,
     });
 
     calendarClient = google.calendar({ version: 'v3', auth });
@@ -101,13 +102,8 @@ async function createMeetingEvent(
         }
         throw new Error('No Meet Link returned');
     } catch (err: any) {
-        console.error('[Google Calendar] Failed to generate Meet link, generating Jitsi fallback link:', err.message);
-        const fallbackLink = `https://meet.jit.si/WebBriks-Meeting-${requestId}`;
-        return {
-            eventId: `fallback-${Date.now()}`,
-            meetLink: fallbackLink,
-            htmlLink: '',
-        };
+        console.error('[Google Calendar] Failed to generate Meet link:', err.message);
+        throw new Error('Failed to create meeting');
     }
 }
 
