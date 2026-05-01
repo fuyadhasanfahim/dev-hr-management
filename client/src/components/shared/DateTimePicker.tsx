@@ -38,7 +38,7 @@ export function DateTimePicker({
 }: DateTimePickerProps) {
     const [open, setOpen] = React.useState(false);
     const [time, setTime] = React.useState(
-        value ? format(value, 'HH:mm') : '12:00'
+        value ? format(value, 'HH:mm') : '12:00',
     );
 
     const handleDateSelect = (selectedDate: Date | undefined) => {
@@ -73,16 +73,15 @@ export function DateTimePicker({
                         disabled={disabled}
                         className={cn('justify-between font-normal w-full')}
                     >
-                        {value
-                            ? format(value, 'PPP h:mm a')
-                            : placeholder}
+                        {value ? format(value, 'PPP h:mm a') : placeholder}
                         <ChevronDownIcon className="h-4 w-4 opacity-60" />
                     </Button>
                 </PopoverTrigger>
 
                 <PopoverContent
                     className="w-auto overflow-hidden p-0"
-                    align="start"
+                    
+                    side="right"
                 >
                     <Calendar
                         mode="single"

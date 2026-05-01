@@ -50,6 +50,10 @@ const meetingSchema = new Schema<IMeeting>(
             type: Boolean,
             default: false,
         },
+        reminder5Sent: {
+            type: Boolean,
+            default: false,
+        },
         smsSent: {
             type: Boolean,
             default: false,

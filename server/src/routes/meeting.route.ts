@@ -19,4 +19,10 @@ router.get('/:id', authorize(...MEETING_ROLES), MeetingController.getMeetingById
 // PATCH /:id/cancel — cancel a meeting
 router.patch('/:id/cancel', authorize(...MEETING_ROLES), MeetingController.cancelMeeting);
 
+// PUT /:id — update a meeting
+router.put('/:id', authorize(...MEETING_ROLES), MeetingController.updateMeeting);
+
+// DELETE /:id — delete a meeting
+router.delete('/:id', authorize(...MEETING_ROLES), MeetingController.deleteMeeting);
+
 export const meetingRoute = router;

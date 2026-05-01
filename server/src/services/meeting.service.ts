@@ -1,5 +1,6 @@
 import MeetingModel from '../models/meeting.model.js';
 import ClientModel from '../models/client.model.js';
+import '../models/user.model.js';
 import googleCalendarService from './google-calendar.service.js';
 import emailService from './email.service.js';
 import { sendBulkSMS } from '../utils/sms.util.js';
@@ -217,24 +218,159 @@ async function cancelMeeting(id: string): Promise<IMeeting | null> {
     return meeting;
 }
 
+async function updateMeeting(meetingId: string, data: Partial<CreateMeetingData>): Promise<IMeeting> {
+    const meeting = await MeetingModel.findById(meetingId);
+    if (!meeting) throw new Error('Meeting not found');
+
+    const scheduledAt = data.scheduledAt ? new Date(data.scheduledAt) : meeting.scheduledAt;
+    const durationMinutes = data.durationMinutes !== undefined ? data.durationMinutes : meeting.durationMinutes;
+
+    meeting.meetingTitle = data.meetingTitle || meeting.meetingTitle;
+    meeting.description = data.description !== undefined ? data.description : meeting.description;
+    meeting.notes = data.notes !== undefined ? data.notes : meeting.notes;
+    meeting.scheduledAt = scheduledAt;
+    meeting.durationMinutes = durationMinutes;
+
+    if (data.attendeeEmails) {
+        meeting.attendeeEmails = data.attendeeEmails;
+    }
+
+    if (meeting.googleEventId) {
+        try {
+            const endTime = new Date(scheduledAt.getTime() + durationMinutes * 60 * 1000);
+            await googleCalendarService.updateMeetingEvent(
+                meeting.googleEventId,
+                meeting.meetingTitle,
+                meeting.description || '',
+                scheduledAt,
+                endTime,
+                meeting.attendeeEmails,
+            );
+        } catch (err: any) {
+            console.error('[Meeting] Google Calendar update failed:', err.message);
+        }
+    }
+
+    await meeting.save();
+
+    const client = await ClientModel.findById(meeting.clientId);
+    const formattedDate = scheduledAt.toLocaleString('en-US', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        timeZone: 'Asia/Dhaka',
+    });
+
+    for (const email of meeting.attendeeEmails) {
+        try {
+            await emailService.sendMeetingInviteEmail({
+                to: email,
+                clientName: client?.name || 'Client',
+                meetingTitle: meeting.meetingTitle,
+                scheduledAt: formattedDate,
+                durationMinutes: meeting.durationMinutes,
+                meetLink: meeting.googleMeetLink || '',
+                description: meeting.description || '',
+            });
+        } catch (err: any) {
+            console.error(`[Meeting] Failed to send update email to ${email}:`, err.message);
+        }
+    }
+
+    if (client?.currency?.toUpperCase() === 'BDT' && client.phone) {
+        try {
+            const smsMsg = `Meeting Updated: "${meeting.meetingTitle}" has been rescheduled to ${formattedDate}. Link: ${meeting.googleMeetLink || ''} - WebBriks`;
+            await sendBulkSMS({ number: client.phone, message: smsMsg });
+        } catch (err: any) {
+            console.error('[Meeting] SMS update failed:', err.message);
+        }
+    }
+
+    return meeting;
+}
+
+async function deleteMeeting(meetingId: string): Promise<IMeeting> {
+    const meeting = await MeetingModel.findById(meetingId);
+    if (!meeting) throw new Error('Meeting not found');
+
+    if (meeting.googleEventId) {
+        try {
+            await googleCalendarService.deleteMeetingEvent(meeting.googleEventId);
+        } catch (err: any) {
+            console.error('[Meeting] Google Calendar deletion failed:', err.message);
+        }
+    }
+
+    await MeetingModel.findByIdAndDelete(meetingId);
+
+    const client = await ClientModel.findById(meeting.clientId);
+    const formattedDate = meeting.scheduledAt.toLocaleString('en-US', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        timeZone: 'Asia/Dhaka',
+    });
+
+    for (const email of meeting.attendeeEmails) {
+        try {
+            await emailService.sendMeetingCancellationEmail({
+                to: email,
+                clientName: client?.name || 'Client',
+                meetingTitle: meeting.meetingTitle,
+                scheduledAt: formattedDate,
+            });
+        } catch (err: any) {
+            console.error(`[Meeting] Failed to send deletion email to ${email}:`, err.message);
+        }
+    }
+
+    if (client?.currency?.toUpperCase() === 'BDT' && client.phone) {
+        try {
+            const smsMsg = `Meeting Cancelled/Deleted: "${meeting.meetingTitle}" scheduled for ${formattedDate} has been cancelled. - WebBriks`;
+            await sendBulkSMS({ number: client.phone, message: smsMsg });
+        } catch (err: any) {
+            console.error('[Meeting] SMS deletion failed:', err.message);
+        }
+    }
+
+    return meeting;
+}
+
 /**
  * Process meeting reminders — called by scheduler every minute.
- * Finds meetings starting within the next 30 minutes that haven't been reminded.
+ * Finds meetings starting within the next 30 minutes that haven't been reminded,
+ * and next 5 minutes that haven't been reminded.
  */
 async function processMeetingReminders(): Promise<{ reminded: number; smsSent: number }> {
     const now = new Date();
-    const thirtyMinutesFromNow = new Date(now.getTime() + 30 * 60 * 1000);
+    let reminded = 0;
+    let smsSentCount = 0;
 
-    const meetings = await MeetingModel.find({
+    // Fetch admin emails
+    let adminEmails: string[] = [];
+    try {
+        const { default: UserCollection } = await import('../models/user.model.js');
+        const admins = await UserCollection.find({ role: { $in: ['admin', 'super_admin'] } }).toArray();
+        adminEmails = admins.map((u: any) => u.email).filter(Boolean);
+    } catch (err: any) {
+        console.error('[Meeting] Failed to fetch admin emails for reminder:', err.message);
+    }
+
+    // --- 1. Process 30-minute Reminders ---
+    const thirtyMinutesFromNow = new Date(now.getTime() + 30 * 60 * 1000);
+    const thirtyMinMeetings = await MeetingModel.find({
         status: 'scheduled',
         reminderSent: false,
         scheduledAt: { $gte: now, $lte: thirtyMinutesFromNow },
     }).populate('clientId', 'name emails phone currency');
 
-    let reminded = 0;
-    let smsSentCount = 0;
-
-    for (const meeting of meetings) {
+    for (const meeting of thirtyMinMeetings) {
         const client = meeting.clientId as any;
         const formattedDate = meeting.scheduledAt.toLocaleString('en-US', {
             weekday: 'long',
@@ -246,7 +382,7 @@ async function processMeetingReminders(): Promise<{ reminded: number; smsSent: n
             timeZone: 'Asia/Dhaka',
         });
 
-        // Send reminder emails to all attendees
+        // 1a. Send email to attendees
         for (const email of meeting.attendeeEmails) {
             try {
                 await emailService.sendMeetingReminderEmail({
@@ -257,13 +393,28 @@ async function processMeetingReminders(): Promise<{ reminded: number; smsSent: n
                     meetLink: meeting.googleMeetLink || '',
                 });
             } catch (err: any) {
-                console.error(`[Meeting] Reminder email failed for ${email}:`, err.message);
+                console.error(`[Meeting] 30m Reminder email failed for attendee ${email}:`, err.message);
+            }
+        }
+
+        // 1b. Send email to admins
+        for (const email of adminEmails) {
+            try {
+                await emailService.sendMeetingReminderEmail({
+                    to: email,
+                    clientName: 'Admin',
+                    meetingTitle: `${meeting.meetingTitle} (Client: ${client?.name || 'N/A'})`,
+                    scheduledAt: formattedDate,
+                    meetLink: meeting.googleMeetLink || '',
+                });
+            } catch (err: any) {
+                console.error(`[Meeting] 30m Reminder email failed for admin ${email}:`, err.message);
             }
         }
 
         meeting.reminderSent = true;
 
-        // SMS for BDT-currency clients
+        // 1c. SMS for BDT-currency clients
         if (client?.currency?.toUpperCase() === 'BDT' && client.phone) {
             try {
                 const smsMsg = `Reminder: Your meeting "${meeting.meetingTitle}" starts in 30 minutes.${meeting.googleMeetLink ? ` Join: ${meeting.googleMeetLink}` : ''} - WebBriks`;
@@ -271,7 +422,75 @@ async function processMeetingReminders(): Promise<{ reminded: number; smsSent: n
                 meeting.smsSent = true;
                 smsSentCount++;
             } catch (err: any) {
-                console.error('[Meeting] SMS reminder failed:', err.message);
+                console.error('[Meeting] 30m SMS reminder failed:', err.message);
+            }
+        }
+
+        await meeting.save();
+        reminded++;
+    }
+
+    // --- 2. Process 5-minute Reminders ---
+    const fiveMinutesFromNow = new Date(now.getTime() + 5 * 60 * 1000);
+    const fiveMinMeetings = await MeetingModel.find({
+        status: 'scheduled',
+        reminder5Sent: { $ne: true },
+        scheduledAt: { $gte: now, $lte: fiveMinutesFromNow },
+    }).populate('clientId', 'name emails phone currency');
+
+    for (const meeting of fiveMinMeetings) {
+        const client = meeting.clientId as any;
+        const formattedDate = meeting.scheduledAt.toLocaleString('en-US', {
+            weekday: 'long',
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            timeZone: 'Asia/Dhaka',
+        });
+
+        // 2a. Send email to attendees
+        for (const email of meeting.attendeeEmails) {
+            try {
+                await emailService.sendMeetingReminderEmail({
+                    to: email,
+                    clientName: client?.name || 'Client',
+                    meetingTitle: meeting.meetingTitle,
+                    scheduledAt: formattedDate,
+                    meetLink: meeting.googleMeetLink || '',
+                });
+            } catch (err: any) {
+                console.error(`[Meeting] 5m Reminder email failed for attendee ${email}:`, err.message);
+            }
+        }
+
+        // 2b. Send email to admins
+        for (const email of adminEmails) {
+            try {
+                await emailService.sendMeetingReminderEmail({
+                    to: email,
+                    clientName: 'Admin',
+                    meetingTitle: `${meeting.meetingTitle} (Client: ${client?.name || 'N/A'})`,
+                    scheduledAt: formattedDate,
+                    meetLink: meeting.googleMeetLink || '',
+                });
+            } catch (err: any) {
+                console.error(`[Meeting] 5m Reminder email failed for admin ${email}:`, err.message);
+            }
+        }
+
+        meeting.reminder5Sent = true;
+
+        // 2c. SMS for BDT-currency clients
+        if (client?.currency?.toUpperCase() === 'BDT' && client.phone) {
+            try {
+                const smsMsg = `Reminder: Your meeting "${meeting.meetingTitle}" starts in 5 minutes.${meeting.googleMeetLink ? ` Join: ${meeting.googleMeetLink}` : ''} - WebBriks`;
+                await sendBulkSMS({ number: client.phone, message: smsMsg });
+                meeting.smsSent = true;
+                smsSentCount++;
+            } catch (err: any) {
+                console.error('[Meeting] 5m SMS reminder failed:', err.message);
             }
         }
 
@@ -291,5 +510,7 @@ export default {
     getMeetings,
     getMeetingById,
     cancelMeeting,
+    updateMeeting,
+    deleteMeeting,
     processMeetingReminders,
 };

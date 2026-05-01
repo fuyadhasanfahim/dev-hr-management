@@ -79,6 +79,23 @@ const meetingApi = apiSlice.injectEndpoints({
             }),
             invalidatesTags: ["Meeting"],
         }),
+
+        updateMeeting: builder.mutation<{ success: boolean; data: Meeting }, { id: string; data: Partial<CreateMeetingInput> }>({
+            query: ({ id, data }) => ({
+                url: `/meetings/${id}`,
+                method: "PUT",
+                body: data,
+            }),
+            invalidatesTags: ["Meeting"],
+        }),
+
+        deleteMeeting: builder.mutation<{ success: boolean; data: Meeting }, string>({
+            query: (id) => ({
+                url: `/meetings/${id}`,
+                method: "DELETE",
+            }),
+            invalidatesTags: ["Meeting"],
+        }),
     }),
 });
 
@@ -87,4 +104,6 @@ export const {
     useGetMeetingByIdQuery,
     useCreateMeetingMutation,
     useCancelMeetingMutation,
+    useUpdateMeetingMutation,
+    useDeleteMeetingMutation,
 } = meetingApi;

@@ -12,6 +12,7 @@ import { auth } from "./lib/auth.js";
 import { requireAuth } from "./middlewares/auth.middleware.js";
 import { requestContextMiddleware } from "./middlewares/requestContext.middleware.js";
 import router from "./routes/index.js";
+import "./models/user.model.js";
 import { stripeWebhook, paypalWebhook } from "./controllers/webhook.controller.js";
 import { globalErrorHandler } from "./middlewares/globalErrorHandler.js";
 

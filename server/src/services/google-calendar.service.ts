@@ -111,7 +111,59 @@ async function cancelMeetingEvent(eventId: string): Promise<void> {
     });
 }
 
+/**
+ * Updates a Google Calendar event.
+ */
+async function updateMeetingEvent(
+    eventId: string,
+    title: string,
+    description: string,
+    startTime: Date,
+    endTime: Date,
+    attendeeEmails: string[],
+): Promise<void> {
+    const calendar = getCalendarClient();
+    const calendarId = envConfig.google_calendar_id || 'primary';
+
+    const event: calendar_v3.Schema$Event = {
+        summary: title,
+        description: description || '',
+        start: {
+            dateTime: startTime.toISOString(),
+            timeZone: 'Asia/Dhaka',
+        },
+        end: {
+            dateTime: endTime.toISOString(),
+            timeZone: 'Asia/Dhaka',
+        },
+        attendees: attendeeEmails.map((email) => ({ email })),
+    };
+
+    await calendar.events.patch({
+        calendarId,
+        eventId,
+        requestBody: event,
+        sendUpdates: 'all',
+    });
+}
+
+/**
+ * Deletes a Google Calendar event.
+ */
+async function deleteMeetingEvent(eventId: string): Promise<void> {
+    const calendar = getCalendarClient();
+    const calendarId = envConfig.google_calendar_id || 'primary';
+
+    await calendar.events.delete({
+        calendarId,
+        eventId,
+        sendUpdates: 'all',
+    });
+}
+
 export default {
     createMeetingEvent,
     cancelMeetingEvent,
+    updateMeetingEvent,
+    deleteMeetingEvent,
 };

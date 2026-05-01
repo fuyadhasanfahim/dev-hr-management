@@ -13,6 +13,7 @@ export interface IMeeting extends Document {
     googleMeetLink?: string;
     status: MeetingStatus;
     reminderSent: boolean;
+    reminder5Sent?: boolean;
     smsSent: boolean;
     createdBy: Types.ObjectId;
     notes?: string;

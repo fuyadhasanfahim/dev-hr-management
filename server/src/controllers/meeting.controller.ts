@@ -72,9 +72,43 @@ const cancelMeeting = async (req: Request, res: Response, next: NextFunction) =>
     }
 };
 
+const updateMeeting = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const { id } = req.params;
+        if (!id) return next(new Error('Meeting ID is required'));
+
+        const meeting = await meetingService.updateMeeting(id, req.body);
+        return res.status(200).json({
+            success: true,
+            message: 'Meeting updated successfully',
+            data: meeting,
+        });
+    } catch (err) {
+        return next(err);
+    }
+};
+
+const deleteMeeting = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const { id } = req.params;
+        if (!id) return next(new Error('Meeting ID is required'));
+
+        const meeting = await meetingService.deleteMeeting(id);
+        return res.status(200).json({
+            success: true,
+            message: 'Meeting deleted successfully',
+            data: meeting,
+        });
+    } catch (err) {
+        return next(err);
+    }
+};
+
 export default {
     createMeeting,
     getMeetings,
     getMeetingById,
     cancelMeeting,
+    updateMeeting,
+    deleteMeeting,
 };
