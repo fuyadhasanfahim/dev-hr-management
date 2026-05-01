@@ -46,6 +46,7 @@ async function createMeetingEvent(
     endTime: Date,
     attendeeEmails: string[],
 ): Promise<GoogleMeetEventResult> {
+    console.log(`[Calendar] creating meeting for ${attendeeEmails.length} attendees`);
     const calendar = getCalendarClient();
     const calendarId = envConfig.google_calendar_id || 'primary';
 
@@ -62,7 +63,6 @@ async function createMeetingEvent(
             dateTime: endTime.toISOString(),
             timeZone: 'Asia/Dhaka',
         },
-        attendees: attendeeEmails.map((email) => ({ email })),
         conferenceData: {
             createRequest: {
                 requestId,
@@ -82,7 +82,7 @@ async function createMeetingEvent(
         calendarId,
         requestBody: event,
         conferenceDataVersion: 1,
-        sendUpdates: 'all', // Send invites to attendees
+        sendUpdates: 'none',
     });
 
     const data = response.data;
@@ -107,7 +107,7 @@ async function cancelMeetingEvent(eventId: string): Promise<void> {
     await calendar.events.delete({
         calendarId,
         eventId,
-        sendUpdates: 'all', // Notify attendees of cancellation
+        sendUpdates: 'none',
     });
 }
 
@@ -122,6 +122,7 @@ async function updateMeetingEvent(
     endTime: Date,
     attendeeEmails: string[],
 ): Promise<void> {
+    console.log(`[Calendar] updating meeting with ${attendeeEmails.length} attendees`);
     const calendar = getCalendarClient();
     const calendarId = envConfig.google_calendar_id || 'primary';
 
@@ -136,14 +137,13 @@ async function updateMeetingEvent(
             dateTime: endTime.toISOString(),
             timeZone: 'Asia/Dhaka',
         },
-        attendees: attendeeEmails.map((email) => ({ email })),
     };
 
     await calendar.events.patch({
         calendarId,
         eventId,
         requestBody: event,
-        sendUpdates: 'all',
+        sendUpdates: 'none',
     });
 }
 

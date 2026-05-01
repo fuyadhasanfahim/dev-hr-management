@@ -231,6 +231,7 @@ async function cancelMeeting(id: string): Promise<IMeeting | null> {
                 clientName: client?.name || 'Client',
                 meetingTitle: meeting.meetingTitle,
                 scheduledAt: formattedDate,
+                isAdmin: false,
             });
         } catch (err: any) {
             console.error(`[Meeting] Failed to send cancellation email to ${email}:`, err.message);
@@ -243,9 +244,10 @@ async function cancelMeeting(id: string): Promise<IMeeting | null> {
         try {
             await emailService.sendMeetingCancellationEmail({
                 to: email,
-                clientName: 'Admin',
-                meetingTitle: `${meeting.meetingTitle} (Client: ${client?.name || 'Client'})`,
+                clientName: client?.name || 'Client',
+                meetingTitle: meeting.meetingTitle,
                 scheduledAt: formattedDate,
+                isAdmin: true,
             });
         } catch (err: any) {
             console.error(`[Meeting] Failed to send cancellation email to admin ${email}:`, err.message);
@@ -255,7 +257,7 @@ async function cancelMeeting(id: string): Promise<IMeeting | null> {
     // SMS for client if phone exists
     if (client?.phone) {
         try {
-            const smsMsg = `Meeting Cancelled: "${meeting.meetingTitle}" scheduled for ${formattedDate} has been cancelled. - WebBriks`;
+            const smsMsg = `❌ Meeting Cancelled\n\nYour meeting "${meeting.meetingTitle}" scheduled for ${formattedDate} has been cancelled.\n\nWe apologize for the inconvenience. We’ll notify you if it is rescheduled.\n\n— Web Briks LLC`;
             await sendBulkSMS({ number: client.phone, message: smsMsg });
         } catch (err: any) {
             console.error('[Meeting] SMS cancellation failed:', err.message);
@@ -390,6 +392,7 @@ async function deleteMeeting(meetingId: string): Promise<IMeeting> {
                 clientName: client?.name || 'Client',
                 meetingTitle: meeting.meetingTitle,
                 scheduledAt: formattedDate,
+                isAdmin: false,
             });
         } catch (err: any) {
             console.error(`[Meeting] Failed to send deletion email to ${email}:`, err.message);
@@ -402,9 +405,10 @@ async function deleteMeeting(meetingId: string): Promise<IMeeting> {
         try {
             await emailService.sendMeetingCancellationEmail({
                 to: email,
-                clientName: 'Admin',
-                meetingTitle: `${meeting.meetingTitle} (Client: ${client?.name || 'Client'})`,
+                clientName: client?.name || 'Client',
+                meetingTitle: meeting.meetingTitle,
                 scheduledAt: formattedDate,
+                isAdmin: true,
             });
         } catch (err: any) {
             console.error(`[Meeting] Failed to send deletion email to admin ${email}:`, err.message);
@@ -414,7 +418,7 @@ async function deleteMeeting(meetingId: string): Promise<IMeeting> {
     // SMS for client if phone exists
     if (client?.phone) {
         try {
-            const smsMsg = `Meeting Cancelled/Deleted: "${meeting.meetingTitle}" scheduled for ${formattedDate} has been cancelled. - WebBriks`;
+            const smsMsg = `❌ Meeting Cancelled\n\nYour meeting "${meeting.meetingTitle}" scheduled for ${formattedDate} has been cancelled.\n\nWe apologize for the inconvenience. We’ll notify you if it is rescheduled.\n\n— Web Briks LLC`;
             await sendBulkSMS({ number: client.phone, message: smsMsg });
         } catch (err: any) {
             console.error('[Meeting] SMS deletion failed:', err.message);

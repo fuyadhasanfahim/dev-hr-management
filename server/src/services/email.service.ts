@@ -538,6 +538,7 @@ interface SendMeetingCancellationData {
     clientName: string;
     meetingTitle: string;
     scheduledAt: string;
+    isAdmin?: boolean;
 }
 
 const sendMeetingCancellationEmail = async (data: SendMeetingCancellationData) => {
@@ -547,13 +548,16 @@ const sendMeetingCancellationEmail = async (data: SendMeetingCancellationData) =
                 clientName: data.clientName,
                 meetingTitle: data.meetingTitle,
                 scheduledAt: data.scheduledAt,
+                isAdmin: data.isAdmin || false,
             }),
         );
 
         return await transporter.sendMail({
             from: 'Meetings | WebBriks',
             to: data.to,
-            subject: `Meeting Cancelled: ${data.meetingTitle}`,
+            subject: data.isAdmin 
+                ? `Notice: Meeting Cancelled by Client/System - ${data.meetingTitle}`
+                : `Meeting Cancelled: ${data.meetingTitle}`,
             html: emailHtml,
         });
     } catch (error) {

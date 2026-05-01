@@ -17,12 +17,14 @@ interface MeetingCancellationEmailProps {
     clientName: string;
     meetingTitle: string;
     scheduledAt: string;
+    isAdmin?: boolean;
 }
 
 export const MeetingCancellationEmail = ({
     clientName,
     meetingTitle,
     scheduledAt,
+    isAdmin = false,
 }: MeetingCancellationEmailProps) => {
     const previewText = `Meeting Cancelled: ${meetingTitle}`;
     const logoUrl =
@@ -44,31 +46,68 @@ export const MeetingCancellationEmail = ({
                         />
                     </Section>
 
-                    <Section style={content}>
-                        <Text style={heading}>❌ Meeting Cancelled</Text>
-
-                        <Text style={paragraph}>
-                            Hi {clientName},<br />
-                            The following scheduled meeting has been cancelled.
-                        </Text>
-
-                        <Section style={detailsSection}>
-                            <Text style={detailsItem}>
-                                <strong>Title:</strong> {meetingTitle}
+                    {isAdmin ? (
+                        <Section style={content}>
+                            <Text style={paragraph}>Hello Admin,</Text>
+                            <Text style={paragraph}>
+                                The following meeting has been cancelled by the client/system.
                             </Text>
-                            <Text style={detailsItem}>
-                                <strong>Originally scheduled for:</strong> {scheduledAt}
+
+                            <Section style={detailsSection}>
+                                <Text style={detailsItem}>
+                                    <strong>Meeting:</strong> {meetingTitle}
+                                </Text>
+                                <Text style={detailsItem}>
+                                    <strong>Client:</strong> {clientName}
+                                </Text>
+                                <Text style={detailsItem}>
+                                    <strong>Scheduled Time:</strong> {scheduledAt}
+                                </Text>
+                            </Section>
+
+                            <Text style={paragraph}>
+                                Please update the meeting status and schedule accordingly.
+                            </Text>
+
+                            <Hr style={hr} />
+
+                            <Text style={footerText}>
+                                Regards,
+                                <br />
+                                <strong>Web Briks LLC</strong>
                             </Text>
                         </Section>
+                    ) : (
+                        <Section style={content}>
+                            <Text style={paragraph}>Hello,</Text>
+                            <Text style={paragraph}>
+                                We wanted to inform you that your scheduled meeting has been cancelled.
+                            </Text>
 
-                        <Hr style={hr} />
+                            <Section style={detailsSection}>
+                                <Text style={detailsItem}>
+                                    <strong>Meeting:</strong> {meetingTitle}
+                                </Text>
+                                <Text style={detailsItem}>
+                                    <strong>Scheduled Time:</strong> {scheduledAt}
+                                </Text>
+                            </Section>
 
-                        <Text style={footerText}>
-                            Best regards,
-                            <br />
-                            <strong>Web Briks LLC</strong>
-                        </Text>
-                    </Section>
+                            <Text style={paragraph}>
+                                We sincerely apologize for the inconvenience. If the meeting is rescheduled, we will notify you with the updated details.
+                            </Text>
+
+                            <Text style={paragraph}>Thank you for your understanding.</Text>
+
+                            <Hr style={hr} />
+
+                            <Text style={footerText}>
+                                Best regards,
+                                <br />
+                                <strong>Web Briks LLC</strong>
+                            </Text>
+                        </Section>
+                    )}
 
                     <Section style={footer}>
                         <Text style={footerLegal}>
@@ -118,14 +157,6 @@ const logo = {
 
 const content = {
     paddingBottom: '16px',
-};
-
-const heading = {
-    fontSize: '24px',
-    fontWeight: '700',
-    color: '#1c1c1e',
-    marginBottom: '24px',
-    letterSpacing: '-0.5px',
 };
 
 const paragraph = {
