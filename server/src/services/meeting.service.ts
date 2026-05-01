@@ -8,8 +8,22 @@ import type { CreateMeetingData, MeetingQueryParams, IMeeting } from '../types/m
 import { Types } from 'mongoose';
 
 /**
+ * Helper to fetch admin emails.
+ */
+async function fetchAdminEmails(): Promise<string[]> {
+    try {
+        const { default: UserCollection } = await import('../models/user.model.js');
+        const admins = await UserCollection.find({ role: { $in: ['admin', 'super_admin'] } }).toArray();
+        return admins.map((u: any) => u.email).filter(Boolean);
+    } catch (err: any) {
+        console.error('[Meeting] Failed to fetch admin emails:', err.message);
+        return [];
+    }
+}
+
+/**
  * Creates a meeting, generates a Google Meet link via Calendar API,
- * and sends confirmation email (+ SMS for BDT clients).
+ * and sends confirmation email (+ SMS for everyone with a phone).
  */
 async function createMeeting(data: CreateMeetingData): Promise<IMeeting> {
     const client = await ClientModel.findById(data.clientId);
@@ -95,10 +109,28 @@ async function createMeeting(data: CreateMeetingData): Promise<IMeeting> {
         }
     }
 
-    // SMS for BDT-currency clients
-    if (client.currency?.toUpperCase() === 'BDT' && client.phone) {
+    // Send invite email to admins as well
+    const adminEmails = await fetchAdminEmails();
+    for (const email of adminEmails) {
         try {
-            const smsMsg = `Meeting Scheduled: "${data.meetingTitle}" on ${formattedDate}.${googleMeetLink ? ` Join: ${googleMeetLink}` : ''} - WebBriks`;
+            await emailService.sendMeetingInviteEmail({
+                to: email,
+                clientName: 'Admin',
+                meetingTitle: `${data.meetingTitle} (Client: ${client.name})`,
+                scheduledAt: formattedDate,
+                durationMinutes: data.durationMinutes,
+                meetLink: googleMeetLink || '',
+                description: data.description || '',
+            });
+        } catch (err: any) {
+            console.error(`[Meeting] Failed to send invite email to admin ${email}:`, err.message);
+        }
+    }
+
+    // SMS for client if phone exists
+    if (client.phone) {
+        try {
+            const smsMsg = `Meeting Scheduled: "${data.meetingTitle}" on ${formattedDate} (${data.durationMinutes} mins).${googleMeetLink ? ` Join: ${googleMeetLink}` : ''} - WebBriks`;
             await sendBulkSMS({ number: client.phone, message: smsMsg });
             console.log('[Meeting] SMS confirmation sent to', client.phone);
         } catch (err: any) {
@@ -205,8 +237,23 @@ async function cancelMeeting(id: string): Promise<IMeeting | null> {
         }
     }
 
-    // SMS for BDT client
-    if (client?.currency?.toUpperCase() === 'BDT' && client.phone) {
+    // Notify admins by email
+    const adminEmails = await fetchAdminEmails();
+    for (const email of adminEmails) {
+        try {
+            await emailService.sendMeetingCancellationEmail({
+                to: email,
+                clientName: 'Admin',
+                meetingTitle: `${meeting.meetingTitle} (Client: ${client?.name || 'Client'})`,
+                scheduledAt: formattedDate,
+            });
+        } catch (err: any) {
+            console.error(`[Meeting] Failed to send cancellation email to admin ${email}:`, err.message);
+        }
+    }
+
+    // SMS for client if phone exists
+    if (client?.phone) {
         try {
             const smsMsg = `Meeting Cancelled: "${meeting.meetingTitle}" scheduled for ${formattedDate} has been cancelled. - WebBriks`;
             await sendBulkSMS({ number: client.phone, message: smsMsg });
@@ -226,8 +273,8 @@ async function updateMeeting(meetingId: string, data: Partial<CreateMeetingData>
     const durationMinutes = data.durationMinutes !== undefined ? data.durationMinutes : meeting.durationMinutes;
 
     meeting.meetingTitle = data.meetingTitle || meeting.meetingTitle;
-    meeting.description = data.description !== undefined ? data.description : meeting.description;
-    meeting.notes = data.notes !== undefined ? data.notes : meeting.notes;
+    meeting.description = (data.description !== undefined ? data.description : meeting.description) as any;
+    meeting.notes = (data.notes !== undefined ? data.notes : meeting.notes) as any;
     meeting.scheduledAt = scheduledAt;
     meeting.durationMinutes = durationMinutes;
 
@@ -280,9 +327,28 @@ async function updateMeeting(meetingId: string, data: Partial<CreateMeetingData>
         }
     }
 
-    if (client?.currency?.toUpperCase() === 'BDT' && client.phone) {
+    // Notify admins by email
+    const adminEmails = await fetchAdminEmails();
+    for (const email of adminEmails) {
         try {
-            const smsMsg = `Meeting Updated: "${meeting.meetingTitle}" has been rescheduled to ${formattedDate}. Link: ${meeting.googleMeetLink || ''} - WebBriks`;
+            await emailService.sendMeetingInviteEmail({
+                to: email,
+                clientName: 'Admin',
+                meetingTitle: `${meeting.meetingTitle} (Client: ${client?.name || 'Client'})`,
+                scheduledAt: formattedDate,
+                durationMinutes: meeting.durationMinutes,
+                meetLink: meeting.googleMeetLink || '',
+                description: meeting.description || '',
+            });
+        } catch (err: any) {
+            console.error(`[Meeting] Failed to send update email to admin ${email}:`, err.message);
+        }
+    }
+
+    // SMS for client if phone exists
+    if (client?.phone) {
+        try {
+            const smsMsg = `Meeting Updated: "${meeting.meetingTitle}" has been rescheduled to ${formattedDate} (${meeting.durationMinutes} mins). Link: ${meeting.googleMeetLink || ''} - WebBriks`;
             await sendBulkSMS({ number: client.phone, message: smsMsg });
         } catch (err: any) {
             console.error('[Meeting] SMS update failed:', err.message);
@@ -330,7 +396,23 @@ async function deleteMeeting(meetingId: string): Promise<IMeeting> {
         }
     }
 
-    if (client?.currency?.toUpperCase() === 'BDT' && client.phone) {
+    // Notify admins by email
+    const adminEmails = await fetchAdminEmails();
+    for (const email of adminEmails) {
+        try {
+            await emailService.sendMeetingCancellationEmail({
+                to: email,
+                clientName: 'Admin',
+                meetingTitle: `${meeting.meetingTitle} (Client: ${client?.name || 'Client'})`,
+                scheduledAt: formattedDate,
+            });
+        } catch (err: any) {
+            console.error(`[Meeting] Failed to send deletion email to admin ${email}:`, err.message);
+        }
+    }
+
+    // SMS for client if phone exists
+    if (client?.phone) {
         try {
             const smsMsg = `Meeting Cancelled/Deleted: "${meeting.meetingTitle}" scheduled for ${formattedDate} has been cancelled. - WebBriks`;
             await sendBulkSMS({ number: client.phone, message: smsMsg });
@@ -352,15 +434,7 @@ async function processMeetingReminders(): Promise<{ reminded: number; smsSent: n
     let reminded = 0;
     let smsSentCount = 0;
 
-    // Fetch admin emails
-    let adminEmails: string[] = [];
-    try {
-        const { default: UserCollection } = await import('../models/user.model.js');
-        const admins = await UserCollection.find({ role: { $in: ['admin', 'super_admin'] } }).toArray();
-        adminEmails = admins.map((u: any) => u.email).filter(Boolean);
-    } catch (err: any) {
-        console.error('[Meeting] Failed to fetch admin emails for reminder:', err.message);
-    }
+    const adminEmails = await fetchAdminEmails();
 
     // --- 1. Process 30-minute Reminders ---
     const thirtyMinutesFromNow = new Date(now.getTime() + 30 * 60 * 1000);
@@ -390,6 +464,7 @@ async function processMeetingReminders(): Promise<{ reminded: number; smsSent: n
                     clientName: client?.name || 'Client',
                     meetingTitle: meeting.meetingTitle,
                     scheduledAt: formattedDate,
+                    durationMinutes: meeting.durationMinutes,
                     meetLink: meeting.googleMeetLink || '',
                 });
             } catch (err: any) {
@@ -405,6 +480,7 @@ async function processMeetingReminders(): Promise<{ reminded: number; smsSent: n
                     clientName: 'Admin',
                     meetingTitle: `${meeting.meetingTitle} (Client: ${client?.name || 'N/A'})`,
                     scheduledAt: formattedDate,
+                    durationMinutes: meeting.durationMinutes,
                     meetLink: meeting.googleMeetLink || '',
                 });
             } catch (err: any) {
@@ -414,10 +490,10 @@ async function processMeetingReminders(): Promise<{ reminded: number; smsSent: n
 
         meeting.reminderSent = true;
 
-        // 1c. SMS for BDT-currency clients
-        if (client?.currency?.toUpperCase() === 'BDT' && client.phone) {
+        // 1c. SMS for client if phone exists
+        if (client?.phone) {
             try {
-                const smsMsg = `Reminder: Your meeting "${meeting.meetingTitle}" starts in 30 minutes.${meeting.googleMeetLink ? ` Join: ${meeting.googleMeetLink}` : ''} - WebBriks`;
+                const smsMsg = `Reminder: Your meeting "${meeting.meetingTitle}" on ${formattedDate} (${meeting.durationMinutes} mins).${meeting.googleMeetLink ? ` Join: ${meeting.googleMeetLink}` : ''} - WebBriks`;
                 await sendBulkSMS({ number: client.phone, message: smsMsg });
                 meeting.smsSent = true;
                 smsSentCount++;
@@ -458,6 +534,7 @@ async function processMeetingReminders(): Promise<{ reminded: number; smsSent: n
                     clientName: client?.name || 'Client',
                     meetingTitle: meeting.meetingTitle,
                     scheduledAt: formattedDate,
+                    durationMinutes: meeting.durationMinutes,
                     meetLink: meeting.googleMeetLink || '',
                 });
             } catch (err: any) {
@@ -473,6 +550,7 @@ async function processMeetingReminders(): Promise<{ reminded: number; smsSent: n
                     clientName: 'Admin',
                     meetingTitle: `${meeting.meetingTitle} (Client: ${client?.name || 'N/A'})`,
                     scheduledAt: formattedDate,
+                    durationMinutes: meeting.durationMinutes,
                     meetLink: meeting.googleMeetLink || '',
                 });
             } catch (err: any) {
@@ -482,10 +560,10 @@ async function processMeetingReminders(): Promise<{ reminded: number; smsSent: n
 
         meeting.reminder5Sent = true;
 
-        // 2c. SMS for BDT-currency clients
-        if (client?.currency?.toUpperCase() === 'BDT' && client.phone) {
+        // 2c. SMS for client if phone exists
+        if (client?.phone) {
             try {
-                const smsMsg = `Reminder: Your meeting "${meeting.meetingTitle}" starts in 5 minutes.${meeting.googleMeetLink ? ` Join: ${meeting.googleMeetLink}` : ''} - WebBriks`;
+                const smsMsg = `Reminder: Your meeting "${meeting.meetingTitle}" on ${formattedDate} (${meeting.durationMinutes} mins).${meeting.googleMeetLink ? ` Join: ${meeting.googleMeetLink}` : ''} - WebBriks`;
                 await sendBulkSMS({ number: client.phone, message: smsMsg });
                 meeting.smsSent = true;
                 smsSentCount++;
