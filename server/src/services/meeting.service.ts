@@ -59,8 +59,8 @@ async function createMeeting(data: CreateMeetingData): Promise<IMeeting> {
             meetLink: googleMeetLink,
         });
     } catch (error: any) {
-        console.error('[Meeting] Google Calendar integration failed, creating meeting without Meet link:', error.message);
-        // Continue without Google Meet — meeting is still valid
+        console.error('[Meeting] Google Calendar integration failed:', error.message);
+        throw new Error('Failed to create meeting');
     }
 
     const meetingPayload: Record<string, any> = {
@@ -297,6 +297,7 @@ async function updateMeeting(meetingId: string, data: Partial<CreateMeetingData>
             );
         } catch (err: any) {
             console.error('[Meeting] Google Calendar update failed:', err.message);
+            throw new Error('Failed to update meeting');
         }
     }
 

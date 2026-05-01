@@ -41,6 +41,12 @@ export function DateTimePicker({
         value ? format(value, 'HH:mm') : '12:00',
     );
 
+    React.useEffect(() => {
+        if (value) {
+            setTime(format(value, 'HH:mm'));
+        }
+    }, [value]);
+
     const handleDateSelect = (selectedDate: Date | undefined) => {
         if (selectedDate) {
             const [hours, minutes] = time.split(':').map(Number);
@@ -54,11 +60,13 @@ export function DateTimePicker({
     const handleTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const newTime = e.target.value;
         setTime(newTime);
-        if (value) {
+        if (value && newTime && newTime.includes(':')) {
             const [hours, minutes] = newTime.split(':').map(Number);
-            const newDate = new Date(value);
-            newDate.setHours(hours, minutes, 0, 0);
-            onChange(newDate);
+            if (!isNaN(hours) && !isNaN(minutes)) {
+                const newDate = new Date(value);
+                newDate.setHours(hours, minutes, 0, 0);
+                onChange(newDate);
+            }
         }
     };
 
@@ -80,7 +88,6 @@ export function DateTimePicker({
 
                 <PopoverContent
                     className="w-auto overflow-hidden p-0"
-                    
                     side="right"
                 >
                     <Calendar

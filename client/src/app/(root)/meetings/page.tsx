@@ -459,7 +459,7 @@ function MeetingRow({ meeting, clients }: { meeting: Meeting; clients: any[] }) 
     const [form, setForm] = useState({
         meetingTitle: meeting.meetingTitle || '',
         description: meeting.description || '',
-        scheduledAt: meeting.scheduledAt ? new Date(meeting.scheduledAt).toISOString().slice(0, 16) : '',
+        scheduledAt: meeting.scheduledAt ? new Date(meeting.scheduledAt).toISOString() : '',
         durationMinutes: meeting.durationMinutes || 30,
         notes: meeting.notes || '',
         attendeeEmails: meeting.attendeeEmails || [],
@@ -881,7 +881,7 @@ function ScheduleMeetingDialog({
     const getDefaultDateTime = () => {
         const d = new Date(Date.now() + 60 * 60 * 1000);
         d.setMinutes(Math.ceil(d.getMinutes() / 15) * 15, 0, 0);
-        return d.toISOString().slice(0, 16);
+        return d.toISOString();
     };
 
     const [createMeeting, { isLoading }] = useCreateMeetingMutation();
