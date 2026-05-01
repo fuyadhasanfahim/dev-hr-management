@@ -52,49 +52,63 @@ async function createMeetingEvent(
 
     const requestId = `meeting-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
 
-    const event: calendar_v3.Schema$Event = {
-        summary: title,
-        description: description || '',
-        start: {
-            dateTime: startTime.toISOString(),
-            timeZone: 'Asia/Dhaka',
-        },
-        end: {
-            dateTime: endTime.toISOString(),
-            timeZone: 'Asia/Dhaka',
-        },
-        conferenceData: {
-            createRequest: {
-                requestId,
-                conferenceSolutionKey: { type: 'hangoutsMeet' },
+    try {
+        const event: calendar_v3.Schema$Event = {
+            summary: title,
+            description: description || '',
+            start: {
+                dateTime: startTime.toISOString(),
+                timeZone: 'Asia/Dhaka',
             },
-        },
-        reminders: {
-            useDefault: false,
-            overrides: [
-                { method: 'email', minutes: 30 },
-                { method: 'popup', minutes: 10 },
-            ],
-        },
-    };
+            end: {
+                dateTime: endTime.toISOString(),
+                timeZone: 'Asia/Dhaka',
+            },
+            conferenceData: {
+                createRequest: {
+                    requestId,
+                    conferenceSolutionKey: { type: 'hangoutsMeet' },
+                },
+            },
+            reminders: {
+                useDefault: false,
+                overrides: [
+                    { method: 'email', minutes: 30 },
+                    { method: 'popup', minutes: 10 },
+                ],
+            },
+        };
 
-    const response = await calendar.events.insert({
-        calendarId,
-        requestBody: event,
-        conferenceDataVersion: 1,
-        sendUpdates: 'none',
-    });
+        const response = await calendar.events.insert({
+            calendarId,
+            requestBody: event,
+            conferenceDataVersion: 1,
+            sendUpdates: 'none',
+        });
 
-    const data = response.data;
-    if (!data.id) {
-        throw new Error('Google Calendar event creation failed: no event ID returned');
+        const data = response.data;
+        if (!data.id) {
+            throw new Error('Google Calendar event creation failed: no event ID returned');
+        }
+
+        const meetLink = data.hangoutLink || data.conferenceData?.entryPoints?.[0]?.uri;
+        if (meetLink) {
+            return {
+                eventId: data.id,
+                meetLink,
+                htmlLink: data.htmlLink || '',
+            };
+        }
+        throw new Error('No Meet Link returned');
+    } catch (err: any) {
+        console.error('[Google Calendar] Failed to generate Meet link, generating Jitsi fallback link:', err.message);
+        const fallbackLink = `https://meet.jit.si/WebBriks-Meeting-${requestId}`;
+        return {
+            eventId: `fallback-${Date.now()}`,
+            meetLink: fallbackLink,
+            htmlLink: '',
+        };
     }
-
-    return {
-        eventId: data.id,
-        meetLink: data.hangoutLink || data.conferenceData?.entryPoints?.[0]?.uri || '',
-        htmlLink: data.htmlLink || '',
-    };
 }
 
 /**
