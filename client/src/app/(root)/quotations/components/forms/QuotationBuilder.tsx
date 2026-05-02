@@ -36,6 +36,8 @@ import { QuotationEmailDialog } from "../QuotationEmailDialog";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
+import { Select as ShadcnSelect, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -442,6 +444,26 @@ export default function QuotationBuilder({
             </div>
             <div className="p-6 space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2 md:col-span-2">
+                  <FieldLabel className="flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-muted-foreground" />
+                    Pre-configured Template
+                  </FieldLabel>
+                  <ShadcnSelect
+                    onValueChange={(value) => loadTemplate(value)}
+                  >
+                    <SelectTrigger className="w-full h-10">
+                      <SelectValue placeholder="Select Template" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.keys(QUOTATION_TEMPLATES).map((key) => (
+                        <SelectItem key={key} value={key}>
+                          {QUOTATION_TEMPLATES[key].details?.title || key}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </ShadcnSelect>
+                </div>
                 <div className="space-y-2">
                   <FieldLabel>Proposal Name</FieldLabel>
                   <TextInput
@@ -452,11 +474,9 @@ export default function QuotationBuilder({
                 </div>
                 <div className="space-y-2">
                   <FieldLabel>Client</FieldLabel>
-                  <SelectInput
+                  <ShadcnSelect
                     value={data.clientId || ""}
-                    placeholder={clientsLoading ? "Fetching..." : "Select Client"}
-                    onChange={(e) => {
-                      const id = e.target.value;
+                    onValueChange={(id) => {
                       const c = clientsData?.clients.find((x) => x._id === id);
                       if (!c) return;
                       // Single atomic update prevents render-loop overwrites of
@@ -483,13 +503,19 @@ export default function QuotationBuilder({
                       }));
                     }}
                   >
-                    {clientsData?.clients.map((c) => (
-                      <option key={c._id} value={c._id}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </SelectInput>
+                    <SelectTrigger className="w-full h-10">
+                      <SelectValue placeholder={clientsLoading ? "Fetching..." : "Select Client"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {clientsData?.clients.map((c) => (
+                        <SelectItem key={c._id} value={c._id}>
+                          {c.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </ShadcnSelect>
                 </div>
+
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

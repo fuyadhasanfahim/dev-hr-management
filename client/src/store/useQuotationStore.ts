@@ -8,8 +8,6 @@ import {
 } from "@/types/quotation.type";
 import { QUOTATION_TEMPLATES } from "@/constants/quotation-templates";
 
-const generateId = () => Math.random().toString(36).substr(2, 9);
-
 interface QuotationStore {
   data: QuotationData;
   setServiceType: (type: ServiceType) => void;
@@ -222,7 +220,24 @@ export const useQuotationStore = create<QuotationStore>((set) => ({
     set((state) => {
       const template = QUOTATION_TEMPLATES[templateKey];
       if (!template) return state;
-      return { data: { ...state.data, ...template } as QuotationData };
+      return {
+        data: {
+          ...state.data,
+          ...template,
+          details: {
+            ...state.data.details,
+            ...template.details,
+          },
+          techStack: {
+            ...state.data.techStack,
+            ...template.techStack,
+          },
+          pricing: {
+            ...state.data.pricing,
+            ...template.pricing,
+          },
+        } as QuotationData
+      };
     }),
 
   setData: (data) => set({ data }),
