@@ -60,10 +60,10 @@ function SectionHeader({ title, icon, description }: { title: string; icon: Reac
   return (
     <div className="space-y-1 mb-4">
       <div className="flex items-center gap-2">
-        <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-muted text-muted-foreground ring-1 ring-border">
+        <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-teal-50/60 text-teal-600 border border-teal-100/50 ring-1 ring-teal-50/40">
           {icon}
         </span>
-        <h3 className="text-lg font-semibold tracking-tight">{title}</h3>
+        <h3 className="text-lg font-extrabold tracking-tight bg-gradient-to-r from-slate-900 to-teal-800 bg-clip-text text-transparent">{title}</h3>
       </div>
       {description && <p className="text-sm text-muted-foreground">{description}</p>}
     </div>
@@ -1172,9 +1172,9 @@ export default function QuotationBuilder({
                   </div>
                 )}
 
-                <div className="pt-6 border-t space-y-1">
-                  <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">Grand Project Total</span>
-                  <div className="text-3xl font-bold tracking-tight text-foreground leading-none">
+                <div className="pt-4 border-t border-teal-100 space-y-1 bg-gradient-to-r from-teal-50/20 to-orange-50/10 p-3 rounded-lg">
+                  <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-teal-700">Grand Project Total</span>
+                  <div className="text-3xl font-black tracking-tight text-slate-900 leading-none">
                     {formatMoney(computedTotals.grandTotal, data.currency)}
                   </div>
                 </div>
@@ -1184,6 +1184,7 @@ export default function QuotationBuilder({
               <PrimaryButton
                 onClick={openRecipientPicker}
                 disabled={isCreating || isUpdating || isSending}
+                className="bg-gradient-to-r from-teal-600 to-teal-500 hover:from-teal-700 hover:to-teal-600 text-white border-0 shadow-md hover:shadow-lg transition-all duration-300"
               >
                 <Send className="w-4 h-4 mr-2" /> Dispatch to Client
               </PrimaryButton>

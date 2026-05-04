@@ -61,7 +61,7 @@ export default function TemplatesPage() {
       : 0;
 
   return (
-    <div className="w-full space-y-8 p-6 bg-slate-50/40 min-h-screen">
+    <div className="w-full space-y-8 bg-slate-50/40 min-h-screen">
       {/* Header section */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>

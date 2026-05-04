@@ -23,6 +23,7 @@ export const authorize =
             next();
             return;
         } catch (error) {
+            console.error("AUTHORIZE ERROR:", error);
             return res.status(500).json({
                 success: false,
                 message: 'Authorization failed',

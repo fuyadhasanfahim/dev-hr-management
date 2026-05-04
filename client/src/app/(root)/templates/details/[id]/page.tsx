@@ -38,20 +38,10 @@ export default function TemplateDetailsPage() {
   const grandTotal = basePrice - discountAmount + (template.additionalServices?.reduce((a: number, s: any) => a + (s.price || 0), 0) || 0);
 
   return (
-    <div className="w-full space-y-8 p-6 bg-slate-50/40 min-h-screen">
+    <div className="w-full space-y-8 bg-slate-50/40 min-h-screen">
       {/* Header section */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <Button
-            asChild
-            variant="ghost"
-            className="mb-2 text-slate-600 hover:bg-slate-100 flex items-center gap-2 p-0 h-auto"
-          >
-            <Link href="/templates">
-              <ArrowLeft className="w-4 h-4" />
-              <span>Back to Templates</span>
-            </Link>
-          </Button>
           <h1 className="text-3xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
             <Layout className="w-8 h-8 text-teal-600" />
             <span>{template.name || "Unnamed Template"}</span>
