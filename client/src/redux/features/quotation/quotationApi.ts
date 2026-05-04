@@ -1,6 +1,21 @@
 import { apiSlice } from '@/redux/api/apiSlice';
 import { QuotationData } from '@/types/quotation.type';
 
+export interface QuotationTemplateData extends Omit<Partial<QuotationData>, 'details' | 'pricing'> {
+  _id?: string;
+  name: string;
+  details?: {
+    title: string;
+    date?: string;
+    validUntil?: string;
+  };
+  pricing?: {
+    basePrice: number;
+    taxRate?: number;
+    discount?: number;
+  };
+}
+
 export interface RecipientSendStatus {
   email: string;
   status: 'sent' | 'failed';
@@ -125,6 +140,52 @@ export const quotationApi = apiSlice.injectEndpoints({
       }),
       invalidatesTags: ['Quotation', 'Order'],
     }),
+
+    getQuotationTemplates: builder.query<QuotationTemplateData[], void>({
+      query: () => ({
+        url: '/quotation-templates',
+        method: 'GET',
+      }),
+      transformResponse: (response: { data: QuotationTemplateData[] }) => response.data,
+      providesTags: ['Quotation'],
+    }),
+
+    createQuotationTemplate: builder.mutation<QuotationTemplateData, Partial<QuotationTemplateData>>({
+      query: (body) => ({
+        url: '/quotation-templates',
+        method: 'POST',
+        body,
+      }),
+      transformResponse: (response: { data: QuotationTemplateData }) => response.data,
+      invalidatesTags: ['Quotation'],
+    }),
+
+    getQuotationTemplateById: builder.query<QuotationTemplateData, string>({
+      query: (id) => ({
+        url: `/quotation-templates/${id}`,
+        method: 'GET',
+      }),
+      transformResponse: (response: { data: QuotationTemplateData }) => response.data,
+      providesTags: ['Quotation'],
+    }),
+
+    updateQuotationTemplate: builder.mutation<QuotationTemplateData, { id: string } & Partial<QuotationTemplateData>>({
+      query: ({ id, ...body }) => ({
+        url: `/quotation-templates/${id}`,
+        method: 'PATCH',
+        body,
+      }),
+      transformResponse: (response: { data: QuotationTemplateData }) => response.data,
+      invalidatesTags: ['Quotation'],
+    }),
+
+    deleteQuotationTemplate: builder.mutation<void, string>({
+      query: (id) => ({
+        url: `/quotation-templates/${id}`,
+        method: 'DELETE',
+      }),
+      invalidatesTags: ['Quotation'],
+    }),
   }),
 });
 
@@ -137,4 +198,9 @@ export const {
   useUpdateQuotationMutation,
   useSendQuotationMutation,
   useDeleteQuotationMutation,
+  useGetQuotationTemplatesQuery,
+  useCreateQuotationTemplateMutation,
+  useGetQuotationTemplateByIdQuery,
+  useUpdateQuotationTemplateMutation,
+  useDeleteQuotationTemplateMutation,
 } = quotationApi;

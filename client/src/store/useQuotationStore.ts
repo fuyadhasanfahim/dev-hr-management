@@ -39,6 +39,8 @@ interface QuotationStore {
 
   // Helpers
   loadTemplate: (templateKey: string) => void;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  loadDynamicTemplate: (template: any) => void;
   setData: (data: QuotationData) => void;
   reset: () => void;
 }
@@ -236,6 +238,33 @@ export const useQuotationStore = create<QuotationStore>((set) => ({
             ...state.data.pricing,
             ...template.pricing,
           },
+        } as QuotationData
+      };
+    }),
+
+  loadDynamicTemplate: (template) =>
+    set((state) => {
+      if (!template) return state;
+      return {
+        data: {
+          ...state.data,
+          ...template,
+          details: {
+            ...state.data.details,
+            title: template.details?.title || state.data.details.title,
+          },
+          phases: template.phases || [],
+          techStack: {
+            ...state.data.techStack,
+            ...template.techStack,
+          },
+          pricing: {
+            ...state.data.pricing,
+            ...template.pricing,
+          },
+          additionalServices: template.additionalServices || [],
+          workflow: template.workflow || [],
+          paymentMilestones: template.paymentMilestones || [],
         } as QuotationData
       };
     }),

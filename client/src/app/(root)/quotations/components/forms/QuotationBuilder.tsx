@@ -26,6 +26,9 @@ import {
   useCreateQuotationMutation,
   useSendQuotationMutation,
   useUpdateQuotationMutation,
+  useGetQuotationTemplatesQuery,
+  useCreateQuotationTemplateMutation,
+  QuotationTemplateData,
 } from "@/redux/features/quotation/quotationApi";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
@@ -255,6 +258,7 @@ export default function QuotationBuilder({
     updateClient,
     updateDetails,
     loadTemplate,
+    loadDynamicTemplate,
     updateTechStack,
     updateWorkflow,
     updatePricing,
@@ -272,6 +276,8 @@ export default function QuotationBuilder({
   const [createQuotation, { isLoading: isCreating }] = useCreateQuotationMutation();
   const [updateQuotation, { isLoading: isUpdating }] = useUpdateQuotationMutation();
   const [sendQuotation, { isLoading: isSending }] = useSendQuotationMutation();
+  const { data: templatesData, isLoading: templatesLoading } = useGetQuotationTemplatesQuery();
+  const [createQuotationTemplate, { isLoading: isCreatingTemplate }] = useCreateQuotationTemplateMutation();
 
   const [recipientModalOpen, setRecipientModalOpen] = useState(false);
 
@@ -312,6 +318,30 @@ export default function QuotationBuilder({
     } catch (err: unknown) {
       const maybe = err as { data?: { message?: string } } | null;
       toast.error(maybe?.data?.message || "Failed to save quotation");
+    }
+  };
+
+  const handleSaveTemplate = async () => {
+    const templateName = window.prompt("Enter a name for this template:", data.details.title || "New Template");
+    if (!templateName) return;
+
+    try {
+      const templateData = {
+        name: templateName,
+        details: { title: data.details.title || templateName },
+        overview: data.overview,
+        phases: data.phases,
+        techStack: data.techStack,
+        pricing: data.pricing,
+        additionalServices: data.additionalServices,
+        workflow: data.workflow,
+        paymentMilestones: data.paymentMilestones,
+      };
+      await createQuotationTemplate(templateData).unwrap();
+      toast.success("Quotation template saved successfully!");
+    } catch (err: unknown) {
+      const maybe = err as { data?: { message?: string } } | null;
+      toast.error(maybe?.data?.message || "Failed to save template");
     }
   };
 
@@ -411,14 +441,15 @@ export default function QuotationBuilder({
                   value=""
                   placeholder="Industry Templates"
                   className="pl-9"
-                  onChange={(e) => loadTemplate(e.target.value)}
+                  onChange={(e) => {
+                    const id = e.target.value;
+                    const t = templatesData?.find((x: QuotationTemplateData) => x._id === id);
+                    if (t) loadDynamicTemplate(t);
+                  }}
                 >
-                  {Object.keys(QUOTATION_TEMPLATES).map((key) => (
-                    <option key={key} value={key}>
-                      {key
-                        .split("-")
-                        .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-                        .join(" ")}
+                  {templatesData?.map((t: QuotationTemplateData) => (
+                    <option key={t._id} value={t._id}>
+                      {t.name}
                     </option>
                   ))}
                 </SelectInput>
@@ -450,15 +481,18 @@ export default function QuotationBuilder({
                     Pre-configured Template
                   </FieldLabel>
                   <ShadcnSelect
-                    onValueChange={(value) => loadTemplate(value)}
+                    onValueChange={(value) => {
+                      const t = templatesData?.find((x: QuotationTemplateData) => x._id === value);
+                      if (t) loadDynamicTemplate(t);
+                    }}
                   >
                     <SelectTrigger className="w-full h-10">
-                      <SelectValue placeholder="Select Template" />
+                      <SelectValue placeholder={templatesLoading ? "Fetching..." : "Select Template"} />
                     </SelectTrigger>
                     <SelectContent>
-                      {Object.keys(QUOTATION_TEMPLATES).map((key) => (
-                        <SelectItem key={key} value={key}>
-                          {QUOTATION_TEMPLATES[key].details?.title || key}
+                      {templatesData?.map((t: QuotationTemplateData) => (
+                        <SelectItem key={t._id} value={t._id as string}>
+                          {t.name || t.details?.title}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -1160,6 +1194,14 @@ export default function QuotationBuilder({
                 disabled={isCreating || isUpdating || isSending}
               >
                 <Save className="w-4 h-4 mr-2" /> Save Internal Draft
+              </PrimaryButton>
+              <PrimaryButton
+                variant="outline"
+                className="w-full"
+                onClick={handleSaveTemplate}
+                disabled={isCreatingTemplate}
+              >
+                <Sparkles className="w-4 h-4 mr-2 text-primary" /> Save as Template
               </PrimaryButton>
             </div>
           </div>

@@ -107,9 +107,9 @@ export const sidebarGroups: SidebarGroup[] = [
                 access: [Role.SUPER_ADMIN, Role.ADMIN],
             },
             {
-                title: "Services",
-                url: "/services",
-                icon: IconPackage,
+                title: "Templates",
+                url: "/templates",
+                icon: IconBriefcase,
                 access: [Role.SUPER_ADMIN, Role.ADMIN],
             },
             {
