@@ -67,9 +67,35 @@ const DEFAULT_LOGO =
 const DEFAULT_SIGNATURE =
     'https://res.cloudinary.com/dny7zfbg9/image/upload/v1776961131/ouvycul8e7xskhrioca4.png';
 
+/** Tiny transparent PNG — last-resort if remote images fail to fetch. */
+const FALLBACK_PIXEL_PNG =
+    'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+
+async function fetchImageAsDataUrl(url: string): Promise<string | null> {
+    try {
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), 18_000);
+        const res = await fetch(url, { signal: ctrl.signal, redirect: 'follow' });
+        clearTimeout(timer);
+        if (!res.ok) return null;
+        const buf = Buffer.from(await res.arrayBuffer());
+        if (buf.length === 0) return null;
+        const ctRaw = (res.headers.get('content-type') || '').split(';')[0] ?? '';
+        const ct = ctRaw.trim() || 'image/png';
+        const safeCt = /^image\/[a-z0-9.+-]+$/i.test(ct) ? ct : 'image/png';
+        return `data:${safeCt};base64,${buf.toString('base64')}`;
+    } catch {
+        return null;
+    }
+}
+
 function buildPrintHtml(
     q: Record<string, any>,
-    ctx: { paymentClientBase: string; logoUrl: string; signatureUrl: string },
+    ctx: {
+        paymentClientBase: string;
+        logoSrc: string;
+        signatureSrc: string;
+    },
 ): string {
     const company = q.company || {};
     const client = q.client || {};
@@ -83,7 +109,6 @@ function buildPrintHtml(
 
     const currency = q.currency || 'BDT';
     const payLink = buildPaymentLink(q.secureToken, ctx.paymentClientBase);
-    const logoUrl = (company.logo as string) || ctx.logoUrl;
 
     const issueDate = details?.date
         ? format(new Date(details.date), 'PPP')
@@ -156,12 +181,6 @@ function buildPrintHtml(
         ? `ACCEPT & PAY ${firstMilestone.percentage}%`
         : 'ACCEPT QUOTATION';
 
-    const footerText = compactList([
-        company?.name ? String(company.name) : 'Company',
-        company?.email ? `— ${company.email}` : null,
-        company?.website ? `— ${company.website}` : null,
-    ]).join(' ');
-
     const serviceBadge =
         q.serviceType === 'web-development' ? 'WEB' : 'SERVICE';
     const statusUpper = q.status ? String(q.status).replace(/_/g, ' ').toUpperCase() : '';
@@ -171,7 +190,7 @@ function buildPrintHtml(
             (item, index) => `
         <tr class="${index % 2 ? 'tr-even' : ''}">
           <td class="td-no">${index + 1}</td>
-          <td>${esc(item.name)}</td>
+          <td class="td-name">${esc(item.name)}</td>
           <td class="td-num">${item.qty}</td>
           <td class="td-num">${item.rate > 0 ? formatMoneyPdf(item.rate, currency) : '—'}</td>
           <td class="td-num">${item.total > 0 ? formatMoneyPdf(item.total, currency) : '—'}</td>
@@ -243,9 +262,15 @@ function buildPrintHtml(
 
     const payButtons = payLink
         ? `
+      <a class="btn btn-proceed" href="${esc(payLink)}">Proceed to Payment</a>
       <a class="btn btn-primary" href="${esc(payLink)}">${esc(ctaPrimary)}</a>
-      <a class="btn btn-secondary" href="${esc(payLink)}">VIEW FULL QUOTATION</a>`
-        : `<span class="btn btn-primary btn-disabled">LINK PENDING</span>`;
+      <a class="btn btn-secondary" href="${esc(payLink)}">View full quotation</a>`
+        : `<span class="btn btn-proceed btn-disabled">Proceed to Payment</span>
+      <span class="btn btn-primary btn-disabled">LINK PENDING</span>`;
+
+    const signatureBlock = ctx.signatureSrc
+        ? `<img class="sig-img" src="${esc(ctx.signatureSrc)}" alt="" width="200" height="48" />`
+        : `<div class="sig-img-spacer" aria-hidden="true"></div>`;
 
     return `<!DOCTYPE html>
 <html lang="en">
@@ -267,23 +292,36 @@ function buildPrintHtml(
     * { box-sizing: border-box; margin: 0; }
     body {
       font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      font-size: 9.5px;
-      line-height: 1.5;
+      font-size: 11px;
+      line-height: 1.55;
       color: var(--slate700);
       background: #fff;
     }
-    .page-pad { padding: 0 2mm; }
+    .page-pad { padding: 0 3mm 4mm 3mm; }
     .header-row {
       display: flex;
       justify-content: space-between;
       align-items: flex-start;
       margin-bottom: 8px;
     }
-    .logo-box { width: 120px; height: 44px; display: flex; align-items: center; }
-    .logo-box img { max-width: 100%; max-height: 44px; object-fit: contain; }
+    .logo-box {
+      width: 152px;
+      height: 52px;
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      flex-shrink: 0;
+    }
+    .logo-box img {
+      display: block;
+      width: 148px;
+      height: 48px;
+      object-fit: contain;
+      object-position: left center;
+    }
     .header-right { text-align: right; }
     .h-title {
-      font-size: 22px;
+      font-size: 24px;
       font-weight: 800;
       letter-spacing: 0.08em;
       background: linear-gradient(180deg, var(--violet-light), var(--violet-deep));
@@ -299,109 +337,156 @@ function buildPrintHtml(
       border-radius: 2px;
       background: linear-gradient(90deg, var(--violet-light), var(--violet-deep));
     }
-    .meta { font-size: 9px; color: var(--slate500); margin-bottom: 2px; }
+    .meta { font-size: 10px; color: var(--slate500); margin-bottom: 3px; }
     .meta strong { color: var(--slate900); font-weight: 700; }
-    .divider { height: 1px; background: var(--slate100); margin: 16px 0; }
+    .divider { height: 1px; background: var(--slate100); margin: 18px 0 20px; }
     .billing { display: flex; justify-content: space-between; margin-bottom: 20px; }
     .bill-col { width: 48%; }
     .bill-col.r { text-align: right; }
     .lbl {
-      font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.14em;
-      color: var(--accent-mid); margin-bottom: 6px;
+      font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.12em;
+      color: var(--accent-mid); margin-bottom: 8px;
     }
-    .bill-name { font-size: 10.5px; font-weight: 700; color: var(--slate900); margin-bottom: 3px; }
-    .bill-txt { font-size: 9px; color: var(--slate500); line-height: 1.45; margin-bottom: 1px; }
+    .bill-name { font-size: 12px; font-weight: 700; color: var(--slate900); margin-bottom: 4px; }
+    .bill-txt { font-size: 10.5px; color: var(--slate500); line-height: 1.5; margin-bottom: 3px; }
     .sec {
-      font-size: 10px; font-weight: 700; color: var(--slate900);
-      letter-spacing: 0.08em; text-transform: uppercase; margin-top: 18px; margin-bottom: 8px;
+      font-size: 11.5px; font-weight: 800; color: var(--slate900);
+      letter-spacing: 0.1em; text-transform: uppercase; margin-top: 22px; margin-bottom: 10px;
+      page-break-after: avoid;
+      break-after: avoid-page;
     }
     .card {
-      border: 1px solid var(--slate100); border-radius: 6px; padding: 12px;
-      background: #fff; margin-bottom: 6px;
+      border: 1px solid var(--slate100); border-radius: 8px; padding: 14px 16px;
+      background: #fff; margin-bottom: 8px;
     }
     .card-soft { background: var(--slate50); }
-    .proj-title { font-size: 13px; font-weight: 700; color: var(--slate900); margin-bottom: 6px; }
+    .proj-title { font-size: 15px; font-weight: 800; color: var(--slate900); margin-bottom: 8px; }
     .badges { display: flex; flex-wrap: wrap; gap: 6px; }
     .badge {
-      border: 1px solid var(--slate100); border-radius: 4px; padding: 2px 7px;
-      background: var(--slate50); font-size: 7.5px; font-weight: 700;
+      border: 1px solid var(--slate100); border-radius: 4px; padding: 3px 8px;
+      background: var(--slate50); font-size: 8.5px; font-weight: 700;
       color: var(--slate500); text-transform: uppercase; letter-spacing: 0.04em;
     }
+    .scope-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      margin-bottom: 4px;
+    }
     .scope-card {
-      border: 1px solid var(--slate100); border-radius: 6px; padding: 12px; margin-bottom: 6px;
+      border: 1px solid var(--slate100); border-radius: 8px; padding: 14px 16px;
+      margin-bottom: 0;
       page-break-inside: avoid;
     }
-    .scope-h { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; font-size: 10px; color: var(--slate900); }
-    .scope-count { font-size: 8px; color: var(--slate500); }
-    .scope-desc { font-size: 9px; color: var(--slate500); margin-bottom: 6px; }
-    .bullet { display: flex; gap: 6px; margin-bottom: 3px; font-size: 9px; }
+    .scope-h { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 8px; font-size: 12px; font-weight: 700; color: var(--slate900); }
+    .scope-count { font-size: 10px; color: var(--slate500); flex-shrink: 0; }
+    .scope-desc { font-size: 10.5px; color: var(--slate500); margin-bottom: 10px; line-height: 1.5; }
+    .bullet { display: flex; gap: 8px; margin-bottom: 5px; font-size: 10.5px; line-height: 1.45; }
     .dot { color: var(--accent-mid); font-weight: 700; width: 10px; flex-shrink: 0; }
-    table.svc { width: 100%; border-collapse: collapse; font-size: 9px; margin-top: 4px; }
+    table.svc { width: 100%; border-collapse: collapse; font-size: 10.5px; margin-top: 0; table-layout: fixed; }
     table.svc th {
-      text-align: left; font-size: 8px; text-transform: uppercase; letter-spacing: 0.08em;
+      text-align: left; font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em;
       color: var(--slate500); background: var(--slate50); border-bottom: 1px solid var(--slate100);
-      padding: 6px 8px;
+      padding: 10px 12px;
     }
     table.svc td {
-      border-bottom: 1px solid var(--slate100); padding: 6px 8px; vertical-align: top;
+      border-bottom: 1px solid var(--slate100); padding: 10px 12px; vertical-align: top;
+      word-wrap: break-word;
+      overflow-wrap: break-word;
     }
     .tr-even { background: #fafafa; }
-    .td-no { width: 28px; }
-    .td-num { text-align: right; white-space: nowrap; }
+    .td-no { width: 40px; text-align: center; }
+    .td-name { width: auto; }
+    .td-num { width: 13%; text-align: right; white-space: nowrap; }
     .tags { display: flex; flex-wrap: wrap; gap: 5px; }
     .tag {
-      font-size: 8px; color: var(--slate700); background: var(--slate50);
+      font-size: 9.5px; color: var(--slate700); background: var(--slate50);
       border: 1px solid var(--slate100); border-radius: 4px; padding: 3px 7px;
     }
     .workflow { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
-    .wf-step { display: flex; align-items: center; gap: 4px; margin-bottom: 4px; }
+    .wf-step { display: flex; align-items: flex-start; gap: 6px; margin-bottom: 6px; }
     .wf-num {
-      width: 16px; height: 16px; border-radius: 50%; color: #fff; font-size: 7px; font-weight: 800;
+      width: 18px; height: 18px; border-radius: 50%; color: #fff; font-size: 8px; font-weight: 800;
       display: inline-flex; align-items: center; justify-content: center;
       background: linear-gradient(135deg, var(--violet-light), var(--violet-deep));
     }
-    .wf-txt { font-size: 8.5px; color: var(--slate700); max-width: 140px; }
+    .wf-txt { font-size: 10px; color: var(--slate700); max-width: 200px; line-height: 1.4; }
     .wf-arrow { color: var(--slate300); font-size: 9px; }
-    .pricing { border-radius: 6px; overflow: hidden; border: 1px solid var(--slate100); page-break-inside: avoid; }
+    .pricing { border-radius: 8px; overflow: hidden; border: 1px solid var(--slate100); page-break-inside: avoid; margin-bottom: 4px; }
     .pricing-h {
-      padding: 8px 12px;
+      padding: 12px 16px;
       background: linear-gradient(90deg, var(--violet-light), var(--violet-deep));
-      color: #fff; font-size: 9px; font-weight: 700; letter-spacing: 0.06em;
+      color: #fff; font-size: 11px; font-weight: 800; letter-spacing: 0.07em;
     }
-    .pricing-b { padding: 10px 12px; }
-    .pr-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 9px; }
-    .pr-row-last { border-bottom: 1px solid var(--slate100); margin-bottom: 6px; padding-bottom: 8px; }
+    .pricing-b { padding: 14px 16px 16px; }
+    .pr-row { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; padding: 8px 0; font-size: 10.5px; }
+    .pr-row span:first-child { flex: 1; }
+    .pr-row span:last-child { font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+    .pr-row-last { border-bottom: 1px solid var(--slate100); margin-bottom: 10px; padding-bottom: 12px; }
     .discount { color: #dc2626; }
-    .pr-total { display: flex; justify-content: space-between; padding-top: 8px; font-weight: 800; font-size: 12px; color: var(--slate900); }
-    .ms { border: 1px solid var(--slate100); border-radius: 6px; overflow: hidden; page-break-inside: avoid; }
-    .ms-row { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-bottom: 1px solid var(--slate100); font-size: 9px; }
+    .pr-total { display: flex; justify-content: space-between; align-items: baseline; padding-top: 12px; font-weight: 800; font-size: 14px; color: var(--slate900); gap: 16px; }
+    .payment-block {
+      page-break-inside: avoid;
+      margin-top: 4px;
+      margin-bottom: 8px;
+    }
+    .ms { border: 1px solid var(--slate100); border-radius: 8px; overflow: hidden; }
+    .ms-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 14px;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--slate100);
+      font-size: 10.5px;
+      min-height: 44px;
+    }
     .ms-last { border-bottom: none; }
     .ms-badge {
-      min-width: 36px; text-align: center; font-weight: 800;
+      min-width: 44px; text-align: center; font-weight: 800;
       color: var(--accent-mid); background: rgba(168, 85, 247, 0.12); border-radius: 4px; padding: 2px 6px;
     }
-    .ms-label { flex: 1; color: var(--slate700); }
-    .ms-amt { font-weight: 700; color: var(--slate900); }
+    .ms-label { flex: 1; color: var(--slate700); line-height: 1.45; padding-top: 2px; }
+    .ms-amt { font-weight: 800; color: var(--slate900); white-space: nowrap; font-variant-numeric: tabular-nums; padding-top: 2px; }
     .trust {
-      margin-top: 14px; padding: 12px; border-radius: 6px;
+      margin-top: 18px; padding: 14px 16px; border-radius: 8px;
       background: rgba(168, 85, 247, 0.08); border: 1px solid rgba(139, 92, 246, 0.25);
       page-break-inside: avoid;
     }
-    .trust h4 { font-size: 9px; font-weight: 800; color: var(--violet-deep); margin-bottom: 6px; letter-spacing: 0.04em; }
-    .trust p { font-size: 9px; color: var(--slate700); line-height: 1.55; }
+    .trust h4 { font-size: 11px; font-weight: 800; color: var(--violet-deep); margin-bottom: 8px; letter-spacing: 0.04em; }
+    .trust p { font-size: 10.5px; color: var(--slate700); line-height: 1.6; }
     .cta {
-      display: flex; gap: 16px; margin-top: 16px; align-items: flex-start;
-      border: 1px solid var(--slate100); border-radius: 8px; padding: 14px;
-      background: linear-gradient(180deg, #faf5ff 0%, #fff 40%);
+      display: flex;
+      flex-direction: row;
+      flex-wrap: wrap;
+      gap: 20px;
+      margin-top: 20px;
+      align-items: stretch;
+      border: 1px solid var(--slate100); border-radius: 10px; padding: 18px 20px;
+      background: linear-gradient(180deg, #faf5ff 0%, #fff 45%);
       page-break-inside: avoid;
     }
-    .cta-l { flex: 1; }
-    .cta-r { display: flex; flex-direction: column; gap: 8px; align-items: stretch; min-width: 200px; }
-    .cta-h { font-size: 9px; font-weight: 800; letter-spacing: 0.1em; color: var(--violet-deep); margin-bottom: 6px; }
-    .cta-d { font-size: 9px; color: var(--slate500); margin-bottom: 4px; line-height: 1.45; }
+    .cta-l { flex: 1 1 220px; min-width: 200px; }
+    .cta-r {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      align-items: stretch;
+      flex: 0 1 240px;
+      min-width: 200px;
+    }
+    .cta-h { font-size: 11px; font-weight: 800; letter-spacing: 0.08em; color: var(--violet-deep); margin-bottom: 8px; }
+    .cta-d { font-size: 10.5px; color: var(--slate500); margin-bottom: 6px; line-height: 1.5; }
     .btn {
-      display: inline-block; text-align: center; text-decoration: none;
-      padding: 10px 14px; border-radius: 6px; font-size: 8px; font-weight: 800; letter-spacing: 0.06em;
+      display: block; text-align: center; text-decoration: none;
+      padding: 12px 16px; border-radius: 8px; font-size: 10px; font-weight: 800; letter-spacing: 0.05em;
+      line-height: 1.25;
+    }
+    .btn-proceed {
+      color: #fff;
+      background: linear-gradient(135deg, #9333ea, var(--violet-deep));
+      box-shadow: 0 4px 14px rgba(79, 70, 229, 0.35);
+      font-size: 11px;
+      padding: 14px 18px;
     }
     .btn-primary {
       color: #fff;
@@ -409,21 +494,26 @@ function buildPrintHtml(
       box-shadow: 0 2px 8px rgba(79, 70, 229, 0.25);
     }
     .btn-secondary {
-      color: #5b21b6; border: 1px solid #c4b5fd; background: #fff;
+      color: #5b21b6; border: 1px solid #c4b5fd; background: #fff; font-weight: 700;
     }
-    .btn-disabled { opacity: 0.7; cursor: default; }
-    .sig-wrap { margin-top: 20px; page-break-inside: avoid; }
-    .sig-row { display: flex; justify-content: space-between; gap: 24px; }
-    .sig-block { flex: 1; }
-    .sig-block img { max-height: 36px; object-fit: contain; display: block; margin-bottom: 4px; }
-    .sig-line { border-bottom: 1px solid var(--slate900); margin-bottom: 6px; max-width: 220px; }
-    .sig-name { font-size: 10px; font-weight: 700; color: var(--slate900); }
-    .sig-role { font-size: 8px; color: var(--slate500); margin-top: 2px; }
-    .spacer36 { height: 36px; }
-    .foot {
-      margin-top: 24px; padding-top: 10px; border-top: 1px solid var(--slate100);
-      font-size: 8px; color: var(--slate500); text-align: center;
+    .btn-disabled { opacity: 0.65; cursor: default; pointer-events: none; }
+    .sig-wrap {
+      margin-top: 28px;
+      page-break-inside: avoid;
+      max-width: 320px;
     }
+    .sig-img {
+      display: block;
+      width: 200px;
+      height: 48px;
+      object-fit: contain;
+      object-position: left bottom;
+      margin-bottom: 6px;
+    }
+    .sig-img-spacer { height: 40px; margin-bottom: 6px; }
+    .sig-line { border-bottom: 1px solid var(--slate900); margin-bottom: 8px; width: 100%; max-width: 260px; }
+    .sig-name { font-size: 11.5px; font-weight: 800; color: var(--slate900); }
+    .sig-role { font-size: 10px; color: var(--slate500); margin-top: 4px; line-height: 1.4; }
   </style>
 </head>
 <body>
@@ -431,7 +521,7 @@ function buildPrintHtml(
 
   <div class="header-row">
     <div class="logo-box">
-      <img src="${esc(logoUrl)}" alt="Logo" crossorigin="anonymous" />
+      <img src="${esc(ctx.logoSrc)}" alt="WebBriks" width="148" height="48" />
     </div>
     <div class="header-right">
       <div class="h-title">QUOTATION</div>
@@ -474,14 +564,14 @@ function buildPrintHtml(
 
   ${
       q.overview
-          ? `<div class="sec">Overview</div><div class="card card-soft"><div class="bill-txt" style="font-size:9.5px;color:var(--slate700);line-height:1.55;">${esc(q.overview).replace(/\n/g, '<br/>')}</div></div>`
+          ? `<div class="sec">Overview</div><div class="card card-soft"><div class="bill-txt" style="font-size:10.5px;color:var(--slate700);line-height:1.6;">${esc(q.overview).replace(/\n/g, '<br/>')}</div></div>`
           : ''
   }
 
   ${
       phases.length
           ? `<div class="sec">Project Scope</div>
-    ${phasesHtml}`
+    <div class="scope-stack">${phasesHtml}</div>`
           : ''
   }
 
@@ -491,7 +581,7 @@ function buildPrintHtml(
       <thead>
         <tr>
           <th class="td-no">No.</th>
-          <th>Service</th>
+          <th class="td-name">Service</th>
           <th class="td-num">Qty</th>
           <th class="td-num">Rate</th>
           <th class="td-num">Total</th>
@@ -516,8 +606,10 @@ function buildPrintHtml(
     </div>
   </div>
 
+  <div class="payment-block">
   <div class="sec">Payment Terms</div>
   <div class="ms">${milestonesHtml}</div>
+  </div>
 
   <div class="trust">
     <h4>Why partner with us</h4>
@@ -536,23 +628,11 @@ function buildPrintHtml(
   </div>
 
   <div class="sig-wrap">
-    <div class="sig-row">
-      <div class="sig-block">
-        <img src="${esc(ctx.signatureUrl)}" alt="Signature" crossorigin="anonymous" />
-        <div class="sig-line"></div>
-        <div class="sig-name">Md. Ashaduzzaman</div>
-        <div class="sig-role">Founder &amp; CEO, ${esc(company?.name || 'Company')}</div>
-      </div>
-      <div class="sig-block">
-        <div class="spacer36"></div>
-        <div class="sig-line"></div>
-        <div class="sig-name">${esc(client.contactName)}</div>
-        <div class="sig-role">Client signature</div>
-      </div>
-    </div>
+    ${signatureBlock}
+    <div class="sig-line"></div>
+    <div class="sig-name">Md. Ashaduzzaman</div>
+    <div class="sig-role">Founder &amp; CEO, ${esc(company?.name || 'WebBriks')}</div>
   </div>
-
-  <div class="foot">${esc(footerText)}</div>
 
 </div>
 </body>
@@ -567,11 +647,18 @@ export class QuotationPuppeteerPdfService {
         if (!q) throw new AppError('Quotation not found', 404);
 
         const signatureUrl = process.env.COMPANY_SIGNATURE_URL || DEFAULT_SIGNATURE;
+        const companyLogoRemote = ((q as any).company?.logo as string) || DEFAULT_LOGO;
+
+        let logoSrc =
+            (await fetchImageAsDataUrl(companyLogoRemote)) || (await fetchImageAsDataUrl(DEFAULT_LOGO));
+        if (!logoSrc) logoSrc = FALLBACK_PIXEL_PNG;
+
+        let signatureSrc = (await fetchImageAsDataUrl(signatureUrl)) || '';
 
         const html = buildPrintHtml(q as Record<string, any>, {
             paymentClientBase: envConfig.payment_client_url,
-            logoUrl: DEFAULT_LOGO,
-            signatureUrl,
+            logoSrc,
+            signatureSrc,
         });
 
         let browser: Awaited<ReturnType<typeof puppeteer.launch>> | undefined;
@@ -605,10 +692,17 @@ export class QuotationPuppeteerPdfService {
                 printBackground: true,
                 displayHeaderFooter: true,
                 headerTemplate: '<div></div>',
-                footerTemplate: `<div style="width:100%;font-size:8px;color:#64748b;text-align:center;font-family:system-ui,sans-serif;padding-top:4px;">
-  Page <span class="pageNumber"></span> of <span class="totalPages"></span>
+                footerTemplate: `<div style="width:100%;margin:0;padding:0 10mm 6mm;box-sizing:border-box;border-top:1px solid #cbd5e1;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;">
+  <div style="text-align:center;padding-top:8px;">
+    <div style="font-size:10.5px;font-weight:600;color:#334155;">
+      WebBriks — <a href="mailto:info@webbriks.com" style="color:#4F46E5;text-decoration:none;">info@webbriks.com</a> — <a href="https://www.webbriks.com" style="color:#4F46E5;text-decoration:none;">www.webbriks.com</a>
+    </div>
+    <div style="font-size:9.5px;color:#64748b;margin-top:6px;">
+      Page <span class="pageNumber"></span> of <span class="totalPages"></span>
+    </div>
+  </div>
 </div>`,
-                margin: { top: '12mm', bottom: '18mm', left: '10mm', right: '10mm' },
+                margin: { top: '12mm', bottom: '22mm', left: '10mm', right: '10mm' },
             });
             const rawName = `${(q as any).quotationNumber || (q as any).details?.title || 'quotation'}.pdf`;
             const filename = rawName.replace(/[/\\?%*:|"<>]/g, '-');
