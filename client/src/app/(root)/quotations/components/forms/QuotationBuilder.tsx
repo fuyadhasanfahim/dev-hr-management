@@ -27,7 +27,6 @@ import {
   useSendQuotationMutation,
   useUpdateQuotationMutation,
   useGetQuotationTemplatesQuery,
-  useCreateQuotationTemplateMutation,
   QuotationTemplateData,
 } from "@/redux/features/quotation/quotationApi";
 import { toast } from "sonner";
@@ -277,7 +276,6 @@ export default function QuotationBuilder({
   const [updateQuotation, { isLoading: isUpdating }] = useUpdateQuotationMutation();
   const [sendQuotation, { isLoading: isSending }] = useSendQuotationMutation();
   const { data: templatesData, isLoading: templatesLoading } = useGetQuotationTemplatesQuery();
-  const [createQuotationTemplate, { isLoading: isCreatingTemplate }] = useCreateQuotationTemplateMutation();
 
   const [recipientModalOpen, setRecipientModalOpen] = useState(false);
 
@@ -321,29 +319,6 @@ export default function QuotationBuilder({
     }
   };
 
-  const handleSaveTemplate = async () => {
-    const templateName = window.prompt("Enter a name for this template:", data.details.title || "New Template");
-    if (!templateName) return;
-
-    try {
-      const templateData = {
-        name: templateName,
-        details: { title: data.details.title || templateName },
-        overview: data.overview,
-        phases: data.phases,
-        techStack: data.techStack,
-        pricing: data.pricing,
-        additionalServices: data.additionalServices,
-        workflow: data.workflow,
-        paymentMilestones: data.paymentMilestones,
-      };
-      await createQuotationTemplate(templateData).unwrap();
-      toast.success("Quotation template saved successfully!");
-    } catch (err: unknown) {
-      const maybe = err as { data?: { message?: string } } | null;
-      toast.error(maybe?.data?.message || "Failed to save template");
-    }
-  };
 
   const openRecipientPicker = () => {
     if (!data.clientId) return toast.error("Please select a client first");
@@ -1196,14 +1171,7 @@ export default function QuotationBuilder({
               >
                 <Save className="w-4 h-4" /> Save Internal Draft
               </PrimaryButton>
-              <PrimaryButton
-                variant="outline"
-                className="w-full"
-                onClick={handleSaveTemplate}
-                disabled={isCreatingTemplate}
-              >
-                <Sparkles className="w-4 h-4 text-primary" /> Save as Template
-              </PrimaryButton>
+
             </div>
           </div>
         </div>
