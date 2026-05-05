@@ -174,10 +174,7 @@ export const QuotationPDF = ({ data }: QuotationPDFProps) => {
 
     return (
         <Document>
-            <Page size="A4" style={styles.page}>
-                {/* Top Bar */}
-                <View style={styles.topBar} fixed />
-
+            <Page size="A4" style={styles.page} wrap>
                 {/* Header (only on first page) */}
                 <View style={styles.headerContainer}>
                     <View style={styles.logoContainer}>
@@ -190,105 +187,74 @@ export const QuotationPDF = ({ data }: QuotationPDFProps) => {
                             Quotation No: {data.quotationNumber || 'TBD'}
                         </Text>
                         <Text style={styles.headerDetailText}>
-                            Date: {issueDate}
+                            Date: <Text style={styles.headerHighlightText}>{issueDate}</Text>
                         </Text>
                         <Text style={styles.headerDetailText}>
                             Valid Until:{' '}
-                            {details?.validUntil
-                                ? format(new Date(details.validUntil), 'PPP')
-                                : '—'}
+                            <Text style={styles.headerHighlightText}>
+                                {details?.validUntil
+                                    ? format(new Date(details.validUntil), 'PPP')
+                                    : '—'}
+                            </Text>
                         </Text>
                     </View>
                 </View>
 
+                <View style={styles.divider} />
+
                 {/* Bill From / To */}
                 <View style={styles.addressContainer} wrap={false}>
                     <View style={styles.addressBox}>
-                        <View
-                            style={[styles.accentBar, styles.billFromAccent]}
-                        />
-                        <View
-                            style={[styles.addressContent, styles.billFromBox]}
-                        >
-                            <Text
-                                style={[styles.boxTitle, styles.billFromText]}
-                            >
-                                BILL FROM
+                        <Text style={styles.boxTitle}>
+                            BILL FROM
+                        </Text>
+                        <Text style={styles.boxTextStrong}>
+                            {company?.name || 'Company'}
+                        </Text>
+                        {company?.address ? (
+                            <Text style={styles.boxText}>
+                                {company.address}
                             </Text>
-                            <Text style={[styles.boxText, styles.billFromText]}>
-                                {company?.name || 'Company'}
+                        ) : null}
+                        {company?.email ? (
+                            <Text style={styles.boxText}>
+                                {company.email}
                             </Text>
-                            {company?.address ? (
-                                <Text
-                                    style={[
-                                        styles.boxText,
-                                        styles.billFromText,
-                                    ]}
-                                >
-                                    {company.address}
-                                </Text>
-                            ) : null}
-                            {company?.email ? (
-                                <Text
-                                    style={[
-                                        styles.boxText,
-                                        styles.billFromText,
-                                    ]}
-                                >
-                                    {company.email}
-                                </Text>
-                            ) : null}
-                            {company?.phone ? (
-                                <Text
-                                    style={[
-                                        styles.boxText,
-                                        styles.billFromText,
-                                    ]}
-                                >
-                                    {company.phone}
-                                </Text>
-                            ) : null}
-                        </View>
+                        ) : null}
+                        {company?.phone ? (
+                            <Text style={styles.boxText}>
+                                {company.phone}
+                            </Text>
+                        ) : null}
                     </View>
 
-                    <View style={styles.addressBox}>
-                        <View style={[styles.accentBar, styles.billToAccent]} />
-                        <View style={[styles.addressContent, styles.billToBox]}>
-                            <Text style={[styles.boxTitle, styles.billToText]}>
-                                BILL TO
+                    <View style={[styles.addressBox, { alignItems: 'flex-end', textAlign: 'right' }]}>
+                        <Text style={styles.boxTitle}>
+                            BILL TO
+                        </Text>
+                        <Text style={styles.boxTextStrong}>
+                            {client.contactName}
+                        </Text>
+                        {client.companyName ? (
+                            <Text style={styles.boxText}>
+                                {client.companyName}
                             </Text>
-                            <Text style={[styles.boxText, styles.billToText]}>
-                                {client.contactName}
+                        ) : null}
+                        {client.address ? (
+                            <Text style={styles.boxText}>
+                                {client.address}
                             </Text>
-                            {client.companyName ? (
-                                <Text
-                                    style={[styles.boxText, styles.billToText]}
-                                >
-                                    {client.companyName}
-                                </Text>
-                            ) : null}
-                            {client.address ? (
-                                <Text
-                                    style={[styles.boxText, styles.billToText]}
-                                >
-                                    {client.address}
-                                </Text>
-                            ) : null}
-                            {client.email ? (
-                                <Text
-                                    style={[styles.boxText, styles.billToText]}
-                                >
-                                    {client.email}
-                                </Text>
-                            ) : null}
-                            {client.phone ? (
-                                <Text
-                                    style={[styles.boxText, styles.billToText]}
-                                >
-                                    {client.phone}
-                                </Text>
-                            ) : null}
-                        </View>
+                        ) : null}
+                        {client.email ? (
+                            <Text style={styles.boxText}>
+                                {client.email}
+                            </Text>
+                        ) : null}
+                        {client.phone ? (
+                            <Text style={styles.boxText}>
+                                {client.phone}
+                            </Text>
+                        ) : null}
                     </View>
                 </View>
 
@@ -387,7 +353,7 @@ export const QuotationPDF = ({ data }: QuotationPDFProps) => {
 
                 {/* Services Table */}
                 <Text style={styles.sectionTitle}>Services</Text>
-                <View style={styles.tableContainer}>
+                <View style={styles.tableContainer} wrap>
                     {/* Keep the header attached to the first row to prevent orphaned headers */}
                     <View wrap={false}>
                         <TableHeader />
@@ -455,8 +421,9 @@ export const QuotationPDF = ({ data }: QuotationPDFProps) => {
                 ) : null}
 
                 {/* Pricing Breakdown */}
-                <Text style={styles.sectionTitle}>Pricing</Text>
-                <View style={styles.pricingBox} wrap={false}>
+                <View wrap={false}>
+                    <Text style={styles.sectionTitle}>Pricing</Text>
+                    <View style={styles.pricingBox}>
                     <View style={styles.pricingHeader}>
                         <Text style={styles.pricingHeaderText}>
                             Pricing breakdown
@@ -505,32 +472,32 @@ export const QuotationPDF = ({ data }: QuotationPDFProps) => {
                             </Text>
                         </View>
                     </View>
+                    </View>
                 </View>
 
                 {/* Payment Terms (dynamic milestones) */}
                 <Text style={styles.sectionTitle}>Payment terms</Text>
                 <View style={styles.paymentPlanBox} wrap={false}>
-                    <View style={styles.paymentPlanHeader}>
-                        <Text style={styles.paymentPlanHeaderText}>
-                            Milestone payment plan
-                        </Text>
-                    </View>
                     {milestones.map((m, idx) => {
-                        const isLast = idx === milestones.length - 1;
-                        const amount =
-                            (pricingTotal * (m.percentage || 0)) / 100;
-                        return (
-                            <View
-                                key={`${idx}-${m.label}`}
-                                style={
-                                    isLast
-                                        ? styles.paymentMilestoneRowLast
-                                        : styles.paymentMilestoneRow
-                                }
-                            >
-                                <Text style={styles.paymentMilestoneLabel}>
-                                    {m.percentage}% — {m.label}
-                                </Text>
+                                const isLast = idx === milestones.length - 1;
+                                const amount =
+                                    (pricingTotal * (m.percentage || 0)) / 100;
+                                return (
+                                    <View
+                                        key={`${idx}-${m.label}`}
+                                        style={
+                                            isLast
+                                                ? styles.paymentMilestoneRowLast
+                                                : styles.paymentMilestoneRow
+                                        }
+                                        wrap={false}
+                                    >
+                                        <Text style={styles.milestoneBadge}>
+                                            {m.percentage}%
+                                        </Text>
+                                        <Text style={styles.paymentMilestoneLabel}>
+                                            {m.label}
+                                        </Text>
                                 <Text style={styles.paymentMilestoneValue}>
                                     {formatMoney(amount, currency)}
                                 </Text>

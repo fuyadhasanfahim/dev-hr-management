@@ -25,7 +25,7 @@ const SLATE_50 = '#f8fafc';
 const styles = StyleSheet.create({
     page: {
         paddingTop: 36,
-        paddingBottom: 48,
+        paddingBottom: 64,
         paddingHorizontal: 36,
         fontSize: 10.5,
         fontFamily: 'Helvetica',
@@ -405,27 +405,29 @@ export function QuotationPdf({
                             <View
                                 key={`phase-${idx}`}
                                 style={[styles.card, { marginBottom: 8 }]}
-                                wrap={false}
+                                wrap
                             >
-                                <Text style={styles.phaseHeading}>
-                                    Phase {idx + 1}: {safeText(p?.title || 'Untitled')}
-                                </Text>
-                                {(p?.startDate || p?.endDate) ? (
-                                    <Text style={styles.phaseSub}>
-                                        {p?.startDate ? formatDate(safeText(p.startDate)) : 'TBD'}
-                                        {' → '}
-                                        {p?.endDate ? formatDate(safeText(p.endDate)) : 'TBD'}
+                                <View wrap={false}>
+                                    <Text style={styles.phaseHeading}>
+                                        Phase {idx + 1}: {safeText(p?.title || 'Untitled')}
                                     </Text>
-                                ) : null}
-                                {p?.description ? (
-                                    <Text style={[styles.body, { marginBottom: 6 }]}>
-                                        {safeText(p.description)}
-                                    </Text>
-                                ) : null}
+                                    {(p?.startDate || p?.endDate) ? (
+                                        <Text style={styles.phaseSub}>
+                                            {p?.startDate ? formatDate(safeText(p.startDate)) : 'TBD'}
+                                            {' → '}
+                                            {p?.endDate ? formatDate(safeText(p.endDate)) : 'TBD'}
+                                        </Text>
+                                    ) : null}
+                                    {p?.description ? (
+                                        <Text style={[styles.body, { marginBottom: 6 }]}>
+                                            {safeText(p.description)}
+                                        </Text>
+                                    ) : null}
+                                </View>
                                 {Array.isArray(p?.items) && p.items.length ? (
                                     <View>
                                         {p.items.map((it, i2) => (
-                                            <View key={`item-${idx}-${i2}`} style={styles.listItem}>
+                                            <View key={`item-${idx}-${i2}`} style={styles.listItem} wrap={false}>
                                                 <Text style={styles.bullet}>•</Text>
                                                 <Text style={[styles.body, { flex: 1 }]}>
                                                     {safeText(it)}
@@ -440,10 +442,10 @@ export function QuotationPdf({
                 ) : null}
 
                 {/* PRICING BREAKDOWN */}
-                <View style={styles.section} wrap={false}>
+                <View style={styles.section} wrap>
                     <Text style={styles.sectionTitle}>Pricing Breakdown</Text>
-                    <View style={styles.card}>
-                        <View style={styles.pricingRow}>
+                    <View style={styles.card} wrap>
+                        <View style={styles.pricingRow} wrap={false}>
                             <Text style={styles.pricingLabel}>Base price</Text>
                             <Text style={styles.pricingValue}>{fmtMoney(basePrice, currency)}</Text>
                         </View>
@@ -451,7 +453,7 @@ export function QuotationPdf({
                         {additionalServices.length ? (
                             <>
                                 {additionalServices.map((s, i) => (
-                                    <View key={`add-${i}`} style={styles.pricingRow}>
+                                    <View key={`add-${i}`} style={styles.pricingRow} wrap={false}>
                                         <Text style={[styles.pricingLabel, { flex: 1 }]}>
                                             + {safeText(s.title)}
                                             {s.billingCycle
@@ -467,7 +469,7 @@ export function QuotationPdf({
                         ) : null}
 
                         {discountRate > 0 ? (
-                            <View style={styles.pricingRow}>
+                            <View style={styles.pricingRow} wrap={false}>
                                 <Text style={styles.pricingLabel}>
                                     Discount ({discountRate}%)
                                 </Text>
@@ -485,13 +487,13 @@ export function QuotationPdf({
                             }}
                         />
 
-                        <View style={styles.pricingRow}>
+                        <View style={styles.pricingRow} wrap={false}>
                             <Text style={styles.pricingLabel}>Subtotal (net)</Text>
                             <Text style={styles.pricingValue}>
                                 {fmtMoney(totals.subtotal, currency)}
                             </Text>
                         </View>
-                        <View style={styles.pricingRow}>
+                        <View style={styles.pricingRow} wrap={false}>
                             <Text style={styles.pricingLabel}>
                                 Tax ({taxRate}%)
                             </Text>
@@ -500,7 +502,7 @@ export function QuotationPdf({
                             </Text>
                         </View>
 
-                        <View style={styles.pricingTotalRow}>
+                        <View style={styles.pricingTotalRow} wrap={false}>
                             <Text style={styles.pricingTotalLabel}>Grand Total</Text>
                             <Text style={styles.pricingTotalValue}>
                                 {fmtMoney(grandTotal, currency)}
@@ -511,9 +513,9 @@ export function QuotationPdf({
 
                 {/* PAYMENT MILESTONES */}
                 {milestones.length ? (
-                    <View style={styles.section} wrap={false}>
+                    <View style={styles.section} wrap>
                         <Text style={styles.sectionTitle}>Payment Milestones</Text>
-                        <View style={styles.card}>
+                        <View style={styles.card} wrap>
                             {milestones.map((m, i) => {
                                 const isLast = i === milestones.length - 1;
                                 const amount = (grandTotal * (m.percentage || 0)) / 100;
@@ -521,6 +523,7 @@ export function QuotationPdf({
                                     <View
                                         key={`m-${i}`}
                                         style={isLast ? styles.milestoneRowLast : styles.milestoneRow}
+                                        wrap={false}
                                     >
                                         <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
                                             <Text style={styles.milestoneIndex}>{i + 1}</Text>
