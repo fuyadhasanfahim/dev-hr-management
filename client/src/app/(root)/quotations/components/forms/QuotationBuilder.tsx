@@ -269,6 +269,7 @@ export default function QuotationBuilder({
     updatePaymentMilestone,
     removePaymentMilestone,
     reset,
+    setData,
   } = useQuotationStore();
 
   const { data: clientsData, isLoading: clientsLoading } = useGetClientsQuery({});
@@ -306,10 +307,12 @@ export default function QuotationBuilder({
       const payload = { ...data, status };
       if (data._id) {
         const updated = await updateQuotation({ id: data._id, ...payload }).unwrap();
+        setData(updated);
         toast.success("Quotation updated successfully");
         return updated._id;
       } else {
         const created = await createQuotation(payload).unwrap();
+        setData(created);
         toast.success("Quotation created successfully");
         return created._id;
       }

@@ -1,222 +1,163 @@
 import { StyleSheet } from "@react-pdf/renderer";
 
+// ─── Design tokens ────────────────────────────────────────────────────────────
 const colors = {
   teal: "#0d9488",
+  tealLight: "#ccfbf1",
+  orange: "#f97316",
   slate900: "#0f172a",
   slate700: "#334155",
   slate500: "#64748b",
+  slate300: "#cbd5e1",
   slate100: "#f1f5f9",
   slate50: "#f8fafc",
-  white: "#FFFFFF",
-  border: "#e2e8f0",
-  accent: "#FF8A00", 
+  white: "#ffffff",
+  red500: "#ef4444",
 };
 
+// ─── Stylesheet ───────────────────────────────────────────────────────────────
 export const styles = StyleSheet.create({
+  // ── Page ──────────────────────────────────────────────────────────────────
   page: {
-    paddingTop: 36,
-    paddingBottom: 64,
+    paddingTop: 40,
+    paddingBottom: 70,
     paddingHorizontal: 40,
-    fontSize: 10,
+    fontSize: 9.5,
     fontFamily: "Helvetica",
     color: colors.slate700,
     lineHeight: 1.5,
     backgroundColor: colors.white,
   },
 
-  // Header Section
+  // ── Header ────────────────────────────────────────────────────────────────
   headerContainer: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
-    marginBottom: 24,
+    marginBottom: 8,
   },
   logoContainer: {
-    width: 140,
-    height: 50,
+    width: 120,
+    height: 44,
     justifyContent: "center",
   },
   logo: {
     width: "100%",
     objectFit: "contain",
   },
-  headerDetailsContainer: {
+  headerRight: {
     alignItems: "flex-end",
   },
   headerTitle: {
-    fontSize: 24,
+    fontSize: 22,
     fontFamily: "Helvetica-Bold",
     color: colors.slate900,
-    letterSpacing: 1,
-    marginBottom: 6,
+    letterSpacing: 1.5,
   },
-  titleUnderline: {
-    height: 3,
-    width: 60,
+  titleAccent: {
+    height: 2.5,
+    width: 50,
     backgroundColor: colors.teal,
+    marginTop: 8,
     marginBottom: 10,
   },
-  headerDetailText: {
-    fontSize: 9.5,
+  headerMeta: {
+    fontSize: 9,
     color: colors.slate500,
-    marginBottom: 3,
+    marginBottom: 2,
+    textAlign: "right",
   },
-  headerHighlightText: {
+  headerMetaStrong: {
     fontFamily: "Helvetica-Bold",
     color: colors.slate900,
   },
 
-  // Divider
+  // ── Divider ───────────────────────────────────────────────────────────────
   divider: {
     height: 1,
     backgroundColor: colors.slate100,
     marginVertical: 16,
   },
 
-  // Bill From / Bill To Section
-  addressContainer: {
+  // ── Billing ───────────────────────────────────────────────────────────────
+  billingRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    gap: 20,
     marginBottom: 20,
   },
-  addressBox: {
-    flex: 1,
+  billingCol: {
+    width: "48%",
   },
-  boxTitle: {
-    fontSize: 9,
+  billingColRight: {
+    width: "48%",
+    alignItems: "flex-end",
+  },
+  billingLabel: {
+    fontSize: 8,
     fontFamily: "Helvetica-Bold",
     color: colors.teal,
-    letterSpacing: 1.2,
+    letterSpacing: 1.4,
     textTransform: "uppercase",
     marginBottom: 6,
   },
-  boxTextStrong: {
-    fontSize: 11,
+  billingName: {
+    fontSize: 10.5,
     fontFamily: "Helvetica-Bold",
     color: colors.slate900,
-    marginBottom: 4,
+    marginBottom: 3,
   },
-  boxText: {
-    fontSize: 9.5,
-    color: colors.slate700,
-    marginBottom: 2,
-    lineHeight: 1.4,
+  billingText: {
+    fontSize: 9,
+    color: colors.slate500,
+    lineHeight: 1.45,
+    marginBottom: 1,
   },
 
-  // Section headings
+  // ── Section title ─────────────────────────────────────────────────────────
   sectionTitle: {
-    fontSize: 11,
+    fontSize: 10,
     fontFamily: "Helvetica-Bold",
     color: colors.slate900,
     letterSpacing: 0.8,
     textTransform: "uppercase",
-    marginTop: 20,
+    marginTop: 18,
     marginBottom: 8,
   },
-  sectionBox: {
+
+  // ── Card ───────────────────────────────────────────────────────────────────
+  card: {
     borderWidth: 1,
     borderColor: colors.slate100,
     borderRadius: 6,
     padding: 12,
     backgroundColor: colors.white,
   },
-  sectionText: {
-    fontSize: 10,
-    color: colors.slate700,
-    lineHeight: 1.5,
-  },
-
-  // Project title block
-  projectTitle: {
-    fontSize: 14,
-    fontFamily: "Helvetica-Bold",
-    color: colors.slate900,
-    marginBottom: 6,
-  },
-  projectMetaRow: {
-    flexDirection: "row",
-    gap: 8,
-    flexWrap: "wrap",
-  },
-  metaBadge: {
+  cardSoft: {
     borderWidth: 1,
     borderColor: colors.slate100,
-    borderRadius: 4,
-    paddingVertical: 3,
-    paddingHorizontal: 8,
+    borderRadius: 6,
+    padding: 12,
     backgroundColor: colors.slate50,
   },
-  metaBadgeText: {
-    fontSize: 8,
-    color: colors.slate700,
-    fontFamily: "Helvetica-Bold",
-  },
-
-  // Tags (tech stack)
-  tagsWrap: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-  },
-  tag: {
-    backgroundColor: colors.slate50,
-    borderWidth: 1,
-    borderColor: colors.slate100,
-    borderRadius: 4,
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    marginRight: 6,
-    marginBottom: 6,
-  },
-  tagText: {
-    fontSize: 8.5,
-    color: colors.slate700,
-  },
-
-  // Workflow inline
-  workflowInline: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    alignItems: "center",
-  },
-  workflowStep: {
-    marginRight: 6,
-    marginBottom: 6,
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  workflowStepText: {
+  bodyText: {
     fontSize: 9.5,
     color: colors.slate700,
-  },
-  workflowArrow: {
-    fontSize: 9,
-    color: colors.teal,
-    marginRight: 6,
-    marginBottom: 6,
+    lineHeight: 1.55,
   },
 
-  // Full scope cards
-  scopeCard: {
-    borderWidth: 1,
-    borderColor: colors.slate100,
-    borderRadius: 6,
-    padding: 12,
-    marginBottom: 8,
-    backgroundColor: colors.white,
-  },
-  scopeHeaderRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 4,
-  },
-  scopeTitle: {
-    fontSize: 11,
+  // ── Project ────────────────────────────────────────────────────────────────
+  projectTitle: {
+    fontSize: 13,
     fontFamily: "Helvetica-Bold",
     color: colors.slate900,
+    marginBottom: 6,
   },
-  scopeCountBadge: {
+  badgeRow: {
+    flexDirection: "row",
+    gap: 6,
+    flexWrap: "wrap",
+  },
+  badge: {
     borderWidth: 1,
     borderColor: colors.slate100,
     borderRadius: 4,
@@ -224,33 +165,62 @@ export const styles = StyleSheet.create({
     paddingHorizontal: 7,
     backgroundColor: colors.slate50,
   },
-  scopeCountBadgeText: {
-    fontSize: 8.5,
+  badgeText: {
+    fontSize: 7.5,
+    fontFamily: "Helvetica-Bold",
+    color: colors.slate500,
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
+  },
+
+  // ── Scope ──────────────────────────────────────────────────────────────────
+  scopeCard: {
+    borderWidth: 1,
+    borderColor: colors.slate100,
+    borderRadius: 6,
+    padding: 12,
+    marginBottom: 6,
+    backgroundColor: colors.white,
+  },
+  scopeHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 4,
+  },
+  scopeTitle: {
+    fontSize: 10,
+    fontFamily: "Helvetica-Bold",
+    color: colors.slate900,
+  },
+  scopeCount: {
+    fontSize: 8,
     color: colors.slate500,
   },
-  sectionSubText: {
-    fontSize: 9.5,
+  scopeDesc: {
+    fontSize: 9,
     color: colors.slate500,
-    marginBottom: 8,
+    marginBottom: 6,
   },
   bulletRow: {
     flexDirection: "row",
-    marginBottom: 4,
+    marginBottom: 3,
   },
   bulletDot: {
     width: 10,
-    fontSize: 10,
+    fontSize: 9,
     color: colors.teal,
+    fontFamily: "Helvetica-Bold",
   },
   bulletText: {
     flex: 1,
-    fontSize: 9.5,
+    fontSize: 9,
     color: colors.slate700,
+    lineHeight: 1.4,
   },
 
-  // Table Section
-  tableContainer: {
-    marginTop: 8,
+  // ── Services table ─────────────────────────────────────────────────────────
+  tableWrap: {
     borderWidth: 1,
     borderColor: colors.slate100,
     borderRadius: 6,
@@ -263,11 +233,12 @@ export const styles = StyleSheet.create({
     borderBottomColor: colors.slate100,
   },
   tableHeaderText: {
-    color: colors.slate500,
-    fontSize: 8.5,
+    fontSize: 8,
     fontFamily: "Helvetica-Bold",
+    color: colors.slate500,
     textTransform: "uppercase",
-    paddingVertical: 8,
+    letterSpacing: 0.5,
+    paddingVertical: 7,
     paddingHorizontal: 8,
   },
   tableRow: {
@@ -278,46 +249,95 @@ export const styles = StyleSheet.create({
   tableRowEven: {
     backgroundColor: colors.slate50,
   },
-  tableRowLast: {
-    flexDirection: "row",
-  },
   tableCell: {
-    fontSize: 9.5,
+    fontSize: 9,
     color: colors.slate700,
-    paddingVertical: 8,
+    paddingVertical: 7,
     paddingHorizontal: 8,
   },
-  tableCellStrong: {
-    color: colors.slate900,
-    fontFamily: "Helvetica-Bold",
-  },
-
-  // Column Widths
-  colNo: { width: "8%", textAlign: "center" },
-  colName: { width: "52%", textAlign: "left" },
+  colNo: { width: "7%", textAlign: "center" },
+  colName: { width: "53%", textAlign: "left" },
   colQty: { width: "10%", textAlign: "center" },
   colRate: { width: "15%", textAlign: "right" },
   colTotal: { width: "15%", textAlign: "right" },
 
-  // Pricing breakdown (compact table-like)
-  pricingBox: {
+  // ── Tags (tech stack) ──────────────────────────────────────────────────────
+  tagsWrap: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+  },
+  tag: {
+    backgroundColor: colors.slate50,
+    borderWidth: 1,
+    borderColor: colors.slate100,
+    borderRadius: 4,
+    paddingVertical: 3,
+    paddingHorizontal: 7,
+    marginRight: 5,
+    marginBottom: 5,
+  },
+  tagText: {
+    fontSize: 8,
+    color: colors.slate700,
+  },
+
+  // ── Workflow ────────────────────────────────────────────────────────────────
+  workflowRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "center",
+  },
+  workflowStep: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginRight: 4,
+    marginBottom: 5,
+  },
+  workflowNum: {
+    backgroundColor: colors.teal,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    marginRight: 4,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  workflowNumText: {
+    color: colors.white,
+    fontSize: 7,
+    fontFamily: "Helvetica-Bold",
+    textAlign: "center",
+  },
+  workflowText: {
+    fontSize: 8.5,
+    color: colors.slate700,
+    marginRight: 4,
+  },
+  workflowArrow: {
+    fontSize: 9,
+    color: colors.slate300,
+    marginRight: 4,
+    marginBottom: 5,
+  },
+
+  // ── Pricing ────────────────────────────────────────────────────────────────
+  pricingCard: {
     borderWidth: 1,
     borderColor: colors.slate100,
     borderRadius: 6,
     overflow: "hidden",
-    backgroundColor: colors.white,
   },
-  pricingHeader: {
+  pricingHeaderBar: {
     backgroundColor: colors.slate50,
-    paddingVertical: 8,
+    paddingVertical: 7,
     paddingHorizontal: 12,
     borderBottomWidth: 1,
     borderBottomColor: colors.slate100,
   },
   pricingHeaderText: {
-    fontSize: 9,
+    fontSize: 8.5,
     fontFamily: "Helvetica-Bold",
-    color: colors.slate700,
+    color: colors.slate500,
     textTransform: "uppercase",
     letterSpacing: 0.6,
   },
@@ -327,28 +347,31 @@ export const styles = StyleSheet.create({
   pricingRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    paddingVertical: 6,
+    paddingVertical: 5,
     borderBottomWidth: 1,
     borderBottomColor: colors.slate50,
   },
   pricingRowLast: {
     flexDirection: "row",
     justifyContent: "space-between",
-    paddingVertical: 6,
+    paddingVertical: 5,
   },
   pricingLabel: {
-    fontSize: 9.5,
-    color: colors.slate700,
+    fontSize: 9,
+    color: colors.slate500,
   },
   pricingValue: {
-    fontSize: 9.5,
-    color: colors.slate900,
+    fontSize: 9,
     fontFamily: "Helvetica-Bold",
+    color: colors.slate900,
+  },
+  pricingDiscount: {
+    color: colors.red500,
   },
   pricingTotalRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    paddingTop: 10,
+    paddingTop: 8,
     marginTop: 4,
     borderTopWidth: 1,
     borderTopColor: colors.slate100,
@@ -364,129 +387,130 @@ export const styles = StyleSheet.create({
     color: colors.teal,
   },
 
-  // Payment plan section
-  paymentPlanBox: {
+  // ── Payment milestones ─────────────────────────────────────────────────────
+  milestoneCard: {
     borderWidth: 1,
     borderColor: colors.slate100,
     borderRadius: 6,
     overflow: "hidden",
   },
-  paymentMilestoneRow: {
+  milestoneRow: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 10,
+    paddingVertical: 8,
     paddingHorizontal: 12,
     borderBottomWidth: 1,
     borderBottomColor: colors.slate50,
   },
-  paymentMilestoneRowLast: {
+  milestoneRowLast: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 10,
+    paddingVertical: 8,
     paddingHorizontal: 12,
   },
   milestoneBadge: {
     backgroundColor: colors.teal,
     color: colors.white,
-    fontSize: 8.5,
+    fontSize: 8,
     fontFamily: "Helvetica-Bold",
     paddingVertical: 2,
     paddingHorizontal: 6,
-    borderRadius: 4,
+    borderRadius: 3,
     marginRight: 10,
   },
-  paymentMilestoneLabel: {
+  milestoneLabel: {
     flex: 1,
-    fontSize: 9.5,
-    color: colors.slate900,
-  },
-  paymentMilestoneValue: {
-    fontSize: 9.5,
-    fontFamily: "Helvetica-Bold",
+    fontSize: 9,
     color: colors.slate700,
   },
-
-  // Pay Now Section
-  payNowSection: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginTop: 24,
-    borderWidth: 1,
-    borderColor: colors.slate100,
-    borderRadius: 6,
-    padding: 16,
-    backgroundColor: colors.slate50,
-  },
-  payNowTextContainer: {
-    flex: 1,
-    paddingRight: 20,
-  },
-  payNowHeading: {
-    fontSize: 10,
-    fontFamily: "Helvetica-Bold",
-    color: colors.teal,
-    letterSpacing: 0.5,
-    marginBottom: 4,
-  },
-  payNowDescription: {
+  milestoneAmount: {
     fontSize: 9,
-    color: colors.slate500,
-    lineHeight: 1.4,
-  },
-  payNowButtonContainer: {
-    width: 160,
-  },
-  payNowButton: {
-    backgroundColor: colors.teal,
-    paddingVertical: 10,
-    borderRadius: 4,
-  },
-  payNowSecondaryButton: {
-    borderWidth: 1,
-    borderColor: colors.teal,
-    paddingVertical: 8,
-    borderRadius: 4,
-    marginTop: 6,
-  },
-  payNowText: {
-    color: colors.white,
-    fontSize: 9.5,
     fontFamily: "Helvetica-Bold",
-    textAlign: "center",
-  },
-  payNowSecondaryText: {
-    color: colors.teal,
-    fontSize: 8.5,
-    fontFamily: "Helvetica-Bold",
-    textAlign: "center",
+    color: colors.slate900,
   },
 
-  // Trust statement
+  // ── Trust band ─────────────────────────────────────────────────────────────
   trustBand: {
     marginTop: 16,
     borderWidth: 1,
     borderColor: colors.slate100,
     borderRadius: 6,
-    backgroundColor: colors.white,
     padding: 12,
+    backgroundColor: colors.white,
   },
   trustTitle: {
-    fontSize: 9.5,
+    fontSize: 9,
     fontFamily: "Helvetica-Bold",
     color: colors.slate900,
-    marginBottom: 4,
+    marginBottom: 3,
   },
   trustText: {
-    fontSize: 9,
+    fontSize: 8.5,
     color: colors.slate500,
     lineHeight: 1.4,
   },
 
-  // Signature
+  // ── CTA / Pay Now ──────────────────────────────────────────────────────────
+  ctaSection: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: 20,
+    borderWidth: 1,
+    borderColor: colors.slate100,
+    borderRadius: 6,
+    padding: 14,
+    backgroundColor: colors.slate50,
+  },
+  ctaLeft: {
+    flex: 1,
+    paddingRight: 16,
+  },
+  ctaHeading: {
+    fontSize: 9.5,
+    fontFamily: "Helvetica-Bold",
+    color: colors.teal,
+    letterSpacing: 0.4,
+    marginBottom: 4,
+  },
+  ctaDesc: {
+    fontSize: 8.5,
+    color: colors.slate500,
+    lineHeight: 1.4,
+  },
+  ctaRight: {
+    width: 150,
+  },
+  ctaButton: {
+    backgroundColor: colors.teal,
+    paddingVertical: 9,
+    borderRadius: 4,
+  },
+  ctaButtonText: {
+    color: colors.white,
+    fontSize: 9,
+    fontFamily: "Helvetica-Bold",
+    textAlign: "center",
+    letterSpacing: 0.3,
+  },
+  ctaSecondary: {
+    borderWidth: 1,
+    borderColor: colors.teal,
+    paddingVertical: 7,
+    borderRadius: 4,
+    marginTop: 5,
+  },
+  ctaSecondaryText: {
+    color: colors.teal,
+    fontSize: 8,
+    fontFamily: "Helvetica-Bold",
+    textAlign: "center",
+  },
+
+  // ── Signature ──────────────────────────────────────────────────────────────
   signatureSection: {
-    marginTop: 30,
-    paddingTop: 16,
+    marginTop: 28,
+    paddingTop: 14,
     borderTopWidth: 1,
     borderTopColor: colors.slate100,
   },
@@ -499,28 +523,28 @@ export const styles = StyleSheet.create({
     width: "45%",
   },
   signatureImage: {
-    width: 120,
-    height: 40,
+    width: 110,
+    height: 36,
     objectFit: "contain",
   },
   signatureLine: {
     height: 1,
-    backgroundColor: colors.slate100,
+    backgroundColor: colors.slate300,
     marginTop: 4,
-    marginBottom: 6,
+    marginBottom: 5,
   },
   signatureName: {
-    fontSize: 9.5,
+    fontSize: 9,
     fontFamily: "Helvetica-Bold",
     color: colors.slate900,
   },
   signatureRole: {
-    fontSize: 8.5,
+    fontSize: 8,
     color: colors.slate500,
-    marginTop: 2,
+    marginTop: 1,
   },
 
-  // Footer Section
+  // ── Footer ─────────────────────────────────────────────────────────────────
   footer: {
     position: "absolute",
     bottom: 24,
@@ -531,17 +555,15 @@ export const styles = StyleSheet.create({
     paddingTop: 8,
   },
   footerText: {
-    fontSize: 8.5,
+    fontSize: 8,
     color: colors.slate500,
     textAlign: "center",
   },
-
-  // Page number
   pageNumber: {
     position: "absolute",
     bottom: 24,
     right: 40,
-    fontSize: 8.5,
+    fontSize: 8,
     color: colors.slate500,
   },
 });

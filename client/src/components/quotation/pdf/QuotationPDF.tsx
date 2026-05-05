@@ -11,8 +11,7 @@ import { formatMoney } from '@/lib/money';
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
 function buildPaymentLink(data: QuotationData) {
-    const base =
-        process.env.NEXT_PUBLIC_PAYMENT_URL!;
+    const base = process.env.NEXT_PUBLIC_PAYMENT_URL!;
     if (!data.secureToken) return null;
     return `${base.replace(/\/$/, '')}/quotation/${data.secureToken}`;
 }
@@ -21,7 +20,7 @@ function compactList(parts: Array<string | undefined | null>) {
     return parts.map((x) => (x || '').trim()).filter(Boolean);
 }
 
-// ─── Main component ───────────────────────────────────────────────────────────
+// ─── Sub-components ──────────────────────────────────────────────────────────
 
 interface QuotationPDFProps {
     data: QuotationData;
@@ -69,6 +68,8 @@ const TableRow = ({
     </View>
 );
 
+// ─── Main component ──────────────────────────────────────────────────────────
+
 export const QuotationPDF = ({ data }: QuotationPDFProps) => {
     const {
         totals,
@@ -100,7 +101,7 @@ export const QuotationPDF = ({ data }: QuotationPDFProps) => {
             ? 'Web Design & Development'
             : 'Service';
 
-    // Services table line items: main project + each phase summary + add-ons
+    // ── Build line items ──────────────────────────────────────────────────────
     const phaseRows: LineItem[] = (phases || []).map((p, idx) => ({
         name: `Phase ${idx + 1}: ${p.title}${
             p.items?.length ? ` (${p.items.length} deliverables)` : ''
@@ -149,7 +150,6 @@ export const QuotationPDF = ({ data }: QuotationPDFProps) => {
             ? (pricingSubtotal * pricing.discount) / 100
             : 0;
 
-    // Use stored milestones; fallback to a sensible default if none configured.
     const milestones: IPaymentMilestone[] =
         data.paymentMilestones && data.paymentMilestones.length
             ? data.paymentMilestones
@@ -172,28 +172,38 @@ export const QuotationPDF = ({ data }: QuotationPDFProps) => {
         .filter(Boolean)
         .join(' ');
 
+    // ── Render ────────────────────────────────────────────────────────────────
     return (
         <Document>
             <Page size="A4" style={styles.page} wrap>
-                {/* Header (only on first page) */}
-                <View style={styles.headerContainer}>
+                {/* ── Header ─────────────────────────────────────────────── */}
+                <View style={styles.headerContainer} wrap={false}>
                     <View style={styles.logoContainer}>
                         <Image src={{ uri: logoUrl }} style={styles.logo} />
                     </View>
-                    <View style={styles.headerDetailsContainer}>
+                    <View style={styles.headerRight}>
                         <Text style={styles.headerTitle}>QUOTATION</Text>
-                        <View style={styles.titleUnderline} />
-                        <Text style={styles.headerDetailText}>
-                            Quotation No: {data.quotationNumber || 'TBD'}
+                        <View style={styles.titleAccent} />
+                        <Text style={styles.headerMeta}>
+                            Ref:{' '}
+                            <Text style={styles.headerMetaStrong}>
+                                {data.quotationNumber || 'TBD'}
+                            </Text>
                         </Text>
-                        <Text style={styles.headerDetailText}>
-                            Date: <Text style={styles.headerHighlightText}>{issueDate}</Text>
+                        <Text style={styles.headerMeta}>
+                            Date:{' '}
+                            <Text style={styles.headerMetaStrong}>
+                                {issueDate}
+                            </Text>
                         </Text>
-                        <Text style={styles.headerDetailText}>
-                            Valid Until:{' '}
-                            <Text style={styles.headerHighlightText}>
+                        <Text style={styles.headerMeta}>
+                            Valid until:{' '}
+                            <Text style={styles.headerMetaStrong}>
                                 {details?.validUntil
-                                    ? format(new Date(details.validUntil), 'PPP')
+                                    ? format(
+                                          new Date(details.validUntil),
+                                          'PPP',
+                                      )
                                     : '—'}
                             </Text>
                         </Text>
@@ -202,86 +212,81 @@ export const QuotationPDF = ({ data }: QuotationPDFProps) => {
 
                 <View style={styles.divider} />
 
-                {/* Bill From / To */}
-                <View style={styles.addressContainer} wrap={false}>
-                    <View style={styles.addressBox}>
-                        <Text style={styles.boxTitle}>
-                            BILL FROM
-                        </Text>
-                        <Text style={styles.boxTextStrong}>
+                {/* ── Billing ─────────────────────────────────────────────── */}
+                <View style={styles.billingRow} wrap={false}>
+                    <View style={styles.billingCol}>
+                        <Text style={styles.billingLabel}>Bill From</Text>
+                        <Text style={styles.billingName}>
                             {company?.name || 'Company'}
                         </Text>
                         {company?.address ? (
-                            <Text style={styles.boxText}>
+                            <Text style={styles.billingText}>
                                 {company.address}
                             </Text>
                         ) : null}
                         {company?.email ? (
-                            <Text style={styles.boxText}>
+                            <Text style={styles.billingText}>
                                 {company.email}
                             </Text>
                         ) : null}
                         {company?.phone ? (
-                            <Text style={styles.boxText}>
+                            <Text style={styles.billingText}>
                                 {company.phone}
                             </Text>
                         ) : null}
                     </View>
-
-                    <View style={[styles.addressBox, { alignItems: 'flex-end', textAlign: 'right' }]}>
-                        <Text style={styles.boxTitle}>
-                            BILL TO
-                        </Text>
-                        <Text style={styles.boxTextStrong}>
+                    <View style={styles.billingColRight}>
+                        <Text style={styles.billingLabel}>Bill To</Text>
+                        <Text style={styles.billingName}>
                             {client.contactName}
                         </Text>
                         {client.companyName ? (
-                            <Text style={styles.boxText}>
+                            <Text style={styles.billingText}>
                                 {client.companyName}
                             </Text>
                         ) : null}
                         {client.address ? (
-                            <Text style={styles.boxText}>
+                            <Text style={styles.billingText}>
                                 {client.address}
                             </Text>
                         ) : null}
                         {client.email ? (
-                            <Text style={styles.boxText}>
+                            <Text style={styles.billingText}>
                                 {client.email}
                             </Text>
                         ) : null}
                         {client.phone ? (
-                            <Text style={styles.boxText}>
+                            <Text style={styles.billingText}>
                                 {client.phone}
                             </Text>
                         ) : null}
                     </View>
                 </View>
 
-                {/* Project Title */}
+                {/* ── Project ─────────────────────────────────────────────── */}
                 <Text style={styles.sectionTitle}>Project</Text>
-                <View style={styles.sectionBox} wrap={false}>
+                <View style={styles.card} wrap={false}>
                     <Text style={styles.projectTitle}>
                         {details?.title || 'Project'}
                     </Text>
-                    <View style={styles.projectMetaRow}>
-                        <View style={styles.metaBadge}>
-                            <Text style={styles.metaBadgeText}>
+                    <View style={styles.badgeRow}>
+                        <View style={styles.badge}>
+                            <Text style={styles.badgeText}>
                                 {data.serviceType === 'web-development'
                                     ? 'WEB'
                                     : 'SERVICE'}
                             </Text>
                         </View>
                         {client.companyName ? (
-                            <View style={styles.metaBadge}>
-                                <Text style={styles.metaBadgeText}>
+                            <View style={styles.badge}>
+                                <Text style={styles.badgeText}>
                                     {client.companyName}
                                 </Text>
                             </View>
                         ) : null}
                         {data.status ? (
-                            <View style={styles.metaBadge}>
-                                <Text style={styles.metaBadgeText}>
+                            <View style={styles.badge}>
+                                <Text style={styles.badgeText}>
                                     {data.status.toUpperCase()}
                                 </Text>
                             </View>
@@ -289,47 +294,42 @@ export const QuotationPDF = ({ data }: QuotationPDFProps) => {
                     </View>
                 </View>
 
-                {/* Project Overview */}
+                {/* ── Overview ────────────────────────────────────────────── */}
                 {data.overview ? (
                     <>
                         <Text style={styles.sectionTitle}>Overview</Text>
-                        <View style={styles.sectionBox} wrap={false}>
-                            <Text style={styles.sectionText}>
+                        <View style={styles.cardSoft}>
+                            <Text style={styles.bodyText}>
                                 {data.overview}
                             </Text>
                         </View>
                     </>
                 ) : null}
 
-                {/* Detailed Project Scope (full lists, no truncation) */}
+                {/* ── Project Scope ───────────────────────────────────────── */}
                 {phases?.length ? (
                     <>
-                        <Text style={styles.sectionTitle}>Project scope</Text>
+                        <Text style={styles.sectionTitle}>Project Scope</Text>
                         {phases.map((phase, idx) => (
                             <View
                                 key={`${idx}-${phase.title}`}
                                 style={styles.scopeCard}
-                                // Allow breaking inside a phase to avoid orphaned headers
                                 wrap
                             >
                                 <View
-                                    style={styles.scopeHeaderRow}
+                                    style={styles.scopeHeader}
                                     wrap={false}
                                 >
                                     <Text style={styles.scopeTitle}>
                                         Phase {idx + 1}: {phase.title}
                                     </Text>
-                                    <View style={styles.scopeCountBadge}>
-                                        <Text
-                                            style={styles.scopeCountBadgeText}
-                                        >
-                                            {phase.items?.length || 0} items
-                                        </Text>
-                                    </View>
+                                    <Text style={styles.scopeCount}>
+                                        {phase.items?.length || 0} items
+                                    </Text>
                                 </View>
 
                                 {phase.description ? (
-                                    <Text style={styles.sectionSubText}>
+                                    <Text style={styles.scopeDesc}>
                                         {phase.description}
                                     </Text>
                                 ) : null}
@@ -340,7 +340,7 @@ export const QuotationPDF = ({ data }: QuotationPDFProps) => {
                                         style={styles.bulletRow}
                                         wrap={false}
                                     >
-                                        <View style={styles.bulletDot} />
+                                        <Text style={styles.bulletDot}>•</Text>
                                         <Text style={styles.bulletText}>
                                             {item}
                                         </Text>
@@ -351,10 +351,9 @@ export const QuotationPDF = ({ data }: QuotationPDFProps) => {
                     </>
                 ) : null}
 
-                {/* Services Table */}
+                {/* ── Services table ──────────────────────────────────────── */}
                 <Text style={styles.sectionTitle}>Services</Text>
-                <View style={styles.tableContainer} wrap>
-                    {/* Keep the header attached to the first row to prevent orphaned headers */}
+                <View style={styles.tableWrap} wrap>
                     <View wrap={false}>
                         <TableHeader />
                         {items[0] ? (
@@ -375,13 +374,13 @@ export const QuotationPDF = ({ data }: QuotationPDFProps) => {
                     ))}
                 </View>
 
-                {/* Technology Stack */}
+                {/* ── Tech stack ──────────────────────────────────────────── */}
                 {techTags.length ? (
                     <>
                         <Text style={styles.sectionTitle}>
-                            Technology stack
+                            Technology Stack
                         </Text>
-                        <View style={styles.sectionBox} wrap>
+                        <View style={styles.card} wrap>
                             <View style={styles.tagsWrap}>
                                 {techTags.map((t) => (
                                     <View key={t} style={styles.tag}>
@@ -393,23 +392,28 @@ export const QuotationPDF = ({ data }: QuotationPDFProps) => {
                     </>
                 ) : null}
 
-                {/* Workflow */}
+                {/* ── Workflow ────────────────────────────────────────────── */}
                 {workflowSteps.length ? (
                     <>
                         <Text style={styles.sectionTitle}>Workflow</Text>
-                        <View style={styles.sectionBox} wrap>
-                            <View style={styles.workflowInline}>
+                        <View style={styles.card} wrap>
+                            <View style={styles.workflowRow}>
                                 {workflowSteps.map((step, i) => (
                                     <React.Fragment key={`${i}-${step}`}>
                                         <View style={styles.workflowStep}>
-                                            <Text
-                                                style={styles.workflowStepText}
-                                            >
-                                                {i + 1}. {step}
+                                            <View style={styles.workflowNum}>
+                                                <Text style={styles.workflowNumText}>
+                                                    {i + 1}
+                                                </Text>
+                                            </View>
+                                            <Text style={styles.workflowText}>
+                                                {step}
                                             </Text>
                                         </View>
                                         {i < workflowSteps.length - 1 ? (
-                                            <Text style={styles.workflowArrow}>
+                                            <Text
+                                                style={styles.workflowArrow}
+                                            >
                                                 →
                                             </Text>
                                         ) : null}
@@ -420,85 +424,94 @@ export const QuotationPDF = ({ data }: QuotationPDFProps) => {
                     </>
                 ) : null}
 
-                {/* Pricing Breakdown */}
+                {/* ── Pricing ────────────────────────────────────────────── */}
                 <View wrap={false}>
                     <Text style={styles.sectionTitle}>Pricing</Text>
-                    <View style={styles.pricingBox}>
-                    <View style={styles.pricingHeader}>
-                        <Text style={styles.pricingHeaderText}>
-                            Pricing breakdown
-                        </Text>
-                    </View>
-                    <View style={styles.pricingBody}>
-                        <View style={styles.pricingRow}>
-                            <Text style={styles.pricingLabel}>Subtotal</Text>
-                            <Text style={styles.pricingValue}>
-                                {formatMoney(pricingSubtotal, currency)}
+                    <View style={styles.pricingCard}>
+                        <View style={styles.pricingHeaderBar}>
+                            <Text style={styles.pricingHeaderText}>
+                                Pricing Breakdown
                             </Text>
                         </View>
-                        {pricing?.taxRate ? (
+                        <View style={styles.pricingBody}>
                             <View style={styles.pricingRow}>
                                 <Text style={styles.pricingLabel}>
-                                    Tax ({pricing.taxRate}%)
+                                    Subtotal
                                 </Text>
                                 <Text style={styles.pricingValue}>
-                                    {formatMoney(pricingTax, currency)}
+                                    {formatMoney(pricingSubtotal, currency)}
                                 </Text>
                             </View>
-                        ) : null}
-                        {pricing?.discount ? (
-                            <View style={styles.pricingRowLast}>
-                                <Text style={styles.pricingLabel}>
-                                    Discount ({pricing.discount}%)
+                            {pricing?.taxRate ? (
+                                <View style={styles.pricingRow}>
+                                    <Text style={styles.pricingLabel}>
+                                        Tax ({pricing.taxRate}%)
+                                    </Text>
+                                    <Text style={styles.pricingValue}>
+                                        {formatMoney(pricingTax, currency)}
+                                    </Text>
+                                </View>
+                            ) : null}
+                            {pricing?.discount ? (
+                                <View style={styles.pricingRowLast}>
+                                    <Text style={styles.pricingLabel}>
+                                        Discount ({pricing.discount}%)
+                                    </Text>
+                                    <Text
+                                        style={[
+                                            styles.pricingValue,
+                                            styles.pricingDiscount,
+                                        ]}
+                                    >
+                                        −{formatMoney(discountAmount, currency)}
+                                    </Text>
+                                </View>
+                            ) : (
+                                <View style={styles.pricingRowLast}>
+                                    <Text style={styles.pricingLabel}>
+                                        Discount
+                                    </Text>
+                                    <Text style={styles.pricingValue}>
+                                        {formatMoney(0, currency)}
+                                    </Text>
+                                </View>
+                            )}
+                            <View style={styles.pricingTotalRow}>
+                                <Text style={styles.pricingTotalLabel}>
+                                    Grand Total
                                 </Text>
-                                <Text style={styles.pricingValue}>
-                                    −{formatMoney(discountAmount, currency)}
+                                <Text style={styles.pricingTotalValue}>
+                                    {formatMoney(pricingTotal, currency)}
                                 </Text>
                             </View>
-                        ) : (
-                            <View style={styles.pricingRowLast}>
-                                <Text style={styles.pricingLabel}>
-                                    Discount
-                                </Text>
-                                <Text style={styles.pricingValue}>
-                                    {formatMoney(0, currency)}
-                                </Text>
-                            </View>
-                        )}
-                        <View style={styles.pricingTotalRow}>
-                            <Text style={styles.pricingTotalLabel}>Total</Text>
-                            <Text style={styles.pricingTotalValue}>
-                                {formatMoney(pricingTotal, currency)}
-                            </Text>
                         </View>
-                    </View>
                     </View>
                 </View>
 
-                {/* Payment Terms (dynamic milestones) */}
-                <Text style={styles.sectionTitle}>Payment terms</Text>
-                <View style={styles.paymentPlanBox} wrap={false}>
+                {/* ── Payment Milestones ──────────────────────────────────── */}
+                <Text style={styles.sectionTitle}>Payment Terms</Text>
+                <View style={styles.milestoneCard} wrap={false}>
                     {milestones.map((m, idx) => {
-                                const isLast = idx === milestones.length - 1;
-                                const amount =
-                                    (pricingTotal * (m.percentage || 0)) / 100;
-                                return (
-                                    <View
-                                        key={`${idx}-${m.label}`}
-                                        style={
-                                            isLast
-                                                ? styles.paymentMilestoneRowLast
-                                                : styles.paymentMilestoneRow
-                                        }
-                                        wrap={false}
-                                    >
-                                        <Text style={styles.milestoneBadge}>
-                                            {m.percentage}%
-                                        </Text>
-                                        <Text style={styles.paymentMilestoneLabel}>
-                                            {m.label}
-                                        </Text>
-                                <Text style={styles.paymentMilestoneValue}>
+                        const isLast = idx === milestones.length - 1;
+                        const amount =
+                            (pricingTotal * (m.percentage || 0)) / 100;
+                        return (
+                            <View
+                                key={`${idx}-${m.label}`}
+                                style={
+                                    isLast
+                                        ? styles.milestoneRowLast
+                                        : styles.milestoneRow
+                                }
+                                wrap={false}
+                            >
+                                <Text style={styles.milestoneBadge}>
+                                    {m.percentage}%
+                                </Text>
+                                <Text style={styles.milestoneLabel}>
+                                    {m.label}
+                                </Text>
+                                <Text style={styles.milestoneAmount}>
                                     {formatMoney(amount, currency)}
                                 </Text>
                             </View>
@@ -506,7 +519,7 @@ export const QuotationPDF = ({ data }: QuotationPDFProps) => {
                     })}
                 </View>
 
-                {/* Trust */}
+                {/* ── Trust band ──────────────────────────────────────────── */}
                 <View style={styles.trustBand} wrap={false}>
                     <Text style={styles.trustTitle}>Why partner with us</Text>
                     <Text style={styles.trustText}>
@@ -517,22 +530,23 @@ export const QuotationPDF = ({ data }: QuotationPDFProps) => {
                     </Text>
                 </View>
 
-                {/* Pay Now Section */}
-                <View style={styles.payNowSection} wrap={false}>
-                    <View style={styles.payNowTextContainer}>
-                        <Text style={styles.payNowHeading}>
+                {/* ── CTA ─────────────────────────────────────────────────── */}
+                <View style={styles.ctaSection} wrap={false}>
+                    <View style={styles.ctaLeft}>
+                        <Text style={styles.ctaHeading}>
                             SECURE ONLINE PAYMENT
                         </Text>
-                        <Text style={styles.payNowDescription}>
+                        <Text style={styles.ctaDesc}>
                             Use the secure online portal to review and accept
                             this quotation, then proceed to the first milestone
                             payment.
                         </Text>
                         {firstMilestone ? (
-                            <Text style={styles.payNowDescription}>
+                            <Text style={styles.ctaDesc}>
                                 On acceptance: {firstMilestone.percentage}% (
                                 {formatMoney(
-                                    (pricingTotal * firstMilestone.percentage) /
+                                    (pricingTotal *
+                                        firstMilestone.percentage) /
                                         100,
                                     currency,
                                 )}
@@ -540,15 +554,15 @@ export const QuotationPDF = ({ data }: QuotationPDFProps) => {
                             </Text>
                         ) : null}
                     </View>
-                    <View style={styles.payNowButtonContainer}>
+                    <View style={styles.ctaRight}>
                         {payLink ? (
                             <>
                                 <Link
                                     src={payLink}
                                     style={{ textDecoration: 'none' }}
                                 >
-                                    <View style={styles.payNowButton}>
-                                        <Text style={styles.payNowText}>
+                                    <View style={styles.ctaButton}>
+                                        <Text style={styles.ctaButtonText}>
                                             {ctaPrimary}
                                         </Text>
                                     </View>
@@ -557,18 +571,16 @@ export const QuotationPDF = ({ data }: QuotationPDFProps) => {
                                     src={payLink}
                                     style={{ textDecoration: 'none' }}
                                 >
-                                    <View style={styles.payNowSecondaryButton}>
-                                        <Text
-                                            style={styles.payNowSecondaryText}
-                                        >
+                                    <View style={styles.ctaSecondary}>
+                                        <Text style={styles.ctaSecondaryText}>
                                             VIEW FULL QUOTATION
                                         </Text>
                                     </View>
                                 </Link>
                             </>
                         ) : (
-                            <View style={styles.payNowButton}>
-                                <Text style={styles.payNowText}>
+                            <View style={styles.ctaButton}>
+                                <Text style={styles.ctaButtonText}>
                                     LINK PENDING
                                 </Text>
                             </View>
@@ -576,7 +588,7 @@ export const QuotationPDF = ({ data }: QuotationPDFProps) => {
                     </View>
                 </View>
 
-                {/* Signature */}
+                {/* ── Signature ────────────────────────────────────────────── */}
                 <View style={styles.signatureSection} wrap={false}>
                     <View style={styles.signatureRow}>
                         <View style={styles.signatureBlock}>
@@ -589,11 +601,12 @@ export const QuotationPDF = ({ data }: QuotationPDFProps) => {
                                 Md. Ashaduzzaman
                             </Text>
                             <Text style={styles.signatureRole}>
-                                Founder &amp; CEO, {company?.name || 'Company'}
+                                Founder &amp; CEO,{' '}
+                                {company?.name || 'Company'}
                             </Text>
                         </View>
                         <View style={styles.signatureBlock}>
-                            <View style={{ height: 42 }} />
+                            <View style={{ height: 36 }} />
                             <View style={styles.signatureLine} />
                             <Text style={styles.signatureName}>
                                 {client.contactName}
@@ -605,12 +618,11 @@ export const QuotationPDF = ({ data }: QuotationPDFProps) => {
                     </View>
                 </View>
 
-                {/* Footer */}
+                {/* ── Footer ──────────────────────────────────────────────── */}
                 <View style={styles.footer} fixed>
                     <Text style={styles.footerText}>{footerText}</Text>
                 </View>
 
-                {/* Page Numbers */}
                 <Text
                     style={styles.pageNumber}
                     render={({ pageNumber, totalPages }) =>
