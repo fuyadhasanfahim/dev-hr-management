@@ -154,7 +154,7 @@ export default function NoticeManagePage() {
                 <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
                     <DialogTrigger asChild>
                         <Button>
-                            <Plus className=" h-4 w-4" />
+                            <Plus className="h-4 w-4" />
                             Create Notice
                         </Button>
                     </DialogTrigger>

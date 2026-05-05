@@ -538,7 +538,7 @@ export function OrderForm({
                         <Label>Services *</Label>
                         {clientId && hasAssignedServices && (
                             <Badge variant={showAllServices ? "outline" : "secondary"} className="text-[10px] cursor-pointer" onClick={() => setShowAllServices(!showAllServices)}>
-                                <Filter className="h-3 w-3 mr-1" />
+                                <Filter className="h-3 w-3" />
                                 {showAllServices ? "Showing All" : "Assigned"}
                             </Badge>
                         )}
@@ -551,12 +551,12 @@ export function OrderForm({
                     >
                         {isNewServiceMode ? (
                             <>
-                                <X className="h-4 w-4 mr-1" />
+                                <X className="h-4 w-4" />
                                 Cancel
                             </>
                         ) : (
                             <>
-                                <Plus className="h-4 w-4 mr-1" />
+                                <Plus className="h-4 w-4" />
                                 New Service
                             </>
                         )}
@@ -600,7 +600,7 @@ export function OrderForm({
                                 size="sm"
                             >
                                 {isCreatingService && (
-                                    <Loader className="h-4 w-4  animate-spin" />
+                                    <Loader className="h-4 w-4 animate-spin" />
                                 )}
                                 Create Service
                             </Button>
@@ -671,12 +671,12 @@ export function OrderForm({
                     >
                         {isNewFormatMode ? (
                             <>
-                                <X className="h-4 w-4 mr-1" />
+                                <X className="h-4 w-4" />
                                 Cancel
                             </>
                         ) : (
                             <>
-                                <Plus className="h-4 w-4 mr-1" />
+                                <Plus className="h-4 w-4" />
                                 New Format
                             </>
                         )}
@@ -721,7 +721,7 @@ export function OrderForm({
                                 size="sm"
                             >
                                 {isCreatingFormat && (
-                                    <Loader className="h-4 w-4  animate-spin" />
+                                    <Loader className="h-4 w-4 animate-spin" />
                                 )}
                                 Create Format
                             </Button>
@@ -813,7 +813,7 @@ export function OrderForm({
                 </Button>
                 <Button type="submit" disabled={isSubmitting}>
                     {isSubmitting && (
-                        <Loader className="h-4 w-4  animate-spin" />
+                        <Loader className="h-4 w-4 animate-spin" />
                     )}
                     {submitLabel}
                 </Button>

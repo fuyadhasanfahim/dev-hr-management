@@ -190,7 +190,7 @@ export default function StaffDashboard() {
                                             }
                                             disabled={isStaffLoading}
                                         >
-                                            <AlertCircle className="mr-2 h-4 w-4" />
+                                            <AlertCircle className="h-4 w-4" />
                                             {staff?.isSalaryPinSet
                                                 ? 'Unlock'
                                                 : 'Set PIN'}

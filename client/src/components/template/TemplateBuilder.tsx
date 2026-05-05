@@ -209,7 +209,7 @@ export default function TemplateBuilder({
                 className="h-10 px-3 shrink-0 shadow-sm border-teal-200 text-teal-600 hover:bg-teal-50 hover:text-teal-700 transition duration-150"
                 onClick={addPhase}
               >
-                <Plus className="w-4 h-4 mr-1" /> New Phase
+                <Plus className="w-4 h-4" /> New Phase
               </PrimaryButton>
             </div>
             <div className="p-6">
@@ -324,7 +324,7 @@ export default function TemplateBuilder({
                             className="text-red-500 hover:text-red-600 hover:bg-red-50 h-9"
                             onClick={() => removePhase(pIdx)}
                           >
-                            <Trash2 className="w-4 h-4 mr-2" /> Delete Phase
+                            <Trash2 className="w-4 h-4" /> Delete Phase
                           </PrimaryButton>
                         </div>
                       </div>
@@ -495,7 +495,7 @@ export default function TemplateBuilder({
                       className="h-9 px-3 border-teal-200 hover:bg-teal-50 text-teal-600 hover:text-teal-700 font-medium"
                       onClick={addPaymentMilestone}
                     >
-                      <Plus className="w-4 h-4 mr-1" /> Add Milestone
+                      <Plus className="w-4 h-4" /> Add Milestone
                     </PrimaryButton>
                   </div>
 

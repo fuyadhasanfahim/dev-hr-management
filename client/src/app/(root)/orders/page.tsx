@@ -830,24 +830,24 @@ export default function OrdersPage() {
                   variant="outline"
                   onClick={() => setIsSelectionMode(true)}
                 >
-                  <CheckSquare className=" h-4 w-4" />
+                  <CheckSquare className="h-4 w-4" />
                   Select
                 </Button>
               ) : (
                 <Button variant="outline" onClick={clearSelection}>
-                  <X className=" h-4 w-4" />
+                  <X className="h-4 w-4" />
                   Cancel
                 </Button>
               ))}
             <Button variant="outline" asChild>
               <Link href="/orders/invoice">
-                <FileText className=" h-4 w-4" />
+                <FileText className="h-4 w-4" />
                 Generate Invoice
               </Link>
             </Button>
             <Button variant="outline" asChild>
               <Link href="/quotations">
-                <IconReceipt className=" h-4 w-4" />
+                <IconReceipt className="h-4 w-4" />
                 Quotation Pipeline
               </Link>
             </Button>
@@ -1029,7 +1029,7 @@ export default function OrdersPage() {
                     onClick={() => setSelectedOrderIds(new Set())}
                     className="h-7 text-xs"
                   >
-                    <X className="h-3 w-3 mr-1" />
+                    <X className="h-3 w-3" />
                     Clear Selection
                   </Button>
                 )}
@@ -1042,7 +1042,7 @@ export default function OrdersPage() {
                     onClick={() => setIsBulkDeleteDialogOpen(true)}
                     disabled={selectedOrderIds.size === 0}
                   >
-                    <Trash2 className="h-4 w-4 mr-1" />
+                    <Trash2 className="h-4 w-4" />
                     Delete ({selectedOrderIds.size})
                   </Button>
                 )}
@@ -1067,7 +1067,7 @@ export default function OrdersPage() {
                 >
                   {isLoadingAll ? (
                     <>
-                      <Loader className=" h-3 w-3 animate-spin" />
+                      <Loader className="h-3 w-3 animate-spin" />
                       Selecting all {meta.total} orders...
                     </>
                   ) : (
@@ -1194,7 +1194,7 @@ export default function OrdersPage() {
                             onClick={() => setIsDeleteDialogOpen(true)}
                             className="mt-2"
                           >
-                            <Plus className="mr-2 h-4 w-4" />
+                            <Plus className="h-4 w-4" />
                             Create New Order
                           </Button>
                         </div>
@@ -1438,7 +1438,7 @@ export default function OrdersPage() {
                   onClick={() => setPage((p) => Math.max(1, p - 1))}
                   disabled={page === 1 || isFetching}
                 >
-                  <ChevronLeft className="h-4 w-4 " />
+                  <ChevronLeft className="h-4 w-4" />
                   Previous
                 </Button>
                 <Button
@@ -1794,7 +1794,7 @@ export default function OrdersPage() {
               onClick={handleExtendDeadline}
               disabled={!newDeadline || isExtending}
             >
-              {isExtending && <Loader className="h-4 w-4  animate-spin" />}
+              {isExtending && <Loader className="h-4 w-4 animate-spin" />}
               Extend Deadline
             </Button>
           </DialogFooter>
@@ -1838,7 +1838,7 @@ export default function OrdersPage() {
               onClick={handleAddRevision}
               disabled={!revisionInstruction.trim() || isAddingRevision}
             >
-              {isAddingRevision && <Loader className="h-4 w-4  animate-spin" />}
+              {isAddingRevision && <Loader className="h-4 w-4 animate-spin" />}
               Add Revision
             </Button>
           </DialogFooter>
@@ -1898,7 +1898,7 @@ export default function OrdersPage() {
               Cancel
             </Button>
             <Button onClick={confirmStatusChange} disabled={isUpdatingStatus}>
-              {isUpdatingStatus && <Loader className="h-4 w-4  animate-spin" />}
+              {isUpdatingStatus && <Loader className="h-4 w-4 animate-spin" />}
               Set to Revision
             </Button>
           </DialogFooter>
@@ -1926,7 +1926,7 @@ export default function OrdersPage() {
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               disabled={isDeleting}
             >
-              {isDeleting && <Loader className="h-4 w-4  animate-spin" />}
+              {isDeleting && <Loader className="h-4 w-4 animate-spin" />}
               Delete
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -1958,7 +1958,7 @@ export default function OrdersPage() {
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               disabled={isBulkDeleting}
             >
-              {isBulkDeleting && <Loader className="h-4 w-4  animate-spin" />}
+              {isBulkDeleting && <Loader className="h-4 w-4 animate-spin" />}
               Delete {selectedOrderIds.size} Order
               {selectedOrderIds.size !== 1 ? "s" : ""}
             </AlertDialogAction>

@@ -962,7 +962,7 @@ function ScheduleMeetingDialog({
         >
             <DialogTrigger asChild>
                 <Button className="bg-teal-600 hover:bg-teal-700 text-white shadow-sm">
-                    <Plus className="h-4 w-4 mr-2" />
+                    <Plus className="h-4 w-4" />
                     Schedule Meeting
                 </Button>
             </DialogTrigger>
@@ -1202,7 +1202,7 @@ function ScheduleMeetingDialog({
                                 <Loader className="h-4 w-4 animate-spin" />
                             ) : (
                                 <>
-                                    <CalendarPlus className="h-4 w-4 mr-2" />
+                                    <CalendarPlus className="h-4 w-4" />
                                     Schedule Meeting
                                 </>
                             )}

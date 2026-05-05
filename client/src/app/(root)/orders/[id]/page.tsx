@@ -76,10 +76,10 @@ export default function OrderDetailsPage() {
 
     const getStatusIcon = (status: string) => {
         switch (status?.toLowerCase()) {
-            case "pending": return <Clock className="h-4 w-4 mr-2" />;
-            case "active": return <Package className="h-4 w-4 mr-2" />;
-            case "completed": return <CheckCircle className="h-4 w-4 mr-2" />;
-            case "cancelled": return <AlertCircle className="h-4 w-4 mr-2" />;
+            case "pending": return <Clock className="h-4 w-4" />;
+            case "active": return <Package className="h-4 w-4" />;
+            case "completed": return <CheckCircle className="h-4 w-4" />;
+            case "cancelled": return <AlertCircle className="h-4 w-4" />;
             default: return null;
         }
     };
@@ -111,7 +111,7 @@ export default function OrderDetailsPage() {
                 </div>
                 <div className="flex gap-2">
                     <Button variant="outline" size="sm">
-                        <FileText className="h-4 w-4 mr-2" />
+                        <FileText className="h-4 w-4" />
                         Export PDF
                     </Button>
                     <Button variant="default" size="sm">
@@ -222,11 +222,11 @@ export default function OrderDetailsPage() {
                         </CardHeader>
                         <CardContent className="space-y-3">
                             <Button variant="outline" className="w-full justify-start font-semibold" onClick={() => router.push(`/orders/invoice/${order._id}`)}>
-                                <FileText className="h-4 w-4 mr-2" />
+                                <FileText className="h-4 w-4" />
                                 Generate Invoice
                             </Button>
                             <Button variant="outline" className="w-full justify-start font-semibold">
-                                <Package className="h-4 w-4 mr-2" />
+                                <Package className="h-4 w-4" />
                                 View Project Files
                             </Button>
                         </CardContent>

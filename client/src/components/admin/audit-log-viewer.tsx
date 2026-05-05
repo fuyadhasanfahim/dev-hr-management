@@ -131,7 +131,7 @@ export default function AuditLogViewer() {
                         variant="outline"
                         disabled={logs.length === 0}
                     >
-                        <Download className=" h-4 w-4" />
+                        <Download className="h-4 w-4" />
                         Export CSV
                     </Button>
                 </div>

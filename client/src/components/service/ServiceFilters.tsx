@@ -91,7 +91,7 @@ export function ServiceFilters({
             onClick={handleClearFilters}
             className="text-slate-500 hover:text-slate-800 hover:bg-slate-100 h-9 px-3"
           >
-            <X className="w-4 h-4 mr-2" />
+            <X className="w-4 h-4" />
             Clear
           </Button>
         )}

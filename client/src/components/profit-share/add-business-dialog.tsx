@@ -84,7 +84,7 @@ export function AddBusinessDialog() {
         <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
                 <Button>
-                    <IconPlus className=" size-4" />
+                    <IconPlus className="size-4" />
                     Add Business
                 </Button>
             </DialogTrigger>

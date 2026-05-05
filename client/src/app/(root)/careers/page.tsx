@@ -612,7 +612,7 @@ export default function CareersPage() {
                                     onClick={clearAllFilters}
                                     className="text-muted-foreground hover:text-foreground"
                                 >
-                                    <X className="h-4 w-4 mr-1" />
+                                    <X className="h-4 w-4" />
                                     Clear filters
                                 </Button>
                             )}

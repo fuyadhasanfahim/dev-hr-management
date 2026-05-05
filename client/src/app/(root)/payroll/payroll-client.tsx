@@ -409,7 +409,7 @@ export default function PayrollPage() {
                                 onClick={handleToggleLock}
                                 disabled={isUnlocking}
                             >
-                                <Unlock className="h-3.5 w-3.5 mr-2" />
+                                <Unlock className="h-3.5 w-3.5" />
                                 Unlock Preview
                             </Button>
                         )}

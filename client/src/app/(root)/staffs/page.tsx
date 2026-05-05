@@ -307,7 +307,7 @@ export default function StaffsPage() {
                                 onClick={clearFilters}
                                 className="h-9 px-2 text-muted-foreground hover:text-foreground"
                             >
-                                <X className="h-4 w-4 mr-1" />
+                                <X className="h-4 w-4" />
                                 Clear
                             </Button>
                         )}
@@ -431,7 +431,7 @@ export default function StaffsPage() {
                                                     }
                                                     className="h-8"
                                                 >
-                                                    <Eye className="h-3.5 w-3.5 mr-1.5" />
+                                                    <Eye className="h-3.5 w-3.5 .5" />
                                                     Details
                                                 </Button>
                                             </TableCell>

@@ -148,7 +148,7 @@ export function SalaryPinDialog({
                             disabled={isLoading}
                         >
                             {isLoading && (
-                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                <Loader2 className="h-4 w-4 animate-spin" />
                             )}
                             {mode === "set" && "Set PIN & View"}
                             {mode === "verify" && "Unlock"}
@@ -173,7 +173,7 @@ export function SalaryPinDialog({
                                 className="w-full"
                                 onClick={() => setMode("verify")}
                             >
-                                <ArrowLeft className="mr-2 h-4 w-4" />
+                                <ArrowLeft className="h-4 w-4" />
                                 Back to Verification
                             </Button>
                         )}

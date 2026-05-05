@@ -659,7 +659,7 @@ export default function InvoicePDF(props: InvoicePDFProps) {
                         disabled={isSending}
                         onClick={handleSendEmail}
                     >
-                        <Mail className="h-4 w-4 " />
+                        <Mail className="h-4 w-4" />
                         {isSending ? 'Sending...' : 'Send to Client'}
                     </Button>
                     <DialogContent className="sm:max-w-md">
@@ -714,7 +714,7 @@ export default function InvoicePDF(props: InvoicePDFProps) {
                             className="bg-teal-500 hover:bg-teal-600"
                             disabled={loading || isSending}
                         >
-                            <Download className="h-4 w-4 " />
+                            <Download className="h-4 w-4" />
                             {loading ? 'Generating PDF...' : 'Download PDF'}
                         </Button>
                     )}

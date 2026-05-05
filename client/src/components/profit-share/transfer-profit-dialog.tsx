@@ -128,7 +128,7 @@ export function TransferProfitDialog() {
         <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
                 <Button variant="outline">
-                    <IconArrowRight className=" size-4" />
+                    <IconArrowRight className="size-4" />
                     Transfer Profit
                 </Button>
             </DialogTrigger>

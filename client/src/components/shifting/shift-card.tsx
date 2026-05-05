@@ -157,7 +157,7 @@ export default function ShiftCard({ shift }: ShiftCardProps) {
                                 <DropdownMenuItem
                                     onClick={() => setOpenEdit(true)}
                                 >
-                                    <Pencil className="mr-2 h-4 w-4 text-muted-foreground" />
+                                    <Pencil className="h-4 w-4 text-muted-foreground" />
                                     Edit Details
                                 </DropdownMenuItem>
                                 <ShiftDeleteAlert shiftId={shift._id} />

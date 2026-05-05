@@ -91,7 +91,7 @@ export function GlobalPolicyPrompt() {
                             disabled={isAccepting}
                             className="min-w-[120px]"
                         >
-                            {isAccepting ? <Loader className="h-4 w-4 animate-spin mr-2" /> : null}
+                            {isAccepting ? <Loader className="h-4 w-4 animate-spin" /> : null}
                             I Agree & Accept
                         </Button>
                     </div>

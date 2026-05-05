@@ -127,7 +127,7 @@ export const EmailDialog: React.FC<EmailDialogProps> = ({
                         <Label htmlFor="recipientEmails">Recipient Emails (Multi-select)</Label>
                         {isLoadingEmails ? (
                             <div className="h-10 w-full flex items-center justify-center border rounded-md bg-muted/20">
-                                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground mr-2" />
+                                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                                 <span className="text-xs text-muted-foreground">Loading contact list...</span>
                             </div>
                         ) : (
@@ -192,7 +192,7 @@ export const EmailDialog: React.FC<EmailDialogProps> = ({
                     >
                         {isLoading ? (
                             <>
-                                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                <Loader2 className="h-4 w-4 animate-spin" />
                                 Sending...
                             </>
                         ) : "Update Status & Send"}

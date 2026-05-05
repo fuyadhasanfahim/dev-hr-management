@@ -554,7 +554,7 @@ export default function LeaveManagePage() {
                                                                     variant="outline"
                                                                     className="text-xs"
                                                                 >
-                                                                    <FileText className="mr-1 h-3 w-3" />
+                                                                    <FileText className="h-3 w-3" />
                                                                     {
                                                                         app
                                                                             .medicalDocuments
@@ -998,7 +998,7 @@ export default function LeaveManagePage() {
                                                                 )
                                                             }
                                                         >
-                                                            <Check className="h-4 w-4 mr-1" />
+                                                            <Check className="h-4 w-4" />
                                                             Approve
                                                         </Button>
                                                         <Button
@@ -1041,7 +1041,7 @@ export default function LeaveManagePage() {
                                                                 )
                                                             }
                                                         >
-                                                            <X className="h-4 w-4 mr-1" />
+                                                            <X className="h-4 w-4" />
                                                             Reject
                                                         </Button>
                                                     </div>
@@ -1115,9 +1115,9 @@ export default function LeaveManagePage() {
                             size="lg"
                         >
                             {isApproving && (
-                                <Loader className=" h-4 w-4 animate-spin" />
+                                <Loader className="h-4 w-4 animate-spin" />
                             )}
-                            <Check className=" h-4 w-4" />
+                            <Check className="h-4 w-4" />
                             {approvalMode === 'full'
                                 ? 'Approve All Days'
                                 : `Approve ${approvedDates.length + paidLeaveDates.length} Day(s)`}
@@ -1159,7 +1159,7 @@ export default function LeaveManagePage() {
                             variant="destructive"
                         >
                             {isRejecting && (
-                                <Loader className=" h-4 w-4 animate-spin" />
+                                <Loader className="h-4 w-4 animate-spin" />
                             )}
                             Reject
                         </Button>
@@ -1391,7 +1391,7 @@ export default function LeaveManagePage() {
                             className="bg-orange-600 hover:bg-orange-700 min-w-[140px]"
                         >
                             {isRevoking && (
-                                <Loader className=" h-4 w-4 animate-spin" />
+                                <Loader className="h-4 w-4 animate-spin" />
                             )}
                             {revokeMode === 'full'
                                 ? 'Revoke All'
@@ -1687,7 +1687,7 @@ export default function LeaveManagePage() {
                                                                     )
                                                                 }
                                                             >
-                                                                <ExternalLink className="h-4 w-4 mr-1" />
+                                                                <ExternalLink className="h-4 w-4" />
                                                                 View
                                                             </Button>
                                                         </div>

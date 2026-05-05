@@ -176,7 +176,7 @@ export default function AssignShift() {
     >
       <DialogTrigger asChild>
         <Button disabled={isLoading || !canCreate}>
-          <IconPlus className="h-4 w-4 mr-2" />
+          <IconPlus className="h-4 w-4" />
           Assign Shift
         </Button>
       </DialogTrigger>

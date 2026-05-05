@@ -109,7 +109,7 @@ export default function OvertimeCountdownWidget() {
             disabled={isStopping}
             className="w-full sm:w-auto font-medium"
           >
-            <StopCircle className="h-5 w-5 mr-2" />
+            <StopCircle className="h-5 w-5" />
             End Early
           </Button>
         </div>

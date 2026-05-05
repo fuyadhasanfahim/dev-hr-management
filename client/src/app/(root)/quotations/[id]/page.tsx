@@ -245,7 +245,7 @@ export default function ViewQuotationPage() {
           {data.status === "accepted" && (
             <Button asChild variant="outline">
               <Link href={`/orders/${data.orderId}`}>
-                <CheckCircle2 className="h-4 w-4 mr-2" />
+                <CheckCircle2 className="h-4 w-4" />
                 View Order
               </Link>
             </Button>
@@ -254,7 +254,7 @@ export default function ViewQuotationPage() {
           {data.isLatestVersion && (
             <Button variant="outline" asChild>
               <Link href={`/quotations/${id}/edit`}>
-                <Edit2 className="h-4 w-4 mr-2" />
+                <Edit2 className="h-4 w-4" />
                 Edit
               </Link>
             </Button>
@@ -317,7 +317,7 @@ export default function ViewQuotationPage() {
                   </div>
                 </div>
                 <Button className="bg-purple-600 hover:bg-purple-700 text-white" onClick={handleNewVersion} disabled={isVersionCreating}>
-                  {isVersionCreating ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Copy className="w-4 h-4 mr-2" />}
+                  {isVersionCreating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Copy className="w-4 h-4" />}
                   Create New Version to Edit
                 </Button>
                 </CardContent>

@@ -68,7 +68,7 @@ export function InvoiceEmailDialog({
                         <label className="text-sm font-medium">Recipients</label>
                         {isLoadingEmails ? (
                             <div className="h-10 flex items-center justify-center border rounded-md bg-muted/20">
-                                <Loader className="h-4 w-4 animate-spin text-muted-foreground mr-2" />
+                                <Loader className="h-4 w-4 animate-spin text-muted-foreground" />
                                 <span className="text-xs text-muted-foreground">Loading email list...</span>
                             </div>
                         ) : (
@@ -98,7 +98,7 @@ export function InvoiceEmailDialog({
                     >
                         {isSending ? (
                             <>
-                                <Loader className="h-4 w-4 animate-spin mr-2" />
+                                <Loader className="h-4 w-4 animate-spin" />
                                 Sending...
                             </>
                         ) : (

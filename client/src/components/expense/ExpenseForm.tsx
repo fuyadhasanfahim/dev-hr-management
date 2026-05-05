@@ -318,7 +318,7 @@ export function ExpenseForm({
                 </Button>
                 <Button type="submit" disabled={isSubmitting}>
                     {isSubmitting && (
-                        <Loader className="h-4 w-4  animate-spin" />
+                        <Loader className="h-4 w-4 animate-spin" />
                     )}
                     {submitLabel}
                 </Button>

@@ -32,9 +32,8 @@ import { quotationRoute } from "./quotation.route.js";
 import { quotationTemplateRoute } from "./quotation-template.route.js";
 import { quotationPaymentRoute } from "./quotation-payment.route.js";
 import { meetingRoute } from "./meeting.route.js";
-
-
-
+import { leadRoute } from "./lead.route.js";
+import { leadSettingRoute } from "./lead-setting.route.js";
 const router: Router = Router();
 
 const moduleRoutes = [
@@ -169,6 +168,14 @@ const moduleRoutes = [
     {
         path: "/meetings",
         route: meetingRoute,
+    },
+    {
+        path: "/leads",
+        route: leadRoute,
+    },
+    {
+        path: "/lead-settings",
+        route: leadSettingRoute,
     },
 ];
 

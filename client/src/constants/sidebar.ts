@@ -19,6 +19,7 @@ import {
     IconWallet,
     IconShieldLock,
     IconCalendarEvent,
+    IconTarget,
 } from "@tabler/icons-react";
 
 
@@ -75,6 +76,18 @@ export const sidebarGroups: SidebarGroup[] = [
     {
         groupLabel: "Business",
         items: [
+            {
+                title: "Leads",
+                url: "/leads",
+                icon: IconTarget,
+                access: [
+                    Role.SUPER_ADMIN,
+                    Role.ADMIN,
+                    Role.TEAM_LEADER,
+                    Role.STAFF,
+                ],
+                requiredDesignation: "telemarketer",
+            },
             {
                 title: "Clients",
                 url: "/clients",

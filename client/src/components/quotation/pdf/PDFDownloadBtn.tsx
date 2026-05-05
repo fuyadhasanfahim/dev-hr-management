@@ -22,9 +22,9 @@ export default function PDFDownloadBtn({ data }: Props) {
       {({ loading }) => (
         <Button className="bg-teal-600 hover:bg-teal-700 text-white" disabled={loading}>
           {loading ? (
-            <span className="flex items-center"><Download className="w-4 h-4 mr-2 animate-bounce" /> Generating...</span>
+            <span className="flex items-center"><Download className="w-4 h-4 animate-bounce" /> Generating...</span>
           ) : (
-            <span className="flex items-center"><FileText className="w-4 h-4 mr-2" /> Download PDF</span>
+            <span className="flex items-center"><FileText className="w-4 h-4" /> Download PDF</span>
           )}
         </Button>
       )}

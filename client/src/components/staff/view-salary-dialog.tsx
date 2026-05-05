@@ -96,7 +96,7 @@ export default function ViewSalaryDialog() {
         >
             <DialogTrigger asChild>
                 <Button variant="outline">
-                    <DollarSign className=" h-4 w-4" />
+                    <DollarSign className="h-4 w-4" />
                     View My Salary
                 </Button>
             </DialogTrigger>
@@ -152,7 +152,7 @@ export default function ViewSalaryDialog() {
                             <Button type="submit" disabled={isLoading}>
                                 {isLoading ? (
                                     <>
-                                        <Loader className=" h-4 w-4 animate-spin" />
+                                        <Loader className="h-4 w-4 animate-spin" />
                                         Verifying...
                                     </>
                                 ) : (

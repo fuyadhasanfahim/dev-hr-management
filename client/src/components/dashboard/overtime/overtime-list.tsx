@@ -269,13 +269,13 @@ export default function OvertimeList() {
                                                                 <DropdownMenuItem
                                                                     onClick={() => handleExtend(ot._id, 30)}
                                                                 >
-                                                                    <Clock className=" h-4 w-4" />{" "}
+                                                                    <Clock className="h-4 w-4" />{" "}
                                                                     Extend by 30m
                                                                 </DropdownMenuItem>
                                                                 <DropdownMenuItem
                                                                     onClick={() => handleExtend(ot._id, 60)}
                                                                 >
-                                                                    <Clock className=" h-4 w-4" />{" "}
+                                                                    <Clock className="h-4 w-4" />{" "}
                                                                     Extend by 1h
                                                                 </DropdownMenuItem>
                                                             </>
@@ -285,7 +285,7 @@ export default function OvertimeList() {
                                                                 handleEdit(ot)
                                                             }
                                                         >
-                                                            <Edit className=" h-4 w-4" />{" "}
+                                                            <Edit className="h-4 w-4" />{" "}
                                                             Edit
                                                         </DropdownMenuItem>
                                                         <DropdownMenuItem
@@ -296,7 +296,7 @@ export default function OvertimeList() {
                                                             }
                                                             className="text-red-600"
                                                         >
-                                                            <Trash className=" h-4 w-4" />{" "}
+                                                            <Trash className="h-4 w-4" />{" "}
                                                             Delete
                                                         </DropdownMenuItem>
                                                     </DropdownMenuContent>

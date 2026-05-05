@@ -275,7 +275,7 @@ export function PersonTabs() {
                                             isFetchingDebits
                                         }
                                     >
-                                        <ChevronLeft className="mr-1 h-4 w-4" />
+                                        <ChevronLeft className="h-4 w-4" />
                                         Previous
                                     </Button>
                                     <div className="min-w-24 text-center text-sm font-medium">
@@ -387,7 +387,7 @@ export function PersonTabs() {
                                                 className="w-full justify-center"
                                                 onClick={() => setSelectedPerson(person)}
                                             >
-                                                <ReceiptText className="mr-2 h-4 w-4" />
+                                                <ReceiptText className="h-4 w-4" />
                                                 Details
                                             </Button>
                                         </div>

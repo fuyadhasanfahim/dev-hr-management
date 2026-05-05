@@ -474,7 +474,7 @@ export default function ExpensePage() {
                                 onClick={() => setIsExportDialogOpen(true)}
                                 variant="outline"
                             >
-                                <Download className=" h-4 w-4" />
+                                <Download className="h-4 w-4" />
                                 Export
                             </Button>
                             <ExportExpenseDialog
@@ -490,7 +490,7 @@ export default function ExpensePage() {
                         >
                             <DialogTrigger asChild>
                                 <Button>
-                                    <Plus className=" h-4 w-4" />
+                                    <Plus className="h-4 w-4" />
                                     Add Expense
                                 </Button>
                             </DialogTrigger>
@@ -519,7 +519,7 @@ export default function ExpensePage() {
                 <CardContent className="space-y-4">
                     {/* Filters Toolbar */}
                     <div className="flex flex-wrap items-center gap-3 p-4 bg-muted/30 rounded-lg border border-border/50">
-                        <div className="flex items-center gap-2 ">
+                        <div className="flex items-center gap-2">
                             <div className="bg-primary/10 p-2 rounded-full">
                                 <Filter className="h-4 w-4 text-primary" />
                             </div>
@@ -636,7 +636,7 @@ export default function ExpensePage() {
                                         variant="outline"
                                         className="w-[240px] h-9 bg-background/60 justify-start text-left font-normal animate-in fade-in slide-in-from-left-2"
                                     >
-                                        <CalendarIcon className=" h-4 w-4" />
+                                        <CalendarIcon className="h-4 w-4" />
                                         {dateRange.from ? (
                                             dateRange.to ? (
                                                 <>
@@ -1019,7 +1019,7 @@ export default function ExpensePage() {
                                     }
                                     disabled={page === 1 || isFetching}
                                 >
-                                    <ChevronLeft className="h-4 w-4 " />
+                                    <ChevronLeft className="h-4 w-4" />
                                     Previous
                                 </Button>
                                 <Button
@@ -1091,7 +1091,7 @@ export default function ExpensePage() {
                             disabled={isDeleting}
                         >
                             {isDeleting && (
-                                <Loader className="h-4 w-4  animate-spin" />
+                                <Loader className="h-4 w-4 animate-spin" />
                             )}
                             Delete
                         </AlertDialogAction>
@@ -1138,7 +1138,7 @@ export default function ExpensePage() {
                             disabled={isCreatingCategory}
                         >
                             {isCreatingCategory && (
-                                <Loader className="h-4 w-4  animate-spin" />
+                                <Loader className="h-4 w-4 animate-spin" />
                             )}
                             Create
                         </Button>

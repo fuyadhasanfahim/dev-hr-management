@@ -689,7 +689,7 @@ export default function EarningsPage() {
                             className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm"
                             onClick={() => setIsBulkWithdrawDialogOpen(true)}
                         >
-                            <Download className=" h-4 w-4" />
+                            <Download className="h-4 w-4" />
                             Monthly Withdraw
                         </Button>
                     </div>
@@ -698,7 +698,7 @@ export default function EarningsPage() {
                 <CardContent className="space-y-6">
                     {/* Filters Toolbar */}
                     <div className="flex flex-wrap items-center gap-3 p-4 bg-muted/30 rounded-lg border border-border/50">
-                        <div className="flex items-center gap-2 ">
+                        <div className="flex items-center gap-2">
                             <div className="bg-primary/10 p-2 rounded-full">
                                 <Filter className="h-4 w-4 text-primary" />
                             </div>
@@ -1627,7 +1627,7 @@ export default function EarningsPage() {
                             className="bg-green-600 hover:bg-green-700 text-white"
                         >
                             {isWithdrawing && (
-                                <Loader className="h-4 w-4  animate-spin" />
+                                <Loader className="h-4 w-4 animate-spin" />
                             )}
                             Record Payment
                         </Button>
@@ -2208,7 +2208,7 @@ export default function EarningsPage() {
                             >
                                 {isWithdrawing ? (
                                     <>
-                                        <Loader className=" h-4 w-4 animate-spin" />{" "}
+                                        <Loader className="h-4 w-4 animate-spin" />{" "}
                                         Processing...
                                     </>
                                 ) : (
@@ -2290,7 +2290,7 @@ export default function EarningsPage() {
                             disabled={isUpdating || !editClientId}
                         >
                             {isUpdating && (
-                                <Loader className="mr-2 h-4 w-4 animate-spin" />
+                                <Loader className="h-4 w-4 animate-spin" />
                             )}
                             Update Client
                         </Button>
@@ -2319,7 +2319,7 @@ export default function EarningsPage() {
                             className="bg-destructive hover:bg-destructive/90"
                         >
                             {isDeleting && (
-                                <Loader className="h-4 w-4  animate-spin" />
+                                <Loader className="h-4 w-4 animate-spin" />
                             )}
                             Delete Record
                         </AlertDialogAction>

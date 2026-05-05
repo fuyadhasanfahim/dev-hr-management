@@ -651,7 +651,7 @@ export default function QuotationBuilder({
                 className="h-10 px-3 shrink-0 shadow-sm"
                 onClick={() => addPhase()}
               >
-                <Plus className="w-4 h-4 mr-1" /> New Phase
+                <Plus className="w-4 h-4" /> New Phase
               </PrimaryButton>
             </div>
             <div className="p-6">
@@ -781,7 +781,7 @@ export default function QuotationBuilder({
                             className="text-muted-foreground hover:text-foreground"
                             onClick={() => removePhase(pIdx)}
                           >
-                            <Trash2 className="w-4 h-4 mr-2" /> Delete Phase
+                            <Trash2 className="w-4 h-4" /> Delete Phase
                           </PrimaryButton>
                         </div>
                       </div>
@@ -951,7 +951,7 @@ export default function QuotationBuilder({
                       variant="secondary"
                       onClick={() => addPaymentMilestone()}
                     >
-                      <Plus className="w-4 h-4 mr-1" /> Add
+                      <Plus className="w-4 h-4" /> Add
                     </PrimaryButton>
                   </div>
 
@@ -1186,7 +1186,7 @@ export default function QuotationBuilder({
                 disabled={isCreating || isUpdating || isSending}
                 className="bg-gradient-to-r from-teal-600 to-teal-500 hover:from-teal-700 hover:to-teal-600 text-white border-0 shadow-md hover:shadow-lg transition-all duration-300"
               >
-                <Send className="w-4 h-4 mr-2" /> Dispatch to Client
+                <Send className="w-4 h-4" /> Dispatch to Client
               </PrimaryButton>
               <PrimaryButton
                 variant="outline"
@@ -1194,7 +1194,7 @@ export default function QuotationBuilder({
                 onClick={() => saveQuotation("draft")}
                 disabled={isCreating || isUpdating || isSending}
               >
-                <Save className="w-4 h-4 mr-2" /> Save Internal Draft
+                <Save className="w-4 h-4" /> Save Internal Draft
               </PrimaryButton>
               <PrimaryButton
                 variant="outline"
@@ -1202,7 +1202,7 @@ export default function QuotationBuilder({
                 onClick={handleSaveTemplate}
                 disabled={isCreatingTemplate}
               >
-                <Sparkles className="w-4 h-4 mr-2 text-primary" /> Save as Template
+                <Sparkles className="w-4 h-4 text-primary" /> Save as Template
               </PrimaryButton>
             </div>
           </div>

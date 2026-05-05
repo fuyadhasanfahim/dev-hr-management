@@ -216,7 +216,7 @@ export default function ClientDetailsPage() {
                             }}
                         >
                             <SelectTrigger className="h-9 bg-muted/40 border-slate-200 uppercase text-[11px] font-bold">
-                                <Filter className="h-3 w-3 mr-2" />
+                                <Filter className="h-3 w-3" />
                                 <SelectValue placeholder="Status" />
                             </SelectTrigger>
                             <SelectContent>
@@ -254,7 +254,7 @@ export default function ClientDetailsPage() {
                             disabled={!search && !selectedMonth && !selectedStatus && !selectedPriority}
                             className="h-9 text-muted-foreground"
                         >
-                            <X className="h-4 w-4 mr-2" />
+                            <X className="h-4 w-4" />
                             Clear
                         </Button>
                     </div>

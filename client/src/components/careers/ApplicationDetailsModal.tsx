@@ -243,7 +243,7 @@ export function ApplicationDetailsModal({
                                 target="_blank"
                                 rel="noopener noreferrer"
                             >
-                                <Download className="h-4 w-4 " />
+                                <Download className="h-4 w-4" />
                                 Download CV ({application.cvFile?.fileName})
                             </a>
                         </Button>
@@ -329,9 +329,9 @@ export function ApplicationDetailsModal({
                             }
                         >
                             {isLoading ? (
-                                <Loader className="h-4 w-4  animate-spin" />
+                                <Loader className="h-4 w-4 animate-spin" />
                             ) : (
-                                <CheckCircle className="h-4 w-4 " />
+                                <CheckCircle className="h-4 w-4" />
                             )}
                             Update Status
                         </Button>

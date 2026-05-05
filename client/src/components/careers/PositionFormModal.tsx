@@ -335,7 +335,7 @@ export function PositionFormModal({
                                 size="sm"
                                 onClick={() => addArrayItem('responsibilities')}
                             >
-                                <Plus className="h-3 w-3 mr-1" /> Add
+                                <Plus className="h-3 w-3" /> Add
                             </Button>
                         </div>
                         {formData.responsibilities?.map((item, index) => (
@@ -381,7 +381,7 @@ export function PositionFormModal({
                                 size="sm"
                                 onClick={() => addArrayItem('requirements')}
                             >
-                                <Plus className="h-3 w-3 mr-1" /> Add
+                                <Plus className="h-3 w-3" /> Add
                             </Button>
                         </div>
                         {formData.requirements?.map((item, index) => (
@@ -426,7 +426,7 @@ export function PositionFormModal({
                                 size="sm"
                                 onClick={() => addArrayItem('benefits')}
                             >
-                                <Plus className="h-3 w-3 mr-1" /> Add
+                                <Plus className="h-3 w-3" /> Add
                             </Button>
                         </div>
                         {formData.benefits?.map((item, index) => (
@@ -493,7 +493,7 @@ export function PositionFormModal({
                         </Button>
                         <Button type="submit" disabled={isLoading}>
                             {isLoading && (
-                                <Loader className="h-4 w-4  animate-spin" />
+                                <Loader className="h-4 w-4 animate-spin" />
                             )}
                             {isEditing ? 'Update Position' : 'Create Position'}
                         </Button>

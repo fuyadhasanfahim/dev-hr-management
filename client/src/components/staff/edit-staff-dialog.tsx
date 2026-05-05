@@ -128,7 +128,7 @@ export function EditStaffDialog({ staff }: EditStaffDialogProps) {
         <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
                 <Button variant="outline" size="sm">
-                    <Edit className="h-4 w-4 mr-2" />
+                    <Edit className="h-4 w-4" />
                     Edit Profile
                 </Button>
             </DialogTrigger>
@@ -440,7 +440,7 @@ export function EditStaffDialog({ staff }: EditStaffDialogProps) {
                         </Button>
                         <Button type="submit" disabled={isLoading}>
                             {isLoading && (
-                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                <Loader2 className="h-4 w-4 animate-spin" />
                             )}
                             Save Changes
                         </Button>

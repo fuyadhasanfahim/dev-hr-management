@@ -110,7 +110,7 @@ jane@example.com,Team Leader,HR,team_leader,60000,BRANCH_ID_HERE,SHIFT_ID_HERE,7
         <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
                 <Button variant="outline">
-                    <Upload className=" h-4 w-4" />
+                    <Upload className="h-4 w-4" />
                     Bulk Invite
                 </Button>
             </DialogTrigger>
@@ -139,7 +139,7 @@ jane@example.com,Team Leader,HR,team_leader,60000,BRANCH_ID_HERE,SHIFT_ID_HERE,7
                                     onClick={downloadTemplate}
                                     variant="outline"
                                 >
-                                    <Download className=" h-4 w-4" />
+                                    <Download className="h-4 w-4" />
                                     Download
                                 </Button>
                             </div>
@@ -172,12 +172,12 @@ jane@example.com,Team Leader,HR,team_leader,60000,BRANCH_ID_HERE,SHIFT_ID_HERE,7
                                             <span>
                                                 {isUploading ? (
                                                     <>
-                                                        <Loader className=" h-4 w-4 animate-spin" />
+                                                        <Loader className="h-4 w-4 animate-spin" />
                                                         Processing...
                                                     </>
                                                 ) : (
                                                     <>
-                                                        <Upload className=" h-4 w-4" />
+                                                        <Upload className="h-4 w-4" />
                                                         Upload CSV
                                                     </>
                                                 )}

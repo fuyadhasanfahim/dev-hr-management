@@ -237,7 +237,7 @@ export function StaffOvertimeTab({ staffId }: { staffId: string }) {
                             disabled={page === 1 || isFetching}
                             className="bg-background"
                         >
-                            <ChevronLeft className="h-4 w-4 mr-1" />
+                            <ChevronLeft className="h-4 w-4" />
                             Prev
                         </Button>
                         <Button

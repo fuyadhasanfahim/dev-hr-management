@@ -589,7 +589,7 @@ export default function LeaveApplyPage() {
                                                             'text-muted-foreground',
                                                     )}
                                                 >
-                                                    <CalendarIcon className=" h-4 w-4" />
+                                                    <CalendarIcon className="h-4 w-4" />
                                                     {startDate
                                                         ? format(
                                                               startDate,
@@ -626,7 +626,7 @@ export default function LeaveApplyPage() {
                                                             'text-muted-foreground',
                                                     )}
                                                 >
-                                                    <CalendarIcon className=" h-4 w-4" />
+                                                    <CalendarIcon className="h-4 w-4" />
                                                     {endDate
                                                         ? format(endDate, 'PPP')
                                                         : 'Select end date'}
@@ -773,14 +773,14 @@ export default function LeaveApplyPage() {
                                 >
                                     {isApplying || isUploading ? (
                                         <>
-                                            <Loader className=" h-5 w-5 animate-spin" />
+                                            <Loader className="h-5 w-5 animate-spin" />
                                             {isApplying
                                                 ? 'Submitting...'
                                                 : 'Uploading...'}
                                         </>
                                     ) : (
                                         <>
-                                            <FileCheck className=" h-5 w-5" />
+                                            <FileCheck className="h-5 w-5" />
                                             Submit Leave Request
                                         </>
                                     )}

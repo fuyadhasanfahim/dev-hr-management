@@ -362,7 +362,7 @@ export default function ExportPdfDialog({
                                             onValueChange={setSelectedBankId}
                                         >
                                             <SelectTrigger>
-                                                <Building2 className="h-4 w-4 mr-2 opacity-50" />
+                                                <Building2 className="h-4 w-4 opacity-50" />
                                                 <SelectValue placeholder="Choose bank account..." />
                                             </SelectTrigger>
                                             <SelectContent>
@@ -450,7 +450,7 @@ export default function ExportPdfDialog({
                                         onClick={() => setShowAddForm(true)}
                                         className="w-full"
                                     >
-                                        <Plus className="h-4 w-4 mr-2" />
+                                        <Plus className="h-4 w-4" />
                                         Add New Bank Account
                                     </Button>
                                 </>
@@ -561,7 +561,7 @@ export default function ExportPdfDialog({
                                             className="flex-1"
                                         >
                                             {isCreating && (
-                                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                                <Loader2 className="h-4 w-4 animate-spin" />
                                             )}
                                             Save Bank
                                         </Button>
@@ -583,7 +583,7 @@ export default function ExportPdfDialog({
                         onClick={handleExport}
                         disabled={!selectedBank || showAddForm}
                     >
-                        <FileText className="h-4 w-4 mr-2" />
+                        <FileText className="h-4 w-4" />
                         Generate PDF
                     </Button>
                 </DialogFooter>

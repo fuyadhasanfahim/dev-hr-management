@@ -137,7 +137,7 @@ export default function StaffDetailsPage() {
             {/* Header / Navigation */}
             <div className="flex items-center gap-2">
                 <Button variant="ghost" size="sm" onClick={() => router.back()}>
-                    <ArrowLeft className="h-4 w-4 mr-1" />
+                    <ArrowLeft className="h-4 w-4" />
                     Back to Staff
                 </Button>
             </div>

@@ -72,7 +72,7 @@ export function ProfileImageUploadDialog() {
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
             <DialogTrigger asChild>
                 <Button className="absolute -top-16 right-0 group-hover/profile-image:top-0">
-                    <SquarePenIcon className=" h-4 w-4" />
+                    <SquarePenIcon className="h-4 w-4" />
                     Update Image
                 </Button>
             </DialogTrigger>

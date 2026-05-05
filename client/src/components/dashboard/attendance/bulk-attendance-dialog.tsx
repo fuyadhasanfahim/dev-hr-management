@@ -165,7 +165,7 @@ export function BulkAttendanceDialog({ staffs }: BulkAttendanceDialogProps) {
                     !date && "text-muted-foreground",
                   )}
                 >
-                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  <CalendarIcon className="h-4 w-4" />
                   {date ? (
                     format(new Date(date), "PPP")
                   ) : (
@@ -236,7 +236,7 @@ export function BulkAttendanceDialog({ staffs }: BulkAttendanceDialogProps) {
 
             <div className="border rounded-md overflow-hidden flex flex-col focus-within:ring-1 focus-within:ring-ring transition-shadow">
               <div className="flex items-center px-3 border-b bg-background">
-                <Search className="mr-2 h-4 w-4 shrink-0 text-muted-foreground" />
+                <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
                 <Input
                   placeholder="Search staff by name or ID..."
                   className="border-0 focus-visible:ring-0 focus-visible:ring-offset-0 px-0 h-10 bg-transparent shadow-none"
