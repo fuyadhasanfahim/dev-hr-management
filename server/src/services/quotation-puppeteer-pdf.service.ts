@@ -336,6 +336,9 @@ function buildPrintHtml(
       --slate50: #f8fafc;
     }
     * { box-sizing: border-box; margin: 0; }
+    html, body {
+      height: 100%;
+    }
     body {
       font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       font-size: 13.5px;
@@ -343,7 +346,11 @@ function buildPrintHtml(
       color: var(--slate700);
       background: #fff;
     }
-    .page-pad { padding: 0 3mm 4mm 3mm; }
+    .page-pad {
+      padding: 0 3mm 40px 3mm;
+      position: relative;
+      min-height: 1122px;
+    }
     .header-row {
       display: flex;
       justify-content: space-between;
@@ -678,7 +685,10 @@ function buildPrintHtml(
     .sig-name { font-size: 13px; font-weight: 800; color: var(--slate900); line-height: 1.35; }
     .sig-role { font-size: 11.5px; color: var(--slate500); margin-top: 5px; line-height: 1.5; }
     .doc-footer {
-      margin-top: 22px;
+      position: absolute;
+      bottom: 0;
+      left: 3mm;
+      right: 3mm;
       padding-top: 14px;
       border-top: 1px solid var(--slate300);
       text-align: center;
