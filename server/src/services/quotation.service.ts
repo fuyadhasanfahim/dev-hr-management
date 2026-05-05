@@ -310,10 +310,11 @@ export class QuotationService {
         if (!quotation) throw new AppError('Quotation not found', 404);
 
         // Resend semantics:
-        // - If already sent/viewed, keep status as-is, reuse token if still valid (otherwise re-issue).
+        // - Prevent sending if the quotation is in a terminal/invalid state.
         // - Always attempt to send email when this endpoint is called.
-        if (quotation.status !== 'sent' && quotation.status !== 'viewed') {
-            assertTransition(quotation.status, 'sent');
+        // - Only move to `sent` when transitioning from draft; otherwise preserve state.
+        if (['superseded', 'rejected', 'expired'].includes(quotation.status)) {
+            throw new AppError(`Cannot send email for a ${quotation.status} quotation`, 400);
         }
 
         const hasValidToken =
@@ -332,7 +333,6 @@ export class QuotationService {
                   return d;
               })();
 
-        // Only move to `sent` when transitioning from draft; otherwise preserve viewed state.
         if (quotation.status === 'draft') {
             quotation.status = 'sent';
         }
@@ -505,18 +505,20 @@ export class QuotationService {
                         : {}),
                 };
 
-                for (const to of toList) {
-                    try {
-                        await emailService.sendQuotationEmail({ to, ...commonPayload });
-                        recipients.push({ email: to, status: 'sent' });
-                    } catch (e: any) {
-                        recipients.push({
-                            email: to,
-                            status: 'failed',
-                            error: e?.message || String(e),
-                        });
-                    }
-                }
+                await Promise.all(
+                    toList.map(async (to) => {
+                        try {
+                            await emailService.sendQuotationEmail({ to, ...commonPayload });
+                            recipients.push({ email: to, status: 'sent' });
+                        } catch (e: any) {
+                            recipients.push({
+                                email: to,
+                                status: 'failed',
+                                error: e?.message || String(e),
+                            });
+                        }
+                    })
+                );
 
                 const successes = recipients.filter((r) => r.status === 'sent');
                 const failures = recipients.filter((r) => r.status === 'failed');
