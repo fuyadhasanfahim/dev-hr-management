@@ -269,10 +269,12 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 function SuccessCard({ 
+    phase,
     data, 
     currency 
 }: { 
-    data: { amountPaid: number; paidAt: string; paymentIntentId?: string }; 
+    phase: string;
+    data: { amountPaid: number; paidAt?: string; paymentIntentId?: string }; 
     currency: string; 
 }) {
     return (
@@ -288,7 +290,7 @@ function SuccessCard({
                 </div>
                 <div>
                     <p className="text-[10px] text-slate-500 uppercase font-bold">Paid On</p>
-                    <p className="text-sm font-medium text-slate-900">{formatDate(data.paidAt)}</p>
+                    <p className="text-sm font-medium text-slate-900">{data.paidAt ? formatDate(data.paidAt) : "N/A"}</p>
                 </div>
                 <div className="col-span-2">
                     <p className="text-[10px] text-slate-500 uppercase font-bold">Transaction ID</p>
