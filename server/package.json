@@ -53,6 +53,7 @@
         "nodemailer": "^8.0.5",
         "pino": "^10.3.1",
         "pino-http": "^11.0.0",
+        "puppeteer": "^24.42.0",
         "react": "^19.2.4",
         "react-dom": "^19.2.4",
         "socket.io": "^4.8.3",

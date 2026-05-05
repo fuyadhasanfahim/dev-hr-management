@@ -1,5 +1,6 @@
 import type { Request, Response, NextFunction } from 'express';
 import { QuotationService } from '../services/quotation.service.js';
+import { QuotationPuppeteerPdfService } from '../services/quotation-puppeteer-pdf.service.js';
 import { logger } from '../lib/logger.js';
 
 // ─── Staff / Admin Handlers ───────────────────────────────────────────────────
@@ -138,6 +139,21 @@ const getQuotationById = async (req: Request, res: Response, next: NextFunction)
     }
 };
 
+const downloadQuotationPdfPuppeteer = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const userId = req.user?.id;
+        if (!userId) return next(new Error('Unauthorized'));
+        const { id } = req.params;
+        if (!id) return next(new Error('ID is required'));
+        const { buffer, filename } = await QuotationPuppeteerPdfService.generatePdf(id);
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        res.send(buffer);
+    } catch (err) {
+        next(err);
+    }
+};
+
 const getGroupVersions = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const { groupId } = req.params;
@@ -252,6 +268,7 @@ export default {
     createNewVersion,
     getAllQuotations,
     getQuotationById,
+    downloadQuotationPdfPuppeteer,
     getGroupVersions,
     deleteQuotation,
     // Public
