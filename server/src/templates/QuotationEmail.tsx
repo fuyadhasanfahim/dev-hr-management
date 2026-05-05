@@ -78,7 +78,7 @@ export const QuotationEmail = ({
         : `Quotation ${quotationNumber} is ready to review`;
 
     const logoUrl =
-        'https://res.cloudinary.com/dny7zfbg9/image/upload/v1755954483/mqontecf1xao7znsh6cx.png';
+        'https://res.cloudinary.com/dny7zfbg9/image/upload/v1777996436/q83auvamwih8u8ftw5zu.png';
 
     return (
         <Html>
@@ -98,7 +98,9 @@ export const QuotationEmail = ({
 
                     <Section style={content}>
                         <Text style={eyebrow}>
-                            {isReminder ? 'Payment reminder' : 'Quotation ready'}
+                            {isReminder
+                                ? 'Payment reminder'
+                                : 'Quotation ready'}
                         </Text>
                         <Text style={heading}>
                             {isReminder
@@ -106,30 +108,35 @@ export const QuotationEmail = ({
                                 : 'Your quotation is ready to review'}
                         </Text>
 
-                        <Text style={paragraph}>Hi {clientName || 'there'},</Text>
+                        <Text style={paragraph}>
+                            Hi {clientName || 'there'},
+                        </Text>
 
                         {isReminder ? (
                             <Text style={paragraph}>
-                                This is a friendly reminder that the payment for your project{' '}
-                                <strong>{quotationTitle}</strong> (quotation{' '}
-                                <strong>{quotationNumber}</strong>) is not yet complete. Use
-                                the secure link below to continue with the next milestone.
+                                This is a friendly reminder that the payment for
+                                your project <strong>{quotationTitle}</strong>{' '}
+                                (quotation <strong>{quotationNumber}</strong>)
+                                is not yet complete. Use the secure link below
+                                to continue with the next milestone.
                             </Text>
                         ) : (
                             <Text style={paragraph}>
                                 We&apos;ve prepared your quotation{' '}
                                 <strong>{quotationNumber}</strong> for{' '}
                                 <strong>{quotationTitle}</strong>. Tap{' '}
-                                <em>Review quotation</em> below to view the full proposal —
-                                project overview, scope of work, pricing, and payment
-                                milestones — in one secure place.
+                                <em>Review quotation</em> below to view the full
+                                proposal — project overview, scope of work,
+                                pricing, and payment milestones — in one secure
+                                place.
                             </Text>
                         )}
 
                         {!isReminder && hasPdfAttachment ? (
                             <Section style={pdfCallout}>
                                 <Text style={pdfCalloutText}>
-                                    A PDF copy of your quotation is attached for easy sharing and printing.
+                                    A PDF copy of your quotation is attached for
+                                    easy sharing and printing.
                                 </Text>
                             </Section>
                         ) : null}
@@ -139,12 +146,16 @@ export const QuotationEmail = ({
                             <Row>
                                 <Column>
                                     <Text style={summaryLabel}>Quotation</Text>
-                                    <Text style={summaryValue}>{quotationNumber}</Text>
+                                    <Text style={summaryValue}>
+                                        {quotationNumber}
+                                    </Text>
                                 </Column>
                                 {totalAmountFormatted ? (
                                     <Column align="right">
                                         <Text style={summaryLabel}>
-                                            {isReminder ? 'Project total' : 'Total'}
+                                            {isReminder
+                                                ? 'Project total'
+                                                : 'Total'}
                                         </Text>
                                         <Text style={summaryValue}>
                                             {totalAmountFormatted}
@@ -152,20 +163,28 @@ export const QuotationEmail = ({
                                     </Column>
                                 ) : null}
                             </Row>
-                            {(isReminder && remainingAmountFormatted) || validUntil ? (
+                            {(isReminder && remainingAmountFormatted) ||
+                            validUntil ? (
                                 <>
                                     <Hr style={summaryDivider} />
                                     <Row>
-                                        {isReminder && remainingAmountFormatted ? (
+                                        {isReminder &&
+                                        remainingAmountFormatted ? (
                                             <Column>
-                                                <Text style={summaryLabel}>Remaining</Text>
-                                                <Text style={summaryValueAccent}>
+                                                <Text style={summaryLabel}>
+                                                    Remaining
+                                                </Text>
+                                                <Text
+                                                    style={summaryValueAccent}
+                                                >
                                                     {remainingAmountFormatted}
                                                 </Text>
                                             </Column>
                                         ) : (
                                             <Column>
-                                                <Text style={summaryLabel}>Project</Text>
+                                                <Text style={summaryLabel}>
+                                                    Project
+                                                </Text>
                                                 <Text style={summaryValueMuted}>
                                                     {quotationTitle}
                                                 </Text>
@@ -173,7 +192,9 @@ export const QuotationEmail = ({
                                         )}
                                         {validUntil && !isReminder ? (
                                             <Column align="right">
-                                                <Text style={summaryLabel}>Valid until</Text>
+                                                <Text style={summaryLabel}>
+                                                    Valid until
+                                                </Text>
                                                 <Text style={summaryValueMuted}>
                                                     {validUntil}
                                                 </Text>
@@ -185,32 +206,43 @@ export const QuotationEmail = ({
                         </Section>
 
                         {/* Payment phase table — reminder mode only */}
-                        {isReminder && paymentPhases && paymentPhases.length > 0 ? (
+                        {isReminder &&
+                        paymentPhases &&
+                        paymentPhases.length > 0 ? (
                             <Section style={phaseTable}>
-                                <Text style={phaseTableHeading}>Payment milestones</Text>
+                                <Text style={phaseTableHeading}>
+                                    Payment milestones
+                                </Text>
 
                                 {paymentPhases.map((ph) => (
-                                    <Section key={ph.label} style={phaseRowStyle(ph.state)}>
+                                    <Section
+                                        key={ph.label}
+                                        style={phaseRowStyle(ph.state)}
+                                    >
                                         <Row>
                                             <Column>
                                                 <Text style={phaseCell}>
                                                     {ph.state === 'paid'
                                                         ? '✅'
                                                         : ph.state === 'next'
-                                                            ? '⏳'
-                                                            : '🔒'}{' '}
-                                                    <strong>{ph.label}</strong> (
-                                                    {ph.percentageLabel}) —{' '}
+                                                          ? '⏳'
+                                                          : '🔒'}{' '}
+                                                    <strong>{ph.label}</strong>{' '}
+                                                    ({ph.percentageLabel}) —{' '}
                                                     {ph.amountFormatted}
                                                 </Text>
                                             </Column>
                                             <Column align="right">
-                                                <Text style={phaseStatusStyle(ph.state)}>
+                                                <Text
+                                                    style={phaseStatusStyle(
+                                                        ph.state,
+                                                    )}
+                                                >
                                                     {ph.state === 'paid'
                                                         ? 'Paid'
                                                         : ph.state === 'next'
-                                                            ? 'Due next'
-                                                            : 'Locked'}
+                                                          ? 'Due next'
+                                                          : 'Locked'}
                                                 </Text>
                                             </Column>
                                         </Row>
@@ -222,7 +254,9 @@ export const QuotationEmail = ({
                         {/* Milestones table — initial email only */}
                         {!isReminder && milestones && milestones.length > 0 ? (
                             <Section style={phaseTable}>
-                                <Text style={phaseTableHeading}>Payment milestones</Text>
+                                <Text style={phaseTableHeading}>
+                                    Payment milestones
+                                </Text>
                                 {milestones.map((m, idx) => (
                                     <Section
                                         key={`${m.label}-${idx}`}
@@ -237,10 +271,19 @@ export const QuotationEmail = ({
                                         <Row>
                                             <Column>
                                                 <Text style={phaseCell}>
-                                                    <strong>{m.label}</strong> ({m.percentageLabel}) — {m.amountFormatted}
+                                                    <strong>{m.label}</strong> (
+                                                    {m.percentageLabel}) —{' '}
+                                                    {m.amountFormatted}
                                                 </Text>
                                                 {m.note ? (
-                                                    <Text style={{ ...phaseCell, color: '#64748b', fontSize: '12px', marginTop: '4px' }}>
+                                                    <Text
+                                                        style={{
+                                                            ...phaseCell,
+                                                            color: '#64748b',
+                                                            fontSize: '12px',
+                                                            marginTop: '4px',
+                                                        }}
+                                                    >
                                                         {m.note}
                                                     </Text>
                                                 ) : null}
@@ -253,19 +296,23 @@ export const QuotationEmail = ({
 
                         <Section style={btnContainer}>
                             <Button style={button} href={clientLink}>
-                                {isReminder ? 'Continue payment →' : 'Review quotation →'}
+                                {isReminder
+                                    ? 'Continue payment →'
+                                    : 'Review quotation →'}
                             </Button>
                         </Section>
 
                         <Text style={tinyMuted}>
-                            This is a secure, single-use link tied to your account. Please
-                            don&apos;t share it with anyone outside your team.
+                            This is a secure, single-use link tied to your
+                            account. Please don&apos;t share it with anyone
+                            outside your team.
                         </Text>
 
                         <Hr style={hr} />
 
                         <Text style={footerText}>
-                            Questions? Just reply to this email — we&apos;re happy to help.
+                            Questions? Just reply to this email — we&apos;re
+                            happy to help.
                             <br />
                             <strong>Web Briks LLC</strong>
                         </Text>

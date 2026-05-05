@@ -31,7 +31,7 @@ export const MeetingReminderEmail = ({
 }: MeetingReminderEmailProps) => {
     const previewText = `Meeting Reminder: ${meetingTitle}`;
     const logoUrl =
-        'https://res.cloudinary.com/dny7zfbg9/image/upload/v1755954483/mqontecf1xao7znsh6cx.png';
+        'https://res.cloudinary.com/dny7zfbg9/image/upload/v1777996436/q83auvamwih8u8ftw5zu.png';
 
     return (
         <Html>
@@ -54,7 +54,8 @@ export const MeetingReminderEmail = ({
 
                         <Text style={paragraph}>
                             Hi {clientName},<br />
-                            This is a friendly reminder that your scheduled meeting with WebBriks is starting soon.
+                            This is a friendly reminder that your scheduled
+                            meeting with WebBriks is starting soon.
                         </Text>
 
                         <Section style={detailsSection}>
@@ -65,7 +66,8 @@ export const MeetingReminderEmail = ({
                                 <strong>When:</strong> {scheduledAt}
                             </Text>
                             <Text style={detailsItem}>
-                                <strong>Duration:</strong> {durationMinutes} minutes
+                                <strong>Duration:</strong> {durationMinutes}{' '}
+                                minutes
                             </Text>
                         </Section>
 
@@ -74,7 +76,9 @@ export const MeetingReminderEmail = ({
                                 <Button style={button} href={meetLink}>
                                     Join Google Meet Now
                                 </Button>
-                                <Text style={linkText}>Or join via link: {meetLink}</Text>
+                                <Text style={linkText}>
+                                    Or join via link: {meetLink}
+                                </Text>
                             </Section>
                         )}
 

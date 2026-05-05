@@ -33,9 +33,9 @@ export function NavMain() {
         if (!userRole) return false;
         if (!item.access.includes(userRole)) return false;
 
-        // Restriction: STAFF and TEAM_LEADER must match requiredDesignation if specified
+        // Restriction: STAFF must match requiredDesignation if specified
         if (
-            (userRole === Role.STAFF || userRole === Role.TEAM_LEADER) &&
+            (userRole === Role.STAFF) &&
             item.requiredDesignation
         ) {
             return (

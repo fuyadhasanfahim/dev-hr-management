@@ -1,22 +1,22 @@
-import type { Metadata } from "next";
-import { Inter, JetBrains_Mono } from "next/font/google";
-import Image from "next/image";
-import "./globals.css";
-import { AnimatedBackground } from "@/components/layout/AnimatedBackground";
+import type { Metadata } from 'next';
+import { Inter, JetBrains_Mono } from 'next/font/google';
+import Image from 'next/image';
+import './globals.css';
+import { AnimatedBackground } from '@/components/layout/AnimatedBackground';
 
 const inter = Inter({
-    variable: "--font-inter",
-    subsets: ["latin"],
+    variable: '--font-inter',
+    subsets: ['latin'],
 });
 
 const jetbrainsMono = JetBrains_Mono({
-    variable: "--font-jetbrains-mono",
-    subsets: ["latin"],
+    variable: '--font-jetbrains-mono',
+    subsets: ['latin'],
 });
 
 export const metadata: Metadata = {
-    title: "Payment | Web Briks",
-    description: "Secure payment portal for Web Briks invoices",
+    title: 'Payment | Web Briks',
+    description: 'Secure payment portal for Web Briks invoices',
 };
 
 export default function RootLayout({
@@ -33,11 +33,11 @@ export default function RootLayout({
                 <header className="w-full p-4 md:p-6">
                     <div className="mx-auto flex h-16 max-w-7xl items-center">
                         <Image
-                            src="https://res.cloudinary.com/dny7zfbg9/image/upload/v1755954483/mqontecf1xao7znsh6cx.png"
+                            src="https://res.cloudinary.com/dny7zfbg9/image/upload/v1777996436/q83auvamwih8u8ftw5zu.png"
                             alt="Web Briks Logo"
                             width={150}
                             height={32}
-                            style={{ width: "auto", height: "auto" }}
+                            style={{ width: 'auto', height: 'auto' }}
                             priority
                         />
                     </div>

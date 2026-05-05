@@ -25,12 +25,16 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                             <Link href="/">
                                 <figure className="w-auto h-auto">
                                     <Image
-                                        src="https://res.cloudinary.com/dny7zfbg9/image/upload/v1755954483/mqontecf1xao7znsh6cx.png"
+                                        src="https://res.cloudinary.com/dny7zfbg9/image/upload/v1777996436/q83auvamwih8u8ftw5zu.png"
                                         alt="Company logo"
                                         width={150}
                                         height={45}
                                         loading="eager"
-                                        style={{ width: 'auto', height: 'auto', maxWidth: '150px' }}
+                                        style={{
+                                            width: 'auto',
+                                            height: 'auto',
+                                            maxWidth: '150px',
+                                        }}
                                     />
                                 </figure>
                             </Link>

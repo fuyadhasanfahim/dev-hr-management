@@ -28,7 +28,7 @@ export const MeetingCancellationEmail = ({
 }: MeetingCancellationEmailProps) => {
     const previewText = `Meeting Cancelled: ${meetingTitle}`;
     const logoUrl =
-        'https://res.cloudinary.com/dny7zfbg9/image/upload/v1755954483/mqontecf1xao7znsh6cx.png';
+        'https://res.cloudinary.com/dny7zfbg9/image/upload/v1777996436/q83auvamwih8u8ftw5zu.png';
 
     return (
         <Html>
@@ -50,7 +50,8 @@ export const MeetingCancellationEmail = ({
                         <Section style={content}>
                             <Text style={paragraph}>Hello Admin,</Text>
                             <Text style={paragraph}>
-                                The following meeting has been cancelled by the client/system.
+                                The following meeting has been cancelled by the
+                                client/system.
                             </Text>
 
                             <Section style={detailsSection}>
@@ -61,12 +62,14 @@ export const MeetingCancellationEmail = ({
                                     <strong>Client:</strong> {clientName}
                                 </Text>
                                 <Text style={detailsItem}>
-                                    <strong>Scheduled Time:</strong> {scheduledAt}
+                                    <strong>Scheduled Time:</strong>{' '}
+                                    {scheduledAt}
                                 </Text>
                             </Section>
 
                             <Text style={paragraph}>
-                                Please update the meeting status and schedule accordingly.
+                                Please update the meeting status and schedule
+                                accordingly.
                             </Text>
 
                             <Hr style={hr} />
@@ -81,7 +84,8 @@ export const MeetingCancellationEmail = ({
                         <Section style={content}>
                             <Text style={paragraph}>Hello,</Text>
                             <Text style={paragraph}>
-                                We wanted to inform you that your scheduled meeting has been cancelled.
+                                We wanted to inform you that your scheduled
+                                meeting has been cancelled.
                             </Text>
 
                             <Section style={detailsSection}>
@@ -89,15 +93,20 @@ export const MeetingCancellationEmail = ({
                                     <strong>Meeting:</strong> {meetingTitle}
                                 </Text>
                                 <Text style={detailsItem}>
-                                    <strong>Scheduled Time:</strong> {scheduledAt}
+                                    <strong>Scheduled Time:</strong>{' '}
+                                    {scheduledAt}
                                 </Text>
                             </Section>
 
                             <Text style={paragraph}>
-                                We sincerely apologize for the inconvenience. If the meeting is rescheduled, we will notify you with the updated details.
+                                We sincerely apologize for the inconvenience. If
+                                the meeting is rescheduled, we will notify you
+                                with the updated details.
                             </Text>
 
-                            <Text style={paragraph}>Thank you for your understanding.</Text>
+                            <Text style={paragraph}>
+                                Thank you for your understanding.
+                            </Text>
 
                             <Hr style={hr} />
 

@@ -87,7 +87,7 @@ export const QuotationPDF = ({ data }: QuotationPDFProps) => {
     const payLink = buildPaymentLink(data);
     const logoUrl =
         company.logo ||
-        'https://res.cloudinary.com/dny7zfbg9/image/upload/v1755954483/mqontecf1xao7znsh6cx.png';
+        'https://res.cloudinary.com/dny7zfbg9/image/upload/v1777996436/q83auvamwih8u8ftw5zu.png';
     const sigUrl =
         process.env.NEXT_PUBLIC_COMPANY_SIGNATURE_URL ||
         'https://res.cloudinary.com/dny7zfbg9/image/upload/v1776961131/ouvycul8e7xskhrioca4.png';
@@ -299,9 +299,7 @@ export const QuotationPDF = ({ data }: QuotationPDFProps) => {
                     <>
                         <Text style={styles.sectionTitle}>Overview</Text>
                         <View style={styles.cardSoft}>
-                            <Text style={styles.bodyText}>
-                                {data.overview}
-                            </Text>
+                            <Text style={styles.bodyText}>{data.overview}</Text>
                         </View>
                     </>
                 ) : null}
@@ -316,10 +314,7 @@ export const QuotationPDF = ({ data }: QuotationPDFProps) => {
                                 style={styles.scopeCard}
                                 wrap
                             >
-                                <View
-                                    style={styles.scopeHeader}
-                                    wrap={false}
-                                >
+                                <View style={styles.scopeHeader} wrap={false}>
                                     <Text style={styles.scopeTitle}>
                                         Phase {idx + 1}: {phase.title}
                                     </Text>
@@ -402,7 +397,11 @@ export const QuotationPDF = ({ data }: QuotationPDFProps) => {
                                     <React.Fragment key={`${i}-${step}`}>
                                         <View style={styles.workflowStep}>
                                             <View style={styles.workflowNum}>
-                                                <Text style={styles.workflowNumText}>
+                                                <Text
+                                                    style={
+                                                        styles.workflowNumText
+                                                    }
+                                                >
                                                     {i + 1}
                                                 </Text>
                                             </View>
@@ -411,9 +410,7 @@ export const QuotationPDF = ({ data }: QuotationPDFProps) => {
                                             </Text>
                                         </View>
                                         {i < workflowSteps.length - 1 ? (
-                                            <Text
-                                                style={styles.workflowArrow}
-                                            >
+                                            <Text style={styles.workflowArrow}>
                                                 →
                                             </Text>
                                         ) : null}
@@ -545,8 +542,7 @@ export const QuotationPDF = ({ data }: QuotationPDFProps) => {
                             <Text style={styles.ctaDesc}>
                                 On acceptance: {firstMilestone.percentage}% (
                                 {formatMoney(
-                                    (pricingTotal *
-                                        firstMilestone.percentage) /
+                                    (pricingTotal * firstMilestone.percentage) /
                                         100,
                                     currency,
                                 )}
@@ -601,8 +597,7 @@ export const QuotationPDF = ({ data }: QuotationPDFProps) => {
                                 Md. Ashaduzzaman
                             </Text>
                             <Text style={styles.signatureRole}>
-                                Founder &amp; CEO,{' '}
-                                {company?.name || 'Company'}
+                                Founder &amp; CEO, {company?.name || 'Company'}
                             </Text>
                         </View>
                         <View style={styles.signatureBlock}>

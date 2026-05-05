@@ -44,7 +44,13 @@ export function QuotationPaymentReceiptEmail({
     })();
 
     const phaseLabel =
-        phase === 'upfront' ? 'Upfront' : phase === 'delivery' ? 'Delivery' : phase === 'final' ? 'Final' : phase;
+        phase === 'upfront'
+            ? 'Upfront'
+            : phase === 'delivery'
+              ? 'Delivery'
+              : phase === 'final'
+                ? 'Final'
+                : phase;
 
     const formattedDate = new Intl.DateTimeFormat('en-US', {
         dateStyle: 'long',
@@ -52,7 +58,7 @@ export function QuotationPaymentReceiptEmail({
     }).format(new Date(paidAt));
 
     const logoUrl =
-        'https://res.cloudinary.com/dny7zfbg9/image/upload/v1755954483/mqontecf1xao7znsh6cx.png';
+        'https://res.cloudinary.com/dny7zfbg9/image/upload/v1777996436/q83auvamwih8u8ftw5zu.png';
 
     return (
         <Html>
@@ -61,7 +67,13 @@ export function QuotationPaymentReceiptEmail({
             <Body style={main}>
                 <Container style={container}>
                     <Section style={header}>
-                        <Img src={logoUrl} width="120" height="56" alt="Web Briks" style={logo} />
+                        <Img
+                            src={logoUrl}
+                            width="120"
+                            height="56"
+                            alt="Web Briks"
+                            style={logo}
+                        />
                     </Section>
 
                     <Section style={card}>
@@ -70,7 +82,8 @@ export function QuotationPaymentReceiptEmail({
                             <Heading style={title}>Payment receipt</Heading>
                             <Text style={text}>Hi {clientName},</Text>
                             <Text style={text}>
-                                We’ve received your payment for <strong>{quotationNumber}</strong>.
+                                We’ve received your payment for{' '}
+                                <strong>{quotationNumber}</strong>.
                             </Text>
 
                             <Section style={receiptBox}>
@@ -86,7 +99,9 @@ export function QuotationPaymentReceiptEmail({
                                 <Hr style={divider} />
                                 <Text style={row}>
                                     <span style={label}>Method:</span>{' '}
-                                    <span style={value}>{String(provider || '').toUpperCase()}</span>
+                                    <span style={value}>
+                                        {String(provider || '').toUpperCase()}
+                                    </span>
                                 </Text>
                                 <Hr style={divider} />
                                 <Text style={row}>
@@ -101,14 +116,16 @@ export function QuotationPaymentReceiptEmail({
                             </Section>
 
                             <Text style={footerText}>
-                                Keep this email as your receipt. If anything looks off, reply to this email and we’ll
-                                help right away.
+                                Keep this email as your receipt. If anything
+                                looks off, reply to this email and we’ll help
+                                right away.
                             </Text>
                         </Section>
                     </Section>
 
                     <Text style={bottomFooter}>
-                        &copy; {new Date().getFullYear()} Web Briks LLC. All rights reserved.
+                        &copy; {new Date().getFullYear()} Web Briks LLC. All
+                        rights reserved.
                     </Text>
                 </Container>
             </Body>
@@ -176,7 +193,12 @@ const receiptBox = {
 };
 
 const row = { margin: '0', padding: '10px 0', fontSize: '14px' };
-const label = { color: '#64748b', fontWeight: '600', display: 'inline-block', width: '110px' };
+const label = {
+    color: '#64748b',
+    fontWeight: '600',
+    display: 'inline-block',
+    width: '110px',
+};
 const value = { color: '#0f172a', fontWeight: '700' };
 const divider = { borderColor: '#e2e8f0', margin: '0' };
 
@@ -194,4 +216,3 @@ const bottomFooter = {
     color: '#94a3b8',
     textAlign: 'center' as const,
 };
-

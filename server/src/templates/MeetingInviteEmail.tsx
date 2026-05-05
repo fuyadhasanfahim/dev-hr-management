@@ -33,7 +33,7 @@ export const MeetingInviteEmail = ({
 }: MeetingInviteEmailProps) => {
     const previewText = `New Meeting Scheduled: ${meetingTitle}`;
     const logoUrl =
-        'https://res.cloudinary.com/dny7zfbg9/image/upload/v1755954483/mqontecf1xao7znsh6cx.png';
+        'https://res.cloudinary.com/dny7zfbg9/image/upload/v1777996436/q83auvamwih8u8ftw5zu.png';
 
     return (
         <Html>
@@ -55,8 +55,9 @@ export const MeetingInviteEmail = ({
                         <Text style={heading}>📅 Meeting Scheduled</Text>
 
                         <Text style={paragraph}>
-                            Hi {clientName},<br />
-                            A new meeting has been scheduled for you. Here are the details of the meeting:
+                            Hi {clientName},<br />A new meeting has been
+                            scheduled for you. Here are the details of the
+                            meeting:
                         </Text>
 
                         <Section style={detailsSection}>
@@ -67,7 +68,8 @@ export const MeetingInviteEmail = ({
                                 <strong>When:</strong> {scheduledAt}
                             </Text>
                             <Text style={detailsItem}>
-                                <strong>Duration:</strong> {durationMinutes} minutes
+                                <strong>Duration:</strong> {durationMinutes}{' '}
+                                minutes
                             </Text>
                             {description && (
                                 <Text style={detailsItem}>
@@ -81,7 +83,9 @@ export const MeetingInviteEmail = ({
                                 <Button style={button} href={meetLink}>
                                     Join Google Meet
                                 </Button>
-                                <Text style={linkText}>Or join via link: {meetLink}</Text>
+                                <Text style={linkText}>
+                                    Or join via link: {meetLink}
+                                </Text>
                             </Section>
                         )}
 
