@@ -202,17 +202,38 @@ function buildPrintHtml(
 
     const phasesHtml = phases.length
         ? phases
-              .map(
-                  (p: any, idx: number) => `
-        <div class="scope-card">
-          <div class="scope-h">
-            <strong>Phase ${idx + 1}: ${esc(p.title)}</strong>
-            <span class="scope-count">${(p.items || []).length} items</span>
-          </div>
-          ${p.description ? `<p class="scope-desc">${esc(p.description)}</p>` : ''}
-          ${(p.items || []).map((item: string) => `<div class="bullet"><span class="dot">•</span><span>${esc(item)}</span></div>`).join('')}
-        </div>`,
-              )
+              .map((p: any, idx: number) => {
+                  const descRow = p.description
+                      ? `<tr><td class="phase-td phase-desc">${esc(p.description)}</td></tr>`
+                      : '';
+                  const itemRows = (p.items || []).length
+                      ? (p.items as string[])
+                            .map(
+                                (item: string) =>
+                                    `<tr><td class="phase-td phase-item"><span class="dot">•</span> ${esc(item)}</td></tr>`,
+                            )
+                            .join('')
+                      : '';
+                  const emptyRow =
+                      !p.description && !(p.items || []).length
+                          ? `<tr><td class="phase-td phase-empty">No deliverables listed</td></tr>`
+                          : '';
+                  const body = `${descRow}${itemRows}${emptyRow}`;
+                  return `
+    <table class="phase-table">
+      <thead>
+        <tr>
+          <th class="phase-th">
+            <div class="phase-th-inner">
+              <strong>Phase ${idx + 1}: ${esc(p.title)}</strong>
+              <span class="scope-count">${(p.items || []).length} deliverables</span>
+            </div>
+          </th>
+        </tr>
+      </thead>
+      <tbody>${body}</tbody>
+    </table>`;
+              })
               .join('')
         : '';
 
@@ -234,26 +255,31 @@ function buildPrintHtml(
         : '';
 
     const milestonesHtml = milestones
-        .map((m, idx) => {
-            const isLast = idx === milestones.length - 1;
+        .map((m) => {
             const amount = (pricingTotal * (m.percentage || 0)) / 100;
             return `
-        <div class="ms-row${isLast ? ' ms-last' : ''}">
-          <span class="ms-badge">${m.percentage}%</span>
-          <span class="ms-label">${esc(m.label)}</span>
-          <span class="ms-amt">${formatMoneyPdf(amount, currency)}</span>
-        </div>`;
+        <tr class="pay-row">
+          <td class="pay-badge-cell"><span class="ms-badge">${m.percentage}%</span></td>
+          <td class="pay-label">${esc(m.label)}</td>
+          <td class="pay-amt">${formatMoneyPdf(amount, currency)}</td>
+        </tr>`;
         })
         .join('');
 
     const taxRow =
         pricing?.taxRate != null && Number(pricing.taxRate) > 0
-            ? `<div class="pr-row"><span>Tax (${esc(pricing.taxRate)}%)</span><span>${formatMoneyPdf(pricingTax, currency)}</span></div>`
+            ? `<tr class="pr-tr"><td>Tax (${esc(pricing.taxRate)}%)</td><td class="pr-num">${formatMoneyPdf(pricingTax, currency)}</td></tr>`
             : '';
 
     const discountRow = pricing?.discount
-        ? `<div class="pr-row pr-row-last"><span>Discount (${esc(pricing.discount)}%)</span><span class="discount">−${formatMoneyPdf(discountAmount, currency)}</span></div>`
-        : `<div class="pr-row pr-row-last"><span>Discount</span><span>${formatMoneyPdf(0, currency)}</span></div>`;
+        ? `<tr class="pr-tr"><td>Discount (${esc(pricing.discount)}%)</td><td class="discount pr-num">−${formatMoneyPdf(discountAmount, currency)}</td></tr>`
+        : `<tr class="pr-tr"><td>Discount</td><td class="pr-num">${formatMoneyPdf(0, currency)}</td></tr>`;
+
+    const pricingTbodyRows = `
+      <tr class="pr-tr"><td>Subtotal</td><td class="pr-num">${formatMoneyPdf(pricingSubtotal, currency)}</td></tr>
+      ${taxRow}
+      ${discountRow}
+      <tr class="pr-tr pr-total"><td>Grand Total</td><td class="pr-num">${formatMoneyPdf(pricingTotal, currency)}</td></tr>`;
 
     const ctaMilestoneText = firstMilestone
         ? `On acceptance: ${firstMilestone.percentage}% (${formatMoneyPdf(
@@ -371,16 +397,48 @@ function buildPrintHtml(
       gap: 14px;
       margin-bottom: 4px;
     }
-    .scope-card {
-      border: 1px solid var(--slate100); border-radius: 8px; padding: 14px 16px;
-      margin-bottom: 0;
-      page-break-inside: avoid;
+    table.phase-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+      border: 1px solid var(--slate100);
+      border-radius: 8px;
+      overflow: hidden;
     }
-    .scope-h { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 9px; font-size: 13.5px; font-weight: 700; color: var(--slate900); line-height: 1.3; }
-    .scope-count { font-size: 11.5px; color: var(--slate500); flex-shrink: 0; }
-    .scope-desc { font-size: 12px; color: var(--slate500); margin-bottom: 11px; line-height: 1.58; }
-    .bullet { display: flex; gap: 8px; margin-bottom: 6px; font-size: 12px; line-height: 1.52; }
-    .dot { color: var(--accent-mid); font-weight: 700; width: 10px; flex-shrink: 0; }
+    table.phase-table thead { background: var(--slate50); }
+    .phase-th {
+      text-align: left;
+      font-weight: 400;
+      padding: 0;
+      border-bottom: 1px solid var(--slate100);
+    }
+    .phase-th-inner {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 14px 16px;
+      font-size: 13.5px;
+      line-height: 1.3;
+    }
+    .phase-th-inner strong { color: var(--slate900); font-weight: 700; }
+    .phase-th-inner .scope-count {
+      font-size: 11.5px;
+      color: var(--slate500);
+      flex-shrink: 0;
+      font-weight: 400;
+    }
+    .phase-td {
+      padding: 11px 16px;
+      border-top: 1px solid var(--slate100);
+      vertical-align: top;
+      line-height: 1.52;
+      word-wrap: break-word;
+    }
+    .phase-desc { color: var(--slate500); font-size: 12px; }
+    .phase-item { color: var(--slate700); }
+    .phase-empty { color: var(--slate500); font-size: 11.5px; }
+    .dot { color: var(--accent-mid); font-weight: 700; margin-right: 6px; }
     table.svc { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 0; table-layout: fixed; }
     table.svc th {
       text-align: left; font-size: 10.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em;
@@ -411,42 +469,79 @@ function buildPrintHtml(
     }
     .wf-txt { font-size: 12px; color: var(--slate700); max-width: 220px; line-height: 1.52; }
     .wf-arrow { color: var(--slate300); font-size: 9px; }
-    .pricing { border-radius: 8px; overflow: hidden; border: 1px solid var(--slate100); page-break-inside: avoid; margin-bottom: 4px; }
-    .pricing-h {
+    table.price-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+    table.price-table thead th.pricing-h {
+      text-align: left;
       padding: 13px 17px;
       background: linear-gradient(90deg, var(--violet-light), var(--violet-deep));
-      color: #fff; font-size: 13px; font-weight: 800; letter-spacing: 0.07em; line-height: 1.35;
+      color: #fff;
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: 0.07em;
+      line-height: 1.35;
+      border: none;
     }
-    .pricing-b { padding: 14px 16px 16px; }
-    .pr-row { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; padding: 9px 0; font-size: 12px; line-height: 1.45; }
-    .pr-row span:first-child { flex: 1; }
-    .pr-row span:last-child { font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
-    .pr-row-last { border-bottom: 1px solid var(--slate100); margin-bottom: 10px; padding-bottom: 12px; }
+    table.price-table .pr-tr td {
+      padding: 11px 16px;
+      border-top: 1px solid var(--slate100);
+      vertical-align: baseline;
+      line-height: 1.45;
+    }
+    table.price-table .pr-num {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+    table.price-table .pr-tr.pr-total td {
+      font-weight: 800;
+      font-size: 16px;
+      color: var(--slate900);
+      background: rgba(248, 250, 252, 0.95);
+      padding-top: 14px;
+      padding-bottom: 14px;
+    }
     .discount { color: #dc2626; }
-    .pr-total { display: flex; justify-content: space-between; align-items: baseline; padding-top: 13px; font-weight: 800; font-size: 16px; color: var(--slate900); gap: 16px; line-height: 1.3; }
     .payment-block {
-      page-break-inside: avoid;
       margin-top: 4px;
       margin-bottom: 12px;
     }
-    .ms { border: 1px solid var(--slate100); border-radius: 8px; overflow: hidden; }
-    .ms-row {
-      display: flex;
-      align-items: flex-start;
-      gap: 14px;
-      padding: 12px 16px;
-      border-bottom: 1px solid var(--slate100);
+    table.pay-table {
+      width: 100%;
+      border-collapse: collapse;
       font-size: 12px;
+      table-layout: fixed;
+    }
+    table.pay-table .pay-row td {
+      padding: 12px 16px;
+      border-top: 1px solid var(--slate100);
+      vertical-align: top;
       line-height: 1.5;
-      min-height: 48px;
     }
-    .ms-last { border-bottom: none; }
-    .ms-badge {
-      min-width: 44px; text-align: center; font-weight: 800;
-      color: var(--accent-mid); background: rgba(168, 85, 247, 0.12); border-radius: 4px; padding: 2px 6px;
+    table.pay-table .pay-row:first-child td { border-top: none; }
+    .pay-badge-cell { width: 56px; }
+    table.pay-table .ms-badge {
+      min-width: 44px;
+      text-align: center;
+      font-weight: 800;
+      color: var(--accent-mid);
+      background: rgba(168, 85, 247, 0.12);
+      border-radius: 4px;
+      padding: 2px 6px;
+      display: inline-block;
     }
-    .ms-label { flex: 1; color: var(--slate700); line-height: 1.45; padding-top: 2px; }
-    .ms-amt { font-weight: 800; color: var(--slate900); white-space: nowrap; font-variant-numeric: tabular-nums; padding-top: 2px; }
+    .pay-label { color: var(--slate700); }
+    .pay-amt {
+      width: 28%;
+      text-align: right;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+      color: var(--slate900);
+    }
     .trust {
       margin-top: 32px;
       padding: 20px 22px;
@@ -652,19 +747,26 @@ function buildPrintHtml(
   ${workflowSteps.length ? `<div class="sec">Workflow</div><div class="card">${workflowHtml}</div>` : ''}
 
   <div class="sec">Pricing</div>
-  <div class="pricing">
-    <div class="pricing-h">Pricing Breakdown</div>
-    <div class="pricing-b">
-      <div class="pr-row"><span>Subtotal</span><span>${formatMoneyPdf(pricingSubtotal, currency)}</span></div>
-      ${taxRow}
-      ${discountRow}
-      <div class="pr-total"><span>Grand Total</span><span>${formatMoneyPdf(pricingTotal, currency)}</span></div>
-    </div>
+  <div class="card" style="padding:0;">
+    <table class="price-table">
+      <thead>
+        <tr>
+          <th colspan="2" class="pricing-h pricing-th">Pricing Breakdown</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${pricingTbodyRows}
+      </tbody>
+    </table>
   </div>
 
   <div class="payment-block">
   <div class="sec">Payment Terms</div>
-  <div class="ms">${milestonesHtml}</div>
+  <div class="card" style="padding:0;">
+    <table class="pay-table">
+      <tbody>${milestonesHtml}</tbody>
+    </table>
+  </div>
   </div>
 
   <div class="trust">
