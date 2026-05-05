@@ -269,12 +269,10 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 function SuccessCard({ 
-    phase, 
     data, 
     currency 
 }: { 
-    phase: Phase; 
-    data: any; 
+    data: { amountPaid: number; paidAt: string; paymentIntentId?: string }; 
     currency: string; 
 }) {
     return (

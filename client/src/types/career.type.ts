@@ -46,8 +46,7 @@ export interface CreateJobPositionInput {
     isOpened?: boolean;
 }
 
-export interface UpdateJobPositionInput
-    extends Partial<CreateJobPositionInput> {}
+export type UpdateJobPositionInput = Partial<CreateJobPositionInput>;
 
 // Job Application Types
 export type ApplicationStatus =

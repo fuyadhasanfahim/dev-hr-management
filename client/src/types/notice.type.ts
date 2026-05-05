@@ -49,7 +49,7 @@ export interface CreateNoticeInput {
     attachments?: NoticeAttachment[];
 }
 
-export interface UpdateNoticeInput extends Partial<CreateNoticeInput> {}
+export type UpdateNoticeInput = Partial<CreateNoticeInput>;
 
 export interface NoticeFilters {
     isPublished?: boolean;
