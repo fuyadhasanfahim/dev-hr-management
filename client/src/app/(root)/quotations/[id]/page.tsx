@@ -35,8 +35,9 @@ import {
   Printer,
 } from "lucide-react";
 import Link from "next/link";
-import PDFDownloadBtn from "@/components/quotation/pdf/PDFDownloadBtn";
-import QuotationPuppeteerPdfBtn from "@/components/quotation/pdf/QuotationPuppeteerPdfBtn";
+import QuotationPuppeteerPdfBtn, {
+  quotationPdfFileStem,
+} from "@/components/quotation/pdf/QuotationPuppeteerPdfBtn";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import { IconReceipt } from "@tabler/icons-react";
@@ -232,11 +233,11 @@ export default function ViewQuotationPage() {
         <div className="flex flex-wrap gap-2">
           <QuotationPuppeteerPdfBtn
             quotationId={id as string}
-            fileNameBase={
-              data.quotationNumber || data.details.title || "Quotation"
-            }
+            fileNameBase={quotationPdfFileStem(
+              data.quotationNumber,
+              data.details?.title,
+            )}
           />
-          <PDFDownloadBtn data={data} />
 
           <Button variant="outline" size="sm" asChild>
             <Link href={`/quotations/${id}/print-paginated`} target="_blank">

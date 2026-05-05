@@ -16,7 +16,18 @@ import "./models/user.model.js";
 import { stripeWebhook, paypalWebhook } from "./controllers/webhook.controller.js";
 import { globalErrorHandler } from "./middlewares/globalErrorHandler.js";
 
-const { trusted_origins } = envConfig;
+const { trusted_origins, client_url } = envConfig;
+
+function buildCorsAllowedOrigins(): Set<string> {
+    const set = new Set<string>();
+    for (const o of trusted_origins.split(",").map((s) => s.trim()).filter(Boolean)) {
+        set.add(o);
+    }
+    if (client_url?.trim()) set.add(client_url.trim());
+    return set;
+}
+
+const corsAllowedOrigins = buildCorsAllowedOrigins();
 
 const app: Application = express();
 
@@ -25,25 +36,36 @@ app.use(requestContextMiddleware);
 
 app.use(
     cors({
+        /**
+         * Local browsers (localhost / 127.0.0.1, any port): always allow.
+         * Otherwise `NODE_ENV=production` on a dev machine would block the SPA
+         * on :3000 talking to the API on :5000 and `fetch` shows only "Failed to fetch".
+         */
         origin: (origin, callback) => {
             if (!origin) return callback(null, true);
-            const origins = trusted_origins.split(",");
-            if (origins.includes(origin)) {
-                callback(null, true);
-            } else {
-                callback(null, false);
+            if (corsAllowedOrigins.has(origin)) {
+                return callback(null, true);
             }
+            if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(origin)) {
+                return callback(null, true);
+            }
+            callback(null, false);
         },
         credentials: true,
         methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
         allowedHeaders: ["Content-Type", "Authorization", "Cookie"],
+        exposedHeaders: ["Content-Disposition"],
     }),
 );
 
 app.all("/api/auth/{*any}", toNodeHandler(auth));
 
-// SECURITY: Add security headers
-app.use(helmet());
+// SECURITY: Add security headers (cross-origin policy so SPA on another port can read API bodies)
+app.use(
+    helmet({
+        crossOriginResourcePolicy: { policy: "cross-origin" },
+    }),
+);
 
 // SECURITY: Global rate limiter
 const globalLimiter = rateLimit({
@@ -103,13 +125,18 @@ app.use(
             (req.method === "GET" && /^\/quotation-payments\/client\/[^/]+\/status$/.test(req.path)) ||
             (req.method === "POST" && /^\/quotation-payments\/client\/[^/]+\/(intent|capture|confirm)$/.test(req.path));
 
+        // Public: Puppeteer PDF by quotation id (no session required)
+        const isPublicQuotationPdfPuppeteerRoute =
+            req.method === "GET" && /^\/quotations\/[^/]+\/pdf\/puppeteer$/.test(req.path);
+
         if (
             isPublicInvitationRoute ||
             isPublicMetadataRoute ||
             isPublicCareerRoute ||
             isPublicInvoiceRoute ||
             isPublicQuotationTokenRoute ||
-            isPublicQuotationPaymentTokenRoute
+            isPublicQuotationPaymentTokenRoute ||
+            isPublicQuotationPdfPuppeteerRoute
         ) {
             return next();
         }

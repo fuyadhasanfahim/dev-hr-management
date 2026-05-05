@@ -66,5 +66,5 @@ export const auth = betterAuth({
             }
         },
     },
-    trustedOrigins: trusted_origins.split(','),
+    trustedOrigins: trusted_origins.split(',').map((o) => o.trim()).filter(Boolean),
 });

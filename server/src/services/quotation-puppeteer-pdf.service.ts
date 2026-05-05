@@ -7,7 +7,10 @@ import { AppError } from '../utils/AppError.js';
 import { logger } from '../lib/logger.js';
 
 /** Matches client `QuotationPDF` + `formatMoney` (BDT / ISO / symbol). */
-function formatMoneyPdf(amount: number | null | undefined, currency?: string | null): string {
+function formatMoneyPdf(
+    amount: number | null | undefined,
+    currency?: string | null,
+): string {
     const n = Number(amount || 0);
     const fractionDigits = 2;
     const BDT_TOKENS = new Set(['BDT', 'BDT.', '৳', 'Tk', 'TK', 'tk']);
@@ -53,7 +56,10 @@ function compactList(parts: Array<string | undefined | null>): string[] {
     return parts.map((x) => String(x ?? '').trim()).filter(Boolean);
 }
 
-function buildPaymentLink(secureToken: unknown, paymentBase: string): string | null {
+function buildPaymentLink(
+    secureToken: unknown,
+    paymentBase: string,
+): string | null {
     if (!secureToken || typeof secureToken !== 'string') return null;
     return `${paymentBase.replace(/\/$/, '')}/quotation/${secureToken}`;
 }
@@ -76,12 +82,16 @@ async function fetchImageAsDataUrl(url: string): Promise<string | null> {
     try {
         const ctrl = new AbortController();
         const timer = setTimeout(() => ctrl.abort(), 18_000);
-        const res = await fetch(url, { signal: ctrl.signal, redirect: 'follow' });
+        const res = await fetch(url, {
+            signal: ctrl.signal,
+            redirect: 'follow',
+        });
         clearTimeout(timer);
         if (!res.ok) return null;
         const buf = Buffer.from(await res.arrayBuffer());
         if (buf.length === 0) return null;
-        const ctRaw = (res.headers.get('content-type') || '').split(';')[0] ?? '';
+        const ctRaw =
+            (res.headers.get('content-type') || '').split(';')[0] ?? '';
         const ct = ctRaw.trim() || 'image/png';
         const safeCt = /^image\/[a-z0-9.+-]+$/i.test(ct) ? ct : 'image/png';
         return `data:${safeCt};base64,${buf.toString('base64')}`;
@@ -106,7 +116,9 @@ function buildPrintHtml(
     const pricing = q.pricing || {};
     const techStack = q.techStack || {};
     const phases = Array.isArray(q.phases) ? q.phases : [];
-    const additionalServices = Array.isArray(q.additionalServices) ? q.additionalServices : [];
+    const additionalServices = Array.isArray(q.additionalServices)
+        ? q.additionalServices
+        : [];
     const workflow = Array.isArray(q.workflow) ? q.workflow : [];
 
     const currency = q.currency || 'BDT';
@@ -123,7 +135,9 @@ function buildPrintHtml(
         : '—';
 
     const baseTitle =
-        q.serviceType === 'web-development' ? 'Web Design & Development' : 'Service';
+        q.serviceType === 'web-development'
+            ? 'Web Design & Development'
+            : 'Service';
 
     const phaseRows: LineItem[] = phases.map((p: any, idx: number) => ({
         name: `Phase ${idx + 1}: ${p.title}${p.items?.length ? ` (${p.items.length} deliverables)` : ''}`,
@@ -141,7 +155,9 @@ function buildPrintHtml(
 
     const items: LineItem[] = [
         {
-            name: details?.title ? `${baseTitle} — ${details.title}` : baseTitle,
+            name: details?.title
+                ? `${baseTitle} — ${details.title}`
+                : baseTitle,
             qty: 1,
             rate: pricing?.basePrice ?? 0,
             total: pricing?.basePrice ?? 0,
@@ -157,13 +173,17 @@ function buildPrintHtml(
         ...(Array.isArray(techStack?.tools) ? techStack.tools : []),
     ]);
 
-    const workflowSteps = workflow.map((s: string) => String(s || '').trim()).filter(Boolean);
+    const workflowSteps = workflow
+        .map((s: string) => String(s || '').trim())
+        .filter(Boolean);
 
     const pricingSubtotal = totals?.subtotal ?? 0;
     const pricingTax = totals?.taxAmount ?? 0;
     const pricingTotal = totals?.grandTotal ?? 0;
     const discountAmount =
-        pricing?.discount && pricingSubtotal ? (pricingSubtotal * pricing.discount) / 100 : 0;
+        pricing?.discount && pricingSubtotal
+            ? (pricingSubtotal * pricing.discount) / 100
+            : 0;
 
     let milestones: Milestone[] = Array.isArray(q.paymentMilestones)
         ? q.paymentMilestones.map((m: any) => ({
@@ -185,7 +205,9 @@ function buildPrintHtml(
 
     const serviceBadge =
         q.serviceType === 'web-development' ? 'WEB' : 'SERVICE';
-    const statusUpper = q.status ? String(q.status).replace(/_/g, ' ').toUpperCase() : '';
+    const statusUpper = q.status
+        ? String(q.status).replace(/_/g, ' ').toUpperCase()
+        : '';
 
     const rowsHtml = items
         .map(
@@ -250,7 +272,7 @@ function buildPrintHtml(
               <span class="wf-txt">${esc(step)}</span>
             </div>
             ${i < workflowSteps.length - 1 ? '<span class="wf-arrow">→</span>' : ''}`,
-          )
+              )
               .join('')}</div>`
         : '';
 
@@ -542,12 +564,27 @@ function buildPrintHtml(
       white-space: nowrap;
       color: var(--slate900);
     }
+    /* --- Last page: flex column fills ≥ one content page; footer pinned with margin-top: auto --- */
+    .pdf-last-page {
+      display: flex;
+      flex-direction: column;
+      box-sizing: border-box;
+      min-height: 260mm;
+      margin-top: 28px;
+      padding-top: 28px;
+    }
+    .pdf-last-page__grow {
+      flex: 1 1 auto;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
     .trust {
-      margin-top: 32px;
+      margin-top: 0;
       padding: 20px 22px;
       border-radius: 10px;
       background: rgba(168, 85, 247, 0.08); border: 1px solid rgba(139, 92, 246, 0.25);
-      page-break-inside: avoid;
+      page-break-inside: auto;
     }
     .trust-title {
       font-size: 16.5px;
@@ -651,12 +688,15 @@ function buildPrintHtml(
     .sig-name { font-size: 13px; font-weight: 800; color: var(--slate900); line-height: 1.35; }
     .sig-role { font-size: 11.5px; color: var(--slate500); margin-top: 5px; line-height: 1.5; }
     .doc-footer {
-      margin-top: 36px;
-      padding-top: 18px;
-      border-top: 1px solid #cbd5e1;
+      flex-shrink: 0;
+      margin-top: auto;
+      margin-bottom: 0;
+      padding-top: 16px;
+      border-top: 1px solid var(--slate300);
       text-align: center;
       font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       page-break-inside: avoid;
+      break-inside: avoid;
     }
     .doc-footer-main {
       font-size: 10.5px;
@@ -769,6 +809,8 @@ function buildPrintHtml(
   </div>
   </div>
 
+  <div class="pdf-last-page">
+    <div class="pdf-last-page__grow">
   <div class="trust">
     <h2 class="trust-title">Why Choose <span class="brand">WebBriks</span></h2>
     <div class="trust-grid">
@@ -809,11 +851,14 @@ function buildPrintHtml(
     <div class="sig-role">Founder &amp; CEO, ${esc(company?.name || 'WebBriks')}</div>
   </div>
 
+    </div>
+
   <footer class="doc-footer">
     <div class="doc-footer-main">
       WebBriks — <a href="mailto:info@webbriks.com">info@webbriks.com</a> — <a href="https://www.webbriks.com">www.webbriks.com</a>
     </div>
   </footer>
+  </div>
 
 </div>
 </body>
@@ -821,17 +866,22 @@ function buildPrintHtml(
 }
 
 export class QuotationPuppeteerPdfService {
-    static async generatePdf(quotationId: string): Promise<{ buffer: Buffer; filename: string }> {
+    static async generatePdf(
+        quotationId: string,
+    ): Promise<{ buffer: Buffer; filename: string }> {
         const q = await QuotationModel.findById(quotationId)
             .populate('clientId', 'name clientId emails')
             .lean();
         if (!q) throw new AppError('Quotation not found', 404);
 
-        const signatureUrl = process.env.COMPANY_SIGNATURE_URL || DEFAULT_SIGNATURE;
-        const companyLogoRemote = ((q as any).company?.logo as string) || DEFAULT_LOGO;
+        const signatureUrl =
+            process.env.COMPANY_SIGNATURE_URL || DEFAULT_SIGNATURE;
+        const companyLogoRemote =
+            ((q as any).company?.logo as string) || DEFAULT_LOGO;
 
         let logoSrc =
-            (await fetchImageAsDataUrl(companyLogoRemote)) || (await fetchImageAsDataUrl(DEFAULT_LOGO));
+            (await fetchImageAsDataUrl(companyLogoRemote)) ||
+            (await fetchImageAsDataUrl(DEFAULT_LOGO));
         if (!logoSrc) logoSrc = FALLBACK_PIXEL_PNG;
 
         let signatureSrc = (await fetchImageAsDataUrl(signatureUrl)) || '';
@@ -842,11 +892,17 @@ export class QuotationPuppeteerPdfService {
             try {
                 paymentPageUrl = await QuotationService.getClientLink(groupId);
             } catch (err) {
-                logger.warn({ err, quotationId, groupId }, 'quotation.puppeteer_pdf.payment_link');
+                logger.warn(
+                    { err, quotationId, groupId },
+                    'quotation.puppeteer_pdf.payment_link',
+                );
             }
         }
         if (!paymentPageUrl?.trim()) {
-            const fallback = buildPaymentLink((q as any).secureToken, envConfig.payment_client_url);
+            const fallback = buildPaymentLink(
+                (q as any).secureToken,
+                envConfig.payment_client_url,
+            );
             if (fallback) paymentPageUrl = fallback;
         }
 
@@ -861,23 +917,45 @@ export class QuotationPuppeteerPdfService {
         try {
             browser = await puppeteer.launch({
                 headless: true,
-                args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
+                args: [
+                    '--no-sandbox',
+                    '--disable-setuid-sandbox',
+                    '--disable-dev-shm-usage',
+                ],
             });
             const page = await browser.newPage();
             await page.setContent(html, { waitUntil: 'load' });
             await page.evaluate(async () => {
-                const g = globalThis as unknown as { document: { querySelectorAll: (sel: string) => Iterable<unknown> } };
-                const images = [...g.document.querySelectorAll('img')] as Array<{
+                const g = globalThis as unknown as {
+                    document: {
+                        querySelectorAll: (sel: string) => Iterable<unknown>;
+                    };
+                };
+                const images = [
+                    ...g.document.querySelectorAll('img'),
+                ] as Array<{
                     complete: boolean;
-                    addEventListener: (type: string, fn: () => void, opts?: { once?: boolean }) => void;
+                    addEventListener: (
+                        type: string,
+                        fn: () => void,
+                        opts?: { once?: boolean },
+                    ) => void;
                 }>;
                 await Promise.all(
                     images.map((img) =>
                         img.complete
                             ? Promise.resolve()
                             : new Promise<void>((resolve) => {
-                                  img.addEventListener('load', () => resolve(), { once: true });
-                                  img.addEventListener('error', () => resolve(), { once: true });
+                                  img.addEventListener(
+                                      'load',
+                                      () => resolve(),
+                                      { once: true },
+                                  );
+                                  img.addEventListener(
+                                      'error',
+                                      () => resolve(),
+                                      { once: true },
+                                  );
                               }),
                     ),
                 );
@@ -886,15 +964,33 @@ export class QuotationPuppeteerPdfService {
             const pdf = await page.pdf({
                 format: 'A4',
                 printBackground: true,
-                margin: { top: '12mm', bottom: '14mm', left: '10mm', right: '10mm' },
+                margin: {
+                    top: '12mm',
+                    bottom: '14mm',
+                    left: '10mm',
+                    right: '10mm',
+                },
             });
-            const rawName = `${(q as any).quotationNumber || (q as any).details?.title || 'quotation'}.pdf`;
+            const qn = String((q as any).quotationNumber || '').trim();
+            const title = String((q as any).details?.title || '').trim();
+            const stem = qn
+                ? qn.startsWith('#')
+                    ? qn
+                    : `#${qn}`
+                : title || 'quotation';
+            const rawName = `${stem}.pdf`;
             const filename = rawName.replace(/[/\\?%*:|"<>]/g, '-');
             return { buffer: Buffer.from(pdf), filename };
         } catch (e: unknown) {
             const err = e as { message?: string };
-            logger.error({ err: e, quotationId }, 'quotation.puppeteer_pdf_failed');
-            throw new AppError(err?.message || 'Failed to generate PDF with Puppeteer', 500);
+            logger.error(
+                { err: e, quotationId },
+                'quotation.puppeteer_pdf_failed',
+            );
+            throw new AppError(
+                err?.message || 'Failed to generate PDF with Puppeteer',
+                500,
+            );
         } finally {
             await browser?.close().catch(() => {});
         }
