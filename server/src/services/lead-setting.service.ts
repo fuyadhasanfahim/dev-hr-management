@@ -8,7 +8,7 @@ const getAllSettings = async (type?: string) => {
 
 const createSetting = async (data: Partial<ILeadSetting>) => {
     // If this is set as default, unset others of the same type
-    if (data.isDefault) {
+    if (data.isDefault && data.type) {
         await LeadSettingModel.updateMany({ type: data.type }, { isDefault: false });
     }
     const setting = new LeadSettingModel(data);

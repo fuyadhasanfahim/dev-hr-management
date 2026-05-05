@@ -38,6 +38,7 @@ const createSetting = async (req: Request, res: Response) => {
 const updateSetting = async (req: Request, res: Response) => {
     try {
         const { id } = req.params;
+        if (!id) throw new Error('Setting ID is required');
         const result = await LeadSettingService.updateSetting(id, req.body);
         res.status(200).json({
             success: true,
@@ -56,6 +57,10 @@ const updateSetting = async (req: Request, res: Response) => {
 const deleteSetting = async (req: Request, res: Response) => {
     try {
         const { id } = req.params;
+        if (!id) {
+            res.status(400).json({ success: false, message: 'Setting ID is required' });
+            return;
+        }
         await LeadSettingService.deleteSetting(id);
         res.status(200).json({
             success: true,

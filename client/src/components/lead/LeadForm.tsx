@@ -28,7 +28,7 @@ export const leadFormSchema = z.object({
   email: z.union([z.string().email("Invalid email address"), z.literal(""), z.undefined()]),
   website: z.string().optional(),
   status: z.string().optional(),
-  priority: z.enum(["High", "Medium", "Low"]).default("Medium"),
+  priority: z.enum(["High", "Medium", "Low"]),
   source: z.string().optional(),
   currentNotes: z.string().optional(),
 });
