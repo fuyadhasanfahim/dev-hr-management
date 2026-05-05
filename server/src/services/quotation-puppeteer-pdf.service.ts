@@ -564,20 +564,10 @@ function buildPrintHtml(
       white-space: nowrap;
       color: var(--slate900);
     }
-    /* --- Last page: flex column fills ≥ one content page; footer pinned with margin-top: auto --- */
-    .pdf-last-page {
-      display: flex;
-      flex-direction: column;
-      box-sizing: border-box;
-      min-height: 260mm;
+    /* Tail: trust + CTA + signature + footer in normal flow (no min-height / flex stretch — those forced extra pages). */
+    .pdf-tail {
       margin-top: 28px;
       padding-top: 28px;
-    }
-    .pdf-last-page__grow {
-      flex: 1 1 auto;
-      display: flex;
-      flex-direction: column;
-      min-height: 0;
     }
     .trust {
       margin-top: 0;
@@ -688,15 +678,11 @@ function buildPrintHtml(
     .sig-name { font-size: 13px; font-weight: 800; color: var(--slate900); line-height: 1.35; }
     .sig-role { font-size: 11.5px; color: var(--slate500); margin-top: 5px; line-height: 1.5; }
     .doc-footer {
-      flex-shrink: 0;
-      margin-top: auto;
-      margin-bottom: 0;
-      padding-top: 16px;
+      margin-top: 22px;
+      padding-top: 14px;
       border-top: 1px solid var(--slate300);
       text-align: center;
       font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      page-break-inside: avoid;
-      break-inside: avoid;
     }
     .doc-footer-main {
       font-size: 10.5px;
@@ -809,8 +795,7 @@ function buildPrintHtml(
   </div>
   </div>
 
-  <div class="pdf-last-page">
-    <div class="pdf-last-page__grow">
+  <div class="pdf-tail">
   <div class="trust">
     <h2 class="trust-title">Why Choose <span class="brand">WebBriks</span></h2>
     <div class="trust-grid">
@@ -850,8 +835,6 @@ function buildPrintHtml(
     <div class="sig-name">Md. Ashaduzzaman</div>
     <div class="sig-role">Founder &amp; CEO, ${esc(company?.name || 'WebBriks')}</div>
   </div>
-
-    </div>
 
   <footer class="doc-footer">
     <div class="doc-footer-main">
