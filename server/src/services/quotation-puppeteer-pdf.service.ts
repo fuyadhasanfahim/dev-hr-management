@@ -2,6 +2,7 @@ import { format } from 'date-fns';
 import puppeteer from 'puppeteer';
 import envConfig from '../config/env.config.js';
 import QuotationModel from '../models/quotation.model.js';
+import { QuotationService } from './quotation.service.js';
 import { AppError } from '../utils/AppError.js';
 import { logger } from '../lib/logger.js';
 
@@ -93,6 +94,7 @@ function buildPrintHtml(
     q: Record<string, any>,
     ctx: {
         paymentClientBase: string;
+        paymentPageUrl: string;
         logoSrc: string;
         signatureSrc: string;
     },
@@ -108,7 +110,10 @@ function buildPrintHtml(
     const workflow = Array.isArray(q.workflow) ? q.workflow : [];
 
     const currency = q.currency || 'BDT';
-    const payLink = buildPaymentLink(q.secureToken, ctx.paymentClientBase);
+    const payLink =
+        (ctx.paymentPageUrl && String(ctx.paymentPageUrl).trim()) ||
+        buildPaymentLink(q.secureToken, ctx.paymentClientBase) ||
+        '';
 
     const issueDate = details?.date
         ? format(new Date(details.date), 'PPP')
@@ -177,9 +182,6 @@ function buildPrintHtml(
     }
 
     const firstMilestone = milestones[0];
-    const ctaPrimary = firstMilestone
-        ? `ACCEPT & PAY ${firstMilestone.percentage}%`
-        : 'ACCEPT QUOTATION';
 
     const serviceBadge =
         q.serviceType === 'web-development' ? 'WEB' : 'SERVICE';
@@ -261,12 +263,8 @@ function buildPrintHtml(
         : '';
 
     const payButtons = payLink
-        ? `
-      <a class="btn btn-proceed" href="${esc(payLink)}">Proceed to Payment</a>
-      <a class="btn btn-primary" href="${esc(payLink)}">${esc(ctaPrimary)}</a>
-      <a class="btn btn-secondary" href="${esc(payLink)}">View full quotation</a>`
-        : `<span class="btn btn-proceed btn-disabled">Proceed to Payment</span>
-      <span class="btn btn-primary btn-disabled">LINK PENDING</span>`;
+        ? `<a class="btn btn-primary" href="${esc(payLink)}">View full quotation</a>`
+        : '';
 
     const signatureBlock = ctx.signatureSrc
         ? `<img class="sig-img" src="${esc(ctx.signatureSrc)}" alt="" width="200" height="48" />`
@@ -292,8 +290,8 @@ function buildPrintHtml(
     * { box-sizing: border-box; margin: 0; }
     body {
       font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      font-size: 11px;
-      line-height: 1.55;
+      font-size: 13.5px;
+      line-height: 1.62;
       color: var(--slate700);
       background: #fff;
     }
@@ -321,7 +319,7 @@ function buildPrintHtml(
     }
     .header-right { text-align: right; }
     .h-title {
-      font-size: 24px;
+      font-size: 28px;
       font-weight: 800;
       letter-spacing: 0.08em;
       background: linear-gradient(180deg, var(--violet-light), var(--violet-deep));
@@ -337,21 +335,21 @@ function buildPrintHtml(
       border-radius: 2px;
       background: linear-gradient(90deg, var(--violet-light), var(--violet-deep));
     }
-    .meta { font-size: 10px; color: var(--slate500); margin-bottom: 3px; }
+    .meta { font-size: 11.5px; color: var(--slate500); margin-bottom: 4px; line-height: 1.5; }
     .meta strong { color: var(--slate900); font-weight: 700; }
     .divider { height: 1px; background: var(--slate100); margin: 18px 0 20px; }
     .billing { display: flex; justify-content: space-between; margin-bottom: 20px; }
     .bill-col { width: 48%; }
     .bill-col.r { text-align: right; }
     .lbl {
-      font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.12em;
-      color: var(--accent-mid); margin-bottom: 8px;
+      font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.12em;
+      color: var(--accent-mid); margin-bottom: 9px;
     }
-    .bill-name { font-size: 12px; font-weight: 700; color: var(--slate900); margin-bottom: 4px; }
-    .bill-txt { font-size: 10.5px; color: var(--slate500); line-height: 1.5; margin-bottom: 3px; }
+    .bill-name { font-size: 13.5px; font-weight: 700; color: var(--slate900); margin-bottom: 5px; line-height: 1.35; }
+    .bill-txt { font-size: 12px; color: var(--slate500); line-height: 1.58; margin-bottom: 4px; }
     .sec {
-      font-size: 11.5px; font-weight: 800; color: var(--slate900);
-      letter-spacing: 0.1em; text-transform: uppercase; margin-top: 22px; margin-bottom: 10px;
+      font-size: 14.5px; font-weight: 800; color: var(--slate900);
+      letter-spacing: 0.1em; text-transform: uppercase; margin-top: 24px; margin-bottom: 11px;
       page-break-after: avoid;
       break-after: avoid-page;
     }
@@ -360,11 +358,11 @@ function buildPrintHtml(
       background: #fff; margin-bottom: 8px;
     }
     .card-soft { background: var(--slate50); }
-    .proj-title { font-size: 15px; font-weight: 800; color: var(--slate900); margin-bottom: 8px; }
+    .proj-title { font-size: 17px; font-weight: 800; color: var(--slate900); margin-bottom: 9px; line-height: 1.3; }
     .badges { display: flex; flex-wrap: wrap; gap: 6px; }
     .badge {
       border: 1px solid var(--slate100); border-radius: 4px; padding: 3px 8px;
-      background: var(--slate50); font-size: 8.5px; font-weight: 700;
+      background: var(--slate50); font-size: 9.5px; font-weight: 700;
       color: var(--slate500); text-transform: uppercase; letter-spacing: 0.04em;
     }
     .scope-stack {
@@ -378,19 +376,20 @@ function buildPrintHtml(
       margin-bottom: 0;
       page-break-inside: avoid;
     }
-    .scope-h { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 8px; font-size: 12px; font-weight: 700; color: var(--slate900); }
-    .scope-count { font-size: 10px; color: var(--slate500); flex-shrink: 0; }
-    .scope-desc { font-size: 10.5px; color: var(--slate500); margin-bottom: 10px; line-height: 1.5; }
-    .bullet { display: flex; gap: 8px; margin-bottom: 5px; font-size: 10.5px; line-height: 1.45; }
+    .scope-h { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 9px; font-size: 13.5px; font-weight: 700; color: var(--slate900); line-height: 1.3; }
+    .scope-count { font-size: 11.5px; color: var(--slate500); flex-shrink: 0; }
+    .scope-desc { font-size: 12px; color: var(--slate500); margin-bottom: 11px; line-height: 1.58; }
+    .bullet { display: flex; gap: 8px; margin-bottom: 6px; font-size: 12px; line-height: 1.52; }
     .dot { color: var(--accent-mid); font-weight: 700; width: 10px; flex-shrink: 0; }
-    table.svc { width: 100%; border-collapse: collapse; font-size: 10.5px; margin-top: 0; table-layout: fixed; }
+    table.svc { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 0; table-layout: fixed; }
     table.svc th {
-      text-align: left; font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em;
+      text-align: left; font-size: 10.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em;
       color: var(--slate500); background: var(--slate50); border-bottom: 1px solid var(--slate100);
-      padding: 10px 12px;
+      padding: 11px 13px; line-height: 1.35;
     }
     table.svc td {
-      border-bottom: 1px solid var(--slate100); padding: 10px 12px; vertical-align: top;
+      border-bottom: 1px solid var(--slate100); padding: 11px 13px; vertical-align: top;
+      line-height: 1.5;
       word-wrap: break-word;
       overflow-wrap: break-word;
     }
@@ -400,35 +399,35 @@ function buildPrintHtml(
     .td-num { width: 13%; text-align: right; white-space: nowrap; }
     .tags { display: flex; flex-wrap: wrap; gap: 5px; }
     .tag {
-      font-size: 9.5px; color: var(--slate700); background: var(--slate50);
+      font-size: 11px; color: var(--slate700); background: var(--slate50);
       border: 1px solid var(--slate100); border-radius: 4px; padding: 3px 7px;
     }
     .workflow { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
     .wf-step { display: flex; align-items: flex-start; gap: 6px; margin-bottom: 6px; }
     .wf-num {
-      width: 18px; height: 18px; border-radius: 50%; color: #fff; font-size: 8px; font-weight: 800;
+      width: 20px; height: 20px; border-radius: 50%; color: #fff; font-size: 9px; font-weight: 800;
       display: inline-flex; align-items: center; justify-content: center;
       background: linear-gradient(135deg, var(--violet-light), var(--violet-deep));
     }
-    .wf-txt { font-size: 10px; color: var(--slate700); max-width: 200px; line-height: 1.4; }
+    .wf-txt { font-size: 12px; color: var(--slate700); max-width: 220px; line-height: 1.52; }
     .wf-arrow { color: var(--slate300); font-size: 9px; }
     .pricing { border-radius: 8px; overflow: hidden; border: 1px solid var(--slate100); page-break-inside: avoid; margin-bottom: 4px; }
     .pricing-h {
-      padding: 12px 16px;
+      padding: 13px 17px;
       background: linear-gradient(90deg, var(--violet-light), var(--violet-deep));
-      color: #fff; font-size: 11px; font-weight: 800; letter-spacing: 0.07em;
+      color: #fff; font-size: 13px; font-weight: 800; letter-spacing: 0.07em; line-height: 1.35;
     }
     .pricing-b { padding: 14px 16px 16px; }
-    .pr-row { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; padding: 8px 0; font-size: 10.5px; }
+    .pr-row { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; padding: 9px 0; font-size: 12px; line-height: 1.45; }
     .pr-row span:first-child { flex: 1; }
     .pr-row span:last-child { font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
     .pr-row-last { border-bottom: 1px solid var(--slate100); margin-bottom: 10px; padding-bottom: 12px; }
     .discount { color: #dc2626; }
-    .pr-total { display: flex; justify-content: space-between; align-items: baseline; padding-top: 12px; font-weight: 800; font-size: 14px; color: var(--slate900); gap: 16px; }
+    .pr-total { display: flex; justify-content: space-between; align-items: baseline; padding-top: 13px; font-weight: 800; font-size: 16px; color: var(--slate900); gap: 16px; line-height: 1.3; }
     .payment-block {
       page-break-inside: avoid;
       margin-top: 4px;
-      margin-bottom: 8px;
+      margin-bottom: 12px;
     }
     .ms { border: 1px solid var(--slate100); border-radius: 8px; overflow: hidden; }
     .ms-row {
@@ -437,8 +436,9 @@ function buildPrintHtml(
       gap: 14px;
       padding: 12px 16px;
       border-bottom: 1px solid var(--slate100);
-      font-size: 10.5px;
-      min-height: 44px;
+      font-size: 12px;
+      line-height: 1.5;
+      min-height: 48px;
     }
     .ms-last { border-bottom: none; }
     .ms-badge {
@@ -448,18 +448,59 @@ function buildPrintHtml(
     .ms-label { flex: 1; color: var(--slate700); line-height: 1.45; padding-top: 2px; }
     .ms-amt { font-weight: 800; color: var(--slate900); white-space: nowrap; font-variant-numeric: tabular-nums; padding-top: 2px; }
     .trust {
-      margin-top: 18px; padding: 14px 16px; border-radius: 8px;
+      margin-top: 32px;
+      padding: 20px 22px;
+      border-radius: 10px;
       background: rgba(168, 85, 247, 0.08); border: 1px solid rgba(139, 92, 246, 0.25);
       page-break-inside: avoid;
     }
-    .trust h4 { font-size: 11px; font-weight: 800; color: var(--violet-deep); margin-bottom: 8px; letter-spacing: 0.04em; }
-    .trust p { font-size: 10.5px; color: var(--slate700); line-height: 1.6; }
+    .trust-title {
+      font-size: 16.5px;
+      font-weight: 800;
+      color: var(--slate900);
+      letter-spacing: 0.02em;
+      margin: 0 0 16px;
+      line-height: 1.25;
+      padding-bottom: 12px;
+      border-bottom: 1px solid rgba(139, 92, 246, 0.22);
+    }
+    .trust-title .brand {
+      background: linear-gradient(90deg, var(--violet-light), var(--violet-deep));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      color: var(--violet-deep);
+    }
+    .trust-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px 28px;
+      align-items: start;
+    }
+    .trust-point {
+      page-break-inside: avoid;
+      min-width: 0;
+    }
+    .trust-pt-title {
+      font-size: 12.5px;
+      font-weight: 700;
+      color: var(--slate900);
+      margin-bottom: 5px;
+      line-height: 1.3;
+    }
+    .trust-pt-desc {
+      font-size: 11.5px;
+      font-weight: 400;
+      color: var(--slate500);
+      line-height: 1.55;
+      margin: 0;
+    }
     .cta {
       display: flex;
       flex-direction: row;
       flex-wrap: wrap;
       gap: 20px;
-      margin-top: 20px;
+      margin-top: 22px;
       align-items: stretch;
       border: 1px solid var(--slate100); border-radius: 10px; padding: 18px 20px;
       background: linear-gradient(180deg, #faf5ff 0%, #fff 45%);
@@ -474,19 +515,19 @@ function buildPrintHtml(
       flex: 0 1 240px;
       min-width: 200px;
     }
-    .cta-h { font-size: 11px; font-weight: 800; letter-spacing: 0.08em; color: var(--violet-deep); margin-bottom: 8px; }
-    .cta-d { font-size: 10.5px; color: var(--slate500); margin-bottom: 6px; line-height: 1.5; }
+    .cta-h { font-size: 12.5px; font-weight: 800; letter-spacing: 0.08em; color: var(--violet-deep); margin-bottom: 9px; line-height: 1.35; }
+    .cta-d { font-size: 12px; color: var(--slate500); margin-bottom: 7px; line-height: 1.58; }
     .btn {
       display: block; text-align: center; text-decoration: none;
-      padding: 12px 16px; border-radius: 8px; font-size: 10px; font-weight: 800; letter-spacing: 0.05em;
-      line-height: 1.25;
+      padding: 13px 17px; border-radius: 8px; font-size: 11px; font-weight: 800; letter-spacing: 0.05em;
+      line-height: 1.3;
     }
     .btn-proceed {
       color: #fff;
       background: linear-gradient(135deg, #9333ea, var(--violet-deep));
       box-shadow: 0 4px 14px rgba(79, 70, 229, 0.35);
-      font-size: 11px;
-      padding: 14px 18px;
+      font-size: 12px;
+      padding: 15px 19px;
     }
     .btn-primary {
       color: #fff;
@@ -512,8 +553,23 @@ function buildPrintHtml(
     }
     .sig-img-spacer { height: 40px; margin-bottom: 6px; }
     .sig-line { border-bottom: 1px solid var(--slate900); margin-bottom: 8px; width: 100%; max-width: 260px; }
-    .sig-name { font-size: 11.5px; font-weight: 800; color: var(--slate900); }
-    .sig-role { font-size: 10px; color: var(--slate500); margin-top: 4px; line-height: 1.4; }
+    .sig-name { font-size: 13px; font-weight: 800; color: var(--slate900); line-height: 1.35; }
+    .sig-role { font-size: 11.5px; color: var(--slate500); margin-top: 5px; line-height: 1.5; }
+    .doc-footer {
+      margin-top: 36px;
+      padding-top: 18px;
+      border-top: 1px solid #cbd5e1;
+      text-align: center;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      page-break-inside: avoid;
+    }
+    .doc-footer-main {
+      font-size: 10.5px;
+      font-weight: 600;
+      color: #334155;
+      line-height: 1.5;
+    }
+    .doc-footer a { color: #4F46E5; text-decoration: none; }
   </style>
 </head>
 <body>
@@ -564,7 +620,7 @@ function buildPrintHtml(
 
   ${
       q.overview
-          ? `<div class="sec">Overview</div><div class="card card-soft"><div class="bill-txt" style="font-size:10.5px;color:var(--slate700);line-height:1.6;">${esc(q.overview).replace(/\n/g, '<br/>')}</div></div>`
+          ? `<div class="sec">Overview</div><div class="card card-soft"><div class="bill-txt">${esc(q.overview).replace(/\n/g, '<br/>')}</div></div>`
           : ''
   }
 
@@ -612,8 +668,25 @@ function buildPrintHtml(
   </div>
 
   <div class="trust">
-    <h4>Why partner with us</h4>
-    <p>We combine product strategy, modern engineering and reliable delivery to scale your business with confidence. This proposal reflects a phased, accountable delivery approach with transparent pricing.</p>
+    <h2 class="trust-title">Why Choose <span class="brand">WebBriks</span></h2>
+    <div class="trust-grid">
+      <div class="trust-point">
+        <div class="trust-pt-title">Strategic Product Thinking</div>
+        <p class="trust-pt-desc">We align scope, milestones, and outcomes with your goals—so you invest in impact, not busywork.</p>
+      </div>
+      <div class="trust-point">
+        <div class="trust-pt-title">Modern Scalable Tech Stack</div>
+        <p class="trust-pt-desc">Future-ready tooling and architecture that grow with you and keep maintenance predictable.</p>
+      </div>
+      <div class="trust-point">
+        <div class="trust-pt-title">Transparent &amp; Phased Delivery</div>
+        <p class="trust-pt-desc">Clear phases, visible progress, and pricing tied to accountable checkpoints you can trust.</p>
+      </div>
+      <div class="trust-point">
+        <div class="trust-pt-title">Reliable Communication &amp; Support</div>
+        <p class="trust-pt-desc">Proactive updates, responsive collaboration, and partnership that continues after go-live.</p>
+      </div>
+    </div>
   </div>
 
   <div class="cta">
@@ -633,6 +706,12 @@ function buildPrintHtml(
     <div class="sig-name">Md. Ashaduzzaman</div>
     <div class="sig-role">Founder &amp; CEO, ${esc(company?.name || 'WebBriks')}</div>
   </div>
+
+  <footer class="doc-footer">
+    <div class="doc-footer-main">
+      WebBriks — <a href="mailto:info@webbriks.com">info@webbriks.com</a> — <a href="https://www.webbriks.com">www.webbriks.com</a>
+    </div>
+  </footer>
 
 </div>
 </body>
@@ -655,8 +734,23 @@ export class QuotationPuppeteerPdfService {
 
         let signatureSrc = (await fetchImageAsDataUrl(signatureUrl)) || '';
 
+        const groupId = String((q as any).quotationGroupId ?? '');
+        let paymentPageUrl = '';
+        if (groupId) {
+            try {
+                paymentPageUrl = await QuotationService.getClientLink(groupId);
+            } catch (err) {
+                logger.warn({ err, quotationId, groupId }, 'quotation.puppeteer_pdf.payment_link');
+            }
+        }
+        if (!paymentPageUrl?.trim()) {
+            const fallback = buildPaymentLink((q as any).secureToken, envConfig.payment_client_url);
+            if (fallback) paymentPageUrl = fallback;
+        }
+
         const html = buildPrintHtml(q as Record<string, any>, {
             paymentClientBase: envConfig.payment_client_url,
+            paymentPageUrl,
             logoSrc,
             signatureSrc,
         });
@@ -690,19 +784,7 @@ export class QuotationPuppeteerPdfService {
             const pdf = await page.pdf({
                 format: 'A4',
                 printBackground: true,
-                displayHeaderFooter: true,
-                headerTemplate: '<div></div>',
-                footerTemplate: `<div style="width:100%;margin:0;padding:0 10mm 6mm;box-sizing:border-box;border-top:1px solid #cbd5e1;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;">
-  <div style="text-align:center;padding-top:8px;">
-    <div style="font-size:10.5px;font-weight:600;color:#334155;">
-      WebBriks — <a href="mailto:info@webbriks.com" style="color:#4F46E5;text-decoration:none;">info@webbriks.com</a> — <a href="https://www.webbriks.com" style="color:#4F46E5;text-decoration:none;">www.webbriks.com</a>
-    </div>
-    <div style="font-size:9.5px;color:#64748b;margin-top:6px;">
-      Page <span class="pageNumber"></span> of <span class="totalPages"></span>
-    </div>
-  </div>
-</div>`,
-                margin: { top: '12mm', bottom: '22mm', left: '10mm', right: '10mm' },
+                margin: { top: '12mm', bottom: '14mm', left: '10mm', right: '10mm' },
             });
             const rawName = `${(q as any).quotationNumber || (q as any).details?.title || 'quotation'}.pdf`;
             const filename = rawName.replace(/[/\\?%*:|"<>]/g, '-');

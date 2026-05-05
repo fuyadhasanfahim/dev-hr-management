@@ -10,6 +10,11 @@ interface Props {
   fileNameBase: string;
 }
 
+function sanitizeFileName(base: string): string {
+  const stem = (base || 'quotation').replace(/[/\\?%*:|"<>]/g, '-').trim() || 'quotation';
+  return stem.endsWith('.pdf') ? stem : `${stem}.pdf`;
+}
+
 export default function QuotationPuppeteerPdfBtn({ quotationId, fileNameBase }: Props) {
   const [loading, setLoading] = useState(false);
 
@@ -24,23 +29,55 @@ export default function QuotationPuppeteerPdfBtn({ quotationId, fileNameBase }: 
       const res = await fetch(`${base}/api/quotations/${quotationId}/pdf/puppeteer`, {
         credentials: 'include',
       });
+
       if (!res.ok) {
-        const errBody = await res.json().catch(() => ({}));
-        throw new Error(
-          (errBody as { message?: string }).message || res.statusText || 'Download failed',
-        );
+        const text = await res.text();
+        let message = res.statusText || 'Download failed';
+        try {
+          const j = JSON.parse(text) as { message?: string };
+          if (j?.message) message = j.message;
+        } catch {
+          if (text?.length && text.length < 400) message = text;
+        }
+        toast.error(message);
+        return;
       }
+
       const blob = await res.blob();
+      if (blob.size === 0) {
+        toast.error('Empty PDF response');
+        return;
+      }
+
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${fileNameBase || 'quotation'}.pdf`;
+      a.download = sanitizeFileName(fileNameBase);
+      a.rel = 'noopener';
       document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-    } catch (e) {
-      toast.error((e as Error).message || 'Failed to download PDF');
+
+      requestAnimationFrame(() => {
+        try {
+          a.click();
+        } catch {
+          try {
+            window.open(url, '_blank', 'noopener,noreferrer');
+          } catch {
+            toast.error('Could not start download');
+            URL.revokeObjectURL(url);
+            a.remove();
+            return;
+          }
+        }
+        setTimeout(() => {
+          URL.revokeObjectURL(url);
+          a.remove();
+        }, 2500);
+      });
+    } catch (e: unknown) {
+      const err = e as { name?: string; message?: string };
+      if (err?.name === 'AbortError') return;
+      toast.error(err?.message || 'Failed to download PDF');
     } finally {
       setLoading(false);
     }
