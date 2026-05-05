@@ -21,7 +21,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { 
+import {
   Loader2, ArrowLeft, FileText, 
   Send, Edit2, Copy, History, AlertCircle, ExternalLink,
   Trash2,
@@ -32,6 +32,7 @@ import {
   Cpu,
   Activity,
   ReceiptText,
+  Printer,
 } from "lucide-react";
 import Link from "next/link";
 import PDFDownloadBtn from "@/components/quotation/pdf/PDFDownloadBtn";
@@ -236,6 +237,13 @@ export default function ViewQuotationPage() {
             }
           />
           <PDFDownloadBtn data={data} />
+
+          <Button variant="outline" size="sm" asChild>
+            <Link href={`/quotations/${id}/print-paginated`} target="_blank">
+              <Printer className="h-4 w-4" />
+              Smart print
+            </Link>
+          </Button>
 
           {data.isLatestVersion &&
             (data.status === "draft" || data.status === "change_requested") && (
