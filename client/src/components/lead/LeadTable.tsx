@@ -1,3 +1,6 @@
+import { useState } from "react";
+import { useConvertLeadToClientMutation } from "@/redux/features/lead/leadApi";
+import { toast } from "sonner";
 import {
   Table,
   TableBody,
@@ -8,7 +11,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Eye, Edit } from "lucide-react";
+import { Eye, Edit, UserPlus, Loader } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Lead } from "@/types/lead.type";
 import { format } from "date-fns";
@@ -26,6 +29,28 @@ export function LeadTable({
   onEdit,
   onView,
 }: LeadTableProps) {
+  const [convertLead] = useConvertLeadToClientMutation();
+  const [activeConvertingId, setActiveConvertingId] = useState<string | null>(null);
+
+  const handleConvert = async (lead: Lead) => {
+    if (!confirm(`Are you sure you want to convert "${lead.name || "this lead"}" to a client?`)) return;
+    try {
+      setActiveConvertingId(lead._id);
+      const clientData = {
+        name: lead.name || "Unknown",
+        emails: lead.email ? [lead.email] : ["temp@temp.com"],
+        phone: lead.phone,
+        status: "active",
+      };
+      await convertLead({ id: lead._id, clientData }).unwrap();
+      toast.success("Lead converted to Client successfully!");
+    } catch (error: any) {
+      toast.error(error?.data?.message || "Failed to convert lead");
+    } finally {
+      setActiveConvertingId(null);
+    }
+  };
+
   const getPriorityColor = (priority?: string) => {
     switch (priority) {
       case "High":
@@ -153,6 +178,22 @@ export function LeadTable({
                     >
                       <Edit className="h-4 w-4" />
                     </Button>
+                    {!lead.isConverted && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleConvert(lead)}
+                        disabled={activeConvertingId === lead._id}
+                        className="h-8 w-8 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-500/10"
+                        title="Convert to Client"
+                      >
+                        {activeConvertingId === lead._id ? (
+                          <Loader className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <UserPlus className="h-4 w-4" />
+                        )}
+                      </Button>
+                    )}
                   </div>
                 </TableCell>
               </TableRow>
