@@ -451,7 +451,7 @@ export function QuotationPdf({
                                         </Text>
                                         {p?.startDate || p?.endDate ? (
                                             <Text style={{ fontSize: 7.5, color: SLATE_500, fontFamily: 'Helvetica-Oblique', marginLeft: 6 }}>
-                                                ({p.startDate ? p.startDate : 'TBD'} — {p.endDate ? p.endDate : 'TBD'})
+                                                ({p.startDate ? formatDate(p.startDate) : 'TBD'} — {p.endDate ? formatDate(p.endDate) : 'TBD'})
                                             </Text>
                                         ) : null}
                                     </View>

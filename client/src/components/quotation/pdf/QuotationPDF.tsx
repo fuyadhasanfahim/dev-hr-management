@@ -315,9 +315,28 @@ export const QuotationPDF = ({ data }: QuotationPDFProps) => {
                                 wrap
                             >
                                 <View style={styles.scopeHeader} wrap={false}>
-                                    <Text style={styles.scopeTitle}>
-                                        Phase {idx + 1}: {phase.title}
-                                    </Text>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                        <Text style={styles.scopeTitle}>
+                                            Phase {idx + 1}: {phase.title}
+                                        </Text>
+                                        {(phase.startDate || phase.endDate) && (
+                                            <Text style={{ fontSize: 7.5, color: '#64748b', fontFamily: 'Helvetica-Oblique', marginLeft: 6 }}>
+                                                ({(() => {
+                                                    try {
+                                                        return phase.startDate ? format(new Date(phase.startDate), 'PPP') : 'TBD';
+                                                    } catch {
+                                                        return phase.startDate || 'TBD';
+                                                    }
+                                                })()} — {(() => {
+                                                    try {
+                                                        return phase.endDate ? format(new Date(phase.endDate), 'PPP') : 'TBD';
+                                                    } catch {
+                                                        return phase.endDate || 'TBD';
+                                                    }
+                                                })()})
+                                            </Text>
+                                        )}
+                                    </View>
                                     <Text style={styles.scopeCount}>
                                         {phase.items?.length || 0} items
                                     </Text>
