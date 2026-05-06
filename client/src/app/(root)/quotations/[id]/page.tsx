@@ -421,8 +421,15 @@ export default function ViewQuotationPage() {
                       >
                         <div className="flex items-start justify-between gap-3">
                           <div className="space-y-1">
-                            <div className="font-bold">
-                              Phase {idx + 1}: {p.title}
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="font-bold">
+                                Phase {idx + 1}: {p.title}
+                              </span>
+                              {(p.startDate || p.endDate) && (
+                                <span className="text-xs font-mono text-muted-foreground bg-muted px-2 py-0.5 rounded border">
+                                  {p.startDate ? p.startDate : "TBD"} — {p.endDate ? p.endDate : "TBD"}
+                                </span>
+                              )}
                             </div>
                             {p.description && (
                               <div className="text-sm text-muted-foreground">

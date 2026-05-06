@@ -197,9 +197,16 @@ function buildUnitDefs(data: QuotationData): UnitDef[] {
         <tr className="border-b border-slate-100">
           <th className="bg-slate-50 px-3 py-2.5 text-left align-top font-normal">
             <div className="flex flex-wrap items-start justify-between gap-2">
-              <span className="text-[13px] font-bold text-slate-900">
-                Phase {pi + 1}: {ph.title}
-              </span>
+              <div className="flex flex-col gap-0.5">
+                <span className="text-[13px] font-bold text-slate-900">
+                  Phase {pi + 1}: {ph.title}
+                </span>
+                {(ph.startDate || ph.endDate) && (
+                  <span className="text-[11px] font-medium text-slate-500">
+                    {ph.startDate ? ph.startDate : "TBD"} — {ph.endDate ? ph.endDate : "TBD"}
+                  </span>
+                )}
+              </div>
               <span className="text-[11.5px] font-normal text-slate-500">
                 {nDeliverables} deliverables
               </span>

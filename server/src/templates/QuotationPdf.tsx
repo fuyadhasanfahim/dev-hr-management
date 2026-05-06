@@ -445,9 +445,16 @@ export function QuotationPdf({
                         {phases.map((p, idx) => (
                             <View key={`phase-${idx}`} style={styles.scopeCard} wrap>
                                 <View style={styles.scopeHeader} wrap={false}>
-                                    <Text style={styles.scopeTitle}>
-                                        Phase {idx + 1}: {safeText(p?.title || 'Untitled')}
-                                    </Text>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                        <Text style={styles.scopeTitle}>
+                                            Phase {idx + 1}: {safeText(p?.title || 'Untitled')}
+                                        </Text>
+                                        {p?.startDate || p?.endDate ? (
+                                            <Text style={{ fontSize: 7.5, color: SLATE_500, fontFamily: 'Helvetica-Oblique', marginLeft: 6 }}>
+                                                ({p.startDate ? p.startDate : 'TBD'} — {p.endDate ? p.endDate : 'TBD'})
+                                            </Text>
+                                        ) : null}
+                                    </View>
                                     <Text style={styles.scopeCount}>
                                         {p?.items?.length || 0} items
                                     </Text>
