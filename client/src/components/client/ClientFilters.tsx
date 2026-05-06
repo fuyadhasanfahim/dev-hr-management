@@ -51,7 +51,7 @@ export function ClientFilters({
           placeholder="Search clients..."
           value={localSearch}
           onChange={(e) => setLocalSearch(e.target.value)}
-          className="pl-9 w-full bg-slate-50/50"
+          className="pl-9 w-full bg-slate-50/50 dark:bg-slate-900/50"
         />
       </div>
       <div className="flex items-center gap-3 w-full sm:w-auto">
@@ -59,7 +59,7 @@ export function ClientFilters({
           value={status}
           onValueChange={(value) => onFilterChange("status", value)}
         >
-          <SelectTrigger className="w-auto bg-slate-50/50">
+          <SelectTrigger className="w-auto bg-slate-50/50 dark:bg-slate-900/50">
             <SelectValue placeholder="All statuses" />
           </SelectTrigger>
           <SelectContent>
@@ -75,7 +75,7 @@ export function ClientFilters({
           value={limit.toString()}
           onValueChange={(value) => onFilterChange("limit", parseInt(value))}
         >
-          <SelectTrigger className="w-auto bg-slate-50/50">
+          <SelectTrigger className="w-auto bg-slate-50/50 dark:bg-slate-900/50">
             <SelectValue placeholder="Rows per page" />
           </SelectTrigger>
           <SelectContent>
@@ -91,7 +91,7 @@ export function ClientFilters({
           variant="secondary"
           size="icon"
           onClick={onClearFilters}
-          className="text-slate-500 hover:text-slate-900 px-3"
+          className="text-slate-500 hover:text-slate-900 dark:hover:text-slate-100 px-3"
         >
           <X className="w-4 h-4" />
         </Button>
