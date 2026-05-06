@@ -5,6 +5,8 @@ const phaseSchema = new Schema({
     title: { type: String, required: true },
     description: { type: String },
     items: [{ type: String }],
+    startDate: { type: String },
+    endDate: { type: String },
 }, { _id: false });
 
 const serviceSchema = new Schema({
