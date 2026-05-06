@@ -21,14 +21,14 @@ const STATUS_CONFIG: Record<
   QuotationStatus,
   { label: string; className: string }
 > = {
-  draft:            { label: "Draft",            className: "bg-slate-100 text-slate-700 border-slate-200" },
-  sent:             { label: "Sent",             className: "bg-blue-50 text-blue-700 border-blue-200" },
-  viewed:           { label: "Viewed",           className: "bg-indigo-50 text-indigo-700 border-indigo-200" },
-  accepted:         { label: "Accepted",         className: "bg-teal-50 text-teal-700 border-teal-200" },
-  rejected:         { label: "Rejected",         className: "bg-red-50 text-red-700 border-red-200" },
-  superseded:       { label: "Superseded",       className: "bg-amber-50 text-amber-700 border-amber-200" },
-  expired:          { label: "Expired",          className: "bg-orange-50 text-orange-700 border-orange-200" },
-  change_requested: { label: "Changes Req.",     className: "bg-purple-50 text-purple-700 border-purple-200" },
+  draft:            { label: "Draft",            className: "bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-900/40 dark:text-slate-300 dark:border-slate-800" },
+  sent:             { label: "Sent",             className: "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-900/50" },
+  viewed:           { label: "Viewed",           className: "bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/40 dark:text-indigo-300 dark:border-indigo-900/50" },
+  accepted:         { label: "Accepted",         className: "bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-950/40 dark:text-teal-300 dark:border-teal-900/50" },
+  rejected:         { label: "Rejected",         className: "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/40 dark:text-red-300 dark:border-red-900/50" },
+  superseded:       { label: "Superseded",       className: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-900/50" },
+  expired:          { label: "Expired",          className: "bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950/40 dark:text-orange-300 dark:border-orange-900/50" },
+  change_requested: { label: "Changes Req.",     className: "bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-900/50" },
 };
 
 const SKELETON_COLS = 7;
@@ -90,11 +90,11 @@ export function QuotationTable({
   if (quotations.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-center space-y-3">
-        <div className="p-4 bg-slate-50 rounded-full text-slate-400">
+        <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-full text-slate-400">
           <FileText className="w-8 h-8" />
         </div>
-        <p className="text-base font-medium text-slate-900">No quotations yet</p>
-        <p className="text-sm text-slate-500">Create your first quotation to get started.</p>
+        <p className="text-base font-medium text-slate-900 dark:text-slate-100">No quotations yet</p>
+        <p className="text-sm text-slate-500 dark:text-slate-400">Create your first quotation to get started.</p>
       </div>
     );
   }
@@ -105,14 +105,14 @@ export function QuotationTable({
       <Table>
         <TableHeader>
           <TableRow className="hover:bg-transparent">
-            <TableHead className="font-medium text-slate-500">Quotation #</TableHead>
-            <TableHead className="font-medium text-slate-500">Ver.</TableHead>
-            <TableHead className="font-medium text-slate-500">Client</TableHead>
-            <TableHead className="font-medium text-slate-500">Service</TableHead>
-            <TableHead className="font-medium text-slate-500">Total</TableHead>
-            <TableHead className="font-medium text-slate-500 text-center">Status</TableHead>
-            <TableHead className="font-medium text-slate-500">Date</TableHead>
-            <TableHead className="font-medium text-slate-500 text-right">Actions</TableHead>
+            <TableHead className="font-medium text-slate-500 dark:text-slate-400">Quotation #</TableHead>
+            <TableHead className="font-medium text-slate-500 dark:text-slate-400">Ver.</TableHead>
+            <TableHead className="font-medium text-slate-500 dark:text-slate-400">Client</TableHead>
+            <TableHead className="font-medium text-slate-500 dark:text-slate-400">Service</TableHead>
+            <TableHead className="font-medium text-slate-500 dark:text-slate-400">Total</TableHead>
+            <TableHead className="font-medium text-slate-500 dark:text-slate-400 text-center">Status</TableHead>
+            <TableHead className="font-medium text-slate-500 dark:text-slate-400">Date</TableHead>
+            <TableHead className="font-medium text-slate-500 dark:text-slate-400 text-right">Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -124,14 +124,14 @@ export function QuotationTable({
             return (
               <TableRow
                 key={q._id}
-                className={`transition-colors ${isSuperseded ? "opacity-50 hover:bg-slate-50/50" : "hover:bg-slate-50/80"}`}
+                className={`transition-colors ${isSuperseded ? "opacity-50 hover:bg-slate-50/50 dark:hover:bg-slate-800/20" : "hover:bg-slate-50/80 dark:hover:bg-slate-800/30"}`}
               >
                 {/* Quotation # */}
-                <TableCell className="font-mono text-slate-900 font-medium">
+                <TableCell className="font-mono text-slate-900 dark:text-slate-100 font-medium">
                   <div className="flex items-center gap-2">
                     {q.quotationNumber}
                     {isSuperseded && (
-                      <span className="text-[10px] font-bold text-amber-500 bg-amber-50 border border-amber-200 rounded px-1">
+                      <span className="text-[10px] font-bold text-amber-500 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/50 rounded px-1">
                         OLD
                       </span>
                     )}
@@ -140,27 +140,27 @@ export function QuotationTable({
 
                 {/* Version */}
                 <TableCell>
-                  <div className="flex items-center gap-1 text-slate-500">
+                  <div className="flex items-center gap-1 text-slate-500 dark:text-slate-400">
                     <GitBranch className="w-3.5 h-3.5" />
                     <span className="text-sm font-medium">v{q.version ?? 1}</span>
                   </div>
                 </TableCell>
 
                 {/* Client */}
-                <TableCell className="text-slate-900 font-medium">
+                <TableCell className="text-slate-900 dark:text-slate-100 font-medium">
                   {(q.clientId as unknown as { name: string })?.name ||
                     q.client.contactName}
                 </TableCell>
 
                 {/* Service */}
-                <TableCell className="text-slate-600">
+                <TableCell className="text-slate-600 dark:text-slate-300">
                   {q.serviceType === "web-development"
                     ? "Web Design & Dev"
                     : "Photography"}
                 </TableCell>
 
                 {/* Total */}
-                <TableCell className="font-bold text-slate-900">
+                <TableCell className="font-bold text-slate-900 dark:text-slate-100">
                   {(q.currency || "৳")}{(q.totals?.grandTotal ?? 0).toLocaleString()}
                 </TableCell>
 
@@ -175,7 +175,7 @@ export function QuotationTable({
                 </TableCell>
 
                 {/* Date */}
-                <TableCell className="text-slate-500 text-sm">
+                <TableCell className="text-slate-500 dark:text-slate-400 text-sm">
                   {format(new Date(q.createdAt ?? new Date()), "MMM dd, yyyy")}
                 </TableCell>
 
@@ -186,7 +186,7 @@ export function QuotationTable({
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-8 w-8 text-slate-400 hover:text-slate-900"
+                      className="h-8 w-8 text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
                       asChild
                     >
                       <Link href={`/quotations/${q._id}`}>
@@ -200,7 +200,7 @@ export function QuotationTable({
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-8 w-8 text-slate-400 hover:text-blue-600"
+                          className="h-8 w-8 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400"
                           onClick={() => q._id && onSend(q._id)}
                           disabled={sendingId === q._id}
                           title="Send to Client"
@@ -217,7 +217,7 @@ export function QuotationTable({
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-8 w-8 text-slate-400 hover:text-teal-600"
+                      className="h-8 w-8 text-slate-400 hover:text-teal-600 dark:hover:text-teal-400"
                       onClick={() => onEdit(q)}
                     >
                       <Edit2 className="h-4 w-4" />
@@ -227,7 +227,7 @@ export function QuotationTable({
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-8 w-8 text-slate-400 hover:text-red-500"
+                      className="h-8 w-8 text-slate-400 hover:text-red-500 dark:hover:text-red-400"
                       onClick={() => q._id && onDelete(q._id)}
                     >
                       <Trash2 className="h-4 w-4" />
