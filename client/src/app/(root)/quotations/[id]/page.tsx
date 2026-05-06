@@ -191,14 +191,7 @@ export default function ViewQuotationPage() {
       {/* Header (Orders-like) */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => router.push("/quotations")}
-            className="rounded-full shadow-sm"
-          >
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
+
 
           <div>
             <div className="flex items-center gap-2">
@@ -239,12 +232,7 @@ export default function ViewQuotationPage() {
             )}
           />
 
-          <Button variant="outline" size="sm" asChild>
-            <Link href={`/quotations/${id}/print-paginated`} target="_blank">
-              <Printer className="h-4 w-4" />
-              Smart print
-            </Link>
-          </Button>
+
 
           {data.isLatestVersion &&
             (data.status === "draft" || data.status === "change_requested") && (
