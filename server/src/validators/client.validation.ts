@@ -8,15 +8,7 @@ const teamMemberSchema = z.object({
 });
 
 export const createClientSchema = z.object({
-    clientId: z
-        .string({ message: 'Client ID is required' })
-        .min(1, 'Client ID is required')
-        .min(2, 'Client ID must be at least 2 characters')
-        .max(50, 'Client ID must be at most 50 characters')
-        .regex(
-            /^[A-Za-z0-9_-]+$/,
-            'Client ID can only contain letters, numbers, hyphens, and underscores',
-        ),
+    clientId: z.string().optional(),
     name: z
         .string({ message: 'Name is required' })
         .min(1, 'Name is required')
@@ -36,15 +28,7 @@ export const createClientSchema = z.object({
 });
 
 export const updateClientSchema = z.object({
-    clientId: z
-        .string()
-        .min(2, 'Client ID must be at least 2 characters')
-        .max(50, 'Client ID must be at most 50 characters')
-        .regex(
-            /^[A-Za-z0-9_-]+$/,
-            'Client ID can only contain letters, numbers, hyphens, and underscores',
-        )
-        .optional(),
+    clientId: z.string().optional(),
     name: z
         .string()
         .min(2, 'Name must be at least 2 characters')

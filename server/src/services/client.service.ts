@@ -210,14 +210,27 @@ class ClientIdExistsError extends Error {
 const createClientInDB = async (
     payload: CreateClientInput & { createdBy: string },
 ) => {
-    // Check if client ID already exists
-    const clientIdExists = await checkClientIdExists(payload.clientId);
-    if (clientIdExists) {
-        const suggestions = await generateSuggestedIds(payload.clientId);
-        throw new ClientIdExistsError(
-            `Client ID "${payload.clientId}" already exists`,
-            suggestions,
-        );
+    let finalClientId = payload.clientId;
+    if (!finalClientId) {
+        const count = await ClientModel.countDocuments();
+        finalClientId = `CLT-${String(count + 1).padStart(4, '0')}`;
+        let exists = await checkClientIdExists(finalClientId);
+        let suffix = 1;
+        while (exists) {
+            finalClientId = `CLT-${String(count + 1 + suffix).padStart(4, '0')}`;
+            exists = await checkClientIdExists(finalClientId);
+            suffix++;
+        }
+    } else {
+        // Check if client ID already exists
+        const clientIdExists = await checkClientIdExists(finalClientId);
+        if (clientIdExists) {
+            const suggestions = await generateSuggestedIds(finalClientId);
+            throw new ClientIdExistsError(
+                `Client ID "${finalClientId}" already exists`,
+                suggestions,
+            );
+        }
     }
 
     // Check if any of the emails already exist
@@ -233,7 +246,7 @@ const createClientInDB = async (
 
     // Prepare data for creation
     const clientData = {
-        clientId: payload.clientId,
+        clientId: finalClientId,
         name: payload.name,
         emails: payload.emails.map((e) => e.toLowerCase()),
         status: payload.status,

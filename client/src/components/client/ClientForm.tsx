@@ -41,15 +41,7 @@ const teamMemberSchema = z.object({
 });
 
 export const clientFormSchema = z.object({
-    clientId: z
-        .string()
-        .min(1, 'Client ID is required')
-        .min(2, 'Client ID must be at least 2 characters')
-        .max(50, 'Client ID must be at most 50 characters')
-        .regex(
-            /^[A-Za-z0-9_-]+$/,
-            'Client ID can only contain letters, numbers, hyphens, and underscores',
-        ),
+    clientId: z.string().optional(),
     name: z
         .string()
         .min(1, 'Name is required')
@@ -185,7 +177,7 @@ export function ClientForm({
     const handleFormSubmit = async (data: FormValues) => {
         if (clientIdError && !isEditMode) return;
         const formattedData: ClientFormData = {
-            clientId: data.clientId,
+            clientId: data.clientId || '',
             name: data.name,
             emails: data.emails.map(e => e.value),
             phone: data.phone,
@@ -333,36 +325,15 @@ function ClientBasicInfo({
 
     return (
         <div className="space-y-6">
-            <div className="grid md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                    <Label htmlFor="clientId" className="text-slate-700">Client ID <span className="text-red-500">*</span></Label>
-                    <div className="relative">
-                        <Input
-                            id="clientId"
-                            placeholder="e.g., CLT-001"
-                            {...register('clientId')}
-                            disabled={isEditMode}
-                            className={cn("bg-slate-50/50 border-slate-200 focus-visible:ring-teal-500", getFieldError('clientId') && 'border-red-500 focus-visible:ring-red-500')}
-                        />
-                        {isCheckingId && (
-                            <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                                <Loader className="h-4 w-4 animate-spin text-slate-400" />
-                            </div>
-                        )}
-                    </div>
-                    {getFieldError('clientId') && <p className="text-xs text-red-500 font-medium">{getFieldError('clientId')}</p>}
-                </div>
-
-                <div className="space-y-2">
-                    <Label htmlFor="name" className="text-slate-700">Client Name <span className="text-red-500">*</span></Label>
-                    <Input
-                        id="name"
-                        placeholder="Company or individual name"
-                        {...register('name')}
-                        className={cn("bg-slate-50/50 border-slate-200 focus-visible:ring-teal-500", getFieldError('name') && 'border-red-500 focus-visible:ring-red-500')}
-                    />
-                    {getFieldError('name') && <p className="text-xs text-red-500 font-medium">{getFieldError('name')}</p>}
-                </div>
+            <div className="space-y-2">
+                <Label htmlFor="name" className="text-slate-700">Client Name <span className="text-red-500">*</span></Label>
+                <Input
+                    id="name"
+                    placeholder="Company or individual name"
+                    {...register('name')}
+                    className={cn("bg-slate-50/50 border-slate-200 focus-visible:ring-teal-500", getFieldError('name') && 'border-red-500 focus-visible:ring-red-500')}
+                />
+                {getFieldError('name') && <p className="text-xs text-red-500 font-medium">{getFieldError('name')}</p>}
             </div>
 
             <div className="space-y-3">
