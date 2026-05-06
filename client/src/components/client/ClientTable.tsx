@@ -86,13 +86,13 @@ export function ClientTable({
       <Table>
         <TableHeader>
           <TableRow className="hover:bg-transparent">
-            <TableHead className="font-medium text-slate-500">Client ID</TableHead>
-            <TableHead className="font-medium text-slate-500">Name</TableHead>
-            <TableHead className="font-medium text-slate-500">Email</TableHead>
-            <TableHead className="font-medium text-slate-500">Phone</TableHead>
-            <TableHead className="font-medium text-slate-500 text-center">Team Members</TableHead>
-            <TableHead className="font-medium text-slate-500 text-center">Status</TableHead>
-            <TableHead className="font-medium text-slate-500 text-right">Actions</TableHead>
+            <TableHead className="font-medium text-slate-500 dark:text-slate-400">Client ID</TableHead>
+            <TableHead className="font-medium text-slate-500 dark:text-slate-400">Name</TableHead>
+            <TableHead className="font-medium text-slate-500 dark:text-slate-400">Email</TableHead>
+            <TableHead className="font-medium text-slate-500 dark:text-slate-400">Phone</TableHead>
+            <TableHead className="font-medium text-slate-500 dark:text-slate-400 text-center">Team Members</TableHead>
+            <TableHead className="font-medium text-slate-500 dark:text-slate-400 text-center">Status</TableHead>
+            <TableHead className="font-medium text-slate-500 dark:text-slate-400 text-right">Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -103,11 +103,11 @@ export function ClientTable({
                 className="text-center py-16 text-muted-foreground"
               >
                 <div className="flex flex-col items-center justify-center space-y-3">
-                  <div className="p-4 bg-slate-50 rounded-full text-slate-400">
+                  <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-full text-slate-400">
                     <UsersRound className="w-8 h-8" />
                   </div>
-                  <p className="text-base font-medium text-slate-900">No clients yet</p>
-                  <p className="text-sm text-slate-500 max-w-sm">
+                  <p className="text-base font-medium text-slate-900 dark:text-slate-100">No clients yet</p>
+                  <p className="text-sm text-slate-500 dark:text-slate-400 max-w-sm">
                     Get started by adding your first client to manage their details and team assignments.
                   </p>
                 </div>
@@ -117,33 +117,33 @@ export function ClientTable({
             clients.map((client) => {
               const isActive = client.status === "active";
               return (
-                <TableRow key={client._id} className="hover:bg-slate-50/80 transition-colors">
-                  <TableCell className="font-mono text-slate-500 text-sm">
+                <TableRow key={client._id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/30 transition-colors">
+                  <TableCell className="font-mono text-slate-500 dark:text-slate-400 text-sm">
                     {client.clientId}
                   </TableCell>
-                  <TableCell className="font-medium text-slate-900">
+                  <TableCell className="font-medium text-slate-900 dark:text-slate-100">
                     {client.name}
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">
-                      <span className="truncate max-w-[150px] text-slate-600">
+                      <span className="truncate max-w-[150px] text-slate-600 dark:text-slate-300">
                         {client.emails?.[0] || "-"}
                       </span>
                       {client.emails && client.emails.length > 1 && (
-                        <Badge variant="secondary" className="bg-slate-100 text-slate-600 hover:bg-slate-200">
+                        <Badge variant="secondary" className="bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700">
                           +{client.emails.length - 1}
                         </Badge>
                       )}
                     </div>
                   </TableCell>
-                  <TableCell className="text-slate-600">
+                  <TableCell className="text-slate-600 dark:text-slate-300">
                     {client.phone || "-"}
                   </TableCell>
                   <TableCell>
                     <div className="flex justify-center">
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <div className="flex items-center gap-1.5 cursor-default hover:bg-slate-100 px-2 py-1 rounded-md transition-colors text-slate-600">
+                          <div className="flex items-center gap-1.5 cursor-default hover:bg-slate-100 dark:hover:bg-slate-800 px-2 py-1 rounded-md transition-colors text-slate-600 dark:text-slate-300">
                             <Users className="h-4 w-4 text-slate-400" />
                             <span className="font-semibold text-sm">
                               {client.teamMembers?.length || 0}
@@ -152,7 +152,7 @@ export function ClientTable({
                         </TooltipTrigger>
                         <TooltipContent
                           side="top"
-                          className="p-3 min-w-[150px] shadow-md border-slate-200 bg-white text-slate-900"
+                          className="p-3 min-w-[150px] shadow-md border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
                         >
                           {client.teamMembers &&
                           client.teamMembers.length > 0 ? (
@@ -168,7 +168,7 @@ export function ClientTable({
                               </ul>
                             </div>
                           ) : (
-                            <p className="text-xs text-slate-500">No team members assigned</p>
+                            <p className="text-xs text-slate-500 dark:text-slate-400">No team members assigned</p>
                           )}
                         </TooltipContent>
                       </Tooltip>
@@ -178,8 +178,8 @@ export function ClientTable({
                     <Badge 
                       variant="outline" 
                       className={isActive 
-                        ? "bg-teal-50 text-teal-700 border-teal-200" 
-                        : "bg-orange-50 text-orange-700 border-orange-200"
+                        ? "bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-950/40 dark:text-teal-300 dark:border-teal-900/50" 
+                        : "bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950/40 dark:text-orange-300 dark:border-orange-900/50"
                       }
                     >
                       {isActive ? "Active" : "Inactive"}
@@ -187,7 +187,7 @@ export function ClientTable({
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-1">
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-slate-900" asChild>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-slate-900 dark:hover:text-slate-100" asChild>
                         <Link href={`/clients/${client._id}`}>
                           <Eye className="h-4 w-4" />
                         </Link>
@@ -196,7 +196,7 @@ export function ClientTable({
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-8 w-8 text-slate-400 hover:text-teal-600"
+                          className="h-8 w-8 text-slate-400 hover:text-teal-600 dark:hover:text-teal-400"
                           onClick={() => onEdit(client)}
                         >
                           <Edit2 className="h-4 w-4" />

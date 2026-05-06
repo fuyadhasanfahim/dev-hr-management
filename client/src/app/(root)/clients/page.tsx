@@ -169,10 +169,10 @@ export default function ClientsPage() {
       {/* Header section */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-slate-900">
+          <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
             Clients
           </h1>
-          <p className="text-sm text-slate-500 mt-1 flex items-center gap-2">
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-2">
             Manage your client relationships
             {isFetching && (
               <Loader className="h-3 w-3 animate-spin text-teal-600" />
@@ -183,10 +183,10 @@ export default function ClientsPage() {
           <div className="flex items-center gap-3">
             <Button
               variant="outline"
-              className="bg-white"
+              className="bg-white dark:bg-slate-900"
               onClick={() => toast.info("Export feature coming soon")}
             >
-              <FileDown className="h-4 w-4 text-slate-500" />
+              <FileDown className="h-4 w-4 text-slate-500 dark:text-slate-400" />
               Export
             </Button>
             <Button
@@ -209,9 +209,9 @@ export default function ClientsPage() {
       />
 
       {/* Main Table Card wrapper */}
-      <Card className="border-slate-200 bg-white">
+      <Card className="border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/40">
         {/* Toolbar */}
-        <div className="p-4 border-b border-slate-100">
+        <div className="p-4 border-b border-slate-100 dark:border-slate-800/80">
           <ClientFilters
             search={search}
             status={status}
@@ -230,12 +230,12 @@ export default function ClientsPage() {
         />
 
         {/* Pagination */}
-        <div className="p-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="text-sm text-slate-500">
+        <div className="p-4 border-t border-slate-100 dark:border-slate-800/80 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="text-sm text-slate-500 dark:text-slate-400">
             Showing{" "}
-            <span className="font-medium text-slate-900">{clients.length}</span>{" "}
+            <span className="font-medium text-slate-900 dark:text-slate-100">{clients.length}</span>{" "}
             of{" "}
-            <span className="font-medium text-slate-900">
+            <span className="font-medium text-slate-900 dark:text-slate-100">
               {pagination.total}
             </span>{" "}
             clients
@@ -251,11 +251,11 @@ export default function ClientsPage() {
 
       {/* Add Client Dialog */}
       <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-        <DialogContent className="max-w-4xl h-[90vh] max-h-[90vh] flex flex-col p-0 overflow-hidden gap-0 bg-white">
-          <div className="px-6 py-4 border-b border-slate-100 shrink-0">
+        <DialogContent className="max-w-4xl h-[90vh] max-h-[90vh] flex flex-col p-0 overflow-hidden gap-0 bg-white dark:bg-slate-900">
+          <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 shrink-0">
             <DialogHeader>
-              <DialogTitle className="text-xl font-semibold text-slate-900">Add New Client</DialogTitle>
-              <DialogDescription className="text-slate-500">
+              <DialogTitle className="text-xl font-semibold text-slate-900 dark:text-slate-100">Add New Client</DialogTitle>
+              <DialogDescription className="text-slate-500 dark:text-slate-400">
                 Create a new client profile with contact and team details.
               </DialogDescription>
             </DialogHeader>
@@ -272,11 +272,11 @@ export default function ClientsPage() {
 
       {/* Edit Client Dialog */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="max-w-4xl h-[90vh] max-h-[90vh] flex flex-col p-0 overflow-hidden gap-0 bg-white">
-          <div className="px-6 py-4 border-b border-slate-100 shrink-0">
+        <DialogContent className="max-w-4xl h-[90vh] max-h-[90vh] flex flex-col p-0 overflow-hidden gap-0 bg-white dark:bg-slate-900">
+          <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 shrink-0">
             <DialogHeader>
-              <DialogTitle className="text-xl font-semibold text-slate-900">Edit Client</DialogTitle>
-              <DialogDescription className="text-slate-500">
+              <DialogTitle className="text-xl font-semibold text-slate-900 dark:text-slate-100">Edit Client</DialogTitle>
+              <DialogDescription className="text-slate-500 dark:text-slate-400">
                 Update client profile and team information.
               </DialogDescription>
             </DialogHeader>
