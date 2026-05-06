@@ -165,14 +165,14 @@ export default function ViewQuotationPage() {
   }
 
   const statusColors = {
-    draft: "bg-slate-100 text-slate-700 border-slate-200",
-    sent: "bg-blue-50 text-blue-700 border-blue-200",
-    viewed: "bg-indigo-50 text-indigo-700 border-indigo-200",
-    accepted: "bg-teal-50 text-teal-700 border-teal-200",
-    rejected: "bg-red-50 text-red-700 border-red-200",
-    superseded: "bg-amber-50 text-amber-700 border-amber-200",
-    expired: "bg-orange-50 text-orange-700 border-orange-200",
-    change_requested: "bg-purple-50 text-purple-700 border-purple-200",
+    draft: "bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-900/40 dark:text-slate-300 dark:border-slate-800",
+    sent: "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-900/50",
+    viewed: "bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/40 dark:text-indigo-300 dark:border-indigo-900/50",
+    accepted: "bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-950/40 dark:text-teal-300 dark:border-teal-900/50",
+    rejected: "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/40 dark:text-red-300 dark:border-red-900/50",
+    superseded: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-900/50",
+    expired: "bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950/40 dark:text-orange-300 dark:border-orange-900/50",
+    change_requested: "bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-900/50",
   };
 
   const currency = data.currency || "৳";
@@ -285,15 +285,15 @@ export default function ViewQuotationPage() {
           <div className="lg:col-span-2 space-y-8">
             {/* Version Warning */}
             {!data.isLatestVersion && (
-              <Card className="border-amber-200 bg-amber-50/40">
+              <Card className="border-amber-200 bg-amber-50/40 dark:border-amber-900/50 dark:bg-amber-950/20">
                 <CardContent className="p-4 flex items-start gap-3">
-                <AlertCircle className="w-5 h-5 text-amber-600 mt-0.5" />
+                <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 mt-0.5" />
                 <div>
-                  <h4 className="text-sm font-bold text-amber-900">This is an old version</h4>
-                  <p className="text-xs text-amber-700">
+                  <h4 className="text-sm font-bold text-amber-900 dark:text-amber-200">This is an old version</h4>
+                  <p className="text-xs text-amber-700 dark:text-amber-300">
                     A newer version of this quotation exists. Any payment links for this version are inactive.
                   </p>
-                  <Button variant="link" className="p-0 h-auto text-xs text-amber-900 font-bold mt-1" onClick={() => router.push(`/quotations/group/${data.quotationGroupId}/latest`)}>
+                  <Button variant="link" className="p-0 h-auto text-xs text-amber-900 dark:text-amber-200 font-bold mt-1" onClick={() => router.push(`/quotations/group/${data.quotationGroupId}/latest`)}>
                     Switch to latest version →
                   </Button>
                 </div>
@@ -303,17 +303,17 @@ export default function ViewQuotationPage() {
 
             {/* Change Request Info */}
             {data.status === "change_requested" && (
-              <Card className="border-purple-200 bg-purple-50/40">
+              <Card className="border-purple-200 bg-purple-50/40 dark:border-purple-900/50 dark:bg-purple-950/20">
                 <CardContent className="p-4 flex flex-col gap-3">
                 <div className="flex items-start gap-3">
-                  <RefreshCcw className="w-5 h-5 text-purple-600 mt-0.5" />
+                  <RefreshCcw className="w-5 h-5 text-purple-600 dark:text-purple-400 mt-0.5" />
                   <div>
-                    <h4 className="text-sm font-bold text-purple-900">Client Requested Changes</h4>
-                    <p className="text-xs text-purple-700">
+                    <h4 className="text-sm font-bold text-purple-900 dark:text-purple-200">Client Requested Changes</h4>
+                    <p className="text-xs text-purple-700 dark:text-purple-300">
                       The client has requested modifications. Review their feedback and issue a new version.
                     </p>
                     {data.changeRequestReason && (
-                      <p className="mt-2 text-xs text-purple-800/80">
+                      <p className="mt-2 text-xs text-purple-800/80 dark:text-purple-300/80">
                         <span className="font-bold">Reason:</span>{" "}
                         {data.changeRequestReason}
                       </p>
@@ -732,13 +732,13 @@ export default function ViewQuotationPage() {
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    <div className="p-3 bg-emerald-50 rounded-lg border border-emerald-100 flex items-start gap-3">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-600 mt-0.5" />
+                    <div className="p-3 bg-emerald-50 rounded-lg border border-emerald-100 dark:bg-emerald-950/20 dark:border-emerald-900/50 flex items-start gap-3">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 mt-0.5" />
                       <div>
-                        <h5 className="text-xs font-bold text-emerald-900">
+                        <h5 className="text-xs font-bold text-emerald-900 dark:text-emerald-200">
                           Link Active
                         </h5>
-                        <p className="text-[10px] text-emerald-700">
+                        <p className="text-[10px] text-emerald-700 dark:text-emerald-300">
                           Client can now view and accept this quotation.
                         </p>
                       </div>
