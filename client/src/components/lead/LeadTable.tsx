@@ -29,13 +29,13 @@ export function LeadTable({
   const getPriorityColor = (priority?: string) => {
     switch (priority) {
       case "High":
-        return "bg-red-50 text-red-700 border-red-200";
+        return "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/20 dark:text-red-400 dark:border-red-900/50";
       case "Medium":
-        return "bg-amber-50 text-amber-700 border-amber-200";
+        return "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/20 dark:text-amber-400 dark:border-amber-900/50";
       case "Low":
-        return "bg-slate-50 text-slate-700 border-slate-200";
+        return "bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-900 dark:text-slate-300 dark:border-slate-800";
       default:
-        return "bg-slate-50 text-slate-700 border-slate-200";
+        return "bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-900 dark:text-slate-300 dark:border-slate-800";
     }
   };
 
@@ -43,14 +43,14 @@ export function LeadTable({
     <div className="w-full overflow-x-auto">
       <Table>
         <TableHeader>
-          <TableRow className="bg-slate-50 border-y border-slate-100 hover:bg-slate-50">
-            <TableHead className="font-semibold text-slate-600">Name</TableHead>
-            <TableHead className="font-semibold text-slate-600">Phone</TableHead>
-            <TableHead className="font-semibold text-slate-600">Status</TableHead>
-            <TableHead className="font-semibold text-slate-600">Priority</TableHead>
-            <TableHead className="font-semibold text-slate-600">Source</TableHead>
-            <TableHead className="font-semibold text-slate-600">Next Action</TableHead>
-            <TableHead className="font-semibold text-slate-600 text-right">
+          <TableRow className="bg-muted/40 border-y border-border hover:bg-muted/40">
+            <TableHead className="font-semibold text-muted-foreground">Name</TableHead>
+            <TableHead className="font-semibold text-muted-foreground">Phone</TableHead>
+            <TableHead className="font-semibold text-muted-foreground">Status</TableHead>
+            <TableHead className="font-semibold text-muted-foreground">Priority</TableHead>
+            <TableHead className="font-semibold text-muted-foreground">Source</TableHead>
+            <TableHead className="font-semibold text-muted-foreground">Next Action</TableHead>
+            <TableHead className="font-semibold text-muted-foreground text-right">
               Actions
             </TableHead>
           </TableRow>
@@ -58,7 +58,7 @@ export function LeadTable({
         <TableBody>
           {isLoading ? (
             Array.from({ length: 5 }).map((_, index) => (
-              <TableRow key={index} className="border-b border-slate-50">
+              <TableRow key={index} className="border-b border-border">
                 <TableCell><Skeleton className="h-4 w-[120px]" /></TableCell>
                 <TableCell><Skeleton className="h-4 w-[100px]" /></TableCell>
                 <TableCell><Skeleton className="h-5 w-[80px] rounded-full" /></TableCell>
@@ -83,12 +83,12 @@ export function LeadTable({
             leads.map((lead) => (
               <TableRow
                 key={lead._id}
-                className="group border-b border-slate-50 hover:bg-slate-50/50 transition-colors"
+                className="group border-b border-border hover:bg-muted/30 transition-colors"
               >
-                <TableCell className="font-medium text-slate-900">
+                <TableCell className="font-medium text-foreground">
                   {lead.name || "N/A"}
                 </TableCell>
-                <TableCell className="text-slate-600">{lead.phone}</TableCell>
+                <TableCell className="text-muted-foreground">{lead.phone}</TableCell>
                 <TableCell>
                   {lead.status ? (
                     <Badge
@@ -116,16 +116,16 @@ export function LeadTable({
                     {lead.priority || "Medium"}
                   </Badge>
                 </TableCell>
-                <TableCell className="text-slate-600">
+                <TableCell className="text-muted-foreground">
                   {lead.source?.name || "N/A"}
                 </TableCell>
                 <TableCell>
                   {lead.nextActionDate ? (
                     <div className="flex flex-col">
-                      <span className="text-sm font-medium text-slate-700">
+                      <span className="text-sm font-medium text-foreground/90">
                         {lead.nextActionType?.name || "Follow-up"}
                       </span>
-                      <span className="text-xs text-slate-500">
+                      <span className="text-xs text-muted-foreground">
                         {format(new Date(lead.nextActionDate), "MMM dd, yyyy")}
                       </span>
                     </div>
@@ -139,7 +139,7 @@ export function LeadTable({
                       variant="ghost"
                       size="icon"
                       onClick={() => onView(lead)}
-                      className="h-8 w-8 text-teal-600 hover:text-teal-700 hover:bg-teal-50"
+                      className="h-8 w-8 text-teal-600 hover:text-teal-700 hover:bg-teal-500/10"
                       title="View Details"
                     >
                       <Eye className="h-4 w-4" />
@@ -148,7 +148,7 @@ export function LeadTable({
                       variant="ghost"
                       size="icon"
                       onClick={() => onEdit(lead)}
-                      className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                      className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-500/10"
                       title="Edit Lead"
                     >
                       <Edit className="h-4 w-4" />

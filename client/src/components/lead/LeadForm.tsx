@@ -109,9 +109,9 @@ export function LeadForm({
     >
       <div className="flex-1 overflow-y-auto p-6 space-y-10">
         <section className="space-y-6">
-          <div className="flex items-center gap-3 border-b border-slate-100 pb-2">
+          <div className="flex items-center gap-3 border-b border-border pb-2">
             <User className="h-5 w-5 text-teal-600" />
-            <h3 className="font-semibold text-slate-900 text-lg">
+            <h3 className="font-semibold text-foreground text-lg">
               Contact Information
             </h3>
           </div>
@@ -119,9 +119,9 @@ export function LeadForm({
         </section>
 
         <section className="space-y-6">
-          <div className="flex items-center gap-3 border-b border-slate-100 pb-2">
+          <div className="flex items-center gap-3 border-b border-border pb-2">
             <Info className="h-5 w-5 text-teal-600" />
-            <h3 className="font-semibold text-slate-900 text-lg">
+            <h3 className="font-semibold text-foreground text-lg">
               Lead Details
             </h3>
           </div>
@@ -134,12 +134,12 @@ export function LeadForm({
         </section>
       </div>
 
-      <div className="p-4 border-t border-slate-200 bg-slate-50 flex items-center justify-end gap-3 sticky bottom-0 z-20 shrink-0 shadow-[0_-1px_2px_rgba(0,0,0,0.02)]">
+      <div className="p-4 border-t border-border bg-muted/40 flex items-center justify-end gap-3 sticky bottom-0 z-20 shrink-0 shadow-[0_-1px_2px_rgba(0,0,0,0.02)]">
         <Button
           type="button"
           variant="outline"
           onClick={onCancel}
-          className="bg-white border-slate-200"
+          className="bg-background border-border"
         >
           Cancel
         </Button>
@@ -169,7 +169,7 @@ function LeadContactInfo({
     <div className="space-y-6">
       <div className="grid md:grid-cols-2 gap-6">
         <div className="space-y-2">
-          <Label htmlFor="phone" className="text-slate-700">
+          <Label htmlFor="phone" className="text-foreground/90">
             Phone Number <span className="text-red-500">*</span>
           </Label>
           <Input
@@ -177,7 +177,7 @@ function LeadContactInfo({
             placeholder="+1 (555) 000-0000"
             {...register("phone")}
             className={cn(
-              "bg-slate-50/50 border-slate-200 focus-visible:ring-teal-500",
+              "bg-background border-border focus-visible:ring-teal-500",
               getFieldError("phone") && "border-red-500 focus-visible:ring-red-500"
             )}
           />
@@ -189,21 +189,21 @@ function LeadContactInfo({
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="name" className="text-slate-700">
+          <Label htmlFor="name" className="text-foreground/90">
             Lead Name
           </Label>
           <Input
             id="name"
             placeholder="John Doe or Company"
             {...register("name")}
-            className="bg-slate-50/50 border-slate-200 focus-visible:ring-teal-500"
+            className="bg-background border-border focus-visible:ring-teal-500"
           />
         </div>
       </div>
 
       <div className="grid md:grid-cols-2 gap-6">
         <div className="space-y-2">
-          <Label htmlFor="email" className="text-slate-700">
+          <Label htmlFor="email" className="text-foreground/90">
             Email
           </Label>
           <Input
@@ -212,7 +212,7 @@ function LeadContactInfo({
             placeholder="john@example.com"
             {...register("email")}
             className={cn(
-              "bg-slate-50/50 border-slate-200 focus-visible:ring-teal-500",
+              "bg-background border-border focus-visible:ring-teal-500",
               getFieldError("email") && "border-red-500 focus-visible:ring-red-500"
             )}
           />
@@ -224,14 +224,14 @@ function LeadContactInfo({
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="website" className="text-slate-700">
+          <Label htmlFor="website" className="text-foreground/90">
             Website
           </Label>
           <Input
             id="website"
             placeholder="https://example.com"
             {...register("website")}
-            className="bg-slate-50/50 border-slate-200 focus-visible:ring-teal-500"
+            className="bg-background border-border focus-visible:ring-teal-500"
           />
         </div>
       </div>
@@ -259,12 +259,12 @@ function LeadDetails({
     <div className="space-y-6">
       <div className="grid md:grid-cols-3 gap-6">
         <div className="space-y-2">
-          <Label className="text-slate-700">Status</Label>
+          <Label className="text-foreground/90">Status</Label>
           <Select
             value={status || "none"}
             onValueChange={(value) => setValue("status", value)}
           >
-            <SelectTrigger className="w-full bg-slate-50/50 border-slate-200 focus:ring-teal-500">
+            <SelectTrigger className="w-full bg-background border-border focus:ring-teal-500">
               <SelectValue placeholder="Select status" />
             </SelectTrigger>
             <SelectContent>
@@ -287,14 +287,14 @@ function LeadDetails({
         </div>
 
         <div className="space-y-2">
-          <Label className="text-slate-700">Priority</Label>
+          <Label className="text-foreground/90">Priority</Label>
           <Select
             value={priority}
             onValueChange={(value: "High" | "Medium" | "Low") =>
               setValue("priority", value)
             }
           >
-            <SelectTrigger className="w-full bg-slate-50/50 border-slate-200 focus:ring-teal-500">
+            <SelectTrigger className="w-full bg-background border-border focus:ring-teal-500">
               <SelectValue placeholder="Select priority" />
             </SelectTrigger>
             <SelectContent>
@@ -306,12 +306,12 @@ function LeadDetails({
         </div>
 
         <div className="space-y-2">
-          <Label className="text-slate-700">Source</Label>
+          <Label className="text-foreground/90">Source</Label>
           <Select
             value={source || "none"}
             onValueChange={(value) => setValue("source", value)}
           >
-            <SelectTrigger className="w-full bg-slate-50/50 border-slate-200 focus:ring-teal-500">
+            <SelectTrigger className="w-full bg-background border-border focus:ring-teal-500">
               <SelectValue placeholder="Select source" />
             </SelectTrigger>
             <SelectContent>
@@ -327,14 +327,14 @@ function LeadDetails({
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="currentNotes" className="text-slate-700">
+        <Label htmlFor="currentNotes" className="text-foreground/90">
           Notes
         </Label>
         <Textarea
           id="currentNotes"
           placeholder="Add any initial notes or context about this lead..."
           {...register("currentNotes")}
-          className="min-h-[120px] bg-slate-50/50 border-slate-200 focus-visible:ring-teal-500 resize-y"
+          className="min-h-[120px] bg-background border-border focus-visible:ring-teal-500 resize-y"
         />
       </div>
     </div>

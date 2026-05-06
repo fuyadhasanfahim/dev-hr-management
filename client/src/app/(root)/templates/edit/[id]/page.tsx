@@ -75,7 +75,7 @@ export default function EditTemplatePage() {
 
   if (isFetching) {
     return (
-      <div className="w-full h-screen flex items-center justify-center text-slate-400">
+      <div className="w-full h-screen flex items-center justify-center text-muted-foreground/60">
         Loading template profile...
       </div>
     );

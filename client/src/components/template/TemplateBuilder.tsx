@@ -128,15 +128,15 @@ export default function TemplateBuilder({
   };
 
   return (
-    <div className="w-full space-y-8 p-6 bg-slate-50/40 min-h-screen">
+    <div className="w-full space-y-8 p-6 bg-background/40 min-h-screen">
       {/* Header section with Teal and Orange flavor */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
+          <h1 className="text-3xl font-bold tracking-tight text-foreground flex items-center gap-2">
             <Layout className="w-8 h-8 text-teal-600" />
             <span>{pageTitle}</span>
           </h1>
-          <p className="text-slate-500 mt-1">
+          <p className="text-muted-foreground mt-1">
             Build dynamic template scope, pricing, phases, and workflows.
           </p>
         </div>
@@ -163,7 +163,7 @@ export default function TemplateBuilder({
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Main Sections */}
         <div className="lg:col-span-2 space-y-6">
-          <Card className="border-slate-200 bg-white p-6 shadow-sm flex flex-col space-y-6 rounded-xl">
+          <Card className="border-border bg-card p-6 shadow-sm flex flex-col space-y-6 rounded-xl">
             {/* Template Header/Title */}
             <div className="space-y-4">
               <SectionHeader
@@ -195,8 +195,8 @@ export default function TemplateBuilder({
           </Card>
 
           {/* Project Phases Section */}
-          <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-            <div className="flex flex-row items-start justify-between gap-4 border-b bg-slate-50/50 p-6">
+          <div className="overflow-hidden rounded-xl border border-border bg-card">
+            <div className="flex flex-row items-start justify-between gap-4 border-b border-border bg-muted/30 p-6">
               <div className="flex-1 min-w-0">
                 <SectionHeader
                   title="Project Phases"
@@ -206,7 +206,7 @@ export default function TemplateBuilder({
               </div>
               <PrimaryButton
                 variant="outline"
-                className="h-10 px-3 shrink-0 shadow-sm border-teal-200 text-teal-600 hover:bg-teal-50 hover:text-teal-700 transition duration-150"
+                className="h-10 px-3 shrink-0 shadow-sm border-teal-500/20 text-teal-600 hover:bg-teal-500/10 hover:text-teal-700 transition duration-150"
                 onClick={addPhase}
               >
                 <Plus className="w-4 h-4" /> New Phase
@@ -214,7 +214,7 @@ export default function TemplateBuilder({
             </div>
             <div className="p-6">
               {data.phases.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/50 p-6 text-center text-sm text-slate-500">
+                <div className="rounded-xl border border-dashed border-border bg-muted/20 p-6 text-center text-sm text-muted-foreground">
                   No phases added yet. Click <span className="font-semibold text-teal-600">New Phase</span> to detail deliverables.
                 </div>
               ) : (
@@ -222,18 +222,18 @@ export default function TemplateBuilder({
                   {data.phases.map((phase, pIdx) => (
                     <details
                       key={pIdx}
-                      className="group border border-slate-100 rounded-xl bg-slate-50/40 px-4 py-3"
+                      className="group border border-border/60 rounded-xl bg-muted/10 px-4 py-3"
                     >
                       <summary className="flex cursor-pointer list-none items-center gap-3 py-2 [&::-webkit-details-marker]:hidden">
                         <div className="flex items-center gap-3 text-left w-full">
                           <BadgePill>Phase {pIdx + 1}</BadgePill>
-                          <span className="font-bold text-slate-800">
+                          <span className="font-bold text-foreground/90">
                             {phase.title || "Untitled phase"}
                           </span>
                         </div>
-                        <ChevronDown className="h-4 w-4 shrink-0 text-slate-400 transition-transform duration-200 group-open:rotate-180" />
+                        <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground/60 transition-transform duration-200 group-open:rotate-180" />
                       </summary>
-                      <div className="pt-3 pb-4 space-y-6 border-t border-slate-100 mt-2">
+                      <div className="pt-3 pb-4 space-y-6 border-t border-border/60 mt-2">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                           <div className="space-y-4">
                             <div className="space-y-1">
@@ -242,7 +242,7 @@ export default function TemplateBuilder({
                                 value={phase.title}
                                 onChange={(e) => updatePhase(pIdx, { title: e.target.value })}
                                 placeholder="Phase title"
-                                className="focus:ring-teal-500 focus:border-teal-500 bg-white"
+                                className="focus:ring-teal-500 focus:border-teal-500 bg-background"
                               />
                             </div>
                             <div className="space-y-1">
@@ -251,7 +251,7 @@ export default function TemplateBuilder({
                                 value={phase.description}
                                 onChange={(e) => updatePhase(pIdx, { description: e.target.value })}
                                 placeholder="Details / key deliverables of this phase..."
-                                className="min-h-[80px] focus:ring-teal-500 focus:border-teal-500 bg-white"
+                                className="min-h-[80px] focus:ring-teal-500 focus:border-teal-500 bg-background"
                               />
                             </div>
                           </div>
@@ -260,7 +260,7 @@ export default function TemplateBuilder({
                             <FieldLabel>Dates (optional)</FieldLabel>
                             <div className="grid grid-cols-2 gap-4">
                               <div className="space-y-1">
-                                <label className="text-[10px] uppercase font-bold text-slate-500">Start</label>
+                                <label className="text-[10px] uppercase font-bold text-muted-foreground">Start</label>
                                 <DatePickerInput
                                   value={phase.startDate || ""}
                                   onChange={(date) => updatePhase(pIdx, { startDate: date })}
@@ -268,7 +268,7 @@ export default function TemplateBuilder({
                                 />
                               </div>
                               <div className="space-y-1">
-                                <label className="text-[10px] uppercase font-bold text-slate-500">End</label>
+                                <label className="text-[10px] uppercase font-bold text-muted-foreground">End</label>
                                 <DatePickerInput
                                   value={phase.endDate || ""}
                                   onChange={(date) => updatePhase(pIdx, { endDate: date })}
@@ -279,7 +279,7 @@ export default function TemplateBuilder({
                           </div>
                         </div>
 
-                        <hr className="border-slate-100" />
+                        <hr className="border-border/60" />
 
                         <div className="space-y-3">
                           <FieldLabel>Checkpoints (optional)</FieldLabel>
@@ -293,7 +293,7 @@ export default function TemplateBuilder({
                                       items: phase.items.filter((_, i) => i !== iIdx),
                                     })
                                   }
-                                  className="text-slate-400 hover:text-red-500 transition-colors"
+                                  className="text-muted-foreground hover:text-red-500 transition-colors"
                                 >
                                   <X className="w-3.5 h-3.5" />
                                 </button>
@@ -301,7 +301,7 @@ export default function TemplateBuilder({
                             ))}
                             <TextInput
                               placeholder="+ Add checkpoint (Press Enter)…"
-                              className="h-9 text-xs border-dashed focus:ring-teal-500 bg-white"
+                              className="h-9 text-xs border-dashed focus:ring-teal-500 bg-background"
                               onKeyDown={(e) => {
                                 if (e.key === "Enter") {
                                   e.preventDefault();
@@ -321,7 +321,7 @@ export default function TemplateBuilder({
                         <div className="pt-4 flex justify-end">
                           <PrimaryButton
                             variant="ghost"
-                            className="text-red-500 hover:text-red-600 hover:bg-red-50 h-9"
+                            className="text-red-500 hover:text-red-600 hover:bg-red-500/10 h-9"
                             onClick={() => removePhase(pIdx)}
                           >
                             <Trash2 className="w-4 h-4" /> Delete Phase
@@ -336,8 +336,8 @@ export default function TemplateBuilder({
           </div>
 
           {/* Optional sections */}
-          <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-            <div className="border-b bg-slate-50/50 p-6">
+          <div className="overflow-hidden rounded-xl border border-border bg-card">
+            <div className="border-b border-border bg-muted/30 p-6">
               <SectionHeader
                 title="Optional Blueprint & Execution Scope"
                 icon={<Settings2 className="w-5 h-5 text-teal-600" />}
@@ -346,13 +346,13 @@ export default function TemplateBuilder({
             </div>
             <div className="p-6 space-y-4">
               {/* Technical Blueprint */}
-              <details className="group border border-slate-100 rounded-xl bg-slate-50/40 px-4 py-3">
+              <details className="group border border-border/60 rounded-xl bg-muted/10 px-4 py-3">
                 <summary className="flex cursor-pointer list-none items-center gap-2 py-2 [&::-webkit-details-marker]:hidden">
                   <Cpu className="w-4 h-4 text-teal-600" />
-                  <span className="font-bold text-slate-800">Technical Blueprint</span>
-                  <ChevronDown className="ml-auto h-4 w-4 shrink-0 text-slate-400 transition-transform duration-200 group-open:rotate-180" />
+                  <span className="font-bold text-foreground/90">Technical Blueprint</span>
+                  <ChevronDown className="ml-auto h-4 w-4 shrink-0 text-muted-foreground/60 transition-transform duration-200 group-open:rotate-180" />
                 </summary>
-                <div className="pt-3 pb-4 space-y-4 border-t border-slate-100 mt-2">
+                <div className="pt-3 pb-4 space-y-4 border-t border-border/60 mt-2">
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="space-y-1">
                       <FieldLabel>Frontend</FieldLabel>
@@ -401,29 +401,29 @@ export default function TemplateBuilder({
               </details>
 
               {/* Tools Selection */}
-              <details className="group border border-slate-100 rounded-xl bg-slate-50/40 px-4 py-3">
+              <details className="group border border-border/60 rounded-xl bg-muted/10 px-4 py-3">
                 <summary className="flex cursor-pointer list-none items-center gap-2 py-2 [&::-webkit-details-marker]:hidden">
                   <Settings2 className="w-4 h-4 text-teal-600" />
-                  <span className="font-bold text-slate-800">Tools</span>
-                  <ChevronDown className="ml-auto h-4 w-4 shrink-0 text-slate-400 transition-transform duration-200 group-open:rotate-180" />
+                  <span className="font-bold text-foreground/90">Tools</span>
+                  <ChevronDown className="ml-auto h-4 w-4 shrink-0 text-muted-foreground/60 transition-transform duration-200 group-open:rotate-180" />
                 </summary>
-                <div className="pt-3 pb-4 space-y-4 border-t border-slate-100 mt-2">
+                <div className="pt-3 pb-4 space-y-4 border-t border-border/60 mt-2">
                   <div className="space-y-1">
                     <FieldLabel className="text-[10px]">Selected Tools</FieldLabel>
                     {data.techStack.tools.length === 0 ? (
-                      <p className="text-sm text-slate-400">No tools selected yet.</p>
+                      <p className="text-sm text-muted-foreground/60">No tools selected yet.</p>
                     ) : (
                       <div className="flex flex-wrap gap-2">
                         {data.techStack.tools.map((tool, idx) => (
                           <SoftBadge key={`${tool}-${idx}`}>
                             {tool}
                             <button
-                              onClick={() =>
+                               onClick={() =>
                                 updateTechStack({
                                   tools: data.techStack.tools.filter((t) => t !== tool),
                                 })
                               }
-                              className="text-slate-400 hover:text-red-500 transition-colors"
+                              className="text-muted-foreground/60 hover:text-red-500 transition-colors"
                               aria-label={`Remove ${tool}`}
                               type="button"
                             >
@@ -434,7 +434,7 @@ export default function TemplateBuilder({
                       </div>
                     )}
                   </div>
-                  <hr className="border-slate-100" />
+                  <hr className="border-border/60" />
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-y-3 gap-x-6">
                     {PREDEFINED_TOOLS.map((tool) => (
                       <div key={tool} className="flex items-center space-x-2">
@@ -449,20 +449,20 @@ export default function TemplateBuilder({
                               : data.techStack.tools.filter((t) => t !== tool);
                             updateTechStack({ tools: newTools });
                           }}
-                          className="h-4 w-4 rounded border border-slate-300 text-teal-600 focus:ring-teal-500 transition duration-150"
+                          className="h-4 w-4 rounded border border-border text-teal-600 focus:ring-teal-500 bg-background transition duration-150"
                         />
-                        <label htmlFor={`tool-${tool}`} className="text-sm cursor-pointer text-slate-600">
+                        <label htmlFor={`tool-${tool}`} className="text-sm cursor-pointer text-foreground/75">
                           {tool}
                         </label>
                       </div>
                     ))}
                   </div>
-                  <hr className="border-slate-100" />
+                  <hr className="border-border/60" />
                   <div className="space-y-1">
                     <FieldLabel className="text-[10px]">Custom Tool Name</FieldLabel>
                     <TextInput
                       placeholder="Type tool name and press Enter…"
-                      className="h-9 text-sm focus:ring-teal-500 bg-white"
+                      className="h-9 text-sm focus:ring-teal-500 bg-background"
                       onKeyDown={(e) => {
                         if (e.key === "Enter") {
                           e.preventDefault();
@@ -479,20 +479,20 @@ export default function TemplateBuilder({
               </details>
 
               {/* Payment Milestones */}
-              <details className="group border border-slate-100 rounded-xl bg-slate-50/40 px-4 py-3">
+              <details className="group border border-border/60 rounded-xl bg-muted/10 px-4 py-3">
                 <summary className="flex cursor-pointer list-none items-center gap-2 py-2 [&::-webkit-details-marker]:hidden">
                   <HandCoins className="w-4 h-4 text-teal-600" />
-                  <span className="font-bold text-slate-800">Payment Milestones</span>
-                  <ChevronDown className="ml-auto h-4 w-4 shrink-0 text-slate-400 transition-transform duration-200 group-open:rotate-180" />
+                  <span className="font-bold text-foreground/90">Payment Milestones</span>
+                  <ChevronDown className="ml-auto h-4 w-4 shrink-0 text-muted-foreground/60 transition-transform duration-200 group-open:rotate-180" />
                 </summary>
-                <div className="pt-3 pb-4 space-y-4 border-t border-slate-100 mt-2">
+                <div className="pt-3 pb-4 space-y-4 border-t border-border/60 mt-2">
                   <div className="flex items-center justify-between gap-3">
-                    <p className="text-sm text-slate-500 font-medium">
+                    <p className="text-sm text-muted-foreground font-medium">
                       Define clear payment allocation percentages for milestones
                     </p>
                     <PrimaryButton
                       variant="outline"
-                      className="h-9 px-3 border-teal-200 hover:bg-teal-50 text-teal-600 hover:text-teal-700 font-medium"
+                      className="h-9 px-3 border-teal-500/20 hover:bg-teal-500/10 text-teal-600 hover:text-teal-700 font-medium"
                       onClick={addPaymentMilestone}
                     >
                       <Plus className="w-4 h-4" /> Add Milestone
@@ -500,20 +500,20 @@ export default function TemplateBuilder({
                   </div>
 
                   {data.paymentMilestones.length === 0 ? (
-                    <p className="text-sm text-slate-400">No payment milestones defined.</p>
+                    <p className="text-sm text-muted-foreground/60">No payment milestones defined.</p>
                   ) : null}
 
                   {data.paymentMilestones.map((m, idx) => (
-                    <div key={idx} className="grid grid-cols-12 gap-2 items-center rounded-lg border border-slate-200 bg-white p-2">
+                    <div key={idx} className="grid grid-cols-12 gap-2 items-center rounded-lg border border-border/60 bg-muted/10 p-2">
                       <TextInput
-                        className="col-span-7 h-9 text-sm bg-slate-50 focus:ring-teal-500"
+                        className="col-span-7 h-9 text-sm bg-background focus:ring-teal-500"
                         value={m.label}
                         onChange={(e) => updatePaymentMilestone(idx, { label: e.target.value })}
                         placeholder="Milestone label (e.g. Upon Delivery)"
                       />
                       <div className="col-span-3 flex items-center gap-1">
                         <TextInput
-                          className="h-9 text-sm bg-slate-50 focus:ring-teal-500"
+                          className="h-9 text-sm bg-background focus:ring-teal-500"
                           type="number"
                           value={m.percentage}
                           min={0}
@@ -524,11 +524,11 @@ export default function TemplateBuilder({
                             })
                           }
                         />
-                        <span className="text-xs text-slate-500">%</span>
+                        <span className="text-xs text-muted-foreground">%</span>
                       </div>
                       <PrimaryButton
                         variant="ghost"
-                        className="col-span-2 text-red-500 hover:text-red-600 hover:bg-red-50 h-9"
+                        className="col-span-2 text-red-500 hover:text-red-600 hover:bg-red-500/10 h-9"
                         onClick={() => removePaymentMilestone(idx)}
                       >
                         <Trash2 className="w-4 h-4" />
@@ -540,7 +540,7 @@ export default function TemplateBuilder({
                     const total = data.paymentMilestones.reduce((s, m) => s + (Number(m.percentage) || 0), 0);
                     const ok = total === 100;
                     return (
-                      <div className="flex items-center justify-between text-xs rounded-lg px-3 py-2 bg-slate-100 text-slate-700 border border-slate-200 font-medium">
+                      <div className="flex items-center justify-between text-xs rounded-lg px-3 py-2 bg-muted text-foreground/80 border border-border font-medium">
                         <span className="flex items-center gap-1 font-semibold">
                           <PieChart className="w-3.5 h-3.5 text-teal-600" /> Allocation Summary
                         </span>
@@ -554,7 +554,7 @@ export default function TemplateBuilder({
                   <div className="flex flex-wrap gap-2 pt-1">
                     <PrimaryButton
                       variant="outline"
-                      className="h-10 px-3 text-sm border-slate-200 text-slate-700 hover:bg-slate-50 transition"
+                      className="h-10 px-3 text-sm border-border text-foreground hover:bg-muted/30 transition"
                       onClick={() =>
                         updateData({
                           paymentMilestones: [
@@ -569,7 +569,7 @@ export default function TemplateBuilder({
                     </PrimaryButton>
                     <PrimaryButton
                       variant="outline"
-                      className="h-10 px-3 text-sm border-slate-200 text-slate-700 hover:bg-slate-50 transition"
+                      className="h-10 px-3 text-sm border-border text-foreground hover:bg-muted/30 transition"
                       onClick={() =>
                         updateData({
                           paymentMilestones: [
@@ -587,13 +587,13 @@ export default function TemplateBuilder({
               </details>
 
               {/* Workflow Steps */}
-              <details className="group border border-slate-100 rounded-xl bg-slate-50/40 px-4 py-3">
+              <details className="group border border-border/60 rounded-xl bg-muted/10 px-4 py-3">
                 <summary className="flex cursor-pointer list-none items-center gap-2 py-2 [&::-webkit-details-marker]:hidden">
                   <Activity className="w-4 h-4 text-teal-600" />
-                  <span className="font-bold text-slate-800">Lifecycle Workflow</span>
-                  <ChevronDown className="ml-auto h-4 w-4 shrink-0 text-slate-400 transition-transform duration-200 group-open:rotate-180" />
+                  <span className="font-bold text-foreground/90">Lifecycle Workflow</span>
+                  <ChevronDown className="ml-auto h-4 w-4 shrink-0 text-muted-foreground/60 transition-transform duration-200 group-open:rotate-180" />
                 </summary>
-                <div className="pt-3 pb-4 space-y-4 border-t border-slate-100 mt-2">
+                <div className="pt-3 pb-4 space-y-4 border-t border-border/60 mt-2">
                   <div className="flex flex-wrap gap-2">
                     {data.workflow.map((step, idx) => (
                       <SoftBadge key={idx}>
@@ -601,7 +601,7 @@ export default function TemplateBuilder({
                         {step}
                         <button
                           onClick={() => updateWorkflow(data.workflow.filter((_, i) => i !== idx))}
-                          className="text-slate-400 hover:text-red-500 transition-colors"
+                          className="text-muted-foreground hover:text-red-500 transition-colors"
                         >
                           <X className="w-3.5 h-3.5" />
                         </button>
@@ -610,7 +610,7 @@ export default function TemplateBuilder({
                   </div>
                   <TextInput
                     placeholder="Add workflow step (Press Enter)…"
-                    className="h-10 text-sm border-dashed focus:ring-teal-500 bg-white"
+                    className="h-10 text-sm border-dashed focus:ring-teal-500 bg-background"
                     onKeyDown={(e) => {
                       if (e.key === "Enter") {
                         e.preventDefault();
@@ -630,13 +630,13 @@ export default function TemplateBuilder({
 
         {/* Sidebar: Cost Calculations */}
         <div className="space-y-6">
-          <div className="border border-slate-200 overflow-hidden rounded-xl bg-white shadow-sm flex flex-col">
-            <div className="bg-slate-50/50 border-b p-6">
+          <div className="border border-border overflow-hidden rounded-xl bg-card shadow-sm flex flex-col">
+            <div className="bg-muted/30 border-b border-border p-6">
               <div className="text-lg font-bold flex items-center gap-2">
-                <span className="inline-flex w-9 h-9 items-center justify-center rounded-lg bg-teal-50 text-teal-600 ring-1 ring-teal-100">
+                <span className="inline-flex w-9 h-9 items-center justify-center rounded-lg bg-teal-500/10 text-teal-600 ring-1 ring-teal-500/20">
                   <Receipt className="w-4 h-4" />
                 </span>
-                <span className="text-slate-800">Template Pricing</span>
+                <span className="text-foreground/90">Template Pricing</span>
               </div>
             </div>
             <div className="p-6 space-y-5">
@@ -651,7 +651,7 @@ export default function TemplateBuilder({
                         pricing: { ...data.pricing, basePrice: Number(e.target.value) },
                       })
                     }
-                    className="h-10 text-sm focus:ring-teal-500 bg-slate-50 font-medium"
+                    className="h-10 text-sm focus:ring-teal-500 bg-background font-medium"
                   />
                 </div>
                 <div className="space-y-1">
@@ -664,13 +664,13 @@ export default function TemplateBuilder({
                         pricing: { ...data.pricing, discount: Number(e.target.value) },
                       })
                     }
-                    className="h-10 text-sm focus:ring-teal-500 bg-slate-50 font-medium"
+                    className="h-10 text-sm focus:ring-teal-500 bg-background font-medium"
                   />
                 </div>
               </div>
 
               {/* Additional Services */}
-              <div className="space-y-3 pt-4 border-t border-slate-100">
+              <div className="space-y-3 pt-4 border-t border-border/60">
                 <div className="flex items-center justify-between">
                   <FieldLabel>Optional / Additional Scope</FieldLabel>
                   <button
@@ -687,7 +687,7 @@ export default function TemplateBuilder({
                 </div>
 
                 {data.additionalServices.length === 0 ? (
-                  <p className="text-xs text-slate-400 text-center py-2">
+                  <p className="text-xs text-muted-foreground/60 text-center py-2">
                     No extra/add-on services configured.
                   </p>
                 ) : (
@@ -696,7 +696,7 @@ export default function TemplateBuilder({
                       <div key={idx} className="flex gap-2 items-center">
                         <TextInput
                           placeholder="Scope title"
-                          className="h-9 text-xs flex-1 bg-slate-50 focus:ring-teal-500"
+                          className="h-9 text-xs flex-1 bg-background focus:ring-teal-500"
                           value={service.title}
                           onChange={(e) => {
                             const updated = data.additionalServices.map((s, i) =>
@@ -706,12 +706,12 @@ export default function TemplateBuilder({
                           }}
                         />
                         <div className="relative w-[110px]">
-                          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-medium text-slate-400">
+                          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-medium text-muted-foreground/60">
                             ৳
                           </span>
                           <TextInput
                             type="number"
-                            className="h-9 pl-6 pr-2 text-xs w-full bg-slate-50 focus:ring-teal-500 font-medium"
+                            className="h-9 pl-6 pr-2 text-xs w-full bg-background focus:ring-teal-500 font-medium"
                             value={service.price}
                             onChange={(e) => {
                               const updated = data.additionalServices.map((s, i) =>
@@ -723,7 +723,7 @@ export default function TemplateBuilder({
                         </div>
                         <PrimaryButton
                           variant="ghost"
-                          className="w-8 h-8 rounded-lg p-0 text-red-500 hover:text-red-600 hover:bg-red-50 h-9 shrink-0 flex items-center justify-center"
+                          className="w-8 h-8 rounded-lg p-0 text-red-500 hover:text-red-600 hover:bg-red-500/10 h-9 shrink-0 flex items-center justify-center"
                           onClick={() => {
                             const updated = data.additionalServices.filter((_, i) => i !== idx);
                             updateData({ additionalServices: updated });
@@ -738,10 +738,10 @@ export default function TemplateBuilder({
               </div>
 
               {/* Grand Cost Calculations */}
-              <div className="pt-4 border-t border-slate-100 space-y-3">
+              <div className="pt-4 border-t border-border/60 space-y-3">
                 <div className="flex justify-between items-center text-sm">
-                  <span className="text-slate-500">Base / Subtotal</span>
-                  <span className="font-semibold text-slate-700">
+                  <span className="text-muted-foreground">Base / Subtotal</span>
+                  <span className="font-semibold text-foreground/80">
                     {formatMoney(computedTotals.subtotal, "৳")}
                   </span>
                 </div>
@@ -756,8 +756,8 @@ export default function TemplateBuilder({
                   </div>
                 )}
 
-                <div className="pt-4 border-t border-slate-200 space-y-1">
-                  <span className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-slate-500">
+                <div className="pt-4 border-t border-border space-y-1">
+                  <span className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-muted-foreground">
                     Grand Project Total
                   </span>
                   <div className="text-3xl font-bold tracking-tight text-teal-600 leading-none">
@@ -766,7 +766,7 @@ export default function TemplateBuilder({
                 </div>
               </div>
             </div>
-            <div className="flex flex-col gap-3 px-6 pb-6 bg-slate-50/20">
+            <div className="flex flex-col gap-3 px-6 pb-6 bg-muted/10">
               <Button
                 onClick={onSave}
                 disabled={isSaving}
@@ -790,8 +790,6 @@ export default function TemplateBuilder({
     </div>
   );
 }
-
-// Internal reusable helper components for aesthetics
 function SectionHeader({
   title,
   icon,
@@ -804,19 +802,19 @@ function SectionHeader({
   return (
     <div className="space-y-1 mb-4">
       <div className="flex items-center gap-2">
-        <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-teal-50 text-teal-600 ring-1 ring-teal-100">
+        <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-teal-500/10 text-teal-600 ring-1 ring-teal-500/20">
           {icon}
         </span>
-        <h3 className="text-lg font-bold tracking-tight text-slate-800">{title}</h3>
+        <h3 className="text-lg font-bold tracking-tight text-foreground">{title}</h3>
       </div>
-      {description && <p className="text-sm text-slate-500 font-medium">{description}</p>}
+      {description && <p className="text-sm text-muted-foreground font-medium">{description}</p>}
     </div>
   );
 }
 
 function FieldLabel({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return (
-    <label className={`text-xs font-bold uppercase tracking-wider text-slate-500 block ${className}`}>
+    <label className={`text-xs font-bold uppercase tracking-wider text-muted-foreground block ${className}`}>
       {children}
     </label>
   );
@@ -828,8 +826,8 @@ function TextInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
     <input
       {...rest}
       className={[
-        "h-10 w-full rounded-md border border-slate-200 bg-background px-3 text-sm transition duration-150",
-        "placeholder:text-slate-400",
+        "h-10 w-full rounded-md border border-border bg-background px-3 text-sm transition duration-150",
+        "placeholder:text-muted-foreground/50",
         "focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500",
         "disabled:opacity-60 disabled:cursor-not-allowed",
         className,
@@ -844,8 +842,8 @@ function TextArea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
     <textarea
       {...rest}
       className={[
-        "w-full rounded-md border border-slate-200 bg-background px-3 py-2 text-sm transition duration-150",
-        "placeholder:text-slate-400",
+        "w-full rounded-md border border-border bg-background px-3 py-2 text-sm transition duration-150",
+        "placeholder:text-muted-foreground/50",
         "focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500",
         "disabled:opacity-60 disabled:cursor-not-allowed",
         className,
@@ -871,13 +869,13 @@ function DatePickerInput({
       <PopoverTrigger asChild>
         <Button
           variant="outline"
-          className="w-full h-10 justify-between text-left font-normal border-slate-200 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 bg-white"
+          className="w-full h-10 justify-between text-left font-normal border-border focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 bg-background text-foreground"
         >
-          {dateObj ? format(dateObj, "PPP") : <span className="text-slate-400">{placeholder}</span>}
+          {dateObj ? format(dateObj, "PPP") : <span className="text-muted-foreground/60">{placeholder}</span>}
           <ChevronDown className="h-4 w-4 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-auto p-0 bg-white" align="start">
+      <PopoverContent className="w-auto p-0 bg-background border border-border" align="start">
         <Calendar
           mode="single"
           selected={dateObj}
@@ -899,13 +897,13 @@ function SelectInput(props: React.SelectHTMLAttributes<HTMLSelectElement> & { pl
     <select
       {...rest}
       className={[
-        "h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition duration-150",
+        "h-10 w-full rounded-md border border-border bg-background text-foreground px-3 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition duration-150",
         "disabled:opacity-60 disabled:cursor-not-allowed",
         className,
       ].join(" ")}
     >
       {placeholder ? (
-        <option value="" disabled>
+        <option value="" disabled className="bg-background text-muted-foreground">
           {placeholder}
         </option>
       ) : null}
@@ -920,16 +918,16 @@ function PrimaryButton(props: React.ButtonHTMLAttributes<HTMLButtonElement> & { 
     "inline-flex items-center justify-center gap-2 rounded-md text-sm font-semibold transition-colors disabled:opacity-60 disabled:cursor-not-allowed transition duration-150";
   const variants: Record<string, string> = {
     primary: "bg-teal-600 text-white hover:bg-teal-700 h-11 px-4 shadow-sm",
-    outline: "border border-slate-200 bg-background hover:bg-slate-50 h-11 px-4",
-    secondary: "bg-slate-100 text-slate-800 hover:bg-slate-200 h-10 px-3",
-    ghost: "bg-transparent hover:bg-slate-50 text-slate-600 hover:text-slate-800 h-9 px-3",
+    outline: "border border-border bg-background text-foreground hover:bg-muted/30 h-11 px-4",
+    secondary: "bg-muted text-foreground hover:bg-muted/80 h-10 px-3",
+    ghost: "bg-transparent hover:bg-muted/30 text-muted-foreground hover:text-foreground h-9 px-3",
   };
   return <button {...rest} className={`${base} ${variants[variant]} ${className}`} />;
 }
 
 function SoftBadge({ children }: { children: React.ReactNode }) {
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm transition duration-150">
+    <span className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-muted/20 px-3 py-1.5 text-xs font-semibold text-foreground/85 shadow-sm transition duration-150">
       {children}
     </span>
   );
@@ -937,7 +935,7 @@ function SoftBadge({ children }: { children: React.ReactNode }) {
 
 function BadgePill({ children }: { children: React.ReactNode }) {
   return (
-    <span className="bg-teal-50 text-teal-600 px-3 py-1 rounded-full text-xs font-bold tracking-wide ring-1 ring-teal-100 uppercase">
+    <span className="bg-teal-500/10 text-teal-600 border border-teal-500/20 px-3 py-1 rounded-full text-xs font-bold tracking-wide uppercase">
       {children}
     </span>
   );

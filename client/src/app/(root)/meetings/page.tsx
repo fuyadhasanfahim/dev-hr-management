@@ -181,7 +181,7 @@ export default function MeetingsPage() {
                     <div className="flex items-center gap-3">
                         <Button
                             variant="outline"
-                            className="bg-white"
+                            className="bg-background border-border"
                             onClick={() => refetch()}
                             disabled={isFetching}
                         >
@@ -375,14 +375,14 @@ export default function MeetingsPage() {
                         ) : (
                             <Table>
                                 <TableHeader>
-                                    <TableRow className="bg-slate-50/70 hover:bg-slate-50/70 border-b border-slate-100">
-                                        <TableHead className="font-semibold text-slate-700 h-11">Meeting</TableHead>
-                                        <TableHead className="font-semibold text-slate-700 h-11">Client</TableHead>
-                                        <TableHead className="font-semibold text-slate-700 h-11">Date & Time</TableHead>
-                                        <TableHead className="font-semibold text-slate-700 h-11">Duration</TableHead>
-                                        <TableHead className="font-semibold text-slate-700 h-11">Status</TableHead>
-                                        <TableHead className="font-semibold text-slate-700 h-11">Google Meet</TableHead>
-                                        <TableHead className="font-semibold text-slate-700 text-right h-11">Actions</TableHead>
+                                    <TableRow className="bg-muted/40 hover:bg-muted/40 border-b border-border">
+                                        <TableHead className="font-semibold text-muted-foreground h-11">Meeting</TableHead>
+                                        <TableHead className="font-semibold text-muted-foreground h-11">Client</TableHead>
+                                        <TableHead className="font-semibold text-muted-foreground h-11">Date & Time</TableHead>
+                                        <TableHead className="font-semibold text-muted-foreground h-11">Duration</TableHead>
+                                        <TableHead className="font-semibold text-muted-foreground h-11">Status</TableHead>
+                                        <TableHead className="font-semibold text-muted-foreground h-11">Google Meet</TableHead>
+                                        <TableHead className="font-semibold text-muted-foreground text-right h-11">Actions</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
@@ -413,19 +413,19 @@ export default function MeetingsPage() {
                                     <Button
                                         variant="outline"
                                         size="icon"
-                                        className="h-8 w-8 bg-white border-slate-200"
+                                        className="h-8 w-8 bg-background border-border"
                                         disabled={page <= 1}
                                         onClick={() => setPage((p) => p - 1)}
                                     >
                                         <ChevronLeft className="h-4 w-4" />
                                     </Button>
-                                    <span className="text-sm font-medium px-3 text-slate-700">
+                                    <span className="text-sm font-medium px-3 text-foreground/80">
                                         {page} / {meta.totalPages}
                                     </span>
                                     <Button
                                         variant="outline"
                                         size="icon"
-                                        className="h-8 w-8 bg-white border-slate-200"
+                                        className="h-8 w-8 bg-background border-border"
                                         disabled={page >= meta.totalPages}
                                         onClick={() => setPage((p) => p + 1)}
                                     >
@@ -524,14 +524,14 @@ function MeetingRow({ meeting, clients }: { meeting: Meeting; clients: any[] }) 
     };
 
     return (
-        <TableRow className="group hover:bg-slate-50/70 transition-all duration-200 border-b border-slate-100/60">
+        <TableRow className="group hover:bg-muted/30 transition-all duration-200 border-b border-border/60">
             <TableCell className="py-3.5">
                 <div>
-                    <p className="font-semibold text-sm text-slate-800 tracking-tight leading-normal">
+                    <p className="font-semibold text-sm text-foreground tracking-tight leading-normal">
                         {meeting.meetingTitle}
                     </p>
                     {meeting.description && (
-                        <p className="text-xs text-slate-500 line-clamp-1 mt-1 font-normal max-w-[260px]">
+                        <p className="text-xs text-muted-foreground line-clamp-1 mt-1 font-normal max-w-[260px]">
                             {meeting.description}
                         </p>
                     )}
@@ -541,11 +541,11 @@ function MeetingRow({ meeting, clients }: { meeting: Meeting; clients: any[] }) 
                 {client ? (
                     <div className="flex items-center gap-2">
                         <div>
-                            <p className="text-sm font-semibold text-slate-800">
+                            <p className="text-sm font-semibold text-foreground">
                                 {client.name}
                             </p>
                             <div className="flex items-center gap-2 mt-0.5">
-                                <p className="text-xs text-slate-500 font-medium">
+                                <p className="text-xs text-muted-foreground font-medium">
                                     {client.clientId}
                                 </p>
                                 {client.currency === 'BDT' && (
@@ -561,19 +561,19 @@ function MeetingRow({ meeting, clients }: { meeting: Meeting; clients: any[] }) 
                         </div>
                     </div>
                 ) : (
-                    <span className="text-xs text-slate-400 font-medium">—</span>
+                    <span className="text-xs text-muted-foreground font-medium">—</span>
                 )}
             </TableCell>
             <TableCell className="py-3.5">
                 <div className="flex items-center gap-2">
-                    <Clock className="h-3.5 w-3.5 text-slate-400" />
-                    <span className="text-sm text-slate-600 font-medium whitespace-nowrap">
+                    <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+                    <span className="text-sm text-foreground/80 font-medium whitespace-nowrap">
                         {formatDate(meeting.scheduledAt)}
                     </span>
                 </div>
             </TableCell>
             <TableCell className="py-3.5">
-                <span className="text-sm text-slate-600 font-semibold whitespace-nowrap">
+                <span className="text-sm text-foreground/80 font-semibold whitespace-nowrap">
                     {meeting.durationMinutes} min
                 </span>
             </TableCell>
@@ -600,7 +600,7 @@ function MeetingRow({ meeting, clients }: { meeting: Meeting; clients: any[] }) 
                         <ExternalLink className="h-3 w-3" />
                     </a>
                 ) : (
-                    <span className="text-xs text-slate-400 font-medium select-none">No link</span>
+                    <span className="text-xs text-muted-foreground font-medium select-none">No link</span>
                 )}
             </TableCell>
             <TableCell className="py-3.5 text-right">
@@ -633,7 +633,7 @@ function MeetingRow({ meeting, clients }: { meeting: Meeting; clients: any[] }) 
                                     <div className="px-6 py-5 flex flex-col gap-5">
                                         {/* Title */}
                                         <div className="flex flex-col gap-2">
-                                            <Label className="text-slate-700 font-medium">
+                                            <Label className="text-foreground/90 font-medium">
                                                 Meeting Title{' '}
                                                 <span className="text-red-500">*</span>
                                             </Label>
@@ -646,14 +646,14 @@ function MeetingRow({ meeting, clients }: { meeting: Meeting; clients: any[] }) 
                                                         meetingTitle: e.target.value,
                                                     }))
                                                 }
-                                                className="bg-white border-slate-200"
+                                                className="bg-background border-border"
                                             />
                                         </div>
 
                                         {/* Date/Time + Duration */}
                                         <div className="grid grid-cols-2 gap-4">
                                             <div className="flex flex-col gap-2">
-                                                <Label className="text-slate-700 font-medium">
+                                                <Label className="text-foreground/90 font-medium">
                                                     Select Date
                                                     <span className="text-red-500">*</span>
                                                 </Label>
@@ -674,7 +674,7 @@ function MeetingRow({ meeting, clients }: { meeting: Meeting; clients: any[] }) 
                                                 />
                                             </div>
                                             <div className="flex flex-col gap-2">
-                                                <Label className="text-slate-700 font-medium">
+                                                <Label className="text-foreground/90 font-medium">
                                                     Duration
                                                 </Label>
                                                 <Select
@@ -686,7 +686,7 @@ function MeetingRow({ meeting, clients }: { meeting: Meeting; clients: any[] }) 
                                                         }))
                                                     }
                                                 >
-                                                    <SelectTrigger className="bg-white border-slate-200 w-full">
+                                                    <SelectTrigger className="bg-background border-border w-full">
                                                         <SelectValue />
                                                     </SelectTrigger>
                                                     <SelectContent>
@@ -705,7 +705,7 @@ function MeetingRow({ meeting, clients }: { meeting: Meeting; clients: any[] }) 
 
                                         {/* Extra Attendees */}
                                         <div className="flex flex-col gap-2">
-                                            <Label className="text-slate-700 font-medium">
+                                            <Label className="text-foreground/90 font-medium">
                                                 Additional Attendees
                                             </Label>
                                             <div className="flex gap-2">
@@ -720,9 +720,9 @@ function MeetingRow({ meeting, clients }: { meeting: Meeting; clients: any[] }) 
                                                             addExtraEmail();
                                                         }
                                                     }}
-                                                    className="bg-white border-slate-200"
+                                                    className="bg-background border-border"
                                                 />
-                                                <Button type="button" variant="outline" onClick={addExtraEmail}>
+                                                <Button type="button" variant="outline" className="border-border bg-background" onClick={addExtraEmail}>
                                                     <IconPlus /> Add
                                                 </Button>
                                             </div>
@@ -733,7 +733,7 @@ function MeetingRow({ meeting, clients }: { meeting: Meeting; clients: any[] }) 
                                                             key={email}
                                                             onClick={() => removeExtraEmail(email)}
                                                             variant="outline"
-                                                            className="cursor-pointer hover:border-destructive hover:text-red-600 hover:bg-red-50 transition-colors duration-200"
+                                                            className="cursor-pointer hover:border-destructive hover:text-red-600 hover:bg-red-500/10 transition-colors duration-200"
                                                             title="Remove"
                                                         >
                                                             {email}
@@ -746,7 +746,7 @@ function MeetingRow({ meeting, clients }: { meeting: Meeting; clients: any[] }) 
 
                                         {/* Description */}
                                         <div className="flex flex-col gap-2">
-                                            <Label className="text-slate-700 font-medium">
+                                            <Label className="text-foreground/90 font-medium">
                                                 Description
                                             </Label>
                                             <Textarea
@@ -758,13 +758,13 @@ function MeetingRow({ meeting, clients }: { meeting: Meeting; clients: any[] }) 
                                                         description: e.target.value,
                                                     }))
                                                 }
-                                                className="bg-white border-slate-200 min-h-[100px] resize-y"
+                                                className="bg-background border-border min-h-[100px] resize-y"
                                             />
                                         </div>
 
                                         {/* Internal Notes */}
                                         <div className="flex flex-col gap-2">
-                                            <Label className="text-slate-700 font-medium">
+                                            <Label className="text-foreground/90 font-medium">
                                                 Internal Notes
                                             </Label>
                                             <Input
@@ -776,18 +776,18 @@ function MeetingRow({ meeting, clients }: { meeting: Meeting; clients: any[] }) 
                                                         notes: e.target.value,
                                                     }))
                                                 }
-                                                className="bg-white border-slate-200"
+                                                className="bg-background border-border"
                                             />
                                         </div>
                                     </div>
                                 </ScrollArea>
 
-                                <DialogFooter className="px-6 py-4 border-t border-slate-100 shrink-0">
+                                <DialogFooter className="px-6 py-4 border-t border-border shrink-0">
                                     <Button
                                         type="button"
                                         variant="outline"
                                         onClick={() => setIsEditDialogOpen(false)}
-                                        className="border-slate-200"
+                                        className="border-border bg-background"
                                     >
                                         Cancel
                                     </Button>
@@ -966,14 +966,14 @@ function ScheduleMeetingDialog({
                     Schedule Meeting
                 </Button>
             </DialogTrigger>
-            <DialogContent className="w-lg bg-white overflow-hidden p-0 flex flex-col h-[95vh] gap-0">
+            <DialogContent className="w-lg bg-background border-border overflow-hidden p-0 flex flex-col h-[95vh] gap-0">
                 <form onSubmit={handleSubmit} className="flex flex-col h-full gap-0">
-                    <DialogHeader className="px-6 pt-5 pb-4 shrink-0 border-b border-slate-100">
-                        <DialogTitle className="flex items-center gap-2 text-xl font-semibold text-slate-900">
+                    <DialogHeader className="px-6 pt-5 pb-4 shrink-0 border-b border-border">
+                        <DialogTitle className="flex items-center gap-2 text-xl font-semibold text-foreground">
                             <Video className="h-5 w-5 text-teal-600" />
                             Schedule New Meeting
                         </DialogTitle>
-                        <DialogDescription className="text-slate-500">
+                        <DialogDescription className="text-muted-foreground">
                             Create a meeting with Google Meet. Attendees will
                             receive an email invitation.
                         </DialogDescription>
@@ -1035,7 +1035,7 @@ function ScheduleMeetingDialog({
                                             <Badge
                                                 key={email}
                                                 variant="secondary"
-                                                className="text-teal-600 border-teal-500 bg-teal-50"
+                                                className="text-teal-600 border-teal-500/30 bg-teal-500/10"
                                             >
                                                 {email}
                                             </Badge>
@@ -1067,7 +1067,7 @@ function ScheduleMeetingDialog({
                                     />
                                 </div>
                                 <div className="flex flex-col gap-2">
-                                    <Label className="text-slate-700 font-medium">
+                                    <Label className="text-foreground/90 font-medium">
                                         Duration
                                     </Label>
                                     <Select
@@ -1079,7 +1079,7 @@ function ScheduleMeetingDialog({
                                             }))
                                         }
                                     >
-                                        <SelectTrigger className="bg-white border-slate-200 w-full">
+                                        <SelectTrigger className="bg-background border-border w-full">
                                             <SelectValue />
                                         </SelectTrigger>
                                         <SelectContent>
@@ -1098,7 +1098,7 @@ function ScheduleMeetingDialog({
 
                             {/* Extra Attendees */}
                             <div className="flex flex-col gap-2">
-                                <Label className="text-slate-700 font-medium">
+                                <Label className="text-foreground/90 font-medium">
                                     Additional Attendees
                                 </Label>
                                 <div className="flex gap-2">
@@ -1115,11 +1115,12 @@ function ScheduleMeetingDialog({
                                                 addExtraEmail();
                                             }
                                         }}
-                                        className="bg-white border-slate-200"
+                                        className="bg-background border-border"
                                     />
                                     <Button
                                         type="button"
                                         variant="outline"
+                                        className="border-border bg-background"
                                         onClick={addExtraEmail}
                                     >
                                         <IconPlus />
@@ -1148,7 +1149,7 @@ function ScheduleMeetingDialog({
 
                             {/* Description */}
                             <div className="flex flex-col gap-2">
-                                <Label className="text-slate-700 font-medium">
+                                <Label className="text-foreground/90 font-medium">
                                     Description
                                 </Label>
                                 <Textarea
@@ -1160,13 +1161,13 @@ function ScheduleMeetingDialog({
                                             description: e.target.value,
                                             }))
                                         }
-                                    className="bg-white border-slate-200 min-h-[100px] resize-y"
+                                    className="bg-background border-border min-h-[100px] resize-y"
                                 />
                             </div>
 
                             {/* Internal Notes */}
                             <div className="flex flex-col gap-2">
-                                <Label className="text-slate-700 font-medium">
+                                <Label className="text-foreground/90 font-medium">
                                     Internal Notes
                                 </Label>
                                 <Input
@@ -1178,18 +1179,18 @@ function ScheduleMeetingDialog({
                                             notes: e.target.value,
                                         }))
                                     }
-                                    className="bg-white border-slate-200"
+                                    className="bg-background border-border"
                                 />
                             </div>
                         </div>
                     </ScrollArea>
 
-                    <DialogFooter className="px-6 py-4 border-t border-slate-100 shrink-0">
+                    <DialogFooter className="px-6 py-4 border-t border-border shrink-0">
                         <Button
                             type="button"
                             variant="outline"
                             onClick={() => setOpen(false)}
-                            className="border-slate-200"
+                            className="border-border bg-background hover:bg-muted/30"
                         >
                             Cancel
                         </Button>

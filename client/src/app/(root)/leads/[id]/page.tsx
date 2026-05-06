@@ -168,7 +168,7 @@ export default function LeadDetailsPage() {
         </Button>
         <div className="flex-1">
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold text-slate-900">
+            <h1 className="text-2xl font-bold text-foreground">
               {lead.name || lead.phone}
             </h1>
             {lead.status && (
@@ -190,7 +190,7 @@ export default function LeadDetailsPage() {
             )}
             {isFetching && <Loader className="h-4 w-4 animate-spin text-teal-600" />}
           </div>
-          <p className="text-sm text-slate-500 mt-1">
+          <p className="text-sm text-muted-foreground mt-1">
             Added on {format(new Date(lead.createdAt), "MMM dd, yyyy")}
           </p>
         </div>
@@ -218,34 +218,34 @@ export default function LeadDetailsPage() {
       <div className="grid lg:grid-cols-3 gap-6">
         <div className="lg:col-span-1 space-y-6">
           <Card className="shadow-sm">
-            <CardHeader className="pb-3 border-b border-slate-100">
-              <CardTitle className="text-base font-semibold flex items-center gap-2 text-slate-800">
-                <User className="h-4 w-4 text-slate-500" />
+            <CardHeader className="pb-3 border-b border-border">
+              <CardTitle className="text-base font-semibold flex items-center gap-2 text-foreground/90">
+                <User className="h-4 w-4 text-muted-foreground" />
                 Contact Info
               </CardTitle>
             </CardHeader>
             <CardContent className="pt-4 space-y-4 text-sm">
               <div className="flex items-start gap-3">
-                <Phone className="h-4 w-4 text-slate-400 mt-0.5" />
+                <Phone className="h-4 w-4 text-muted-foreground/60 mt-0.5" />
                 <div>
-                  <p className="font-medium text-slate-900">{lead.phone}</p>
-                  <p className="text-slate-500">Phone</p>
+                  <p className="font-medium text-foreground">{lead.phone}</p>
+                  <p className="text-muted-foreground">Phone</p>
                 </div>
               </div>
               {lead.email && (
                 <div className="flex items-start gap-3">
-                  <Mail className="h-4 w-4 text-slate-400 mt-0.5" />
+                  <Mail className="h-4 w-4 text-muted-foreground/60 mt-0.5" />
                   <div>
-                    <p className="font-medium text-slate-900">{lead.email}</p>
-                    <p className="text-slate-500">Email</p>
+                    <p className="font-medium text-foreground">{lead.email}</p>
+                    <p className="text-muted-foreground">Email</p>
                   </div>
                 </div>
               )}
               {lead.website && (
                 <div className="flex items-start gap-3">
-                  <Globe className="h-4 w-4 text-slate-400 mt-0.5" />
+                  <Globe className="h-4 w-4 text-muted-foreground/60 mt-0.5" />
                   <div>
-                    <p className="font-medium text-slate-900">
+                    <p className="font-medium text-foreground">
                       <a
                         href={lead.website.startsWith("http") ? lead.website : `https://${lead.website}`}
                         target="_blank"
@@ -255,7 +255,7 @@ export default function LeadDetailsPage() {
                         {lead.website}
                       </a>
                     </p>
-                    <p className="text-slate-500">Website</p>
+                    <p className="text-muted-foreground">Website</p>
                   </div>
                 </div>
               )}
@@ -263,29 +263,29 @@ export default function LeadDetailsPage() {
           </Card>
 
           <Card className="shadow-sm">
-            <CardHeader className="pb-3 border-b border-slate-100">
-              <CardTitle className="text-base font-semibold flex items-center gap-2 text-slate-800">
-                <Activity className="h-4 w-4 text-slate-500" />
+            <CardHeader className="pb-3 border-b border-border">
+              <CardTitle className="text-base font-semibold flex items-center gap-2 text-foreground/90">
+                <Activity className="h-4 w-4 text-muted-foreground" />
                 Lead Status
               </CardTitle>
             </CardHeader>
             <CardContent className="pt-4 space-y-4 text-sm">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <p className="text-slate-500 mb-1">Priority</p>
+                  <p className="text-muted-foreground mb-1">Priority</p>
                   <Badge variant="secondary">{lead.priority || "Medium"}</Badge>
                 </div>
                 <div>
-                  <p className="text-slate-500 mb-1">Source</p>
+                  <p className="text-muted-foreground mb-1">Source</p>
                   <span className="font-medium">{lead.source?.name || "N/A"}</span>
                 </div>
               </div>
               {lead.nextActionDate && (
-                <div className="pt-3 border-t border-slate-100">
-                  <p className="text-slate-500 flex items-center gap-1.5 mb-1">
+                <div className="pt-3 border-t border-border">
+                  <p className="text-muted-foreground flex items-center gap-1.5 mb-1">
                     <Calendar className="h-3.5 w-3.5" /> Next Action
                   </p>
-                  <p className="font-medium text-slate-900">
+                  <p className="font-medium text-foreground">
                     {lead.nextActionType?.name} on{" "}
                     {format(new Date(lead.nextActionDate), "MMM dd, yyyy")}
                   </p>
@@ -297,19 +297,19 @@ export default function LeadDetailsPage() {
 
         <div className="lg:col-span-2">
           <Card className="shadow-sm h-full">
-            <CardHeader className="pb-3 border-b border-slate-100">
-              <CardTitle className="text-base font-semibold text-slate-800">
+            <CardHeader className="pb-3 border-b border-border">
+              <CardTitle className="text-base font-semibold text-foreground/90">
                 Activity Timeline
               </CardTitle>
             </CardHeader>
             <CardContent className="pt-6">
-              <div className="space-y-6 relative before:absolute before:inset-0 before:ml-5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-slate-200 before:to-transparent">
+              <div className="space-y-6 relative before:absolute before:inset-0 before:ml-5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-border before:to-transparent">
                 {activities.map((act: any, idx: number) => (
                   <div
                     key={act._id}
                     className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active"
                   >
-                    <div className="flex items-center justify-center w-10 h-10 rounded-full border-4 border-white bg-slate-100 text-slate-500 shadow shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 z-10">
+                    <div className="flex items-center justify-center w-10 h-10 rounded-full border-4 border-background bg-muted text-muted-foreground shadow shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 z-10">
                       {act.activityType === "CREATED" ? (
                         <User className="h-4 w-4 text-teal-600" />
                       ) : act.activityType === "STATUS_CHANGE" ? (
@@ -317,22 +317,22 @@ export default function LeadDetailsPage() {
                       ) : act.activityType === "CONVERTED" ? (
                         <UserCheck className="h-4 w-4 text-amber-600" />
                       ) : (
-                        <MessageSquarePlus className="h-4 w-4 text-slate-600" />
+                        <MessageSquarePlus className="h-4 w-4 text-muted-foreground" />
                       )}
                     </div>
-                    <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
+                    <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] bg-card p-4 rounded-xl border border-border shadow-sm">
                       <div className="flex items-center justify-between mb-2">
-                        <span className="font-semibold text-slate-800 text-sm capitalize">
+                        <span className="font-semibold text-foreground/90 text-sm capitalize">
                           {act.activityType.replace(/_/g, " ").toLowerCase()}
                         </span>
-                        <span className="text-xs text-slate-400 flex items-center gap-1">
+                        <span className="text-xs text-muted-foreground/80 flex items-center gap-1">
                           <Clock className="h-3 w-3" />
                           {format(new Date(act.createdAt), "MMM dd, hh:mm a")}
                         </span>
                       </div>
                       
                       {act.previousStatus && act.newStatus && (
-                        <div className="text-sm text-slate-600 mb-2 flex items-center gap-2">
+                        <div className="text-sm text-muted-foreground mb-2 flex items-center gap-2">
                           Status changed: 
                           <Badge variant="secondary" className="text-xs">{act.previousStatus.name}</Badge> 
                           <ArrowRightCircle className="h-3 w-3 text-slate-400" /> 
@@ -341,7 +341,7 @@ export default function LeadDetailsPage() {
                       )}
 
                       {act.notes && (
-                        <p className="text-sm text-slate-600 bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                        <p className="text-sm text-foreground/80 bg-muted/50 p-2.5 rounded-lg border border-border">
                           {act.notes}
                         </p>
                       )}
@@ -353,7 +353,7 @@ export default function LeadDetailsPage() {
                         </p>
                       )}
 
-                      <div className="text-xs text-slate-400 mt-2 text-right">
+                      <div className="text-xs text-muted-foreground mt-2 text-right">
                         by {act.createdBy?.firstName} {act.createdBy?.lastName}
                       </div>
                     </div>
@@ -361,7 +361,7 @@ export default function LeadDetailsPage() {
                 ))}
 
                 {activities.length === 0 && (
-                  <div className="text-center text-slate-500 py-10">
+                  <div className="text-center text-muted-foreground py-10">
                     No activities recorded yet.
                   </div>
                 )}
@@ -433,8 +433,8 @@ export default function LeadDetailsPage() {
                     <Button
                       variant={"outline"}
                       className={cn(
-                        "w-full justify-start text-left font-normal bg-white",
-                        !nextActionDate && "text-slate-500"
+                        "w-full justify-start text-left font-normal bg-background border-border",
+                        !nextActionDate && "text-muted-foreground"
                       )}
                     >
                       <Calendar className="h-4 w-4" />

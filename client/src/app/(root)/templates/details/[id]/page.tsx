@@ -18,7 +18,7 @@ export default function TemplateDetailsPage() {
 
   if (isLoading) {
     return (
-      <div className="w-full h-screen flex items-center justify-center text-slate-400">
+      <div className="w-full h-screen flex items-center justify-center text-muted-foreground/60">
         Loading template details...
       </div>
     );
@@ -26,7 +26,7 @@ export default function TemplateDetailsPage() {
 
   if (!template) {
     return (
-      <div className="w-full h-screen flex flex-col items-center justify-center gap-4 text-slate-500">
+      <div className="w-full h-screen flex flex-col items-center justify-center gap-4 text-muted-foreground">
         <p>Template not found or has been removed.</p>
         <Button onClick={() => router.push("/templates")}>Back to Templates</Button>
       </div>
@@ -38,15 +38,15 @@ export default function TemplateDetailsPage() {
   const grandTotal = basePrice - discountAmount + (template.additionalServices?.reduce((a: number, s: any) => a + (s.price || 0), 0) || 0);
 
   return (
-    <div className="w-full space-y-8 bg-slate-50/40 min-h-screen">
+    <div className="w-full space-y-8 bg-background/40 min-h-screen">
       {/* Header section */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
+          <h1 className="text-3xl font-bold tracking-tight text-foreground flex items-center gap-2">
             <Layout className="w-8 h-8 text-teal-600" />
             <span>{template.name || "Unnamed Template"}</span>
           </h1>
-          <p className="text-slate-500 mt-1">Full breakdown of quotation scope, phases, and pricing</p>
+          <p className="text-muted-foreground mt-1">Full breakdown of quotation scope, phases, and pricing</p>
         </div>
         <div>
           <Button
@@ -65,64 +65,64 @@ export default function TemplateDetailsPage() {
         {/* Main section */}
         <div className="lg:col-span-2 space-y-6">
           {/* Identity & Overview */}
-          <Card className="border-slate-200 bg-white p-6 shadow-sm rounded-xl">
-            <div className="flex items-center gap-2 pb-4 border-b border-slate-100">
-              <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-teal-50 text-teal-600 ring-1 ring-teal-100">
+          <Card className="border-border bg-card p-6 shadow-sm rounded-xl">
+            <div className="flex items-center gap-2 pb-4 border-b border-border/60">
+              <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-teal-500/10 text-teal-600 ring-1 ring-teal-500/20">
                 <FileText className="w-4 h-4" />
               </span>
-              <h2 className="text-lg font-bold text-slate-800">Template Overview</h2>
+              <h2 className="text-lg font-bold text-foreground">Template Overview</h2>
             </div>
-            <div className="mt-4 text-slate-600 leading-relaxed text-sm whitespace-pre-line">
+            <div className="mt-4 text-foreground/80 leading-relaxed text-sm whitespace-pre-line">
               {template.overview || "No overview specified for this template."}
             </div>
           </Card>
 
           {/* Phases Details */}
-          <Card className="border-slate-200 bg-white p-6 shadow-sm rounded-xl">
-            <div className="flex items-center gap-2 pb-4 border-b border-slate-100 mb-4">
-              <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-teal-50 text-teal-600 ring-1 ring-teal-100">
+          <Card className="border-border bg-card p-6 shadow-sm rounded-xl">
+            <div className="flex items-center gap-2 pb-4 border-b border-border/60 mb-4">
+              <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-teal-500/10 text-teal-600 ring-1 ring-teal-500/20">
                 <Layers className="w-4 h-4" />
               </span>
-              <h2 className="text-lg font-bold text-slate-800">Project Phases</h2>
+              <h2 className="text-lg font-bold text-foreground">Project Phases</h2>
             </div>
             {!template.phases || template.phases.length === 0 ? (
-              <p className="text-sm text-slate-400">No specific phases defined for this template.</p>
+              <p className="text-sm text-muted-foreground/60">No specific phases defined for this template.</p>
             ) : (
               <div className="space-y-4">
                 {template.phases.map((phase: any, index: number) => (
                   <div
                     key={index}
-                    className="border border-slate-100 rounded-xl bg-slate-50/40 p-4 space-y-3"
+                    className="border border-border/60 rounded-xl bg-muted/10 p-4 space-y-3"
                   >
                     <div className="flex justify-between items-start gap-4">
                       <div>
-                        <span className="bg-teal-50 text-teal-600 px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wide uppercase">
+                        <span className="bg-teal-500/10 text-teal-600 px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wide uppercase">
                           Phase {index + 1}
                         </span>
-                        <h3 className="font-bold text-slate-800 text-base mt-1">
+                        <h3 className="font-bold text-foreground text-base mt-1">
                           {phase.title || "Untitled phase"}
                         </h3>
                       </div>
-                      <span className="text-xs font-mono text-slate-400 bg-white px-2.5 py-1 border border-slate-100 rounded-md">
+                      <span className="text-xs font-mono text-muted-foreground bg-background px-2.5 py-1 border border-border rounded-md">
                         {phase.startDate ? phase.startDate : "TBD"} —{" "}
                         {phase.endDate ? phase.endDate : "TBD"}
                       </span>
                     </div>
                     {phase.description && (
-                      <p className="text-sm text-slate-600 leading-relaxed whitespace-pre-line">
+                      <p className="text-sm text-foreground/80 leading-relaxed whitespace-pre-line">
                         {phase.description}
                       </p>
                     )}
                     {phase.items && phase.items.length > 0 && (
-                      <div className="pt-3 border-t border-slate-100">
-                        <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+                      <div className="pt-3 border-t border-border/60">
+                        <div className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">
                           Key Checkpoints
                         </div>
                         <div className="flex flex-wrap gap-2">
                           {phase.items.map((item: string, iIdx: number) => (
                             <span
                               key={iIdx}
-                              className="bg-white border border-slate-200 text-slate-700 text-xs px-2.5 py-1 rounded-lg font-medium shadow-sm"
+                              className="bg-background border border-border text-foreground/80 text-xs px-2.5 py-1 rounded-lg font-medium shadow-sm"
                             >
                               {item}
                             </span>
@@ -137,51 +137,51 @@ export default function TemplateDetailsPage() {
           </Card>
 
           {/* Additional details: Tech Stack, Payment Milestones, Workflow */}
-          <Card className="border-slate-200 bg-white p-6 shadow-sm rounded-xl space-y-6">
+          <Card className="border-border bg-card p-6 shadow-sm rounded-xl space-y-6">
             {/* Tech stack blueprint */}
             <div>
-              <div className="flex items-center gap-2 pb-3 border-b border-slate-100 mb-3">
-                <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-teal-50 text-teal-600 ring-1 ring-teal-100">
+              <div className="flex items-center gap-2 pb-3 border-b border-border/60 mb-3">
+                <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-teal-500/10 text-teal-600 ring-1 ring-teal-500/20">
                   <Cpu className="w-4 h-4" />
                 </span>
-                <h3 className="text-base font-bold text-slate-800">Technical Blueprint</h3>
+                <h3 className="text-base font-bold text-foreground">Technical Blueprint</h3>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm mt-3">
-                <div className="bg-slate-50/60 p-3 rounded-lg border border-slate-100">
-                  <span className="text-[10px] uppercase font-bold text-slate-400 block mb-0.5">
+                <div className="bg-muted/10 p-3 rounded-lg border border-border/60">
+                  <span className="text-[10px] uppercase font-bold text-muted-foreground block mb-0.5">
                     Frontend
                   </span>
-                  <span className="font-bold text-slate-700">
+                  <span className="font-bold text-foreground/85">
                     {template.techStack?.frontend || "Not Specified"}
                   </span>
                 </div>
-                <div className="bg-slate-50/60 p-3 rounded-lg border border-slate-100">
-                  <span className="text-[10px] uppercase font-bold text-slate-400 block mb-0.5">
+                <div className="bg-muted/10 p-3 rounded-lg border border-border/60">
+                  <span className="text-[10px] uppercase font-bold text-muted-foreground block mb-0.5">
                     Backend
                   </span>
-                  <span className="font-bold text-slate-700">
+                  <span className="font-bold text-foreground/85">
                     {template.techStack?.backend || "Not Specified"}
                   </span>
                 </div>
-                <div className="bg-slate-50/60 p-3 rounded-lg border border-slate-100">
-                  <span className="text-[10px] uppercase font-bold text-slate-400 block mb-0.5">
+                <div className="bg-muted/10 p-3 rounded-lg border border-border/60">
+                  <span className="text-[10px] uppercase font-bold text-muted-foreground block mb-0.5">
                     Database
                   </span>
-                  <span className="font-bold text-slate-700">
+                  <span className="font-bold text-foreground/85">
                     {template.techStack?.database || "Not Specified"}
                   </span>
                 </div>
               </div>
               {template.techStack?.tools && template.techStack.tools.length > 0 && (
-                <div className="mt-3 bg-slate-50/40 border border-slate-100 rounded-lg p-3">
-                  <span className="text-[10px] uppercase font-bold text-slate-400 block mb-2">
+                <div className="mt-3 bg-muted/10 border border-border/60 rounded-lg p-3">
+                  <span className="text-[10px] uppercase font-bold text-muted-foreground block mb-2">
                     Preconfigured Tools
                   </span>
                   <div className="flex flex-wrap gap-1.5">
                     {template.techStack.tools.map((t: string, idx: number) => (
                       <span
                         key={idx}
-                        className="bg-white border border-slate-200 px-2.5 py-1 text-xs text-slate-600 rounded-lg font-medium shadow-sm"
+                        className="bg-background border border-border px-2.5 py-1 text-xs text-foreground/75 rounded-lg font-medium shadow-sm"
                       >
                         {t}
                       </span>
@@ -194,17 +194,17 @@ export default function TemplateDetailsPage() {
             {/* Workflow steps */}
             {template.workflow && template.workflow.length > 0 && (
               <div>
-                <div className="flex items-center gap-2 pb-3 border-b border-slate-100 mb-3">
-                  <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-teal-50 text-teal-600 ring-1 ring-teal-100">
+                <div className="flex items-center gap-2 pb-3 border-b border-border/60 mb-3">
+                  <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-teal-500/10 text-teal-600 ring-1 ring-teal-500/20">
                     <Activity className="w-4 h-4" />
                   </span>
-                  <h3 className="text-base font-bold text-slate-800">Workflow Pipeline</h3>
+                  <h3 className="text-base font-bold text-foreground">Workflow Pipeline</h3>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {template.workflow.map((step: string, idx: number) => (
                     <span
                       key={idx}
-                      className="bg-slate-50 border border-slate-100 px-3 py-1.5 text-xs text-slate-700 font-semibold rounded-lg shadow-sm"
+                      className="bg-muted/10 border border-border/60 px-3 py-1.5 text-xs text-foreground/80 font-semibold rounded-lg shadow-sm"
                     >
                       <span className="text-teal-600 font-bold mr-1">{idx + 1}.</span>
                       {step}
@@ -217,20 +217,20 @@ export default function TemplateDetailsPage() {
             {/* Payment Milestones */}
             {template.paymentMilestones && template.paymentMilestones.length > 0 && (
               <div>
-                <div className="flex items-center gap-2 pb-3 border-b border-slate-100 mb-3">
-                  <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-teal-50 text-teal-600 ring-1 ring-teal-100">
+                <div className="flex items-center gap-2 pb-3 border-b border-border/60 mb-3">
+                  <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-teal-500/10 text-teal-600 ring-1 ring-teal-500/20">
                     <HandCoins className="w-4 h-4" />
                   </span>
-                  <h3 className="text-base font-bold text-slate-800">Payment Milestones</h3>
+                  <h3 className="text-base font-bold text-foreground">Payment Milestones</h3>
                 </div>
                 <div className="space-y-2">
                   {template.paymentMilestones.map((m: any, idx: number) => (
                     <div
                       key={idx}
-                      className="flex items-center justify-between bg-slate-50/50 border border-slate-100 rounded-xl p-3 text-sm"
+                      className="flex items-center justify-between bg-muted/10 border border-border/60 rounded-xl p-3 text-sm"
                     >
-                      <span className="font-semibold text-slate-700">{m.label}</span>
-                      <span className="bg-teal-50 text-teal-600 px-2.5 py-1 rounded-full text-xs font-extrabold tracking-wide">
+                      <span className="font-semibold text-foreground/85">{m.label}</span>
+                      <span className="bg-teal-500/10 text-teal-600 px-2.5 py-1 rounded-full text-xs font-extrabold tracking-wide">
                         {m.percentage}%
                       </span>
                     </div>
@@ -243,39 +243,39 @@ export default function TemplateDetailsPage() {
 
         {/* Sidebar calculations */}
         <div className="space-y-6">
-          <Card className="border-slate-200 bg-white overflow-hidden rounded-xl shadow-md flex flex-col h-fit">
-            <div className="bg-slate-50/50 border-b border-slate-100 p-6">
+          <Card className="border-border bg-card overflow-hidden rounded-xl shadow-md flex flex-col h-fit">
+            <div className="bg-muted/30 border-b border-border p-6">
               <div className="text-lg font-bold flex items-center gap-2">
-                <span className="inline-flex w-9 h-9 items-center justify-center rounded-lg bg-teal-50 text-teal-600 ring-1 ring-teal-100">
+                <span className="inline-flex w-9 h-9 items-center justify-center rounded-lg bg-teal-500/10 text-teal-600 ring-1 ring-teal-500/20">
                   <Receipt className="w-4 h-4" />
                 </span>
-                <span className="text-slate-800">Financial Projection</span>
+                <span className="text-foreground/90">Financial Projection</span>
               </div>
             </div>
             <div className="p-6 space-y-4">
-              <div className="flex justify-between items-center text-sm border-b border-slate-50 pb-3">
-                <span className="text-slate-500 font-medium">Base Price</span>
-                <span className="font-bold text-slate-700">
+              <div className="flex justify-between items-center text-sm border-b border-border/60 pb-3">
+                <span className="text-muted-foreground font-medium">Base Price</span>
+                <span className="font-bold text-foreground/85">
                   {formatMoney(basePrice, "৳")}
                 </span>
               </div>
               {template.pricing?.discount !== undefined && template.pricing.discount > 0 && (
-                <div className="flex justify-between items-center text-sm border-b border-slate-50 pb-3">
+                <div className="flex justify-between items-center text-sm border-b border-border/60 pb-3">
                   <span className="text-orange-500 font-medium">Discount ({template.pricing.discount}%)</span>
-                  <span className="font-bold text-orange-600">
+                  <span className="font-bold text-orange-500">
                     - {formatMoney(discountAmount, "৳")}
                   </span>
                 </div>
               )}
               {template.additionalServices && template.additionalServices.length > 0 && (
-                <div className="space-y-2 border-b border-slate-50 pb-3">
-                  <span className="text-xs font-bold uppercase tracking-wider text-slate-400 block">
+                <div className="space-y-2 border-b border-border/60 pb-3">
+                  <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground block">
                     Additional Options Added
                   </span>
                   {template.additionalServices.map((s: any, idx: number) => (
                     <div key={idx} className="flex justify-between items-center text-sm">
-                      <span className="text-slate-600 font-medium">{s.label}</span>
-                      <span className="font-semibold text-slate-700">
+                      <span className="text-foreground/80 font-medium">{s.label}</span>
+                      <span className="font-semibold text-foreground/85">
                         {formatMoney(s.price || 0, "৳")}
                       </span>
                     </div>
@@ -284,7 +284,7 @@ export default function TemplateDetailsPage() {
               )}
 
               <div className="pt-2">
-                <span className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-slate-400">
+                <span className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-muted-foreground">
                   Grand Template Value
                 </span>
                 <div className="text-3xl font-extrabold tracking-tight text-teal-600 mt-1">
