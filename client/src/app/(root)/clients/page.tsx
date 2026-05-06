@@ -165,7 +165,7 @@ export default function ClientsPage() {
   };
 
   return (
-    <div className="w-full space-y-8 bg-slate-50/50 min-h-screen">
+    <div className="w-full space-y-8 bg-slate-50/50 dark:bg-transparent min-h-screen">
       {/* Header section */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
