@@ -192,6 +192,16 @@ function buildUnitDefs(data: QuotationData): UnitDef[] {
 
   (data.phases || []).forEach((ph, pi) => {
     const nDeliverables = (ph.items || []).length;
+    const formatPhaseDate = (raw: string | undefined | null) => {
+      if (!raw) return "TBD";
+      try {
+        const d = new Date(raw);
+        if (isNaN(d.getTime())) return raw;
+        return format(d, "PPP");
+      } catch {
+        return raw;
+      }
+    };
     const phaseThead = (
       <thead>
         <tr className="border-b border-slate-100">
@@ -203,7 +213,7 @@ function buildUnitDefs(data: QuotationData): UnitDef[] {
                 </span>
                 {(ph.startDate || ph.endDate) && (
                   <span className="text-[11px] font-medium text-slate-500">
-                    {ph.startDate ? ph.startDate : "TBD"} — {ph.endDate ? ph.endDate : "TBD"}
+                    {ph.startDate ? formatPhaseDate(ph.startDate) : "TBD"} — {ph.endDate ? formatPhaseDate(ph.endDate) : "TBD"}
                   </span>
                 )}
               </div>
@@ -275,19 +285,28 @@ function buildUnitDefs(data: QuotationData): UnitDef[] {
   });
 
   const lineItems = buildServiceLineItems(data);
+   const svcColGroup = (
+    <colgroup>
+      <col style={{ width: "48px" }} />
+      <col />
+      <col style={{ width: "56px" }} />
+      <col style={{ width: "110px" }} stroke-width="0" />
+      <col style={{ width: "120px" }} />
+    </colgroup>
+  );
   const svcHead = (
     <tr className="border-b border-slate-100 bg-slate-50 text-[10.5px] font-extrabold uppercase tracking-wide text-slate-500">
-      <th className="w-10 px-2 py-2.5 text-center font-extrabold">No.</th>
+      <th className="px-1 py-2.5 text-center font-extrabold">No.</th>
       <th className="px-3 py-2.5 text-left font-extrabold">Service</th>
-      <th className="w-14 px-2 py-2.5 text-right font-extrabold">Qty</th>
-      <th className="w-24 px-2 py-2.5 text-right font-extrabold">Rate</th>
-      <th className="w-28 px-2 py-2.5 text-right font-extrabold">Total</th>
+      <th className="px-2 py-2.5 text-right font-extrabold">Qty</th>
+      <th className="px-2 py-2.5 text-right font-extrabold">Rate</th>
+      <th className="px-2 py-2.5 text-right font-extrabold">Total</th>
     </tr>
   );
 
   const svcRow = (row: ServiceLineItem, index: number) => (
     <tr className="border-t border-slate-100">
-      <td className="px-2 py-2.5 text-center text-[12px] text-slate-600">
+      <td className="px-1 py-2.5 text-center text-[12px] text-slate-600 whitespace-nowrap">
         {index + 1}
       </td>
       <td className="break-words px-3 py-2.5 text-[12px]">{row.name}</td>
@@ -308,6 +327,7 @@ function buildUnitDefs(data: QuotationData): UnitDef[] {
       node: (
         <div className={TABLE_SECTION}>
           <table className="w-full table-fixed border-collapse text-[12px]">
+            {svcColGroup}
             <thead>{svcHead}</thead>
             <tbody>{svcRow(lineItems[0], 0)}</tbody>
           </table>
@@ -321,6 +341,7 @@ function buildUnitDefs(data: QuotationData): UnitDef[] {
         node: (
           <div className={TABLE_SECTION}>
             <table className="w-full table-fixed border-collapse text-[12px]">
+              {svcColGroup}
               <tbody>{svcRow(lineItems[i], i)}</tbody>
             </table>
           </div>
@@ -465,11 +486,19 @@ function buildUnitDefs(data: QuotationData): UnitDef[] {
     </thead>
   );
 
+  const payColGroup = (
+    <colgroup>
+      <col style={{ width: "64px" }} />
+      <col />
+      <col style={{ width: "120px" }} />
+    </colgroup>
+  );
+
   const payRow = (m: (typeof milestones)[0], mi: number) => {
     const amt = (totals.grandTotal * (m.percentage || 0)) / 100;
     return (
       <tr key={mi} className="border-t border-slate-100">
-        <td className="w-[52px] px-3 py-2.5 align-top">
+        <td className="px-3 py-2.5 align-top">
           <span className="inline-block min-w-[40px] rounded bg-violet-100 px-2 py-0.5 text-center text-[11px] font-extrabold text-violet-700">
             {m.percentage}%
           </span>
@@ -490,6 +519,7 @@ function buildUnitDefs(data: QuotationData): UnitDef[] {
     node: (
       <div className={TABLE_SECTION}>
         <table className="w-full table-fixed border-collapse text-[12px]">
+          {payColGroup}
           {payThead}
           <tbody>{payRow(milestones[0], 0)}</tbody>
         </table>
@@ -503,6 +533,7 @@ function buildUnitDefs(data: QuotationData): UnitDef[] {
       node: (
         <div className={TABLE_SECTION}>
           <table className="w-full table-fixed border-collapse text-[12px]">
+            {payColGroup}
             <tbody>{payRow(milestones[mi], mi)}</tbody>
           </table>
         </div>
