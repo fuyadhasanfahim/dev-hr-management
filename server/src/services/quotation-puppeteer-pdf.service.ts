@@ -56,6 +56,15 @@ function compactList(parts: Array<string | undefined | null>): string[] {
     return parts.map((x) => String(x ?? '').trim()).filter(Boolean);
 }
 
+function formatDatePdf(raw: unknown): string {
+    if (!raw) return 'TBD';
+    try {
+        return format(new Date(String(raw)), 'PPP');
+    } catch {
+        return String(raw);
+    }
+}
+
 function buildPaymentLink(
     secureToken: unknown,
     paymentBase: string,
@@ -241,13 +250,17 @@ function buildPrintHtml(
                           ? `<tr><td class="phase-td phase-empty">No deliverables listed</td></tr>`
                           : '';
                   const body = `${descRow}${itemRows}${emptyRow}`;
+                  const datesSpan =
+                      p.startDate || p.endDate
+                          ? `<span class="phase-dates">(${p.startDate ? formatDatePdf(p.startDate) : 'TBD'} — ${p.endDate ? formatDatePdf(p.endDate) : 'TBD'})</span>`
+                          : '';
                   return `
     <table class="phase-table">
       <thead>
         <tr>
           <th class="phase-th">
             <div class="phase-th-inner">
-              <strong>Phase ${idx + 1}: ${esc(p.title)}</strong>
+              <strong>Phase ${idx + 1}: ${esc(p.title)}${datesSpan}</strong>
               <span class="scope-count">${(p.items || []).length} deliverables</span>
             </div>
           </th>
@@ -451,6 +464,13 @@ function buildPrintHtml(
       line-height: 1.3;
     }
     .phase-th-inner strong { color: var(--slate900); font-weight: 700; }
+    .phase-dates {
+      font-size: 11.5px;
+      color: var(--slate500);
+      font-weight: 400;
+      font-style: italic;
+      margin-left: 6px;
+    }
     .phase-th-inner .scope-count {
       font-size: 11.5px;
       color: var(--slate500);
