@@ -6,6 +6,7 @@ const LeadSchema = new Schema<ILead>(
         name: {
             type: String,
             trim: true,
+            index: true,
         },
         phone: {
             type: String,
@@ -27,10 +28,12 @@ const LeadSchema = new Schema<ILead>(
         source: {
             type: Schema.Types.ObjectId,
             ref: 'LeadSetting',
+            index: true,
         },
         status: {
             type: Schema.Types.ObjectId,
             ref: 'LeadSetting',
+            index: true,
         },
         priority: {
             type: String,
@@ -61,6 +64,7 @@ const LeadSchema = new Schema<ILead>(
         assignedTo: {
             type: Schema.Types.ObjectId,
             ref: 'User',
+            index: true,
         },
         createdBy: {
             type: Schema.Types.ObjectId,

@@ -51,7 +51,8 @@ const getAllLeads = async (params: LeadQueryParams) => {
             .populate('assignedTo', 'firstName lastName email')
             .sort({ createdAt: -1 })
             .skip(skip)
-            .limit(limit),
+            .limit(limit)
+            .lean(),
         LeadModel.countDocuments(query),
     ]);
 
@@ -68,7 +69,8 @@ const getLeadById = async (id: string) => {
         .populate('status')
         .populate('source')
         .populate('nextActionType')
-        .populate('assignedTo', 'firstName lastName email');
+        .populate('assignedTo', 'firstName lastName email')
+        .lean();
     
     if (!lead) return null;
 
@@ -77,7 +79,8 @@ const getLeadById = async (id: string) => {
         .populate('newStatus')
         .populate('nextActionType')
         .populate('createdBy', 'firstName lastName email')
-        .sort({ createdAt: -1 });
+        .sort({ createdAt: -1 })
+        .lean();
 
     return { lead, activities };
 };

@@ -1,13 +1,7 @@
 import { Search, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useEffect, useState } from "react";
 import { LeadSetting } from "@/types/lead.type";
@@ -50,94 +44,138 @@ export function LeadFilters({
     search !== "" || status !== "" || priority !== "" || source !== "";
 
   return (
-    <div className="flex flex-col sm:flex-row gap-3">
-      {/* Search */}
-      <div className="relative flex-1 sm:max-w-xs">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-        <Input
-          placeholder="Search leads..."
-          value={localSearch}
-          onChange={(e) => setLocalSearch(e.target.value)}
-          className="pl-9 h-9 border-slate-200 bg-white"
-        />
+    <div className="space-y-6">
+      {/* Search Input Row */}
+      <div className="flex flex-col sm:flex-row gap-3 justify-between items-start sm:items-center">
+        <div className="relative flex-1 w-full sm:max-w-xs">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+          <Input
+            placeholder="Search leads..."
+            value={localSearch}
+            onChange={(e) => setLocalSearch(e.target.value)}
+            className="pl-9 h-9 border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100"
+          />
+        </div>
+
+        {hasActiveFilters && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onClearFilters}
+            className="h-9 px-3 text-slate-500 hover:text-slate-900 dark:hover:text-slate-100 gap-1.5"
+          >
+            <X className="h-4 w-4" />
+            Clear All Filters
+          </Button>
+        )}
       </div>
 
-      {/* Status Filter */}
-      <div className="w-full sm:w-[160px]">
-        <Select
-          value={status || "all"}
-          onValueChange={(value) =>
-            onFilterChange("status", value === "all" ? "" : value)
-          }
-        >
-          <SelectTrigger className="h-9 border-slate-200 bg-white">
-            <SelectValue placeholder="Status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Statuses</SelectItem>
-            {statuses?.map((s) => (
-              <SelectItem key={s._id} value={s._id}>
-                {s.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+      <div className="space-y-4 pt-4 border-t border-slate-100 dark:border-slate-800/80">
+        {/* Status Filter Tabs */}
+        <div className="flex flex-col md:flex-row md:items-start gap-2 md:gap-4">
+          <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 shrink-0 min-w-[70px] mt-2">
+            Status:
+          </span>
+          <Tabs
+            value={status || "all"}
+            onValueChange={(val) =>
+              onFilterChange("status", val === "all" ? "" : val)
+            }
+            className="w-full"
+          >
+            <TabsList className="flex flex-wrap h-auto gap-1.5 bg-transparent p-0 justify-start">
+              <TabsTrigger
+                value="all"
+                className="px-3 py-1 h-8 text-xs border border-slate-200 dark:border-slate-800/80 bg-white dark:bg-slate-900/20 rounded-lg data-[state=active]:bg-teal-600 data-[state=active]:text-white dark:data-[state=active]:bg-teal-600 hover:bg-slate-100 dark:hover:bg-slate-800/50 transition-colors cursor-pointer"
+              >
+                All Statuses
+              </TabsTrigger>
+              {statuses?.map((s) => (
+                <TabsTrigger
+                  key={s._id}
+                  value={s._id}
+                  className="px-3 py-1 h-8 text-xs border border-slate-200 dark:border-slate-800/80 bg-white dark:bg-slate-900/20 rounded-lg data-[state=active]:bg-teal-600 data-[state=active]:text-white dark:data-[state=active]:bg-teal-600 hover:bg-slate-100 dark:hover:bg-slate-800/50 transition-colors cursor-pointer"
+                >
+                  {s.name}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
+        </div>
 
-      {/* Priority Filter */}
-      <div className="w-full sm:w-[140px]">
-        <Select
-          value={priority || "all"}
-          onValueChange={(value) =>
-            onFilterChange("priority", value === "all" ? "" : value)
-          }
-        >
-          <SelectTrigger className="h-9 border-slate-200 bg-white">
-            <SelectValue placeholder="Priority" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Priorities</SelectItem>
-            <SelectItem value="High">High</SelectItem>
-            <SelectItem value="Medium">Medium</SelectItem>
-            <SelectItem value="Low">Low</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
+        {/* Priority Filter Tabs */}
+        <div className="flex flex-col md:flex-row md:items-start gap-2 md:gap-4">
+          <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 shrink-0 min-w-[70px] mt-2">
+            Priority:
+          </span>
+          <Tabs
+            value={priority || "all"}
+            onValueChange={(val) =>
+              onFilterChange("priority", val === "all" ? "" : val)
+            }
+            className="w-full"
+          >
+            <TabsList className="flex flex-wrap h-auto gap-1.5 bg-transparent p-0 justify-start">
+              <TabsTrigger
+                value="all"
+                className="px-3 py-1 h-8 text-xs border border-slate-200 dark:border-slate-800/80 bg-white dark:bg-slate-900/20 rounded-lg data-[state=active]:bg-teal-600 data-[state=active]:text-white dark:data-[state=active]:bg-teal-600 hover:bg-slate-100 dark:hover:bg-slate-800/50 transition-colors cursor-pointer"
+              >
+                All Priorities
+              </TabsTrigger>
+              <TabsTrigger
+                value="High"
+                className="px-3 py-1 h-8 text-xs border border-slate-200 dark:border-slate-800/80 bg-white dark:bg-slate-900/20 rounded-lg data-[state=active]:bg-red-600 data-[state=active]:text-white dark:data-[state=active]:bg-red-600 hover:bg-slate-100 dark:hover:bg-slate-800/50 transition-colors cursor-pointer"
+              >
+                High
+              </TabsTrigger>
+              <TabsTrigger
+                value="Medium"
+                className="px-3 py-1 h-8 text-xs border border-slate-200 dark:border-slate-800/80 bg-white dark:bg-slate-900/20 rounded-lg data-[state=active]:bg-amber-600 data-[state=active]:text-white dark:data-[state=active]:bg-amber-600 hover:bg-slate-100 dark:hover:bg-slate-800/50 transition-colors cursor-pointer"
+              >
+                Medium
+              </TabsTrigger>
+              <TabsTrigger
+                value="Low"
+                className="px-3 py-1 h-8 text-xs border border-slate-200 dark:border-slate-800/80 bg-white dark:bg-slate-900/20 rounded-lg data-[state=active]:bg-blue-600 data-[state=active]:text-white dark:data-[state=active]:bg-blue-600 hover:bg-slate-100 dark:hover:bg-slate-800/50 transition-colors cursor-pointer"
+              >
+                Low
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+        </div>
 
-      {/* Source Filter */}
-      <div className="w-full sm:w-[160px]">
-        <Select
-          value={source || "all"}
-          onValueChange={(value) =>
-            onFilterChange("source", value === "all" ? "" : value)
-          }
-        >
-          <SelectTrigger className="h-9 border-slate-200 bg-white">
-            <SelectValue placeholder="Source" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Sources</SelectItem>
-            {sources?.map((s) => (
-              <SelectItem key={s._id} value={s._id}>
-                {s.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        {/* Source Filter Tabs */}
+        <div className="flex flex-col md:flex-row md:items-start gap-2 md:gap-4">
+          <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 shrink-0 min-w-[70px] mt-2">
+            Source:
+          </span>
+          <Tabs
+            value={source || "all"}
+            onValueChange={(val) =>
+              onFilterChange("source", val === "all" ? "" : val)
+            }
+            className="w-full"
+          >
+            <TabsList className="flex flex-wrap h-auto gap-1.5 bg-transparent p-0 justify-start">
+              <TabsTrigger
+                value="all"
+                className="px-3 py-1 h-8 text-xs border border-slate-200 dark:border-slate-800/80 bg-white dark:bg-slate-900/20 rounded-lg data-[state=active]:bg-teal-600 data-[state=active]:text-white dark:data-[state=active]:bg-teal-600 hover:bg-slate-100 dark:hover:bg-slate-800/50 transition-colors cursor-pointer"
+              >
+                All Sources
+              </TabsTrigger>
+              {sources?.map((s) => (
+                <TabsTrigger
+                  key={s._id}
+                  value={s._id}
+                  className="px-3 py-1 h-8 text-xs border border-slate-200 dark:border-slate-800/80 bg-white dark:bg-slate-900/20 rounded-lg data-[state=active]:bg-teal-600 data-[state=active]:text-white dark:data-[state=active]:bg-teal-600 hover:bg-slate-100 dark:hover:bg-slate-800/50 transition-colors cursor-pointer"
+                >
+                  {s.name}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
+        </div>
       </div>
-
-      {/* Clear Filters */}
-      {hasActiveFilters && (
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={onClearFilters}
-          className="h-9 px-2.5 text-slate-500 hover:text-slate-900"
-        >
-          <X className="h-4 w-4" />
-          Clear
-        </Button>
-      )}
     </div>
   );
 }

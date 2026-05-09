@@ -1,316 +1,341 @@
-"use client";
+'use client';
 
-import { useState, useMemo, Suspense } from "react";
-import { useRouter, usePathname, useSearchParams } from "next/navigation";
+import { useState, useMemo, Suspense } from 'react';
+import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import {
-  useGetLeadsQuery,
-  useCreateLeadMutation,
-  useUpdateLeadMutation,
-} from "@/redux/features/lead/leadApi";
-import { useGetLeadSettingsQuery } from "@/redux/features/lead/leadSettingApi";
+    useGetLeadsQuery,
+    useCreateLeadMutation,
+    useUpdateLeadMutation,
+} from '@/redux/features/lead/leadApi';
+import { useGetLeadSettingsQuery } from '@/redux/features/lead/leadSettingApi';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Plus, Loader, FileDown, Settings } from "lucide-react";
-import { toast } from "sonner";
-import { LeadForm, type LeadFormValues } from "@/components/lead/LeadForm";
-import { LeadSettingsDialog } from "@/components/lead/LeadSettingsDialog";
-import { LeadStats } from "@/components/lead/LeadStats";
-import { LeadFilters } from "@/components/lead/LeadFilters";
-import { LeadTable } from "@/components/lead/LeadTable";
-import { LeadPagination } from "@/components/lead/LeadPagination";
-import { Lead } from "@/types/lead.type";
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import {
+    Card,
+    CardContent,
+    CardFooter,
+    CardHeader,
+} from '@/components/ui/card';
+import { Plus, Loader, FileDown, Settings } from 'lucide-react';
+import { toast } from 'sonner';
+import { LeadForm, type LeadFormValues } from '@/components/lead/LeadForm';
+import { LeadSettingsDialog } from '@/components/lead/LeadSettingsDialog';
+import { LeadStats } from '@/components/lead/LeadStats';
+import { LeadFilters } from '@/components/lead/LeadFilters';
+import { LeadTable } from '@/components/lead/LeadTable';
+import { LeadPagination } from '@/components/lead/LeadPagination';
+import { Lead } from '@/types/lead.type';
 
 export default function LeadsPage() {
-  return (
-    <Suspense
-      fallback={
-        <div className="flex h-[400px] items-center justify-center">
-          <Loader className="h-8 w-8 animate-spin text-teal-600" />
-        </div>
-      }
-    >
-      <LeadsPageContent />
-    </Suspense>
-  );
+    return (
+        <Suspense
+            fallback={
+                <div className="flex h-[400px] items-center justify-center">
+                    <Loader className="h-8 w-8 animate-spin text-teal-600" />
+                </div>
+            }
+        >
+            <LeadsPageContent />
+        </Suspense>
+    );
 }
 
 function LeadsPageContent() {
-  const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
+    const router = useRouter();
+    const pathname = usePathname();
+    const searchParams = useSearchParams();
 
-  // Filter states from URL search params
-  const page = Number(searchParams.get("page")) || 1;
-  const limit = Number(searchParams.get("limit")) || 20;
-  const search = searchParams.get("search") || "";
-  const status = searchParams.get("status") || "";
-  const priority = searchParams.get("priority") || "";
-  const source = searchParams.get("source") || "";
+    // Filter states from URL search params
+    const page = Number(searchParams.get('page')) || 1;
+    const limit = Number(searchParams.get('limit')) || 20;
+    const search = searchParams.get('search') || '';
+    const status = searchParams.get('status') || '';
+    const priority = searchParams.get('priority') || '';
+    const source = searchParams.get('source') || '';
 
-  // Helper to update filters in URL
-  const updateFilters = (updates: Record<string, string | number | undefined>) => {
-    const params = new URLSearchParams(searchParams.toString());
-    Object.entries(updates).forEach(([key, value]) => {
-      if (value === undefined || value === "") {
-        params.delete(key);
-      } else {
-        params.set(key, String(value));
-      }
-    });
-    router.push(`${pathname}?${params.toString()}`, { scroll: false });
-  };
-
-  // Dialog states
-  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
-
-  // Queries
-  const { data: settingsData } = useGetLeadSettingsQuery(undefined);
-  const statuses = useMemo(
-    () => settingsData?.data?.filter((s: any) => s.type === "STATUS") || [],
-    [settingsData]
-  );
-  const sources = useMemo(
-    () => settingsData?.data?.filter((s: any) => s.type === "SOURCE") || [],
-    [settingsData]
-  );
-
-  const {
-    data: leadsData,
-    isLoading,
-    isFetching,
-  } = useGetLeadsQuery({
-    page,
-    limit,
-    search: search || undefined,
-    status: status || undefined,
-    priority: priority || undefined,
-    source: source || undefined,
-  });
-
-  const [createLead, { isLoading: isCreating }] = useCreateLeadMutation();
-  const [updateLead, { isLoading: isUpdating }] = useUpdateLeadMutation();
-
-  const [serverErrors, setServerErrors] = useState<Record<string, string[]> | undefined>();
-
-  const leads = useMemo(() => leadsData?.data?.leads || [], [leadsData]);
-  const pagination = leadsData?.data || {
-    page: 1,
-    limit: 20,
-    total: 0,
-    totalPages: 1,
-  };
-
-  const stats = useMemo(() => {
-    return {
-      total: pagination.total,
-      highPriority: leads.filter((l: Lead) => l.priority === "High").length,
-      converted: leads.filter((l: Lead) => l.isConverted).length,
-      active: leads.filter((l: Lead) => !l.isConverted).length,
+    // Helper to update filters in URL
+    const updateFilters = (
+        updates: Record<string, string | number | undefined>,
+    ) => {
+        const params = new URLSearchParams(searchParams.toString());
+        Object.entries(updates).forEach(([key, value]) => {
+            if (value === undefined || value === '') {
+                params.delete(key);
+            } else {
+                params.set(key, String(value));
+            }
+        });
+        router.push(`${pathname}?${params.toString()}`, { scroll: false });
     };
-  }, [leads, pagination.total]);
 
-  const handleFilterChange = (key: string, value: string | number) => {
-    updateFilters({ [key]: value, page: 1 });
-  };
+    // Dialog states
+    const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+    const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+    const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+    const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
 
-  const handleClearFilters = () => {
-    router.push(pathname);
-  };
+    // Queries
+    const { data: settingsData } = useGetLeadSettingsQuery(undefined);
+    const statuses = useMemo(
+        () => settingsData?.data?.filter((s: any) => s.type === 'STATUS') || [],
+        [settingsData],
+    );
+    const sources = useMemo(
+        () => settingsData?.data?.filter((s: any) => s.type === 'SOURCE') || [],
+        [settingsData],
+    );
 
-  const handleAddLead = async (data: LeadFormValues) => {
-    try {
-      setServerErrors(undefined);
-      await createLead(data).unwrap();
-      toast.success("Lead created successfully");
-      setIsAddDialogOpen(false);
-    } catch (error: any) {
-      setServerErrors(error?.data?.errors || error?.errors);
-      toast.error(error?.data?.message || "Failed to create lead");
-    }
-  };
+    const {
+        data: leadsData,
+        isLoading,
+        isFetching,
+    } = useGetLeadsQuery({
+        page,
+        limit,
+        search: search || undefined,
+        status: status || undefined,
+        priority: priority || undefined,
+        source: source || undefined,
+    });
 
-  const handleUpdateLead = async (data: LeadFormValues) => {
-    if (!selectedLead) return;
-    try {
-      setServerErrors(undefined);
-      await updateLead({ id: selectedLead._id, data }).unwrap();
-      toast.success("Lead updated successfully");
-      setIsEditDialogOpen(false);
-    } catch (error: any) {
-      setServerErrors(error?.data?.errors || error?.errors);
-      toast.error(error?.data?.message || "Failed to update lead");
-    }
-  };
+    const [createLead, { isLoading: isCreating }] = useCreateLeadMutation();
+    const [updateLead, { isLoading: isUpdating }] = useUpdateLeadMutation();
 
-  const openEditDialog = (lead: Lead) => {
-    setSelectedLead(lead);
-    setServerErrors(undefined);
-    setIsEditDialogOpen(true);
-  };
+    const [serverErrors, setServerErrors] = useState<
+        Record<string, string[]> | undefined
+    >();
 
-  const handleViewLead = (lead: Lead) => {
-    const currentUrl = `${pathname}?${searchParams.toString()}`;
-    router.push(`/leads/${lead._id}?callbackUrl=${encodeURIComponent(currentUrl)}`);
-  };
+    const leads = useMemo(() => leadsData?.data?.leads || [], [leadsData]);
+    const pagination = leadsData?.data || {
+        page: 1,
+        limit: 20,
+        total: 0,
+        totalPages: 1,
+    };
 
-  return (
-    <div className="w-full space-y-8 bg-slate-50/50 dark:bg-transparent min-h-screen pb-10">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
-            Leads
-          </h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-2">
-            Manage your leads and prospects pipeline
-            {isFetching && (
-              <Loader className="h-3 w-3 animate-spin text-teal-600" />
-            )}
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          <Button
-            variant="outline"
-            className="bg-white dark:bg-slate-900"
-            onClick={() => setIsSettingsOpen(true)}
-          >
-            <Settings className="h-4 w-4 text-slate-500 dark:text-slate-400" />
-            Settings
-          </Button>
-          <Button
-            variant="outline"
-            className="bg-white dark:bg-slate-900"
-            onClick={() => toast.info("Export feature coming soon")}
-          >
-            <FileDown className="h-4 w-4 text-slate-500 dark:text-slate-400" />
-            Export
-          </Button>
-          <Button
-            onClick={() => {
-              setServerErrors(undefined);
-              setIsAddDialogOpen(true);
-            }}
-            className="bg-teal-600 hover:bg-teal-700 text-white shadow-sm"
-          >
-            <Plus className="h-4 w-4" /> Add Lead
-          </Button>
-        </div>
-      </div>
+    const stats = useMemo(() => {
+        return {
+            total: pagination.total,
+            highPriority: leads.filter((l: Lead) => l.priority === 'High')
+                .length,
+            converted: leads.filter((l: Lead) => l.isConverted).length,
+            active: leads.filter((l: Lead) => !l.isConverted).length,
+        };
+    }, [leads, pagination.total]);
 
-      <LeadStats
-        total={stats.total}
-        highPriority={stats.highPriority}
-        converted={stats.converted}
-        active={stats.active}
-        isLoading={isLoading}
-      />
+    const handleFilterChange = (key: string, value: string | number) => {
+        updateFilters({ [key]: value, page: 1 });
+    };
 
-      <Card className="border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/40">
-        <div className="p-4 border-b border-slate-100 dark:border-slate-800/80">
-          <LeadFilters
-            search={search}
-            status={status}
-            priority={priority}
-            source={source}
-            onFilterChange={handleFilterChange}
-            onClearFilters={handleClearFilters}
-            statuses={statuses}
-            sources={sources}
-          />
-        </div>
+    const handleClearFilters = () => {
+        router.push(pathname);
+    };
 
-        <LeadTable
-          leads={leads}
-          isLoading={isLoading}
-          onEdit={openEditDialog}
-          onView={handleViewLead}
-        />
+    const handleAddLead = async (data: LeadFormValues) => {
+        try {
+            setServerErrors(undefined);
+            await createLead(data).unwrap();
+            toast.success('Lead created successfully');
+            setIsAddDialogOpen(false);
+        } catch (error: any) {
+            setServerErrors(error?.data?.errors || error?.errors);
+            toast.error(error?.data?.message || 'Failed to create lead');
+        }
+    };
 
-        <div className="p-4 border-t border-slate-100 dark:border-slate-800/80 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="text-sm text-slate-500 dark:text-slate-400">
-            Showing <span className="font-medium text-slate-900 dark:text-slate-100">{leads.length}</span> of <span className="font-medium text-slate-900 dark:text-slate-100">{pagination.total}</span> leads
-          </div>
-          <LeadPagination
-            currentPage={page}
-            totalPages={pagination.totalPages}
-            onPageChange={(p) => updateFilters({ page: p })}
-            isLoading={isLoading}
-          />
-        </div>
-      </Card>
+    const handleUpdateLead = async (data: LeadFormValues) => {
+        if (!selectedLead) return;
+        try {
+            setServerErrors(undefined);
+            await updateLead({ id: selectedLead._id, data }).unwrap();
+            toast.success('Lead updated successfully');
+            setIsEditDialogOpen(false);
+        } catch (error: any) {
+            setServerErrors(error?.data?.errors || error?.errors);
+            toast.error(error?.data?.message || 'Failed to update lead');
+        }
+    };
 
-      <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-        <DialogContent className="max-w-3xl h-[90vh] max-h-[90vh] flex flex-col p-0 overflow-hidden gap-0 bg-white dark:bg-slate-900">
-          <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 shrink-0">
-            <DialogHeader>
-              <DialogTitle className="text-xl font-semibold text-slate-900 dark:text-slate-100">
-                Add New Lead
-              </DialogTitle>
-              <DialogDescription className="text-slate-500 dark:text-slate-400">
-                Create a new prospect to begin tracking their journey.
-              </DialogDescription>
-            </DialogHeader>
-          </div>
-          <LeadForm
-            onSubmit={handleAddLead}
-            isSubmitting={isCreating}
-            submitLabel="Create Lead"
-            onCancel={() => setIsAddDialogOpen(false)}
-            serverErrors={serverErrors}
-            statuses={statuses}
-            sources={sources}
-          />
-        </DialogContent>
-      </Dialog>
+    const openEditDialog = (lead: Lead) => {
+        setSelectedLead(lead);
+        setServerErrors(undefined);
+        setIsEditDialogOpen(true);
+    };
 
-      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="max-w-3xl h-[90vh] max-h-[90vh] flex flex-col p-0 overflow-hidden gap-0 bg-white dark:bg-slate-900">
-          <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 shrink-0">
-            <DialogHeader>
-              <DialogTitle className="text-xl font-semibold text-slate-900 dark:text-slate-100">
-                Edit Lead
-              </DialogTitle>
-              <DialogDescription className="text-slate-500 dark:text-slate-400">
-                Update the prospect's basic information and pipeline status.
-              </DialogDescription>
-            </DialogHeader>
-          </div>
-          {selectedLead && (
-            <LeadForm
-              key={selectedLead._id}
-              defaultValues={{
-                name: selectedLead.name,
-                phone: selectedLead.phone,
-                email: selectedLead.email,
-                website: selectedLead.website,
-                status: selectedLead.status?._id,
-                priority: selectedLead.priority,
-                source: selectedLead.source?._id,
-                currentNotes: selectedLead.currentNotes,
-              }}
-              onSubmit={handleUpdateLead}
-              isSubmitting={isUpdating}
-              submitLabel="Save Changes"
-              onCancel={() => setIsEditDialogOpen(false)}
-              serverErrors={serverErrors}
-              isEditMode
-              statuses={statuses}
-              sources={sources}
+    const handleViewLead = (lead: Lead) => {
+        const currentUrl = `${pathname}?${searchParams.toString()}`;
+        router.push(
+            `/leads/${lead._id}?callbackUrl=${encodeURIComponent(currentUrl)}`,
+        );
+    };
+
+    return (
+        <div className="w-full space-y-8 bg-slate-50/50 dark:bg-transparent min-h-screen pb-10">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <div>
+                    <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
+                        Leads
+                    </h1>
+                    <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-2">
+                        Manage your leads and prospects pipeline
+                        {isFetching && (
+                            <Loader className="h-3 w-3 animate-spin text-teal-600" />
+                        )}
+                    </p>
+                </div>
+                <div className="flex items-center gap-3">
+                    <Button
+                        variant="outline"
+                        className="bg-white dark:bg-slate-900"
+                        onClick={() => setIsSettingsOpen(true)}
+                    >
+                        <Settings className="h-4 w-4 text-slate-500 dark:text-slate-400" />
+                        Settings
+                    </Button>
+                    <Button
+                        variant="outline"
+                        className="bg-white dark:bg-slate-900"
+                        onClick={() => toast.info('Export feature coming soon')}
+                    >
+                        <FileDown className="h-4 w-4 text-slate-500 dark:text-slate-400" />
+                        Export
+                    </Button>
+                    <Button
+                        onClick={() => {
+                            setServerErrors(undefined);
+                            setIsAddDialogOpen(true);
+                        }}
+                        className="bg-teal-600 hover:bg-teal-700 text-white shadow-sm"
+                    >
+                        <Plus className="h-4 w-4" /> Add Lead
+                    </Button>
+                </div>
+            </div>
+
+            <LeadStats
+                total={stats.total}
+                highPriority={stats.highPriority}
+                converted={stats.converted}
+                active={stats.active}
+                isLoading={isLoading}
             />
-          )}
-        </DialogContent>
-      </Dialog>
 
-      <LeadSettingsDialog open={isSettingsOpen} onOpenChange={setIsSettingsOpen} />
-    </div>
-  );
+            <Card>
+                <CardHeader>
+                    <LeadFilters
+                        search={search}
+                        status={status}
+                        priority={priority}
+                        source={source}
+                        onFilterChange={handleFilterChange}
+                        onClearFilters={handleClearFilters}
+                        statuses={statuses}
+                        sources={sources}
+                    />
+                </CardHeader>
+                <CardContent className="px-0">
+                    <LeadTable
+                        leads={leads}
+                        isLoading={isLoading}
+                        onEdit={openEditDialog}
+                        onView={handleViewLead}
+                    />
+                </CardContent>
+                <CardFooter className="w-full flex items-center justify-between">
+                    <div className="text-sm text-slate-500 dark:text-slate-400">
+                        Showing{' '}
+                        <span className="font-medium text-slate-900 dark:text-slate-100">
+                            {leads.length}
+                        </span>{' '}
+                        of{' '}
+                        <span className="font-medium text-slate-900 dark:text-slate-100">
+                            {pagination.total}
+                        </span>{' '}
+                        leads
+                    </div>
+                    <LeadPagination
+                        currentPage={page}
+                        totalPages={pagination.totalPages}
+                        onPageChange={(p) => updateFilters({ page: p })}
+                        isLoading={isLoading}
+                    />
+                </CardFooter>
+            </Card>
+
+            <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+                <DialogContent className="max-w-3xl h-[90vh] max-h-[90vh] flex flex-col p-0 overflow-hidden gap-0 bg-white dark:bg-slate-900">
+                    <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 shrink-0">
+                        <DialogHeader>
+                            <DialogTitle className="text-xl font-semibold text-slate-900 dark:text-slate-100">
+                                Add New Lead
+                            </DialogTitle>
+                            <DialogDescription className="text-slate-500 dark:text-slate-400">
+                                Create a new prospect to begin tracking their
+                                journey.
+                            </DialogDescription>
+                        </DialogHeader>
+                    </div>
+                    <LeadForm
+                        onSubmit={handleAddLead}
+                        isSubmitting={isCreating}
+                        submitLabel="Create Lead"
+                        onCancel={() => setIsAddDialogOpen(false)}
+                        serverErrors={serverErrors}
+                        statuses={statuses}
+                        sources={sources}
+                    />
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+                <DialogContent className="max-w-3xl h-[90vh] max-h-[90vh] flex flex-col p-0 overflow-hidden gap-0 bg-white dark:bg-slate-900">
+                    <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 shrink-0">
+                        <DialogHeader>
+                            <DialogTitle className="text-xl font-semibold text-slate-900 dark:text-slate-100">
+                                Edit Lead
+                            </DialogTitle>
+                            <DialogDescription className="text-slate-500 dark:text-slate-400">
+                                Update the prospect's basic information and
+                                pipeline status.
+                            </DialogDescription>
+                        </DialogHeader>
+                    </div>
+                    {selectedLead && (
+                        <LeadForm
+                            key={selectedLead._id}
+                            defaultValues={{
+                                name: selectedLead.name,
+                                phone: selectedLead.phone,
+                                email: selectedLead.email,
+                                website: selectedLead.website,
+                                status: selectedLead.status?._id,
+                                priority: selectedLead.priority,
+                                source: selectedLead.source?._id,
+                                currentNotes: selectedLead.currentNotes,
+                            }}
+                            onSubmit={handleUpdateLead}
+                            isSubmitting={isUpdating}
+                            submitLabel="Save Changes"
+                            onCancel={() => setIsEditDialogOpen(false)}
+                            serverErrors={serverErrors}
+                            isEditMode
+                            statuses={statuses}
+                            sources={sources}
+                        />
+                    )}
+                </DialogContent>
+            </Dialog>
+
+            <LeadSettingsDialog
+                open={isSettingsOpen}
+                onOpenChange={setIsSettingsOpen}
+            />
+        </div>
+    );
 }
