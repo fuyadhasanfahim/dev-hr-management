@@ -69,6 +69,7 @@ import {
     CheckCircle2,
     Filter,
     Copy,
+    Eye,
 } from 'lucide-react';
 import {
     useCreateMeetingMutation,
@@ -451,6 +452,7 @@ function MeetingRow({ meeting, clients }: { meeting: Meeting; clients: any[] }) 
 
     const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+    const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
 
     const client = typeof meeting.clientId === 'object' ? meeting.clientId : null;
     const config = statusConfig[meeting.status] || statusConfig.scheduled;
@@ -627,6 +629,170 @@ function MeetingRow({ meeting, clients }: { meeting: Meeting; clients: any[] }) 
             </TableCell>
             <TableCell className="py-3.5 text-right">
                 <div className="flex items-center justify-end gap-1.5 opacity-90 group-hover:opacity-100 transition-opacity">
+                    {/* View Details button and Dialog */}
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-slate-500 hover:text-teal-600 hover:bg-teal-50"
+                        onClick={() => setIsViewDialogOpen(true)}
+                        title="View Details"
+                    >
+                        <Eye className="h-4 w-4" />
+                    </Button>
+
+                    {/* View Meeting Dialog */}
+                    <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
+                        <DialogContent className="max-w-lg bg-white p-6 rounded-lg shadow-xl border border-slate-200">
+                            <DialogHeader className="border-b pb-4 border-slate-100">
+                                <DialogTitle className="text-xl font-bold text-slate-800 flex items-center gap-2">
+                                    <Video className="h-5 w-5 text-teal-600" />
+                                    Meeting Details
+                                </DialogTitle>
+                                <DialogDescription className="text-slate-500">
+                                    Full information about this scheduled meeting.
+                                </DialogDescription>
+                            </DialogHeader>
+
+                            <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto pr-1">
+                                <div className="grid grid-cols-3 gap-2 border-b pb-3 border-slate-100">
+                                    <span className="text-sm font-semibold text-slate-500">Title:</span>
+                                    <span className="text-sm text-slate-800 col-span-2 font-medium">{meeting.meetingTitle}</span>
+                                </div>
+
+                                <div className="grid grid-cols-3 gap-2 border-b pb-3 border-slate-100">
+                                    <span className="text-sm font-semibold text-slate-500">Scheduled At:</span>
+                                    <span className="text-sm text-slate-800 col-span-2 font-medium">
+                                        {new Date(meeting.scheduledAt).toLocaleString('en-US', {
+                                            weekday: 'long',
+                                            year: 'numeric',
+                                            month: 'long',
+                                            day: 'numeric',
+                                            hour: '2-digit',
+                                            minute: '2-digit',
+                                            timeZone: 'Asia/Dhaka',
+                                        })}
+                                    </span>
+                                </div>
+
+                                <div className="grid grid-cols-3 gap-2 border-b pb-3 border-slate-100">
+                                    <span className="text-sm font-semibold text-slate-500">Duration:</span>
+                                    <span className="text-sm text-slate-800 col-span-2 font-medium">{meeting.durationMinutes} minutes</span>
+                                </div>
+
+                                <div className="grid grid-cols-3 gap-2 border-b pb-3 border-slate-100">
+                                    <span className="text-sm font-semibold text-slate-500">Status:</span>
+                                    <span className="col-span-2">
+                                        <Badge variant="outline" className={`font-medium ${config.className}`}>
+                                            {config.label}
+                                        </Badge>
+                                    </span>
+                                </div>
+
+                                {meeting.googleMeetLink && (
+                                    <div className="grid grid-cols-3 gap-2 border-b pb-3 border-slate-100">
+                                        <span className="text-sm font-semibold text-slate-500">Meet Link:</span>
+                                        <div className="col-span-2 flex items-center gap-2">
+                                            <a
+                                                href={meeting.googleMeetLink}
+                                                target="_blank"
+                                                rel="noreferrer"
+                                                className="text-sm text-teal-600 hover:underline font-medium break-all flex items-center gap-1"
+                                            >
+                                                {meeting.googleMeetLink}
+                                                <ExternalLink className="h-3 w-3" />
+                                            </a>
+                                        </div>
+                                    </div>
+                                )}
+
+                                <div className="grid grid-cols-3 gap-2 border-b pb-3 border-slate-100">
+                                    <span className="text-sm font-semibold text-slate-500">Client:</span>
+                                    <span className="text-sm text-slate-800 col-span-2 font-medium">
+                                        {client?.name || 'No Client (Guest Meeting)'}
+                                    </span>
+                                </div>
+
+                                {client && (
+                                    <>
+                                        {client.emails && client.emails.length > 0 && (
+                                            <div className="grid grid-cols-3 gap-2 border-b pb-3 border-slate-100">
+                                                <span className="text-sm font-semibold text-slate-500">Client Emails:</span>
+                                                <div className="col-span-2 flex flex-wrap gap-1">
+                                                    {client.emails.map((email: string) => (
+                                                        <Badge key={email} variant="secondary" className="bg-slate-100 text-slate-700">
+                                                            {email}
+                                                        </Badge>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {client.phone && (
+                                            <div className="grid grid-cols-3 gap-2 border-b pb-3 border-slate-100">
+                                                <span className="text-sm font-semibold text-slate-500">Client Phone:</span>
+                                                <span className="text-sm text-slate-800 col-span-2 font-medium">
+                                                    <Badge variant="secondary" className="bg-slate-100 text-slate-700">
+                                                        {client.phone}
+                                                    </Badge>
+                                                </span>
+                                            </div>
+                                        )}
+                                    </>
+                                )}
+
+                                {meeting.attendeeEmails && meeting.attendeeEmails.length > 0 && (
+                                    <div className="grid grid-cols-3 gap-2 border-b pb-3 border-slate-100">
+                                        <span className="text-sm font-semibold text-slate-500">Attendees (Email):</span>
+                                        <div className="col-span-2 flex flex-wrap gap-1">
+                                            {meeting.attendeeEmails.map((email: string) => (
+                                                <Badge key={email} variant="secondary" className="bg-slate-100 text-slate-700">
+                                                    {email}
+                                                </Badge>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {meeting.attendeePhones && meeting.attendeePhones.length > 0 && (
+                                    <div className="grid grid-cols-3 gap-2 border-b pb-3 border-slate-100">
+                                        <span className="text-sm font-semibold text-slate-500">Attendees (Phone):</span>
+                                        <div className="col-span-2 flex flex-wrap gap-1">
+                                            {meeting.attendeePhones.map((phone: string) => (
+                                                <Badge key={phone} variant="secondary" className="bg-slate-100 text-slate-700">
+                                                    {phone}
+                                                </Badge>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {meeting.description && (
+                                    <div className="grid grid-cols-3 gap-2 border-b pb-3 border-slate-100">
+                                        <span className="text-sm font-semibold text-slate-500">Description:</span>
+                                        <span className="text-sm text-slate-700 col-span-2 break-words">{meeting.description}</span>
+                                    </div>
+                                )}
+
+                                {meeting.notes && (
+                                    <div className="grid grid-cols-3 gap-2">
+                                        <span className="text-sm font-semibold text-slate-500">Internal Notes:</span>
+                                        <span className="text-sm text-slate-700 col-span-2 break-words bg-slate-50 p-2 rounded border border-slate-100">{meeting.notes}</span>
+                                    </div>
+                                )}
+                            </div>
+
+                            <DialogFooter className="border-t pt-4 border-slate-100">
+                                <Button
+                                    type="button"
+                                    onClick={() => setIsViewDialogOpen(false)}
+                                    className="bg-slate-800 hover:bg-slate-900 text-white"
+                                >
+                                    Close
+                                </Button>
+                            </DialogFooter>
+                        </DialogContent>
+                    </Dialog>
+
                     {/* Edit button and Dialog */}
                     <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
                         <DialogTrigger asChild>
