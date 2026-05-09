@@ -82,6 +82,20 @@ async function fetchAdminEmails(): Promise<string[]> {
 }
 
 /**
+ * Helper to fetch admin phones.
+ */
+async function fetchAdminPhones(): Promise<string[]> {
+    try {
+        const { default: UserCollection } = await import('../models/user.model.js');
+        const admins = await UserCollection.find({ role: { $in: ['admin', 'super_admin'] } }).toArray();
+        return admins.map((u: any) => u.phone || u.phoneNumber).filter(Boolean);
+    } catch (err: any) {
+        console.error('[Meeting] Failed to fetch admin phones:', err.message);
+        return [];
+    }
+}
+
+/**
  * Creates a meeting, generates a Google Meet link via Calendar API,
  * and sends confirmation email (+ SMS for everyone with a phone).
  */
@@ -218,6 +232,21 @@ async function createMeeting(data: CreateMeetingData): Promise<IMeeting> {
         }
     }
 
+    // Send invite SMS to admins (if they have BD phones)
+    const adminPhones = await fetchAdminPhones();
+    for (const phone of adminPhones) {
+        const parsed = parseAndFormatPhone(phone);
+        if (parsed.isValid && parsed.country === 'BD') {
+            try {
+                const smsMsg = `Admin Alert: Meeting Scheduled: "${data.meetingTitle}"${client ? ` (Client: ${client.name})` : ''} on ${formattedDate} (${data.durationMinutes} mins). Join: ${googleMeetLink || ''} - WebBriks`;
+                await sendBulkSMS({ number: parsed.formatted, message: smsMsg });
+                console.log('[Meeting] Admin SMS confirmation sent to BD phone:', parsed.formatted);
+            } catch (err: any) {
+                console.error('[Meeting] Admin SMS confirmation failed:', err.message);
+            }
+        }
+    }
+
     return meeting;
 }
 
@@ -348,6 +377,20 @@ async function cancelMeeting(id: string): Promise<IMeeting | null> {
         }
     }
 
+    // SMS cancellation only for Bangladesh adminPhones
+    const adminPhonesCancel = await fetchAdminPhones();
+    for (const phone of adminPhonesCancel) {
+        const parsed = parseAndFormatPhone(phone);
+        if (parsed.isValid && parsed.country === 'BD') {
+            try {
+                const smsMsg = `❌ Admin Alert: Meeting Cancelled\n\nMeeting "${meeting.meetingTitle}" scheduled for ${formattedDate} has been cancelled.\n\n— Web Briks LLC`;
+                await sendBulkSMS({ number: parsed.formatted, message: smsMsg });
+            } catch (err: any) {
+                console.error('[Meeting] Admin SMS cancellation failed:', err.message);
+            }
+        }
+    }
+
     return meeting;
 }
 
@@ -452,6 +495,20 @@ async function updateMeeting(meetingId: string, data: Partial<CreateMeetingData>
         }
     }
 
+    // SMS only for Bangladesh adminPhones on update
+    const adminPhonesUpdate = await fetchAdminPhones();
+    for (const phone of adminPhonesUpdate) {
+        const parsed = parseAndFormatPhone(phone);
+        if (parsed.isValid && parsed.country === 'BD') {
+            try {
+                const smsMsg = `Admin Alert: Meeting Updated: "${meeting.meetingTitle}" has been rescheduled to ${formattedDate} (${meeting.durationMinutes} mins). Link: ${meeting.googleMeetLink || ''} - WebBriks`;
+                await sendBulkSMS({ number: parsed.formatted, message: smsMsg });
+            } catch (err: any) {
+                console.error('[Meeting] Admin SMS update failed:', err.message);
+            }
+        }
+    }
+
     return meeting;
 }
 
@@ -520,6 +577,20 @@ async function deleteMeeting(meetingId: string): Promise<IMeeting> {
                 await sendBulkSMS({ number: parsed.formatted, message: smsMsg });
             } catch (err: any) {
                 console.error('[Meeting] SMS deletion failed:', err.message);
+            }
+        }
+    }
+
+    // SMS deletion only for Bangladesh adminPhones
+    const adminPhonesDelete = await fetchAdminPhones();
+    for (const phone of adminPhonesDelete) {
+        const parsed = parseAndFormatPhone(phone);
+        if (parsed.isValid && parsed.country === 'BD') {
+            try {
+                const smsMsg = `❌ Admin Alert: Meeting Cancelled\n\nMeeting "${meeting.meetingTitle}" scheduled for ${formattedDate} has been cancelled.\n\n— Web Briks LLC`;
+                await sendBulkSMS({ number: parsed.formatted, message: smsMsg });
+            } catch (err: any) {
+                console.error('[Meeting] Admin SMS deletion failed:', err.message);
             }
         }
     }
@@ -609,6 +680,22 @@ async function processMeetingReminders(): Promise<{ reminded: number; smsSent: n
             }
         }
 
+        // 1d. SMS only for Bangladesh adminPhones (30m reminder)
+        const adminPhones30 = await fetchAdminPhones();
+        for (const phone of adminPhones30) {
+            const parsed = parseAndFormatPhone(phone);
+            if (parsed.isValid && parsed.country === 'BD') {
+                try {
+                    const smsMsg = `Admin Reminder: Meeting "${meeting.meetingTitle}"${client ? ` (Client: ${client.name})` : ''} on ${formattedDate} (${meeting.durationMinutes} mins). Join: ${meeting.googleMeetLink || ''} - WebBriks`;
+                    await sendBulkSMS({ number: parsed.formatted, message: smsMsg });
+                    meeting.smsSent = true;
+                    smsSentCount++;
+                } catch (err: any) {
+                    console.error('[Meeting] 30m Admin SMS reminder failed:', err.message);
+                }
+            }
+        }
+
         await meeting.save();
         reminded++;
     }
@@ -679,6 +766,22 @@ async function processMeetingReminders(): Promise<{ reminded: number; smsSent: n
                     smsSentCount++;
                 } catch (err: any) {
                     console.error('[Meeting] 5m SMS reminder failed:', err.message);
+                }
+            }
+        }
+
+        // 2d. SMS only for Bangladesh adminPhones (5m reminder)
+        const adminPhones5 = await fetchAdminPhones();
+        for (const phone of adminPhones5) {
+            const parsed = parseAndFormatPhone(phone);
+            if (parsed.isValid && parsed.country === 'BD') {
+                try {
+                    const smsMsg = `Admin Reminder: Meeting "${meeting.meetingTitle}"${client ? ` (Client: ${client.name})` : ''} starts in 5 minutes! Join: ${meeting.googleMeetLink || ''} - WebBriks`;
+                    await sendBulkSMS({ number: parsed.formatted, message: smsMsg });
+                    meeting.smsSent = true;
+                    smsSentCount++;
+                } catch (err: any) {
+                    console.error('[Meeting] 5m Admin SMS reminder failed:', err.message);
                 }
             }
         }
