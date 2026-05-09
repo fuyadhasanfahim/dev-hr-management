@@ -68,6 +68,7 @@ import {
     Trash2,
     CheckCircle2,
     Filter,
+    Copy,
 } from 'lucide-react';
 import {
     useCreateMeetingMutation,
@@ -902,6 +903,22 @@ function MeetingRow({ meeting, clients }: { meeting: Meeting; clients: any[] }) 
                             </AlertDialogFooter>
                         </AlertDialogContent>
                     </AlertDialog>
+
+                    {/* Copy Link Action */}
+                    {meeting.googleMeetLink && (
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-slate-500 hover:text-teal-600 hover:bg-teal-50"
+                            onClick={() => {
+                                navigator.clipboard.writeText(meeting.googleMeetLink || '');
+                                toast.success('Meeting link copied to clipboard!');
+                            }}
+                            title="Copy Meet Link"
+                        >
+                            <Copy className="h-4 w-4" />
+                        </Button>
+                    )}
 
                     {/* Cancel meeting action */}
                     {meeting.status === 'scheduled' && upcoming && (

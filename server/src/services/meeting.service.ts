@@ -8,6 +8,66 @@ import type { CreateMeetingData, MeetingQueryParams, IMeeting } from '../types/m
 import { Types } from 'mongoose';
 
 /**
+ * Helper to parse and format phone numbers with country detection.
+ */
+export function parseAndFormatPhone(phone: string): { isValid: boolean; country: string; formatted: string } {
+    const cleaned = phone.trim();
+    const digits = cleaned.replace(/\D/g, '');
+
+    if (!digits) {
+        return { isValid: false, country: 'UNKNOWN', formatted: '' };
+    }
+
+    // Bangladesh Phone detection
+    if (digits.length === 11 && digits.startsWith('01')) {
+        return {
+            isValid: true,
+            country: 'BD',
+            formatted: `+880${digits.substring(1)}`, // +8801XXXXXXXXX
+        };
+    }
+    if (digits.length === 13 && digits.startsWith('8801')) {
+        return {
+            isValid: true,
+            country: 'BD',
+            formatted: `+${digits}`, // +8801XXXXXXXXX
+        };
+    }
+
+    // US/Canada Phone detection
+    if (digits.length === 10) {
+        return {
+            isValid: true,
+            country: 'US',
+            formatted: `+1${digits}`,
+        };
+    }
+    if (digits.length === 11 && digits.startsWith('1')) {
+        return {
+            isValid: true,
+            country: 'US',
+            formatted: `+${digits}`,
+        };
+    }
+
+    // Other country code heuristic
+    if (cleaned.startsWith('+')) {
+        return {
+            isValid: digits.length >= 7 && digits.length <= 15,
+            country: 'OTHER',
+            formatted: `+${digits}`,
+        };
+    }
+
+    // Default fallback
+    return {
+        isValid: digits.length >= 7 && digits.length <= 15,
+        country: 'UNKNOWN',
+        formatted: `+${digits}`,
+    };
+}
+
+/**
  * Helper to fetch admin emails.
  */
 async function fetchAdminEmails(): Promise<string[]> {
@@ -36,13 +96,18 @@ async function createMeeting(data: CreateMeetingData): Promise<IMeeting> {
         ]),
     );
 
-    // Merge client phone with any additional attendee phones
-    const attendeePhones = Array.from(
+    // Merge client phone with any additional attendee phones, then validate and format them
+    const rawAttendeePhones = Array.from(
         new Set([
             ...(client?.phone ? [client.phone] : []),
             ...(data.attendeePhones || []),
         ]),
     );
+
+    const attendeePhones = rawAttendeePhones
+        .map((phone) => parseAndFormatPhone(phone))
+        .filter((parsed) => parsed.isValid)
+        .map((parsed) => parsed.formatted);
 
     const scheduledAt = new Date(data.scheduledAt);
     const endTime = new Date(scheduledAt.getTime() + data.durationMinutes * 60 * 1000);
@@ -137,16 +202,19 @@ async function createMeeting(data: CreateMeetingData): Promise<IMeeting> {
         }
     }
 
-    // Send invite SMS to all attendeePhones
+    // Send invite SMS only to Bangladesh phone numbers
     for (const phone of attendeePhones) {
-        if (phone) {
+        const parsed = parseAndFormatPhone(phone);
+        if (parsed.isValid && parsed.country === 'BD') {
             try {
                 const smsMsg = `Meeting Scheduled: "${data.meetingTitle}" on ${formattedDate} (${data.durationMinutes} mins).${googleMeetLink ? ` Join: ${googleMeetLink}` : ''} - WebBriks`;
-                await sendBulkSMS({ number: phone, message: smsMsg });
-                console.log('[Meeting] SMS confirmation sent to', phone);
+                await sendBulkSMS({ number: parsed.formatted, message: smsMsg });
+                console.log('[Meeting] SMS confirmation sent to BD phone:', parsed.formatted);
             } catch (err: any) {
                 console.error('[Meeting] SMS confirmation failed:', err.message);
             }
+        } else if (parsed.isValid) {
+            console.log('[Meeting] Skipping SMS for non-BD phone:', parsed.formatted);
         }
     }
 
@@ -266,13 +334,14 @@ async function cancelMeeting(id: string): Promise<IMeeting | null> {
         }
     }
 
-    // SMS for all attendeePhones
+    // SMS only for Bangladesh attendeePhones
     const attendeePhones = meeting.attendeePhones || [];
     for (const phone of attendeePhones) {
-        if (phone) {
+        const parsed = parseAndFormatPhone(phone);
+        if (parsed.isValid && parsed.country === 'BD') {
             try {
                 const smsMsg = `❌ Meeting Cancelled\n\nYour meeting "${meeting.meetingTitle}" scheduled for ${formattedDate} has been cancelled.\n\nWe apologize for the inconvenience.\n\n— Web Briks LLC`;
-                await sendBulkSMS({ number: phone, message: smsMsg });
+                await sendBulkSMS({ number: parsed.formatted, message: smsMsg });
             } catch (err: any) {
                 console.error('[Meeting] SMS cancellation failed:', err.message);
             }
@@ -299,7 +368,10 @@ async function updateMeeting(meetingId: string, data: Partial<CreateMeetingData>
         meeting.attendeeEmails = data.attendeeEmails;
     }
     if (data.attendeePhones) {
-        meeting.attendeePhones = data.attendeePhones;
+        meeting.attendeePhones = data.attendeePhones
+            .map((phone) => parseAndFormatPhone(phone))
+            .filter((parsed) => parsed.isValid)
+            .map((parsed) => parsed.formatted);
     }
 
     if (meeting.googleEventId) {
@@ -366,13 +438,14 @@ async function updateMeeting(meetingId: string, data: Partial<CreateMeetingData>
         }
     }
 
-    // SMS for all attendeePhones
+    // SMS only for Bangladesh attendeePhones
     const updateAttendeePhones = meeting.attendeePhones || [];
     for (const phone of updateAttendeePhones) {
-        if (phone) {
+        const parsed = parseAndFormatPhone(phone);
+        if (parsed.isValid && parsed.country === 'BD') {
             try {
                 const smsMsg = `Meeting Updated: "${meeting.meetingTitle}" has been rescheduled to ${formattedDate} (${meeting.durationMinutes} mins). Link: ${meeting.googleMeetLink || ''} - WebBriks`;
-                await sendBulkSMS({ number: phone, message: smsMsg });
+                await sendBulkSMS({ number: parsed.formatted, message: smsMsg });
             } catch (err: any) {
                 console.error('[Meeting] SMS update failed:', err.message);
             }
@@ -437,13 +510,14 @@ async function deleteMeeting(meetingId: string): Promise<IMeeting> {
         }
     }
 
-    // SMS for all attendeePhones
+    // SMS only for Bangladesh attendeePhones
     const attendeePhones = meeting.attendeePhones || [];
     for (const phone of attendeePhones) {
-        if (phone) {
+        const parsed = parseAndFormatPhone(phone);
+        if (parsed.isValid && parsed.country === 'BD') {
             try {
                 const smsMsg = `❌ Meeting Cancelled\n\nYour meeting "${meeting.meetingTitle}" scheduled for ${formattedDate} has been cancelled.\n\nWe apologize for the inconvenience.\n\n— Web Briks LLC`;
-                await sendBulkSMS({ number: phone, message: smsMsg });
+                await sendBulkSMS({ number: parsed.formatted, message: smsMsg });
             } catch (err: any) {
                 console.error('[Meeting] SMS deletion failed:', err.message);
             }
@@ -519,13 +593,14 @@ async function processMeetingReminders(): Promise<{ reminded: number; smsSent: n
 
         meeting.reminderSent = true;
 
-        // 1c. SMS for all attendeePhones
+        // 1c. SMS only for Bangladesh attendeePhones
         const attendeePhones30 = meeting.attendeePhones || [];
         for (const phone of attendeePhones30) {
-            if (phone) {
+            const parsed = parseAndFormatPhone(phone);
+            if (parsed.isValid && parsed.country === 'BD') {
                 try {
                     const smsMsg = `Reminder: Your meeting "${meeting.meetingTitle}" on ${formattedDate} (${meeting.durationMinutes} mins).${meeting.googleMeetLink ? ` Join: ${meeting.googleMeetLink}` : ''} - WebBriks`;
-                    await sendBulkSMS({ number: phone, message: smsMsg });
+                    await sendBulkSMS({ number: parsed.formatted, message: smsMsg });
                     meeting.smsSent = true;
                     smsSentCount++;
                 } catch (err: any) {
@@ -592,13 +667,14 @@ async function processMeetingReminders(): Promise<{ reminded: number; smsSent: n
 
         meeting.reminder5Sent = true;
 
-        // 2c. SMS for all attendeePhones
+        // 2c. SMS only for Bangladesh attendeePhones
         const attendeePhones5 = meeting.attendeePhones || [];
         for (const phone of attendeePhones5) {
-            if (phone) {
+            const parsed = parseAndFormatPhone(phone);
+            if (parsed.isValid && parsed.country === 'BD') {
                 try {
                     const smsMsg = `Reminder: Your meeting "${meeting.meetingTitle}" on ${formattedDate} (${meeting.durationMinutes} mins).${meeting.googleMeetLink ? ` Join: ${meeting.googleMeetLink}` : ''} - WebBriks`;
-                    await sendBulkSMS({ number: phone, message: smsMsg });
+                    await sendBulkSMS({ number: parsed.formatted, message: smsMsg });
                     meeting.smsSent = true;
                     smsSentCount++;
                 } catch (err: any) {
