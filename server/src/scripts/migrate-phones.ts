@@ -1,4 +1,6 @@
-import { connect, connection } from 'mongoose';
+import mongoose from 'mongoose';
+import dns from 'dns';
+dns.setServers(['8.8.8.8', '8.8.4.4']);
 import envConfig from '../config/env.config.js';
 import ClientModel from '../models/client.model.js';
 import MeetingModel from '../models/meeting.model.js';
@@ -7,7 +9,7 @@ import { parseAndFormatPhone } from '../services/meeting.service.js';
 async function runMigration() {
     console.log('🚀 Starting Phone Number Format Migration...');
     try {
-        await connect(envConfig.mongo_uri);
+        await mongoose.connect(envConfig.mongo_uri!);
         console.log('✅ Database connected successfully.\n');
 
         // --- 1. Migrate Client Phone Numbers ---
@@ -59,7 +61,7 @@ async function runMigration() {
     } catch (err: any) {
         console.error('❌ Migration failed:', err.message);
     } finally {
-        await connection.close();
+        await mongoose.connection.close();
         console.log('🔌 Database connection closed.');
         process.exit(0);
     }
