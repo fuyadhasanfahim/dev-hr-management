@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useState, useMemo, Suspense } from "react";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
   useGetLeadByIdQuery,
   useAddLeadActivityMutation,
@@ -49,9 +49,25 @@ import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 
 export default function LeadDetailsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex h-[400px] items-center justify-center">
+          <Loader className="h-8 w-8 animate-spin text-teal-600" />
+        </div>
+      }
+    >
+      <LeadDetailsContent />
+    </Suspense>
+  );
+}
+
+function LeadDetailsContent() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const id = params.id as string;
+  const callbackUrl = searchParams.get("callbackUrl");
 
   const { data: leadData, isLoading, isFetching } = useGetLeadByIdQuery(id);
   const { data: settingsData } = useGetLeadSettingsQuery(undefined);
@@ -91,7 +107,7 @@ export default function LeadDetailsPage() {
     return (
       <div className="flex h-[400px] flex-col items-center justify-center gap-4">
         <h2 className="text-xl font-semibold text-slate-700">Lead not found</h2>
-        <Button onClick={() => router.push("/leads")} variant="outline">
+        <Button onClick={() => router.push(callbackUrl || "/leads")} variant="outline">
           Back to Leads
         </Button>
       </div>
@@ -161,7 +177,13 @@ export default function LeadDetailsPage() {
         <Button
           variant="ghost"
           size="icon"
-          onClick={() => router.push("/leads")}
+          onClick={() => {
+            if (callbackUrl) {
+              router.push(callbackUrl);
+            } else {
+              router.back();
+            }
+          }}
           className="shrink-0"
         >
           <ArrowLeft className="h-5 w-5" />

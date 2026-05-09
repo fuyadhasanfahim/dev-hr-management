@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useMemo, Suspense } from "react";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import {
   useGetLeadsQuery,
   useCreateLeadMutation,
@@ -28,15 +28,44 @@ import { LeadPagination } from "@/components/lead/LeadPagination";
 import { Lead } from "@/types/lead.type";
 
 export default function LeadsPage() {
-  const router = useRouter();
+  return (
+    <Suspense
+      fallback={
+        <div className="flex h-[400px] items-center justify-center">
+          <Loader className="h-8 w-8 animate-spin text-teal-600" />
+        </div>
+      }
+    >
+      <LeadsPageContent />
+    </Suspense>
+  );
+}
 
-  // Filter states
-  const [page, setPage] = useState(1);
-  const [limit, setLimit] = useState(20);
-  const [search, setSearch] = useState("");
-  const [status, setStatus] = useState("");
-  const [priority, setPriority] = useState("");
-  const [source, setSource] = useState("");
+function LeadsPageContent() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  // Filter states from URL search params
+  const page = Number(searchParams.get("page")) || 1;
+  const limit = Number(searchParams.get("limit")) || 20;
+  const search = searchParams.get("search") || "";
+  const status = searchParams.get("status") || "";
+  const priority = searchParams.get("priority") || "";
+  const source = searchParams.get("source") || "";
+
+  // Helper to update filters in URL
+  const updateFilters = (updates: Record<string, string | number | undefined>) => {
+    const params = new URLSearchParams(searchParams.toString());
+    Object.entries(updates).forEach(([key, value]) => {
+      if (value === undefined || value === "") {
+        params.delete(key);
+      } else {
+        params.set(key, String(value));
+      }
+    });
+    router.push(`${pathname}?${params.toString()}`, { scroll: false });
+  };
 
   // Dialog states
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
@@ -91,21 +120,11 @@ export default function LeadsPage() {
   }, [leads, pagination.total]);
 
   const handleFilterChange = (key: string, value: string | number) => {
-    if (key === "search") setSearch(value as string);
-    if (key === "status") setStatus(value as string);
-    if (key === "priority") setPriority(value as string);
-    if (key === "source") setSource(value as string);
-    if (key === "limit") setLimit(value as number);
-    setPage(1);
+    updateFilters({ [key]: value, page: 1 });
   };
 
   const handleClearFilters = () => {
-    setSearch("");
-    setStatus("");
-    setPriority("");
-    setSource("");
-    setLimit(20);
-    setPage(1);
+    router.push(pathname);
   };
 
   const handleAddLead = async (data: LeadFormValues) => {
@@ -140,7 +159,8 @@ export default function LeadsPage() {
   };
 
   const handleViewLead = (lead: Lead) => {
-    router.push(`/leads/${lead._id}`);
+    const currentUrl = `${pathname}?${searchParams.toString()}`;
+    router.push(`/leads/${lead._id}?callbackUrl=${encodeURIComponent(currentUrl)}`);
   };
 
   return (
@@ -222,7 +242,7 @@ export default function LeadsPage() {
           <LeadPagination
             currentPage={page}
             totalPages={pagination.totalPages}
-            onPageChange={setPage}
+            onPageChange={(p) => updateFilters({ page: p })}
             isLoading={isLoading}
           />
         </div>
