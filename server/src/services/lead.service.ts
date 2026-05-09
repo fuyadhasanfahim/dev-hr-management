@@ -4,6 +4,7 @@ import type { ILead, ILeadActivity, LeadQueryParams } from '../types/lead.type.j
 import ClientModel from '../models/client.model.js';
 import { Types } from 'mongoose';
 import LeadSettingModel from '../models/lead-setting.model.js';
+import { escapeRegex } from '../lib/sanitize.js';
 
 class DuplicatePhoneError extends Error {
     constructor(message: string) {
@@ -27,7 +28,12 @@ const getAllLeads = async (params: LeadQueryParams) => {
     const query: Record<string, any> = {};
 
     if (search) {
-        query.$text = { $search: search };
+        const escaped = escapeRegex(search);
+        query.$or = [
+            { name: { $regex: escaped, $options: 'i' } },
+            { phone: { $regex: escaped, $options: 'i' } },
+            { email: { $regex: escaped, $options: 'i' } },
+        ];
     }
     if (status) query.status = status;
     if (priority) query.priority = priority;
