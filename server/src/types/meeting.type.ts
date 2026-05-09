@@ -7,8 +7,9 @@ export interface IMeeting extends Document {
     description?: string;
     scheduledAt: Date;
     durationMinutes: number;
-    clientId: Types.ObjectId;
-    attendeeEmails: string[];
+    clientId?: Types.ObjectId;
+    attendeeEmails?: string[];
+    attendeePhones?: string[];
     googleEventId?: string;
     googleMeetLink?: string;
     status: MeetingStatus;
@@ -26,8 +27,9 @@ export interface CreateMeetingData {
     description?: string;
     scheduledAt: string; // ISO date string from client
     durationMinutes: number;
-    clientId: string;
+    clientId?: string;
     attendeeEmails?: string[];
+    attendeePhones?: string[];
     notes?: string;
     createdBy: string;
 }

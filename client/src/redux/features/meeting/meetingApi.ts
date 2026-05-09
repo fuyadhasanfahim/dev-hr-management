@@ -6,7 +6,7 @@ export interface Meeting {
     description?: string;
     scheduledAt: string;
     durationMinutes: number;
-    clientId: {
+    clientId?: {
         _id: string;
         clientId: string;
         name: string;
@@ -15,6 +15,7 @@ export interface Meeting {
         currency?: string;
     } | string;
     attendeeEmails: string[];
+    attendeePhones?: string[];
     googleEventId?: string;
     googleMeetLink?: string;
     status: 'scheduled' | 'completed' | 'cancelled';
@@ -31,8 +32,9 @@ export interface CreateMeetingInput {
     description?: string;
     scheduledAt: string;
     durationMinutes: number;
-    clientId: string;
+    clientId?: string;
     attendeeEmails?: string[];
+    attendeePhones?: string[];
     notes?: string;
 }
 

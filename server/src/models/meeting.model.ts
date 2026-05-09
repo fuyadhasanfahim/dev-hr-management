@@ -27,16 +27,16 @@ const meetingSchema = new Schema<IMeeting>(
         clientId: {
             type: Schema.Types.ObjectId,
             ref: 'Client',
-            required: true,
+            required: false,
             index: true,
         },
         attendeeEmails: {
             type: [String],
-            required: true,
-            validate: {
-                validator: (v: string[]) => v && v.length > 0,
-                message: 'At least one attendee email is required',
-            },
+            default: [],
+        },
+        attendeePhones: {
+            type: [String],
+            default: [],
         },
         googleEventId: { type: String },
         googleMeetLink: { type: String },

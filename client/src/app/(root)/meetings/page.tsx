@@ -463,8 +463,10 @@ function MeetingRow({ meeting, clients }: { meeting: Meeting; clients: any[] }) 
         durationMinutes: meeting.durationMinutes || 30,
         notes: meeting.notes || '',
         attendeeEmails: meeting.attendeeEmails || [],
+        attendeePhones: meeting.attendeePhones || [],
     });
     const [extraEmail, setExtraEmail] = useState('');
+    const [extraPhone, setExtraPhone] = useState('');
 
     const handleEditSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -520,6 +522,25 @@ function MeetingRow({ meeting, clients }: { meeting: Meeting; clients: any[] }) 
         setForm((f) => ({
             ...f,
             attendeeEmails: (f.attendeeEmails || []).filter((e) => e !== email),
+        }));
+    };
+
+    const addExtraPhone = () => {
+        if (extraPhone && /^\+?[0-9\s-]{6,15}$/.test(extraPhone)) {
+            setForm((f) => ({
+                ...f,
+                attendeePhones: [...(f.attendeePhones || []), extraPhone],
+            }));
+            setExtraPhone('');
+        } else {
+            toast.error('Invalid phone number format');
+        }
+    };
+
+    const removeExtraPhone = (phone: string) => {
+        setForm((f) => ({
+            ...f,
+            attendeePhones: (f.attendeePhones || []).filter((p) => p !== phone),
         }));
     };
 
@@ -744,6 +765,47 @@ function MeetingRow({ meeting, clients }: { meeting: Meeting; clients: any[] }) 
                                             )}
                                         </div>
 
+                                        {/* Additional Phone Invites */}
+                                        <div className="flex flex-col gap-2">
+                                            <Label className="text-foreground/90 font-medium">
+                                                Additional Phone Invites (SMS)
+                                            </Label>
+                                            <div className="flex gap-2">
+                                                <Input
+                                                    type="tel"
+                                                    placeholder="+88017xxxxxxxx"
+                                                    value={extraPhone}
+                                                    onChange={(e) => setExtraPhone(e.target.value)}
+                                                    onKeyDown={(e) => {
+                                                        if (e.key === 'Enter') {
+                                                            e.preventDefault();
+                                                            addExtraPhone();
+                                                        }
+                                                    }}
+                                                    className="bg-background border-border"
+                                                />
+                                                <Button type="button" variant="outline" className="border-border bg-background" onClick={addExtraPhone}>
+                                                    <IconPlus /> Add
+                                                </Button>
+                                            </div>
+                                            {(form.attendeePhones?.length ?? 0) > 0 && (
+                                                <div className="flex flex-wrap gap-2">
+                                                    {form.attendeePhones?.map((phone) => (
+                                                        <Badge
+                                                            key={phone}
+                                                            onClick={() => removeExtraPhone(phone)}
+                                                            variant="outline"
+                                                            className="cursor-pointer hover:border-destructive hover:text-red-600 hover:bg-red-50/10 transition-colors duration-200"
+                                                            title="Remove"
+                                                        >
+                                                            {phone}
+                                                            <IconX className="h-3.5 w-3.5 ml-1" />
+                                                        </Badge>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+
                                         {/* Description */}
                                         <div className="flex flex-col gap-2">
                                             <Label className="text-foreground/90 font-medium">
@@ -893,22 +955,28 @@ function ScheduleMeetingDialog({
         durationMinutes: 30,
         clientId: '',
         attendeeEmails: [],
+        attendeePhones: [],
         notes: '',
     });
     const [extraEmail, setExtraEmail] = useState('');
+    const [extraPhone, setExtraPhone] = useState('');
 
     const selectedClient = clients.find((c) => c._id === form.clientId);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!form.meetingTitle || !form.scheduledAt || !form.clientId) {
+        if (!form.meetingTitle || !form.scheduledAt) {
             toast.error('Please fill in all required fields');
             return;
         }
 
         try {
+            const payload = { ...form };
+            if (payload.clientId === 'none' || !payload.clientId) {
+                delete payload.clientId;
+            }
             const result = await createMeeting({
-                ...form,
+                ...payload,
                 scheduledAt: new Date(form.scheduledAt).toISOString(),
             }).unwrap();
             toast.success('Meeting scheduled successfully!');
@@ -930,9 +998,11 @@ function ScheduleMeetingDialog({
             durationMinutes: 30,
             clientId: '',
             attendeeEmails: [],
+            attendeePhones: [],
             notes: '',
         });
         setExtraEmail('');
+        setExtraPhone('');
     };
 
     const addExtraEmail = () => {
@@ -949,6 +1019,25 @@ function ScheduleMeetingDialog({
         setForm((f) => ({
             ...f,
             attendeeEmails: (f.attendeeEmails || []).filter((e) => e !== email),
+        }));
+    };
+
+    const addExtraPhone = () => {
+        if (extraPhone && /^\+?[0-9\s-]{6,15}$/.test(extraPhone)) {
+            setForm((f) => ({
+                ...f,
+                attendeePhones: [...(f.attendeePhones || []), extraPhone],
+            }));
+            setExtraPhone('');
+        } else {
+            toast.error('Invalid phone number format');
+        }
+    };
+
+    const removeExtraPhone = (phone: string) => {
+        setForm((f) => ({
+            ...f,
+            attendeePhones: (f.attendeePhones || []).filter((p) => p !== phone),
         }));
     };
 
@@ -1003,22 +1092,22 @@ function ScheduleMeetingDialog({
                             {/* Client */}
                             <div className="flex flex-col gap-2">
                                 <Label className="text-slate-700 font-medium">
-                                    Client{' '}
-                                    <span className="text-red-500">*</span>
+                                    Client (Optional)
                                 </Label>
                                 <Select
-                                    value={form.clientId}
+                                    value={form.clientId || 'none'}
                                     onValueChange={(val) =>
                                         setForm((f) => ({
                                             ...f,
-                                            clientId: val,
+                                            clientId: val === 'none' ? '' : val,
                                         }))
                                     }
                                 >
                                     <SelectTrigger className="bg-white border-slate-200 w-full">
-                                        <SelectValue placeholder="Select a client" />
+                                        <SelectValue placeholder="Select a client (Optional)" />
                                     </SelectTrigger>
                                     <SelectContent>
+                                        <SelectItem value="none">No Client (Guest Meeting)</SelectItem>
                                         {clients.map((c) => (
                                             <SelectItem
                                                 key={c._id}
@@ -1140,6 +1229,57 @@ function ScheduleMeetingDialog({
                                                 title="Remove"
                                             >
                                                 {email}
+                                                <IconX className="h-3.5 w-3.5 ml-1" />
+                                            </Badge>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Additional Phone Invites */}
+                            <div className="flex flex-col gap-2">
+                                <Label className="text-foreground/90 font-medium">
+                                    Additional Phone Invites (SMS)
+                                </Label>
+                                <div className="flex gap-2">
+                                    <Input
+                                        type="tel"
+                                        placeholder="+88017xxxxxxxx"
+                                        value={extraPhone}
+                                        onChange={(e) =>
+                                            setExtraPhone(e.target.value)
+                                        }
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter') {
+                                                e.preventDefault();
+                                                addExtraPhone();
+                                            }
+                                        }}
+                                        className="bg-background border-border"
+                                    />
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        className="border-border bg-background"
+                                        onClick={addExtraPhone}
+                                    >
+                                        <IconPlus />
+                                        Add
+                                    </Button>
+                                </div>
+                                {(form.attendeePhones?.length ?? 0) > 0 && (
+                                    <div className="flex flex-wrap gap-2">
+                                        {form.attendeePhones?.map((phone) => (
+                                            <Badge
+                                                key={phone}
+                                                onClick={() =>
+                                                    removeExtraPhone(phone)
+                                                }
+                                                variant="outline"
+                                                className="cursor-pointer hover:border-destructive hover:text-red-600 hover:bg-red-50 transition-colors duration-200"
+                                                title="Remove"
+                                            >
+                                                {phone}
                                                 <IconX className="h-3.5 w-3.5 ml-1" />
                                             </Badge>
                                         ))}

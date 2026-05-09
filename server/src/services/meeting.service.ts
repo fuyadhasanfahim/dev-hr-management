@@ -26,14 +26,21 @@ async function fetchAdminEmails(): Promise<string[]> {
  * and sends confirmation email (+ SMS for everyone with a phone).
  */
 async function createMeeting(data: CreateMeetingData): Promise<IMeeting> {
-    const client = await ClientModel.findById(data.clientId);
-    if (!client) throw new Error('Client not found');
+    const client = data.clientId ? await ClientModel.findById(data.clientId) : null;
 
     // Merge client emails with any additional attendee emails
     const attendeeEmails = Array.from(
         new Set([
-            ...client.emails,
+            ...(client?.emails || []),
             ...(data.attendeeEmails || []),
+        ]),
+    );
+
+    // Merge client phone with any additional attendee phones
+    const attendeePhones = Array.from(
+        new Set([
+            ...(client?.phone ? [client.phone] : []),
+            ...(data.attendeePhones || []),
         ]),
     );
 
@@ -67,14 +74,17 @@ async function createMeeting(data: CreateMeetingData): Promise<IMeeting> {
         meetingTitle: data.meetingTitle,
         scheduledAt,
         durationMinutes: data.durationMinutes,
-        clientId: new Types.ObjectId(data.clientId),
         attendeeEmails,
+        attendeePhones,
         status: 'scheduled',
         reminderSent: false,
         smsSent: false,
         createdBy: new Types.ObjectId(data.createdBy),
     };
 
+    if (data.clientId) {
+        meetingPayload.clientId = new Types.ObjectId(data.clientId);
+    }
     if (data.description) meetingPayload.description = data.description;
     if (googleEventId) meetingPayload.googleEventId = googleEventId;
     if (googleMeetLink) meetingPayload.googleMeetLink = googleMeetLink;
@@ -97,7 +107,7 @@ async function createMeeting(data: CreateMeetingData): Promise<IMeeting> {
         try {
             await emailService.sendMeetingInviteEmail({
                 to: email,
-                clientName: client.name,
+                clientName: client?.name || 'Guest',
                 meetingTitle: data.meetingTitle,
                 scheduledAt: formattedDate,
                 durationMinutes: data.durationMinutes,
@@ -116,7 +126,7 @@ async function createMeeting(data: CreateMeetingData): Promise<IMeeting> {
             await emailService.sendMeetingInviteEmail({
                 to: email,
                 clientName: 'Admin',
-                meetingTitle: `${data.meetingTitle} (Client: ${client.name})`,
+                meetingTitle: `${data.meetingTitle}${client ? ` (Client: ${client.name})` : ''}`,
                 scheduledAt: formattedDate,
                 durationMinutes: data.durationMinutes,
                 meetLink: googleMeetLink || '',
@@ -127,14 +137,16 @@ async function createMeeting(data: CreateMeetingData): Promise<IMeeting> {
         }
     }
 
-    // SMS for client if phone exists
-    if (client.phone) {
-        try {
-            const smsMsg = `Meeting Scheduled: "${data.meetingTitle}" on ${formattedDate} (${data.durationMinutes} mins).${googleMeetLink ? ` Join: ${googleMeetLink}` : ''} - WebBriks`;
-            await sendBulkSMS({ number: client.phone, message: smsMsg });
-            console.log('[Meeting] SMS confirmation sent to', client.phone);
-        } catch (err: any) {
-            console.error('[Meeting] SMS confirmation failed:', err.message);
+    // Send invite SMS to all attendeePhones
+    for (const phone of attendeePhones) {
+        if (phone) {
+            try {
+                const smsMsg = `Meeting Scheduled: "${data.meetingTitle}" on ${formattedDate} (${data.durationMinutes} mins).${googleMeetLink ? ` Join: ${googleMeetLink}` : ''} - WebBriks`;
+                await sendBulkSMS({ number: phone, message: smsMsg });
+                console.log('[Meeting] SMS confirmation sent to', phone);
+            } catch (err: any) {
+                console.error('[Meeting] SMS confirmation failed:', err.message);
+            }
         }
     }
 
@@ -224,11 +236,11 @@ async function cancelMeeting(id: string): Promise<IMeeting | null> {
         timeZone: 'Asia/Dhaka',
     });
 
-    for (const email of meeting.attendeeEmails) {
+    for (const email of meeting.attendeeEmails || []) {
         try {
             await emailService.sendMeetingCancellationEmail({
                 to: email,
-                clientName: client?.name || 'Client',
+                clientName: client?.name || 'Guest',
                 meetingTitle: meeting.meetingTitle,
                 scheduledAt: formattedDate,
                 isAdmin: false,
@@ -254,13 +266,16 @@ async function cancelMeeting(id: string): Promise<IMeeting | null> {
         }
     }
 
-    // SMS for client if phone exists
-    if (client?.phone) {
-        try {
-            const smsMsg = `❌ Meeting Cancelled\n\nYour meeting "${meeting.meetingTitle}" scheduled for ${formattedDate} has been cancelled.\n\nWe apologize for the inconvenience. We’ll notify you if it is rescheduled.\n\n— Web Briks LLC`;
-            await sendBulkSMS({ number: client.phone, message: smsMsg });
-        } catch (err: any) {
-            console.error('[Meeting] SMS cancellation failed:', err.message);
+    // SMS for all attendeePhones
+    const attendeePhones = meeting.attendeePhones || [];
+    for (const phone of attendeePhones) {
+        if (phone) {
+            try {
+                const smsMsg = `❌ Meeting Cancelled\n\nYour meeting "${meeting.meetingTitle}" scheduled for ${formattedDate} has been cancelled.\n\nWe apologize for the inconvenience.\n\n— Web Briks LLC`;
+                await sendBulkSMS({ number: phone, message: smsMsg });
+            } catch (err: any) {
+                console.error('[Meeting] SMS cancellation failed:', err.message);
+            }
         }
     }
 
@@ -283,6 +298,9 @@ async function updateMeeting(meetingId: string, data: Partial<CreateMeetingData>
     if (data.attendeeEmails) {
         meeting.attendeeEmails = data.attendeeEmails;
     }
+    if (data.attendeePhones) {
+        meeting.attendeePhones = data.attendeePhones;
+    }
 
     if (meeting.googleEventId) {
         try {
@@ -293,7 +311,7 @@ async function updateMeeting(meetingId: string, data: Partial<CreateMeetingData>
                 meeting.description || '',
                 scheduledAt,
                 endTime,
-                meeting.attendeeEmails,
+                meeting.attendeeEmails || [],
             );
         } catch (err: any) {
             console.error('[Meeting] Google Calendar update failed:', err.message);
@@ -303,7 +321,7 @@ async function updateMeeting(meetingId: string, data: Partial<CreateMeetingData>
 
     await meeting.save();
 
-    const client = await ClientModel.findById(meeting.clientId);
+    const client = meeting.clientId ? await ClientModel.findById(meeting.clientId) : null;
     const formattedDate = scheduledAt.toLocaleString('en-US', {
         weekday: 'long',
         year: 'numeric',
@@ -314,11 +332,11 @@ async function updateMeeting(meetingId: string, data: Partial<CreateMeetingData>
         timeZone: 'Asia/Dhaka',
     });
 
-    for (const email of meeting.attendeeEmails) {
+    for (const email of meeting.attendeeEmails || []) {
         try {
             await emailService.sendMeetingInviteEmail({
                 to: email,
-                clientName: client?.name || 'Client',
+                clientName: client?.name || 'Guest',
                 meetingTitle: meeting.meetingTitle,
                 scheduledAt: formattedDate,
                 durationMinutes: meeting.durationMinutes,
@@ -337,7 +355,7 @@ async function updateMeeting(meetingId: string, data: Partial<CreateMeetingData>
             await emailService.sendMeetingInviteEmail({
                 to: email,
                 clientName: 'Admin',
-                meetingTitle: `${meeting.meetingTitle} (Client: ${client?.name || 'Client'})`,
+                meetingTitle: `${meeting.meetingTitle}${client ? ` (Client: ${client.name})` : ''}`,
                 scheduledAt: formattedDate,
                 durationMinutes: meeting.durationMinutes,
                 meetLink: meeting.googleMeetLink || '',
@@ -348,13 +366,16 @@ async function updateMeeting(meetingId: string, data: Partial<CreateMeetingData>
         }
     }
 
-    // SMS for client if phone exists
-    if (client?.phone) {
-        try {
-            const smsMsg = `Meeting Updated: "${meeting.meetingTitle}" has been rescheduled to ${formattedDate} (${meeting.durationMinutes} mins). Link: ${meeting.googleMeetLink || ''} - WebBriks`;
-            await sendBulkSMS({ number: client.phone, message: smsMsg });
-        } catch (err: any) {
-            console.error('[Meeting] SMS update failed:', err.message);
+    // SMS for all attendeePhones
+    const updateAttendeePhones = meeting.attendeePhones || [];
+    for (const phone of updateAttendeePhones) {
+        if (phone) {
+            try {
+                const smsMsg = `Meeting Updated: "${meeting.meetingTitle}" has been rescheduled to ${formattedDate} (${meeting.durationMinutes} mins). Link: ${meeting.googleMeetLink || ''} - WebBriks`;
+                await sendBulkSMS({ number: phone, message: smsMsg });
+            } catch (err: any) {
+                console.error('[Meeting] SMS update failed:', err.message);
+            }
         }
     }
 
@@ -375,7 +396,7 @@ async function deleteMeeting(meetingId: string): Promise<IMeeting> {
 
     await MeetingModel.findByIdAndDelete(meetingId);
 
-    const client = await ClientModel.findById(meeting.clientId);
+    const client = meeting.clientId ? await ClientModel.findById(meeting.clientId) : null;
     const formattedDate = meeting.scheduledAt.toLocaleString('en-US', {
         weekday: 'long',
         year: 'numeric',
@@ -386,11 +407,11 @@ async function deleteMeeting(meetingId: string): Promise<IMeeting> {
         timeZone: 'Asia/Dhaka',
     });
 
-    for (const email of meeting.attendeeEmails) {
+    for (const email of meeting.attendeeEmails || []) {
         try {
             await emailService.sendMeetingCancellationEmail({
                 to: email,
-                clientName: client?.name || 'Client',
+                clientName: client?.name || 'Guest',
                 meetingTitle: meeting.meetingTitle,
                 scheduledAt: formattedDate,
                 isAdmin: false,
@@ -406,7 +427,7 @@ async function deleteMeeting(meetingId: string): Promise<IMeeting> {
         try {
             await emailService.sendMeetingCancellationEmail({
                 to: email,
-                clientName: client?.name || 'Client',
+                clientName: client?.name || 'Guest',
                 meetingTitle: meeting.meetingTitle,
                 scheduledAt: formattedDate,
                 isAdmin: true,
@@ -416,13 +437,16 @@ async function deleteMeeting(meetingId: string): Promise<IMeeting> {
         }
     }
 
-    // SMS for client if phone exists
-    if (client?.phone) {
-        try {
-            const smsMsg = `❌ Meeting Cancelled\n\nYour meeting "${meeting.meetingTitle}" scheduled for ${formattedDate} has been cancelled.\n\nWe apologize for the inconvenience. We’ll notify you if it is rescheduled.\n\n— Web Briks LLC`;
-            await sendBulkSMS({ number: client.phone, message: smsMsg });
-        } catch (err: any) {
-            console.error('[Meeting] SMS deletion failed:', err.message);
+    // SMS for all attendeePhones
+    const attendeePhones = meeting.attendeePhones || [];
+    for (const phone of attendeePhones) {
+        if (phone) {
+            try {
+                const smsMsg = `❌ Meeting Cancelled\n\nYour meeting "${meeting.meetingTitle}" scheduled for ${formattedDate} has been cancelled.\n\nWe apologize for the inconvenience.\n\n— Web Briks LLC`;
+                await sendBulkSMS({ number: phone, message: smsMsg });
+            } catch (err: any) {
+                console.error('[Meeting] SMS deletion failed:', err.message);
+            }
         }
     }
 
@@ -462,7 +486,7 @@ async function processMeetingReminders(): Promise<{ reminded: number; smsSent: n
         });
 
         // 1a. Send email to attendees
-        for (const email of meeting.attendeeEmails) {
+        for (const email of meeting.attendeeEmails || []) {
             try {
                 await emailService.sendMeetingReminderEmail({
                     to: email,
@@ -495,15 +519,18 @@ async function processMeetingReminders(): Promise<{ reminded: number; smsSent: n
 
         meeting.reminderSent = true;
 
-        // 1c. SMS for client if phone exists
-        if (client?.phone) {
-            try {
-                const smsMsg = `Reminder: Your meeting "${meeting.meetingTitle}" on ${formattedDate} (${meeting.durationMinutes} mins).${meeting.googleMeetLink ? ` Join: ${meeting.googleMeetLink}` : ''} - WebBriks`;
-                await sendBulkSMS({ number: client.phone, message: smsMsg });
-                meeting.smsSent = true;
-                smsSentCount++;
-            } catch (err: any) {
-                console.error('[Meeting] 30m SMS reminder failed:', err.message);
+        // 1c. SMS for all attendeePhones
+        const attendeePhones30 = meeting.attendeePhones || [];
+        for (const phone of attendeePhones30) {
+            if (phone) {
+                try {
+                    const smsMsg = `Reminder: Your meeting "${meeting.meetingTitle}" on ${formattedDate} (${meeting.durationMinutes} mins).${meeting.googleMeetLink ? ` Join: ${meeting.googleMeetLink}` : ''} - WebBriks`;
+                    await sendBulkSMS({ number: phone, message: smsMsg });
+                    meeting.smsSent = true;
+                    smsSentCount++;
+                } catch (err: any) {
+                    console.error('[Meeting] 30m SMS reminder failed:', err.message);
+                }
             }
         }
 
@@ -532,7 +559,7 @@ async function processMeetingReminders(): Promise<{ reminded: number; smsSent: n
         });
 
         // 2a. Send email to attendees
-        for (const email of meeting.attendeeEmails) {
+        for (const email of meeting.attendeeEmails || []) {
             try {
                 await emailService.sendMeetingReminderEmail({
                     to: email,
@@ -565,15 +592,18 @@ async function processMeetingReminders(): Promise<{ reminded: number; smsSent: n
 
         meeting.reminder5Sent = true;
 
-        // 2c. SMS for client if phone exists
-        if (client?.phone) {
-            try {
-                const smsMsg = `Reminder: Your meeting "${meeting.meetingTitle}" on ${formattedDate} (${meeting.durationMinutes} mins).${meeting.googleMeetLink ? ` Join: ${meeting.googleMeetLink}` : ''} - WebBriks`;
-                await sendBulkSMS({ number: client.phone, message: smsMsg });
-                meeting.smsSent = true;
-                smsSentCount++;
-            } catch (err: any) {
-                console.error('[Meeting] 5m SMS reminder failed:', err.message);
+        // 2c. SMS for all attendeePhones
+        const attendeePhones5 = meeting.attendeePhones || [];
+        for (const phone of attendeePhones5) {
+            if (phone) {
+                try {
+                    const smsMsg = `Reminder: Your meeting "${meeting.meetingTitle}" on ${formattedDate} (${meeting.durationMinutes} mins).${meeting.googleMeetLink ? ` Join: ${meeting.googleMeetLink}` : ''} - WebBriks`;
+                    await sendBulkSMS({ number: phone, message: smsMsg });
+                    meeting.smsSent = true;
+                    smsSentCount++;
+                } catch (err: any) {
+                    console.error('[Meeting] 5m SMS reminder failed:', err.message);
+                }
             }
         }
 
