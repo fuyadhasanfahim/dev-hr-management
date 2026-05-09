@@ -118,13 +118,13 @@ export function ClientInfoCard({ client }: ClientInfoCardProps) {
 
             {/* Team Members & Assigned Services */}
             {(client.teamMembers?.length || 0) > 0 || (client.assignedServicesDetails?.length || 0) > 0 ? (
-                <div className="px-6 pb-6 pt-2 border-t mt-4 flex flex-wrap gap-8">
+                <div className="px-6 pb-6 pt-2 border-t border-slate-100 dark:border-slate-800 mt-4 flex flex-wrap gap-8">
                     {client.teamMembers && client.teamMembers.length > 0 && (
                         <div className="flex flex-col gap-2 min-w-[200px]">
                             <p className="text-[10px] uppercase font-extrabold text-slate-400 tracking-widest">Team Members ({client.teamMembers.length})</p>
                             <div className="flex flex-wrap gap-2">
                                 {client.teamMembers.map((member, idx) => (
-                                    <Badge key={idx} variant="outline" className="bg-slate-50 shadow-sm border-slate-200 text-slate-600">
+                                    <Badge key={idx} variant="outline" className="bg-slate-50 dark:bg-slate-900 shadow-sm border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300">
                                         {member.name}
                                     </Badge>
                                 ))}
@@ -139,7 +139,7 @@ export function ClientInfoCard({ client }: ClientInfoCardProps) {
                             </p>
                             <div className="flex flex-wrap gap-2">
                                 {client.assignedServicesDetails.map((service, idx) => (
-                                    <Badge key={idx} variant="outline" className="bg-teal-50 text-teal-700 border-teal-200 shadow-sm">
+                                    <Badge key={idx} variant="outline" className="bg-teal-50 dark:bg-teal-950/40 text-teal-700 dark:text-teal-300 border-teal-200 dark:border-teal-900/50 shadow-sm">
                                         {service.name}
                                     </Badge>
                                 ))}

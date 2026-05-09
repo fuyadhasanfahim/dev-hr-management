@@ -35,7 +35,7 @@ export function ClientPagination({
         return range.map((pageNumber, idx) => {
             if (pageNumber === "...") {
                 return (
-                    <span key={`ellipsis-${idx}`} className="px-3 py-2 text-slate-400">
+                    <span key={`ellipsis-${idx}`} className="px-3 py-2 text-slate-400 dark:text-slate-500">
                         ...
                     </span>
                 );
@@ -49,7 +49,7 @@ export function ClientPagination({
                     className={`h-8 w-8 ${
                         currentPage === pageNumber
                             ? "bg-teal-600 text-white hover:bg-teal-700"
-                            : "text-slate-600 hover:text-slate-900"
+                            : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
                     }`}
                     onClick={() => onPageChange(pageNumber as number)}
                     disabled={isLoading}
@@ -65,7 +65,7 @@ export function ClientPagination({
             <Button
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8 text-slate-500"
+                className="h-8 w-8 text-slate-500 dark:text-slate-400 dark:hover:text-slate-100"
                 onClick={() => onPageChange(1)}
                 disabled={currentPage === 1 || isLoading}
             >
@@ -74,7 +74,7 @@ export function ClientPagination({
             <Button
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8 text-slate-500"
+                className="h-8 w-8 text-slate-500 dark:text-slate-400 dark:hover:text-slate-100"
                 onClick={() => onPageChange(Math.max(1, currentPage - 1))}
                 disabled={currentPage === 1 || isLoading}
             >
@@ -88,7 +88,7 @@ export function ClientPagination({
             <Button
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8 text-slate-500"
+                className="h-8 w-8 text-slate-500 dark:text-slate-400 dark:hover:text-slate-100"
                 onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))}
                 disabled={currentPage === totalPages || totalPages === 0 || isLoading}
             >
@@ -97,7 +97,7 @@ export function ClientPagination({
             <Button
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8 text-slate-500"
+                className="h-8 w-8 text-slate-500 dark:text-slate-400 dark:hover:text-slate-100"
                 onClick={() => onPageChange(totalPages)}
                 disabled={currentPage === totalPages || totalPages === 0 || isLoading}
             >

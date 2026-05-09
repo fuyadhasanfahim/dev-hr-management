@@ -174,10 +174,10 @@ export default function ClientDetailsPage() {
                 </div>
 
                 {/* Filters */}
-                <div className="bg-card p-4 rounded-xl border shadow-sm space-y-4">
+                <div className="bg-card dark:bg-slate-900/40 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-3">
                         <div className="relative group lg:col-span-2">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-teal-500 dark:group-focus-within:text-teal-400 transition-colors" />
                             <Input
                                 placeholder="Search orders..."
                                 value={search}
@@ -185,7 +185,7 @@ export default function ClientDetailsPage() {
                                     setSearch(e.target.value);
                                     setPage(1);
                                 }}
-                                className="pl-9 h-9 bg-muted/40 border-slate-200"
+                                className="pl-9 h-9 bg-muted/40 dark:bg-slate-950/50 border-slate-200 dark:border-slate-800"
                             />
                         </div>
 
@@ -196,7 +196,7 @@ export default function ClientDetailsPage() {
                                 setPage(1);
                             }}
                         >
-                            <SelectTrigger className="h-9 bg-muted/40 border-slate-200">
+                            <SelectTrigger className="h-9 bg-muted/40 dark:bg-slate-950/50 border-slate-200 dark:border-slate-800">
                                 <SelectValue placeholder="Month" />
                             </SelectTrigger>
                             <SelectContent>
@@ -215,7 +215,7 @@ export default function ClientDetailsPage() {
                                 setPage(1);
                             }}
                         >
-                            <SelectTrigger className="h-9 bg-muted/40 border-slate-200 uppercase text-[11px] font-bold">
+                            <SelectTrigger className="h-9 bg-muted/40 dark:bg-slate-950/50 border-slate-200 dark:border-slate-800 uppercase text-[11px] font-bold">
                                 <Filter className="h-3 w-3" />
                                 <SelectValue placeholder="Status" />
                             </SelectTrigger>
@@ -235,7 +235,7 @@ export default function ClientDetailsPage() {
                                 setPage(1);
                             }}
                         >
-                            <SelectTrigger className="h-9 bg-muted/40 border-slate-200 uppercase text-[11px] font-bold">
+                            <SelectTrigger className="h-9 bg-muted/40 dark:bg-slate-950/50 border-slate-200 dark:border-slate-800 uppercase text-[11px] font-bold">
                                 <SelectValue placeholder="Priority" />
                             </SelectTrigger>
                             <SelectContent>
@@ -268,12 +268,12 @@ export default function ClientDetailsPage() {
                 />
 
                 {/* Pagination */}
-                <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-6 py-4 border rounded-xl bg-muted/20">
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-6 py-4 border border-slate-100 dark:border-slate-800 rounded-xl bg-muted/20 dark:bg-slate-900/30">
                     <div className="flex items-center gap-4">
                         <div className="text-sm text-muted-foreground">
-                            Showing <span className="font-medium text-foreground">{orders.length}</span> of <span className="font-medium text-foreground">{pagination.total}</span> orders
+                            Showing <span className="font-medium text-slate-900 dark:text-slate-100">{orders.length}</span> of <span className="font-medium text-slate-900 dark:text-slate-100">{pagination.total}</span> orders
                         </div>
-                        <div className="h-4 w-px bg-slate-300 hidden sm:block" />
+                        <div className="h-4 w-px bg-slate-300 dark:bg-slate-700 hidden sm:block" />
                         <div className="flex items-center gap-2">
                             <span className="text-xs text-muted-foreground">Per page</span>
                             <Select
@@ -283,7 +283,7 @@ export default function ClientDetailsPage() {
                                     setPage(1);
                                 }}
                             >
-                                <SelectTrigger className="h-7 w-[70px] text-xs bg-background">
+                                <SelectTrigger className="h-7 w-[70px] text-xs bg-background dark:bg-slate-950 border-slate-200 dark:border-slate-800">
                                     <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -301,7 +301,7 @@ export default function ClientDetailsPage() {
                         <Button
                             variant="outline"
                             size="icon"
-                            className="h-8 w-8"
+                            className="h-8 w-8 text-slate-500 dark:text-slate-400 dark:hover:text-slate-100 border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950"
                             onClick={() => setPage(1)}
                             disabled={page === 1 || isLoadingOrders}
                         >
@@ -310,7 +310,7 @@ export default function ClientDetailsPage() {
                         <Button
                             variant="outline"
                             size="icon"
-                            className="h-8 w-8"
+                            className="h-8 w-8 text-slate-500 dark:text-slate-400 dark:hover:text-slate-100 border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950"
                             onClick={() => setPage((p) => Math.max(1, p - 1))}
                             disabled={page === 1 || isLoadingOrders}
                         >
@@ -318,7 +318,7 @@ export default function ClientDetailsPage() {
                         </Button>
                         <div className="flex items-center gap-1.5 px-3">
                             <span className="text-sm font-medium">Page</span>
-                            <span className="flex h-7 w-12 items-center justify-center rounded-md border bg-background text-sm font-bold text-primary">
+                            <span className="flex h-7 w-12 items-center justify-center rounded-md border border-slate-200 dark:border-slate-800 bg-background dark:bg-slate-950 text-sm font-bold text-teal-600 dark:text-teal-400">
                                 {page}
                             </span>
                             <span className="text-sm font-medium text-muted-foreground">
@@ -328,7 +328,7 @@ export default function ClientDetailsPage() {
                         <Button
                             variant="outline"
                             size="icon"
-                            className="h-8 w-8"
+                            className="h-8 w-8 text-slate-500 dark:text-slate-400 dark:hover:text-slate-100 border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950"
                             onClick={() => setPage((p) => Math.min(pagination.totalPages, p + 1))}
                             disabled={page === pagination.totalPages || isLoadingOrders}
                         >
@@ -337,7 +337,7 @@ export default function ClientDetailsPage() {
                         <Button
                             variant="outline"
                             size="icon"
-                            className="h-8 w-8"
+                            className="h-8 w-8 text-slate-500 dark:text-slate-400 dark:hover:text-slate-100 border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950"
                             onClick={() => setPage(pagination.totalPages)}
                             disabled={page === pagination.totalPages || isLoadingOrders}
                         >
