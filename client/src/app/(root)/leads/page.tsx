@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, Suspense } from 'react';
+import { useState, useMemo, Suspense, useEffect } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import {
     useGetLeadsQuery,
@@ -51,19 +51,41 @@ function LeadsPageContent() {
     const pathname = usePathname();
     const searchParams = useSearchParams();
 
-    // Filter states from URL search params
-    const page = Number(searchParams.get('page')) || 1;
-    const limit = Number(searchParams.get('limit')) || 20;
-    const search = searchParams.get('search') || '';
-    const status = searchParams.get('status') || '';
-    const priority = searchParams.get('priority') || '';
-    const source = searchParams.get('source') || '';
+    // Local filter states initialized from searchParams
+    const [page, setPage] = useState(() => Number(searchParams.get('page')) || 1);
+    const [limit, setLimit] = useState(() => Number(searchParams.get('limit')) || 20);
+    const [search, setSearch] = useState(() => searchParams.get('search') || '');
+    const [status, setStatus] = useState(() => searchParams.get('status') || '');
+    const [priority, setPriority] = useState(() => searchParams.get('priority') || '');
+    const [source, setSource] = useState(() => searchParams.get('source') || '');
 
-    // Helper to update filters in URL
+    // Synchronize URL changes (e.g. back/forward browser navigation) with local states
+    useEffect(() => {
+        setPage(Number(searchParams.get('page')) || 1);
+        setLimit(Number(searchParams.get('limit')) || 20);
+        setSearch(searchParams.get('search') || '');
+        setStatus(searchParams.get('status') || '');
+        setPriority(searchParams.get('priority') || '');
+        setSource(searchParams.get('source') || '');
+    }, [searchParams]);
+
+    // Helper to update local filter states and synchronize browser URL silently
     const updateFilters = (
         updates: Record<string, string | number | undefined>,
     ) => {
-        const params = new URLSearchParams(searchParams.toString());
+        // 1. Instantly update local states for immediate RTK Query reactivity
+        Object.entries(updates).forEach(([key, value]) => {
+            const strVal = value === undefined ? '' : String(value);
+            if (key === 'page') setPage(Number(value) || 1);
+            if (key === 'limit') setLimit(Number(value) || 20);
+            if (key === 'search') setSearch(strVal);
+            if (key === 'status') setStatus(strVal);
+            if (key === 'priority') setPriority(strVal);
+            if (key === 'source') setSource(strVal);
+        });
+
+        // 2. Silently update the URL without triggering slow Next.js server transitions
+        const params = new URLSearchParams(window.location.search);
         Object.entries(updates).forEach(([key, value]) => {
             if (value === undefined || value === '') {
                 params.delete(key);
@@ -71,7 +93,8 @@ function LeadsPageContent() {
                 params.set(key, String(value));
             }
         });
-        router.push(`${pathname}?${params.toString()}`, { scroll: false });
+        const newUrl = params.toString() ? `${pathname}?${params.toString()}` : pathname;
+        window.history.replaceState({ ...window.history.state, as: newUrl, url: newUrl }, '', newUrl);
     };
 
     // Dialog states
@@ -134,7 +157,12 @@ function LeadsPageContent() {
     };
 
     const handleClearFilters = () => {
-        router.push(pathname);
+        setPage(1);
+        setSearch('');
+        setStatus('');
+        setPriority('');
+        setSource('');
+        window.history.replaceState({ ...window.history.state, as: pathname, url: pathname }, '', pathname);
     };
 
     const handleAddLead = async (data: LeadFormValues) => {
@@ -169,7 +197,14 @@ function LeadsPageContent() {
     };
 
     const handleViewLead = (lead: Lead) => {
-        const currentUrl = `${pathname}?${searchParams.toString()}`;
+        const params = new URLSearchParams();
+        if (page !== 1) params.set('page', String(page));
+        if (limit !== 20) params.set('limit', String(limit));
+        if (search) params.set('search', search);
+        if (status) params.set('status', status);
+        if (priority) params.set('priority', priority);
+        if (source) params.set('source', source);
+        const currentUrl = params.toString() ? `${pathname}?${params.toString()}` : pathname;
         router.push(
             `/leads/${lead._id}?callbackUrl=${encodeURIComponent(currentUrl)}`,
         );
