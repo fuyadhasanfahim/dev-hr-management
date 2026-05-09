@@ -477,16 +477,35 @@ function MeetingRow({ meeting, clients }: { meeting: Meeting; clients: any[] }) 
             toast.error('Please fill in all required fields');
             return;
         }
+
+        const finalAttendeeEmails = [...(form.attendeeEmails || [])];
+        if (extraEmail && /\S+@\S+\.\S+/.test(extraEmail)) {
+            if (!finalAttendeeEmails.includes(extraEmail)) {
+                finalAttendeeEmails.push(extraEmail);
+            }
+        }
+
+        const finalAttendeePhones = [...(form.attendeePhones || [])];
+        if (extraPhone && /^\+?[0-9\s-]{6,15}$/.test(extraPhone)) {
+            if (!finalAttendeePhones.includes(extraPhone)) {
+                finalAttendeePhones.push(extraPhone);
+            }
+        }
+
         try {
             await updateMeeting({
                 id: meeting._id,
                 data: {
                     ...form,
+                    attendeeEmails: finalAttendeeEmails,
+                    attendeePhones: finalAttendeePhones,
                     scheduledAt: new Date(form.scheduledAt).toISOString(),
                 },
             }).unwrap();
             toast.success('Meeting updated successfully');
             setIsEditDialogOpen(false);
+            setExtraEmail('');
+            setExtraPhone('');
         } catch (err: any) {
             toast.error(err?.data?.message || 'Failed to update meeting');
         }
@@ -1153,8 +1172,26 @@ function ScheduleMeetingDialog({
             return;
         }
 
+        const finalAttendeeEmails = [...(form.attendeeEmails || [])];
+        if (extraEmail && /\S+@\S+\.\S+/.test(extraEmail)) {
+            if (!finalAttendeeEmails.includes(extraEmail)) {
+                finalAttendeeEmails.push(extraEmail);
+            }
+        }
+
+        const finalAttendeePhones = [...(form.attendeePhones || [])];
+        if (extraPhone && /^\+?[0-9\s-]{6,15}$/.test(extraPhone)) {
+            if (!finalAttendeePhones.includes(extraPhone)) {
+                finalAttendeePhones.push(extraPhone);
+            }
+        }
+
         try {
-            const payload = { ...form };
+            const payload = { 
+                ...form,
+                attendeeEmails: finalAttendeeEmails,
+                attendeePhones: finalAttendeePhones,
+            };
             if (payload.clientId === 'none' || !payload.clientId) {
                 delete payload.clientId;
             }
