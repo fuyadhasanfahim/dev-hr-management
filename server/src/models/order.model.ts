@@ -108,6 +108,12 @@ export interface IQuotationSnapshot {
     taxRate: number;
     discount: number;
     additionalServicesTotal: number;
+    additionalServices?: Array<{
+        title: string;
+        price: number;
+        billingCycle: 'one-time' | 'monthly' | 'yearly';
+        description?: string | undefined;
+    }>;
     taxAmount: number;
 }
 
@@ -193,6 +199,15 @@ const snapshotSchema = new Schema<IQuotationSnapshot>(
         taxRate: { type: Number, required: true },
         discount: { type: Number, required: true },
         additionalServicesTotal: { type: Number, required: true },
+        additionalServices: [
+            {
+                title: String,
+                price: Number,
+                billingCycle: { type: String, enum: ['one-time', 'monthly', 'yearly'] },
+                description: String,
+                _id: false,
+            },
+        ],
         taxAmount: { type: Number, required: true },
     },
     { _id: false },

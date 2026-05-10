@@ -73,7 +73,7 @@ function buildPaymentLink(
     return `${paymentBase.replace(/\/$/, '')}/quotation/${secureToken}`;
 }
 
-type LineItem = { name: string; qty: number; rate: number; total: number };
+type LineItem = { name: string; desc?: string; qty: number; rate: number; total: number };
 
 type Milestone = { label: string; percentage: number; note?: string };
 
@@ -157,6 +157,7 @@ function buildPrintHtml(
 
     const addOnRows: LineItem[] = additionalServices.map((s: any) => ({
         name: `${s.title} (${s.billingCycle})`,
+        desc: s.description,
         qty: 1,
         rate: s.price ?? 0,
         total: s.price ?? 0,
@@ -223,7 +224,10 @@ function buildPrintHtml(
             (item, index) => `
         <tr class="${index % 2 ? 'tr-even' : ''}">
           <td class="td-no">${index + 1}</td>
-          <td class="td-name">${esc(item.name)}</td>
+          <td class="td-name">
+            <div style="font-weight: 600; color: var(--slate900);">${esc(item.name)}</div>
+            ${item.desc ? `<div style="font-size: 11px; color: var(--slate500); margin-top: 2px; font-style: italic;">${esc(item.desc)}</div>` : ''}
+          </td>
           <td class="td-num">${item.qty}</td>
           <td class="td-num">${item.rate > 0 ? formatMoneyPdf(item.rate, currency) : '—'}</td>
           <td class="td-num">${item.total > 0 ? formatMoneyPdf(item.total, currency) : '—'}</td>

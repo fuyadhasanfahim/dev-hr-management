@@ -112,6 +112,29 @@ export default function TemplateBuilder({
     updateData({ phases: data.phases.filter((_, i) => i !== index) });
   };
 
+  // Additional Services
+  const addService = () => {
+    updateData({
+      additionalServices: [
+        ...data.additionalServices,
+        { title: "", price: 0, billingCycle: "one-time", description: "" },
+      ],
+    });
+  };
+
+  const updateService = (index: number, updates: Partial<IAdditionalService>) => {
+    const newServices = data.additionalServices.map((s, i) =>
+      i === index ? { ...s, ...updates } : s
+    );
+    updateData({ additionalServices: newServices });
+  };
+
+  const removeService = (index: number) => {
+    updateData({
+      additionalServices: data.additionalServices.filter((_, i) => i !== index),
+    });
+  };
+
   // Tech stack
   const updateTechStack = (updates: Partial<TemplateData["techStack"]>) => {
     updateData({ techStack: { ...data.techStack, ...updates } });
@@ -361,6 +384,88 @@ export default function TemplateBuilder({
                     <Plus className="w-5 h-5" />
                     <span className="text-sm">New Phase</span>
                   </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Additional Services */}
+          <div className="overflow-hidden rounded-xl border border-border bg-card">
+            <div className="flex flex-row items-start justify-between gap-4 border-b border-border bg-muted/30 p-6">
+              <div className="flex-1 min-w-0">
+                <SectionHeader
+                  title="Additional Services"
+                  icon={<Briefcase className="w-5 h-5 text-teal-600" />}
+                  description="Add individual items like hosting, domains, SSL, or manual tasks."
+                />
+              </div>
+              <PrimaryButton
+                variant="outline"
+                className="h-10 px-3 shrink-0 shadow-sm border-teal-500/20 text-teal-600 hover:bg-teal-500/10 hover:text-teal-700 transition duration-150"
+                onClick={addService}
+              >
+                <Plus className="w-4 h-4" /> New Service
+              </PrimaryButton>
+            </div>
+            <div className="p-6">
+              {data.additionalServices.length === 0 ? (
+                <div className="rounded-xl border bg-muted/20 p-4 text-sm text-muted-foreground">
+                  No additional services added yet. Click <span className="font-medium text-foreground">New Service</span> to add direct services.
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {data.additionalServices.map((service, sIdx) => (
+                    <div key={sIdx} className="group relative border border-border rounded-xl bg-card p-4 transition-all hover:border-teal-500/30">
+                      <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+                        <div className="md:col-span-5 space-y-1">
+                          <FieldLabel>Service Title</FieldLabel>
+                          <TextInput
+                            value={service.title}
+                            onChange={(e) => updateService(sIdx, { title: e.target.value })}
+                            placeholder="e.g. Cloud Hosting (1 Year)"
+                          />
+                        </div>
+                        <div className="md:col-span-3 space-y-1">
+                          <FieldLabel>Billing Cycle</FieldLabel>
+                          <SelectInput
+                            value={service.billingCycle || "one-time"}
+                            onChange={(e) => updateService(sIdx, { billingCycle: e.target.value as any })}
+                          >
+                            <option value="one-time">One-time</option>
+                            <option value="monthly">Monthly</option>
+                            <option value="yearly">Yearly</option>
+                          </SelectInput>
+                        </div>
+                        <div className="md:col-span-3 space-y-1">
+                          <FieldLabel>Price</FieldLabel>
+                          <TextInput
+                            type="number"
+                            value={service.price || ""}
+                            onChange={(e) => updateService(sIdx, { price: Number(e.target.value) })}
+                            placeholder="0.00"
+                          />
+                        </div>
+                        <div className="md:col-span-1 flex items-end justify-end pb-1">
+                          <PrimaryButton
+                            variant="ghost"
+                            className="h-9 w-9 p-0 text-red-500 hover:text-red-600 hover:bg-red-500/10"
+                            onClick={() => removeService(sIdx)}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </PrimaryButton>
+                        </div>
+                        <div className="md:col-span-12 space-y-1">
+                          <FieldLabel>Description (Optional)</FieldLabel>
+                          <TextArea
+                            value={service.description || ""}
+                            onChange={(e) => updateService(sIdx, { description: e.target.value })}
+                            placeholder="Brief breakdown of what this includes..."
+                            className="min-h-[50px]"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>

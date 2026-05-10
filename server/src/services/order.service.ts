@@ -174,6 +174,14 @@ function buildQuotationSnapshot(
         taxRate: quotation.pricing.taxRate,
         discount: quotation.pricing.discount,
         additionalServicesTotal,
+        additionalServices: Array.isArray(quotation.additionalServices)
+            ? quotation.additionalServices.map((s) => ({
+                  title: String(s.title || ''),
+                  price: Number(s.price) || 0,
+                  billingCycle: s.billingCycle || 'one-time',
+                  ...(s.description ? { description: String(s.description) } : {}),
+              }))
+            : [],
         taxAmount: quotation.totals.taxAmount,
     });
 }
