@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from "react";
 import { format } from "date-fns";
+import { toast } from "sonner";
 import {
   Plus,
   Trash2,
@@ -19,6 +20,7 @@ import {
   FileText,
   DollarSign,
   LucideIcon,
+  Sparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -87,6 +89,15 @@ export default function TemplateBuilder({
 
   // Phase operations
   const addPhase = () => {
+    // Validation: if any existing phase doesn't have a title, warn and stop
+    const hasEmptyPhase = data.phases.some((p) => !p.title || !p.title.trim());
+    if (hasEmptyPhase) {
+      toast.warning("Please fill out existing phase titles before adding a new one.", {
+        description: "Each phase requires at least a title to maintain structure.",
+      });
+      return;
+    }
+
     updateData({
       phases: [...data.phases, { title: "", description: "", items: [] }],
     });
@@ -125,6 +136,13 @@ export default function TemplateBuilder({
   // Workflow
   const updateWorkflow = (workflow: string[]) => {
     updateData({ workflow });
+  };
+
+  const syncWorkflowFromPhases = () => {
+    const steps = data.phases
+      .map((p) => p.title.trim())
+      .filter(Boolean);
+    updateWorkflow(steps);
   };
 
   return (
@@ -330,6 +348,19 @@ export default function TemplateBuilder({
                       </div>
                     </details>
                   ))}
+                </div>
+              )}
+
+              {data.phases.length > 0 && (
+                <div className="sticky bottom-2 pr-2 pt-4 flex justify-end pointer-events-none z-30">
+                  <button
+                    type="button"
+                    onClick={addPhase}
+                    className="pointer-events-auto bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-full shadow-[0_8px_25px_-8px_rgba(13,148,136,0.5)] hover:shadow-[0_12px_30px_-8px_rgba(13,148,136,0.6)] flex items-center justify-center gap-2 px-5 py-3 transform transition duration-200 hover:-translate-y-1 active:scale-95"
+                  >
+                    <Plus className="w-5 h-5" />
+                    <span className="text-sm">New Phase</span>
+                  </button>
                 </div>
               )}
             </div>
@@ -594,6 +625,19 @@ export default function TemplateBuilder({
                   <ChevronDown className="ml-auto h-4 w-4 shrink-0 text-muted-foreground/60 transition-transform duration-200 group-open:rotate-180" />
                 </summary>
                 <div className="pt-3 pb-4 space-y-4 border-t border-border/60 mt-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs text-muted-foreground font-medium">
+                      Define sequence of steps.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={syncWorkflowFromPhases}
+                      className="text-xs font-bold text-teal-600 hover:text-teal-700 flex items-center gap-1 px-2 py-1 rounded-md hover:bg-teal-500/10 transition-colors"
+                      title="Automatically pull titles from project phases"
+                    >
+                      <Sparkles className="w-3 h-3" /> Auto-fill from Phases
+                    </button>
+                  </div>
                   <div className="flex flex-wrap gap-2">
                     {data.workflow.map((step, idx) => (
                       <SoftBadge key={idx}>
