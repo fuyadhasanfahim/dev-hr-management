@@ -120,6 +120,8 @@ function buildQuotationSnapshot(
         title: p.title,
         description: typeof p.description === 'string' ? p.description : '',
         items: Array.isArray(p.items) ? [...p.items] : [],
+        ...(p.startDate ? { startDate: p.startDate } : {}),
+        ...(p.endDate ? { endDate: p.endDate } : {}),
     }));
 
     // ── additionalServices — optional; each entry must have a numeric price ───

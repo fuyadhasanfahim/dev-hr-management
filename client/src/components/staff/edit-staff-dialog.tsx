@@ -109,6 +109,7 @@ export function EditStaffDialog({ staff }: EditStaffDialogProps) {
         try {
             const payload = {
                 ...values,
+                branchId: values.branchId === "" ? undefined : values.branchId,
             };
 
             await updateStaff({

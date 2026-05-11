@@ -739,6 +739,13 @@ async function updateStaffInDB(payload: {
 }) {
     const { staffId, staffData, role, changedBy, ipAddress, userAgent } = payload;
 
+    // Sanitize empty strings that cause CastError on ObjectIds
+    const finalStaffData = { ...staffData };
+    const rawBranchId = finalStaffData.branchId as unknown;
+    if (rawBranchId === "" || rawBranchId === "null" || rawBranchId === "undefined") {
+        delete finalStaffData.branchId; 
+    }
+
     const session = await mongoose.startSession();
     session.startTransaction();
 
@@ -751,8 +758,8 @@ async function updateStaffInDB(payload: {
 
         // If salary is being changed, we should probably log it (reusing logic or simplified)
         if (
-            staffData.salary !== undefined &&
-            staffData.salary !== staff.salary &&
+            finalStaffData.salary !== undefined &&
+            finalStaffData.salary !== staff.salary &&
             changedBy
         ) {
             const SalaryHistoryModel = (
@@ -764,7 +771,7 @@ async function updateStaffInDB(payload: {
                     {
                         staffId: staff._id,
                         previousSalary: staff.salary,
-                        newSalary: staffData.salary,
+                        newSalary: finalStaffData.salary,
                         changedBy,
                         reason: "Administrative Update",
                     },
@@ -776,7 +783,7 @@ async function updateStaffInDB(payload: {
         // Update Staff
         const updatedStaff = await StaffModel.findOneAndUpdate(
             { staffId },
-            { $set: staffData },
+            { $set: finalStaffData },
             { new: true, session },
         );
 
@@ -793,7 +800,7 @@ async function updateStaffInDB(payload: {
         await session.commitTransaction();
 
         if (changedBy) {
-            const isSalaryChange = staffData.salary !== undefined && staffData.salary !== staff.salary;
+            const isSalaryChange = finalStaffData.salary !== undefined && finalStaffData.salary !== staff.salary;
             await auditService.createLog({
                 userId: changedBy,
                 action: isSalaryChange ? 'SALARY_UPDATE' : 'UPDATE',
