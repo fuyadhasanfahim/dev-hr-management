@@ -305,6 +305,7 @@ export class QuotationService {
         id: string,
         _userId: string,
         recipientEmails?: string[],
+        includePaymentLink = false,
     ): Promise<SendQuotationResult> {
         const quotation = await QuotationModel.findById(id);
         if (!quotation) throw new AppError('Quotation not found', 404);
@@ -461,7 +462,7 @@ export class QuotationService {
                     clientName,
                     quotationTitle: saved.details?.title || 'Quotation',
                     quotationNumber: saved.quotationNumber,
-                    clientLink,
+                    ...(includePaymentLink ? { clientLink } : {}),
                     totalAmountFormatted,
                     ...(saved.details?.validUntil
                         ? { validUntil: new Date(saved.details.validUntil).toLocaleDateString('en-GB') }

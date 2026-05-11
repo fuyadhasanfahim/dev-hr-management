@@ -9,6 +9,7 @@ import {
   useDeleteQuotationMutation,
   useGetGroupVersionsQuery
 } from "@/redux/features/quotation/quotationApi";
+import { useConvertQuotationToOrderMutation } from "@/redux/features/order/orderApi";
 import { QuotationEmailDialog } from "../components/QuotationEmailDialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -33,6 +34,7 @@ import {
   Activity,
   ReceiptText,
   Printer,
+  Briefcase,
 } from "lucide-react";
 import Link from "next/link";
 import QuotationPuppeteerPdfBtn, {
@@ -46,7 +48,7 @@ import { toast } from "sonner";
 export default function ViewQuotationPage() {
   const router = useRouter();
   const { id } = useParams();
-  const { data, isLoading } = useGetQuotationByIdQuery(id as string);
+  const { data, isLoading, refetch } = useGetQuotationByIdQuery(id as string);
   const { data: versions } = useGetGroupVersionsQuery(data?.quotationGroupId || "", {
     skip: !data?.quotationGroupId
   });
@@ -54,6 +56,7 @@ export default function ViewQuotationPage() {
   const [sendQuotation, { isLoading: isSending }] = useSendQuotationMutation();
   const [createNewVersion, { isLoading: isVersionCreating }] = useCreateNewVersionMutation();
   const [deleteQuotation, { isLoading: isDeleting }] = useDeleteQuotationMutation();
+  const [convertQuotationToOrder, { isLoading: isConverting }] = useConvertQuotationToOrderMutation();
 
   const [pickerOpen, setPickerOpen] = useState(false);
 
@@ -74,7 +77,7 @@ export default function ViewQuotationPage() {
     setPickerOpen(true);
   };
 
-  const handleConfirmSend = async (selected: string[]) => {
+  const handleConfirmSend = async (selected: string[], includePaymentLink: boolean) => {
     if (!id) return [];
     if (selected.length === 0) {
       toast.warning("Please select at least one recipient");
@@ -82,7 +85,11 @@ export default function ViewQuotationPage() {
     }
     if (isSending) return [];
     try {
-      const result = await sendQuotation({ id: id as string, emails: selected }).unwrap();
+      const result = await sendQuotation({ 
+        id: id as string, 
+        emails: selected,
+        includePaymentLink,
+      }).unwrap();
       if (result.data.clientLink) {
         try {
           await navigator.clipboard.writeText(result.data.clientLink);
@@ -117,6 +124,21 @@ export default function ViewQuotationPage() {
     } catch (err) {
       toast.error((err as Error).message || "Failed to send quotation");
       return [];
+    }
+  };
+
+  const handleConvertToOrder = async () => {
+    if (!data?.quotationGroupId) return;
+    const tid = toast.loading("Converting quotation to order...");
+    try {
+      const res = await convertQuotationToOrder({ quotationGroupId: data.quotationGroupId }).unwrap();
+      toast.success("Converted to order successfully!", { id: tid });
+      refetch();
+      if (res.data?._id) {
+        router.push(`/orders/${res.data._id}`);
+      }
+    } catch (err: any) {
+      toast.error(err?.data?.message || err?.message || "Conversion failed", { id: tid });
     }
   };
 
@@ -246,7 +268,22 @@ export default function ViewQuotationPage() {
               </Button>
             )}
 
-          {data.status === "accepted" && (
+          {data.status === "accepted" && !data.orderId && (
+            <Button 
+              className="bg-emerald-600 hover:bg-emerald-700 text-white" 
+              disabled={isConverting}
+              onClick={handleConvertToOrder}
+            >
+              {isConverting ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Briefcase className="h-4 w-4" />
+              )}
+              Convert to Order
+            </Button>
+          )}
+
+          {data.status === "accepted" && data.orderId && (
             <Button asChild variant="outline">
               <Link href={`/orders/${data.orderId}`}>
                 <CheckCircle2 className="h-4 w-4" />
@@ -279,6 +316,8 @@ export default function ViewQuotationPage() {
           </Button>
         </div>
       </div>
+
+
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Main Info */}

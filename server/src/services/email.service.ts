@@ -242,7 +242,7 @@ interface SendQuotationEmailData {
     clientName: string;
     quotationTitle: string;
     quotationNumber: string;
-    clientLink: string;
+    clientLink?: string;
     validUntil?: string;
     /** Formatted grand total, e.g. "$1,250.00". Always shown when provided. */
     totalAmountFormatted?: string;
@@ -266,7 +266,7 @@ const sendQuotationEmail = async (data: SendQuotationEmailData) => {
                 clientName: data.clientName,
                 quotationTitle: data.quotationTitle,
                 quotationNumber: data.quotationNumber,
-                clientLink: data.clientLink,
+                ...(data.clientLink ? { clientLink: data.clientLink } : {}),
                 ...(data.validUntil ? { validUntil: data.validUntil } : {}),
                 ...(data.totalAmountFormatted
                     ? { totalAmountFormatted: data.totalAmountFormatted }

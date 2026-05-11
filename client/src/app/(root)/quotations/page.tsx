@@ -15,6 +15,7 @@ import {
   useDeleteQuotationMutation,
   useSendQuotationMutation,
 } from "@/redux/features/quotation/quotationApi";
+import { useConvertQuotationToOrderMutation } from "@/redux/features/order/orderApi";
 import { QuotationTable } from "./components/QuotationTable";
 import { QuotationEmailDialog } from "./components/QuotationEmailDialog";
 import { Input } from "@/components/ui/input";
@@ -38,6 +39,7 @@ import {
   ReceiptText,
   Search,
   X,
+  Loader2
 } from "lucide-react";
 
 /** Resolve the client `_id` even when the API populates `clientId` as an object. */
@@ -54,7 +56,7 @@ export default function QuotationsPage() {
   const [status, setStatus] = useState<string>("");
   const [search, setSearch] = useState<string>("");
 
-  const { data: qData, isLoading } = useGetQuotationsQuery({
+  const { data: qData, isLoading, refetch } = useGetQuotationsQuery({
     page,
     status: status === "all" ? undefined : status || undefined,
     search: search || undefined,
@@ -62,6 +64,7 @@ export default function QuotationsPage() {
 
   const [deleteQuotation] = useDeleteQuotationMutation();
   const [sendQuotation] = useSendQuotationMutation();
+  const [convertQuotationToOrder] = useConvertQuotationToOrderMutation();
   const [sendingId, setSendingId] = useState<string | null>(null);
 
   // ── Email recipient picker state ────────────────────────────────────────
@@ -88,7 +91,7 @@ export default function QuotationsPage() {
     setPickerOpen(true);
   };
 
-  const handleConfirmSend = async (selected: string[]) => {
+  const handleConfirmSend = async (selected: string[], includePaymentLink: boolean) => {
     if (!pickerQuotation?._id) return [];
     if (selected.length === 0) {
       toast.warning("Please select at least one recipient");
@@ -100,6 +103,7 @@ export default function QuotationsPage() {
       const result = await sendQuotation({
         id: pickerQuotation._id,
         emails: selected,
+        includePaymentLink,
       }).unwrap();
 
       if (result.data.clientLink) {
@@ -154,6 +158,21 @@ export default function QuotationsPage() {
       } catch (err) {
         toast.error((err as Error).message || "Failed to delete quotation");
       }
+    }
+  };
+
+  const handleConvertToOrder = async (groupId: string) => {
+    const toastId = toast.loading("Converting quotation to order...");
+    try {
+      const response = await convertQuotationToOrder({ quotationGroupId: groupId }).unwrap();
+      toast.success("Successfully converted to order", { id: toastId });
+      refetch(); // refresh listing data to ensure the orderId updates
+      // Navigate directly to new order
+      if (response.data?._id) {
+        router.push(`/orders/${response.data._id}`);
+      }
+    } catch (err: any) {
+      toast.error(err?.data?.message || err?.message || "Failed to convert", { id: toastId });
     }
   };
 
@@ -293,6 +312,7 @@ export default function QuotationsPage() {
               isLoading={isLoading}
               onEdit={handleEdit}
               onDelete={handleDelete}
+              onConvertToOrder={handleConvertToOrder}
               onSend={(id) => {
                 const q = qData?.items.find((x) => x._id === id);
                 if (q) handleOpenPicker(q);

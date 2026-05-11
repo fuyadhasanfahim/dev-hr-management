@@ -122,12 +122,12 @@ export const quotationApi = apiSlice.injectEndpoints({
           recipients: RecipientSendStatus[];
         };
       },
-      { id: string; emails?: string[] }
+      { id: string; emails?: string[]; includePaymentLink?: boolean }
     >({
-      query: ({ id, emails }) => ({
+      query: ({ id, emails, includePaymentLink }) => ({
         url: `/quotations/${id}/send`,
         method: 'POST',
-        body: emails?.length ? { emails } : undefined,
+        body: { emails, includePaymentLink },
       }),
       invalidatesTags: ['Quotation'],
     }),

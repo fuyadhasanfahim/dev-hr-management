@@ -31,6 +31,7 @@ export interface QuotationEmailDialogProps {
      */
     onSend: (
         selectedEmails: string[],
+        includePaymentLink: boolean,
     ) => Promise<RecipientSendStatus[] | void> | RecipientSendStatus[] | void;
     isSending?: boolean;
 }
@@ -125,6 +126,7 @@ export function QuotationEmailDialog({
     }, [clientEmails, extraEmails]);
 
     const [selected, setSelected] = useState<string[]>([]);
+    const [includePaymentLink, setIncludePaymentLink] = useState(false);
     const [results, setResults] = useState<RecipientSendStatus[] | null>(null);
 
     // Re-entrancy guard: prevents double-submits when a user clicks the
@@ -138,6 +140,7 @@ export function QuotationEmailDialog({
         if (!open) return;
         submitLockRef.current = false;
         setResults(null);
+        setIncludePaymentLink(false);
         const primary = options.find((o) => o.type === "primary");
         if (primary) {
             setSelected([primary.email]);
@@ -171,8 +174,9 @@ export function QuotationEmailDialog({
         // Lock first, *then* call onSend. This prevents a second click from
         // starting another in-flight request before React commits state.
         submitLockRef.current = true;
+        submitLockRef.current = true;
         try {
-            const out = await onSend(selected);
+            const out = await onSend(selected, includePaymentLink);
             if (Array.isArray(out)) {
                 setResults(out);
             }
@@ -333,6 +337,30 @@ export function QuotationEmailDialog({
                         <div className="mt-4 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
                             <AlertTriangle className="h-3.5 w-3.5 mt-0.5" />
                             <span>Please select at least one recipient.</span>
+                        </div>
+                    )}
+
+                    {!hasResults && !isLoading && options.length > 0 && (
+                        <div className="mt-5 pt-4 border-t border-slate-100">
+                            <label className="flex items-center gap-3 cursor-pointer select-none group rounded-lg border border-transparent hover:bg-slate-50 p-2 transition-colors">
+                                <div className="relative flex items-center justify-center h-5 w-5 shrink-0">
+                                    <input
+                                        type="checkbox"
+                                        checked={includePaymentLink}
+                                        onChange={(e) => setIncludePaymentLink(e.target.checked)}
+                                        disabled={inFlight}
+                                        className="peer h-4 w-4 shrink-0 rounded border-slate-300 text-teal-600 focus:ring-teal-500 disabled:cursor-not-allowed"
+                                    />
+                                </div>
+                                <div className="flex-1">
+                                    <p className="text-sm font-medium text-slate-900 group-hover:text-teal-700 transition-colors">
+                                        Include Payment Link
+                                    </p>
+                                    <p className="text-xs text-slate-500">
+                                        Let the client view and pay directly from the email
+                                    </p>
+                                </div>
+                            </label>
                         </div>
                     )}
                 </div>

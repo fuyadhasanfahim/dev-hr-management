@@ -173,6 +173,19 @@ export const orderApi = apiSlice.injectEndpoints({
         { type: "Order", id: "LIST" },
       ],
     }),
+
+    convertQuotationToOrder: builder.mutation<OrderResponse, { quotationGroupId: string }>({
+      query: (data) => ({
+        url: "/orders/convert-quotation",
+        method: "POST",
+        body: data,
+      }),
+      invalidatesTags: [
+        { type: "Order", id: "LIST" },
+        { type: "Order", id: "STATS" },
+        { type: "Quotation" as any, id: "LIST" },
+      ],
+    }),
   }),
 });
 
@@ -190,4 +203,5 @@ export const {
   useAddRevisionMutation,
   useDeleteOrderMutation,
   useMarkDeliveredMutation,
+  useConvertQuotationToOrderMutation,
 } = orderApi;

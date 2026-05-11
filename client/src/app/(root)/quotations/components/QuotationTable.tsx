@@ -11,7 +11,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Eye, Edit2, FileText, Trash2, Send, Loader2, GitBranch } from "lucide-react";
+import { Eye, Edit2, FileText, Trash2, Send, Loader2, GitBranch, Briefcase } from "lucide-react";
 import Link from "next/link";
 import { QuotationData, QuotationStatus } from "@/types/quotation.type";
 import { format } from "date-fns";
@@ -39,6 +39,7 @@ interface QuotationTableProps {
   onEdit: (quotation: QuotationData) => void;
   onDelete: (id: string) => void;
   onSend: (id: string) => void;
+  onConvertToOrder?: (quotationGroupId: string) => void;
   sendingId?: string | null;
 }
 
@@ -48,6 +49,7 @@ export function QuotationTable({
   onEdit,
   onDelete,
   onSend,
+  onConvertToOrder,
   sendingId,
 }: QuotationTableProps) {
   // ── Loading skeleton ───────────────────────────────────────────────────
@@ -182,6 +184,19 @@ export function QuotationTable({
                 {/* Actions */}
                 <TableCell className="text-right">
                   <div className="flex items-center justify-end gap-1">
+                    {/* Convert to Order (only when accepted but not yet converted) */}
+                    {q.status === "accepted" && !q.orderId && onConvertToOrder && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-emerald-500 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
+                        onClick={() => q.quotationGroupId && onConvertToOrder(q.quotationGroupId)}
+                        title="Convert to Order"
+                      >
+                        <Briefcase className="h-4 w-4" />
+                      </Button>
+                    )}
+
                     {/* View */}
                     <Button
                       variant="ghost"

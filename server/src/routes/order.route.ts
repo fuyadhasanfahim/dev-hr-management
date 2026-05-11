@@ -27,6 +27,7 @@ router.get('/:id',      authorize(...STAFF_ROLES), OrderController.getOrderById)
 
 router.patch('/:id/status',         authorize(...STAFF_ROLES), OrderController.updateOrderStatus);
 router.post('/:id/deliver',         authorize(...STAFF_ROLES), OrderController.markDelivered);
+router.post('/convert-quotation',    authorize(...STAFF_ROLES), OrderController.convertQuotationToOrder);
 
 // Public asset delivery endpoint — accessToken is the credential (no JWT).
 router.get('/client/:id/assets/:assetId', OrderController.getAssetPublic);

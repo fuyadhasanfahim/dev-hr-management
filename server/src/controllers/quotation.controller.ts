@@ -38,10 +38,11 @@ const sendQuotation = async (req: Request, res: Response, next: NextFunction) =>
             Array.isArray((req as any)?.body?.emails) && (req as any).body.emails.length
                 ? (req as any).body.emails
                 : undefined;
+        const includePaymentLink = Boolean((req as any)?.body?.includePaymentLink);
         const { id } = req.params;
         if (!id) return next(new Error('Quotation ID is required'));
-        logger.info({ quotationId: id }, 'quotation.send.requested');
-        const result = await QuotationService.sendQuotation(id, userId, emails);
+        logger.info({ quotationId: id, includePaymentLink }, 'quotation.send.requested');
+        const result = await QuotationService.sendQuotation(id, userId, emails, includePaymentLink);
 
         const q = result.quotation;
         logger.info(

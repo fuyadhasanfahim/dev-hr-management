@@ -401,7 +401,7 @@ export default function QuotationBuilder({
         setRecipientModalOpen(true);
     };
 
-    const confirmDispatch = async (selectedEmails: string[]) => {
+    const confirmDispatch = async (selectedEmails: string[], includePaymentLink: boolean) => {
         if (!data.clientId) {
             toast.error('Please select a client first');
             return [];
@@ -419,6 +419,7 @@ export default function QuotationBuilder({
             const result = await sendQuotation({
                 id: String(id),
                 emails: selectedEmails,
+                includePaymentLink,
             }).unwrap();
             if (result.data.clientLink) {
                 try {

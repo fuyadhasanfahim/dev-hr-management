@@ -41,7 +41,7 @@ interface QuotationEmailProps {
      * Secure link the client uses to review the quotation. Rendered as a CTA
      * only — never as bare text — to avoid the "shady raw URL" feel.
      */
-    clientLink: string;
+    clientLink?: string;
     validUntil?: string;
     /** Formatted grand total, e.g. "$1,250.00". Always shown when provided. */
     totalAmountFormatted?: string;
@@ -124,11 +124,22 @@ export const QuotationEmail = ({
                             <Text style={paragraph}>
                                 We&apos;ve prepared your quotation{' '}
                                 <strong>{quotationNumber}</strong> for{' '}
-                                <strong>{quotationTitle}</strong>. Tap{' '}
-                                <em>Review quotation</em> below to view the full
-                                proposal — project overview, scope of work,
-                                pricing, and payment milestones — in one secure
-                                place.
+                                <strong>{quotationTitle}</strong>.
+                                {clientLink ? (
+                                    <>
+                                        {' '}Tap <em>Review quotation</em> below
+                                        to view the full proposal — project
+                                        overview, scope of work, pricing, and
+                                        payment milestones — in one secure
+                                        place.
+                                    </>
+                                ) : (
+                                    <>
+                                        {' '}Please find the details attached in the PDF
+                                        below, covering the project overview, scope of
+                                        work, pricing, and deliverables.
+                                    </>
+                                )}
                             </Text>
                         )}
 
@@ -294,19 +305,23 @@ export const QuotationEmail = ({
                             </Section>
                         ) : null}
 
-                        <Section style={btnContainer}>
-                            <Button style={button} href={clientLink}>
-                                {isReminder
-                                    ? 'Continue payment →'
-                                    : 'Review quotation →'}
-                            </Button>
-                        </Section>
+                        {clientLink ? (
+                            <>
+                                <Section style={btnContainer}>
+                                    <Button style={button} href={clientLink}>
+                                        {isReminder
+                                            ? 'Continue payment →'
+                                            : 'Review quotation →'}
+                                    </Button>
+                                </Section>
 
-                        <Text style={tinyMuted}>
-                            This is a secure, single-use link tied to your
-                            account. Please don&apos;t share it with anyone
-                            outside your team.
-                        </Text>
+                                <Text style={tinyMuted}>
+                                    This is a secure, single-use link tied to your
+                                    account. Please don&apos;t share it with anyone
+                                    outside your team.
+                                </Text>
+                            </>
+                        ) : null}
 
                         <Hr style={hr} />
 

@@ -168,6 +168,36 @@ async function getAssetPublic(req: Request, res: Response, next: NextFunction): 
     }
 }
 
+/**
+ * Explicit staff command to manually create an order from an existing accepted quotation.
+ */
+async function convertQuotationToOrder(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+        const { quotationGroupId } = req.body;
+        const userId = req.user?.id;
+
+        if (!userId) {
+            next(new AppError('Unauthorized', 401));
+            return;
+        }
+
+        if (!quotationGroupId) {
+            next(new AppError('quotationGroupId is required', 400));
+            return;
+        }
+
+        const result = await OrderService.createOrderFromQuotation(quotationGroupId, userId);
+
+        res.status(201).json({
+            success: true,
+            message: 'Order successfully created from quotation',
+            data: result,
+        });
+    } catch (err) {
+        next(err);
+    }
+}
+
 export default {
     getAllOrders,
     getOrderById,
@@ -175,4 +205,5 @@ export default {
     markDelivered,
     getAsset,
     getAssetPublic,
+    convertQuotationToOrder,
 };

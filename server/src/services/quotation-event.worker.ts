@@ -82,7 +82,7 @@ async function sendReceiptEmails(
 // ─── Event Handlers ───────────────────────────────────────────────────────────
 
 export async function handleQuotationAccepted(data: any) {
-    const tracker = await QuotationPaymentService.initializePaymentTracker(
+    await QuotationPaymentService.initializePaymentTracker(
         data.quotationGroupId,
         data.quotationId,
         data.quotationVersion,
@@ -91,27 +91,16 @@ export async function handleQuotationAccepted(data: any) {
         data.currency,
     );
 
-    const systemActorId = data.systemActorId || '000000000000000000000000';
-
-    // CRITICAL: Create the order immediately upon acceptance.
-    // This ensures the order exists in 'pending_upfront' status as expected by the new pipeline.
-    const order = await OrderService.createOrderFromQuotation(
-        data.quotationGroupId,
-        systemActorId,
-    );
-
-    // Link the orderId back to the tracker
-    await QuotationPaymentModel.findByIdAndUpdate(tracker._id, {
-        $set: { orderId: order._id }
-    });
-
+    /* 
+     * MODIFIED: Removed automatic order creation upon acceptance per requirements.
+     * Order must now be explicitly created via staff dashboard "Convert to Order".
+     */
     logger.info(
         {
             quotationGroupId: data.quotationGroupId,
             quotationId: data.quotationId,
-            orderId: order._id,
         },
-        'quotation.accepted.order_created',
+        'quotation.accepted.tracker_initialized',
     );
 }
 
@@ -170,30 +159,9 @@ export async function handleUpfrontPaymentSucceeded(data: any) {
         return;
     }
 
-    // Fallback for legacy trackers missing orderId
-    log.info('payment.upfront.succeeded.creating_missing_order');
-    try {
-        const order = await OrderService.createOrderFromQuotation(
-            data.quotationGroupId,
-            systemActorId,
-        );
-
-        await QuotationPaymentModel.findOneAndUpdate(
-            { quotationGroupId: data.quotationGroupId, isActive: true },
-            { $set: { orderId: order._id } },
-        );
-
-        // Immediately transition to active
-        await OrderService.transitionStatus(
-            order._id.toString(),
-            OrderStatus.ACTIVE,
-            systemActorId,
-            'Order activated automatically after creation (upfront already paid)'
-        );
-    } catch (err) {
-        log.error({ err }, 'payment.upfront.succeeded.order_creation_failed');
-        throw err;
-    }
+    // Fallback for legacy trackers missing orderId REMOVED. 
+    // As per the new manually converted workflow, orders are no longer auto-generated on payment.
+    log.warn('payment.upfront.succeeded.order_missing — manually conversion required to proceed to active status');
 }
 
 export async function handleDeliveryPaymentSucceeded(data: any) {
