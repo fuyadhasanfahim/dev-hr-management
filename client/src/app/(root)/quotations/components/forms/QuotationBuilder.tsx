@@ -86,10 +86,10 @@ function SectionHeader({
     return (
         <div className="space-y-1 mb-4">
             <div className="flex items-center gap-2">
-                <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-teal-50/60 text-teal-600 border border-teal-100/50 ring-1 ring-teal-50/40">
+                <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-teal-50/60 dark:bg-teal-950/30 text-teal-600 dark:text-teal-400 border border-teal-100/50 dark:border-teal-900/50 ring-1 ring-teal-50/40 dark:ring-teal-900/20">
                     {icon}
                 </span>
-                <h3 className="text-lg font-extrabold tracking-tight bg-gradient-to-r from-slate-900 to-teal-800 bg-clip-text text-transparent">
+                <h3 className="text-lg font-extrabold tracking-tight bg-gradient-to-r from-slate-900 to-teal-800 dark:from-slate-50 dark:to-teal-400 bg-clip-text text-transparent">
                     {title}
                 </h3>
             </div>
@@ -1776,7 +1776,7 @@ export default function QuotationBuilder({
                                         <span className="text-muted-foreground">
                                             Additional Services
                                         </span>
-                                        <span className="font-bold text-teal-600">
+                                        <span className="font-bold text-teal-600 dark:text-teal-400">
                                             +{' '}
                                             {formatMoney(
                                                 data.additionalServices.reduce(
@@ -1839,11 +1839,11 @@ export default function QuotationBuilder({
                                     </div>
                                 )}
 
-                                <div className="pt-4 border-t border-teal-100 space-y-1 bg-gradient-to-r from-teal-50/20 to-orange-50/10 p-3 rounded-lg">
-                                    <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-teal-700">
+                                <div className="pt-4 border-t border-teal-100 dark:border-teal-900/50 space-y-1 bg-gradient-to-r from-teal-50/20 to-orange-50/10 dark:from-teal-950/30 dark:to-orange-950/10 p-3 rounded-lg">
+                                    <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-teal-700 dark:text-teal-400">
                                         Grand Project Total
                                     </span>
-                                    <div className="text-3xl font-black tracking-tight text-slate-900 leading-none">
+                                    <div className="text-3xl font-black tracking-tight text-slate-900 dark:text-slate-50 leading-none">
                                         {formatMoney(
                                             computedTotals.grandTotal,
                                             data.currency,

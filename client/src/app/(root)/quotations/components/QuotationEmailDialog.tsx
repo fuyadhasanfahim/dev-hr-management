@@ -213,22 +213,22 @@ export function QuotationEmailDialog({
                 onClick={handleClose}
             />
 
-            <div className="relative w-full sm:max-w-lg rounded-t-2xl sm:rounded-2xl border border-slate-200 bg-white shadow-2xl">
-                <div className="flex items-start justify-between gap-4 p-5 border-b border-slate-100">
+            <div className="relative w-full sm:max-w-lg rounded-t-2xl sm:rounded-2xl border bg-card shadow-2xl">
+                <div className="flex items-start justify-between gap-4 p-5 border-b">
                     <div className="flex items-start gap-3 min-w-0">
-                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-teal-50 text-teal-600 ring-1 ring-teal-100">
+                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-teal-50 dark:bg-teal-950/30 text-teal-600 dark:text-teal-400 ring-1 ring-teal-100 dark:ring-teal-900/30">
                             <Mail className="h-5 w-5" />
                         </span>
                         <div className="min-w-0">
                             <h2
                                 id="quotation-email-dialog-title"
-                                className="text-base font-semibold text-slate-900 truncate"
+                                className="text-base font-semibold truncate"
                             >
                                 {hasResults
                                     ? "Delivery summary"
                                     : "Send quotation to client"}
                             </h2>
-                            <p className="text-xs text-slate-500 mt-0.5 truncate">
+                            <p className="text-xs text-muted-foreground mt-0.5 truncate">
                                 {quotationLabel
                                     ? hasResults
                                         ? `Results for ${quotationLabel}`
@@ -241,7 +241,7 @@ export function QuotationEmailDialog({
                         type="button"
                         onClick={handleClose}
                         disabled={inFlight}
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed"
                         aria-label="Close"
                     >
                         <X className="h-4 w-4" />
@@ -256,16 +256,16 @@ export function QuotationEmailDialog({
                             failedCount={failedCount}
                         />
                     ) : isLoading ? (
-                        <div className="flex items-center justify-center gap-2 rounded-xl border border-dashed border-slate-200 py-10 text-sm text-slate-500">
+                        <div className="flex items-center justify-center gap-2 rounded-xl border border-dashed py-10 text-sm text-muted-foreground">
                             <Loader2 className="h-4 w-4 animate-spin" />
                             Loading recipient list…
                         </div>
                     ) : options.length === 0 ? (
-                        <div className="rounded-xl border border-dashed border-slate-200 p-6 text-center">
-                            <p className="text-sm font-medium text-slate-700">
+                        <div className="rounded-xl border border-dashed p-6 text-center">
+                            <p className="text-sm font-medium">
                                 No emails available for this client.
                             </p>
-                            <p className="mt-1 text-xs text-slate-500">
+                            <p className="mt-1 text-xs text-muted-foreground">
                                 Add at least one email to the client profile or team members
                                 first.
                             </p>
@@ -334,29 +334,29 @@ export function QuotationEmailDialog({
                     )}
 
                     {!hasResults && noneSelected && options.length > 0 && (
-                        <div className="mt-4 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                        <div className="mt-4 flex items-start gap-2 rounded-lg border border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-950/20 px-3 py-2 text-xs text-amber-800 dark:text-amber-400">
                             <AlertTriangle className="h-3.5 w-3.5 mt-0.5" />
                             <span>Please select at least one recipient.</span>
                         </div>
                     )}
 
                     {!hasResults && !isLoading && options.length > 0 && (
-                        <div className="mt-5 pt-4 border-t border-slate-100">
-                            <label className="flex items-center gap-3 cursor-pointer select-none group rounded-lg border border-transparent hover:bg-slate-50 p-2 transition-colors">
+                        <div className="mt-5 pt-4 border-t">
+                            <label className="flex items-center gap-3 cursor-pointer select-none group rounded-lg border border-transparent hover:bg-muted p-2 transition-colors">
                                 <div className="relative flex items-center justify-center h-5 w-5 shrink-0">
                                     <input
                                         type="checkbox"
                                         checked={includePaymentLink}
                                         onChange={(e) => setIncludePaymentLink(e.target.checked)}
                                         disabled={inFlight}
-                                        className="peer h-4 w-4 shrink-0 rounded border-slate-300 text-teal-600 focus:ring-teal-500 disabled:cursor-not-allowed"
+                                        className="peer h-4 w-4 shrink-0 rounded border-input bg-background text-teal-600 focus:ring-teal-500 disabled:cursor-not-allowed"
                                     />
                                 </div>
                                 <div className="flex-1">
-                                    <p className="text-sm font-medium text-slate-900 group-hover:text-teal-700 transition-colors">
+                                    <p className="text-sm font-medium group-hover:text-teal-700 dark:group-hover:text-teal-400 transition-colors">
                                         Include Payment Link
                                     </p>
-                                    <p className="text-xs text-slate-500">
+                                    <p className="text-xs text-muted-foreground">
                                         Let the client view and pay directly from the email
                                     </p>
                                 </div>
@@ -365,10 +365,10 @@ export function QuotationEmailDialog({
                     )}
                 </div>
 
-                <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-3 border-t border-slate-100 p-5">
+                <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-3 border-t p-5">
                     {hasResults ? (
                         <>
-                            <p className="text-[11px] text-slate-500">
+                            <p className="text-[11px] text-muted-foreground">
                                 {successCount > 0 && `${successCount} sent`}
                                 {successCount > 0 && failedCount > 0 ? " • " : ""}
                                 {failedCount > 0 && `${failedCount} failed`}
@@ -377,7 +377,7 @@ export function QuotationEmailDialog({
                                 <button
                                     type="button"
                                     onClick={handleClose}
-                                    className="inline-flex h-10 items-center justify-center rounded-lg bg-slate-900 px-4 text-sm font-semibold text-white hover:bg-slate-800"
+                                    className="inline-flex h-10 items-center justify-center rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
                                 >
                                     Done
                                 </button>
@@ -385,7 +385,7 @@ export function QuotationEmailDialog({
                         </>
                     ) : (
                         <>
-                            <p className="text-[11px] text-slate-500">
+                            <p className="text-[11px] text-muted-foreground">
                                 {selected.length > 0
                                     ? `${selected.length} recipient${selected.length === 1 ? "" : "s"} selected • emails are sent one by one`
                                     : "Pick at least one recipient."}
@@ -395,7 +395,7 @@ export function QuotationEmailDialog({
                                     type="button"
                                     onClick={handleClose}
                                     disabled={inFlight}
-                                    className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60 disabled:cursor-not-allowed"
+                                    className="inline-flex h-10 items-center justify-center rounded-lg border bg-background px-4 text-sm font-medium hover:bg-muted disabled:opacity-60 disabled:cursor-not-allowed"
                                 >
                                     Cancel
                                 </button>
@@ -436,7 +436,7 @@ function Section({
 }) {
     return (
         <section className="space-y-2">
-            <h3 className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+            <h3 className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                 {title}
             </h3>
             <div className="space-y-2">{children}</div>
@@ -464,9 +464,9 @@ function EmailRow({
                 "group flex items-start gap-3 rounded-xl border p-3 transition-colors",
                 disabled ? "cursor-not-allowed" : "cursor-pointer",
                 checked
-                    ? "border-teal-500 bg-teal-50/60 ring-1 ring-teal-500/30"
-                    : "border-slate-200 hover:border-slate-300 hover:bg-slate-50",
-                isPrimary && !checked ? "border-teal-200 bg-teal-50/30" : "",
+                    ? "border-teal-500 bg-teal-50/60 dark:bg-teal-950/30 ring-1 ring-teal-500/30"
+                    : "border-border hover:border-teal-500/30 hover:bg-muted/50",
+                isPrimary && !checked ? "border-teal-200 dark:border-teal-900/50 bg-teal-50/30 dark:bg-teal-950/10" : "",
             ].join(" ")}
         >
             <input
@@ -474,27 +474,27 @@ function EmailRow({
                 checked={checked}
                 onChange={onToggle}
                 disabled={disabled}
-                className="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300 text-teal-600 focus:ring-teal-500 disabled:cursor-not-allowed"
+                className="mt-0.5 h-4 w-4 shrink-0 rounded border-input bg-background text-teal-600 focus:ring-teal-500 disabled:cursor-not-allowed"
             />
             <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-sm font-medium text-slate-900 truncate">
+                    <span className="text-sm font-medium truncate">
                         {opt.email}
                     </span>
                     {isPrimary && (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-teal-600/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-teal-700">
+                        <span className="inline-flex items-center gap-1 rounded-full bg-teal-600/10 text-teal-700 dark:text-teal-400 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide">
                             <Star className="h-3 w-3" />
                             Primary
                         </span>
                     )}
                     {isTeam && (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600">
+                        <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
                             <Users className="h-3 w-3" />
                             Team
                         </span>
                     )}
                 </div>
-                <p className="text-xs text-slate-500 mt-0.5 truncate">{opt.label}</p>
+                <p className="text-xs text-muted-foreground mt-0.5 truncate">{opt.label}</p>
             </div>
         </label>
     );
@@ -515,10 +515,10 @@ function ResultsView({
                 className={[
                     "rounded-xl border p-3 text-xs",
                     failedCount === 0
-                        ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                        ? "border-emerald-200 dark:border-emerald-900/50 bg-emerald-50 dark:bg-emerald-950/20 text-emerald-800 dark:text-emerald-400"
                         : successCount === 0
-                            ? "border-red-200 bg-red-50 text-red-800"
-                            : "border-amber-200 bg-amber-50 text-amber-800",
+                            ? "border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/20 text-red-800 dark:text-red-400"
+                            : "border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-950/20 text-amber-800 dark:text-amber-400",
                 ].join(" ")}
             >
                 {failedCount === 0
@@ -537,8 +537,8 @@ function ResultsView({
                             className={[
                                 "flex items-start gap-3 rounded-xl border p-3",
                                 ok
-                                    ? "border-emerald-200 bg-emerald-50/40"
-                                    : "border-red-200 bg-red-50/40",
+                                    ? "border-emerald-200 dark:border-emerald-900/30 bg-emerald-50/40 dark:bg-emerald-950/10"
+                                    : "border-red-200 dark:border-red-900/30 bg-red-50/40 dark:bg-red-950/10",
                             ].join(" ")}
                         >
                             {ok ? (
@@ -548,15 +548,15 @@ function ResultsView({
                             )}
                             <div className="min-w-0 flex-1">
                                 <div className="flex items-center gap-2 flex-wrap">
-                                    <span className="text-sm font-medium text-slate-900 truncate">
+                                    <span className="text-sm font-medium truncate">
                                         {r.email}
                                     </span>
                                     <span
                                         className={[
                                             "rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
                                             ok
-                                                ? "bg-emerald-600/10 text-emerald-700"
-                                                : "bg-red-600/10 text-red-700",
+                                                ? "bg-emerald-600/10 text-emerald-700 dark:text-emerald-400"
+                                                : "bg-red-600/10 text-red-700 dark:text-red-400",
                                         ].join(" ")}
                                     >
                                         {ok ? "Sent" : "Failed"}

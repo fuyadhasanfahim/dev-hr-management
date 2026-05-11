@@ -21,10 +21,10 @@ export default function NewQuotationPage() {
         <div className="w-full space-y-6 animate-in fade-in duration-300">
             <Card>
                 <CardHeader>
-                    <CardTitle className="text-2xl text-slate-900 font-bold">
+                    <CardTitle className="text-2xl font-bold">
                         New Quotation
                     </CardTitle>
-                    <CardDescription className="text-slate-500">
+                    <CardDescription>
                         Build secure, version-controlled quotations with custom
                         tech stacks, scope, and pricing.
                     </CardDescription>
