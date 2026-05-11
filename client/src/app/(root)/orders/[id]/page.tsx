@@ -1,7 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { useSession } from "@/lib/auth-client";
+import { Role } from "@/constants/role";
 import { 
     useGetOrderByIdQuery, 
     useRecordManualPaymentMutation,
@@ -93,6 +95,12 @@ export default function OrderDetailsPage() {
     const params = useParams();
     const router = useRouter();
     const id = params.id as string;
+
+    const { data: session } = useSession();
+    const canSeeFinancials = useMemo(() => {
+        const r = session?.user?.role;
+        return r === Role.SUPER_ADMIN || r === Role.ADMIN || r === Role.HR_MANAGER;
+    }, [session]);
 
     const { data, isLoading, error } = useGetOrderByIdQuery(id);
     const order = data?.data;
@@ -348,11 +356,17 @@ export default function OrderDetailsPage() {
                             <CardTitle className="text-lg">Financial Summary</CardTitle>
                         </CardHeader>
                         <CardContent className="pt-6 space-y-4">
-                            <div className="p-4 bg-primary/10 rounded-2xl border border-primary/20 text-center">
+                            <div className="p-4 bg-primary/10 rounded-2xl border border-primary/20 text-center relative overflow-hidden">
                                 <span className="text-muted-foreground text-sm font-medium">Grand Total</span>
-                                <h2 className="text-4xl font-black text-primary mt-1">
-                                    {order.quotationSnapshot?.currency === "USD" ? "$" : order.quotationSnapshot?.currency || "$"}
-                                    {(order.quotationSnapshot?.grandTotal || 0).toLocaleString()}
+                                <h2 className={cn("text-4xl font-black text-primary mt-1 tracking-tight", !canSeeFinancials && "blur-[3px] opacity-50 select-none")}>
+                                    {canSeeFinancials ? (
+                                        <>
+                                            {order.quotationSnapshot?.currency === "USD" ? "$" : order.quotationSnapshot?.currency || "$"}
+                                            {(order.quotationSnapshot?.grandTotal || 0).toLocaleString()}
+                                        </>
+                                    ) : (
+                                        "******"
+                                    )}
                                 </h2>
                             </div>
 
@@ -406,8 +420,8 @@ export default function OrderDetailsPage() {
                                     const rawPaid = details.amountPaid || 0;
                                     const remaining = Math.max(0, rawDue - rawPaid);
                                     
-                                    // Floor the percentage so 99.9% doesn't look like 100% when money is still owed.
-                                    const pct = rawDue > 0 ? Math.min(100, Math.floor((rawPaid / rawDue) * 100)) : 0;
+                                    // Prioritize backend-calculated percentage if present (prevents arithmetic anomalies when masked)
+                                    const pct = typeof details.percentage === "number" ? details.percentage : (rawDue > 0 ? Math.min(100, Math.floor((rawPaid / rawDue) * 100)) : 0);
                                     const isPhasePaid = details.status === "paid";
 
                                     return (
@@ -427,8 +441,14 @@ export default function OrderDetailsPage() {
                                             <Progress value={pct} className={cn("h-2 bg-muted", isPhasePaid && "[&>div]:bg-emerald-600")} />
 
                                             <div className="flex items-center justify-between text-[11px]">
-                                                <div className="text-muted-foreground font-medium">
-                                                    <span className="text-foreground font-bold">{(rawPaid / 100).toFixed(2)}</span> / {(rawDue / 100).toFixed(2)} {order.quotationSnapshot?.currency === "USD" ? "$" : order.quotationSnapshot?.currency || "$"}
+                                                <div className="text-muted-foreground font-medium italic">
+                                                    {canSeeFinancials ? (
+                                                        <>
+                                                            <span className="text-foreground font-bold not-italic">{(rawPaid / 100).toFixed(2)}</span> / {(rawDue / 100).toFixed(2)} {order.quotationSnapshot?.currency === "USD" ? "$" : order.quotationSnapshot?.currency || "$"}
+                                                        </>
+                                                    ) : (
+                                                        <span className="opacity-70">Visual tracking only</span>
+                                                    )}
                                                 </div>
                                                 {!isPhasePaid && remaining > 0 && (
                                                     <Button 

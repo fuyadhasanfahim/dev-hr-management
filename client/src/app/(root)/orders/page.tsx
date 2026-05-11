@@ -215,6 +215,10 @@ export default function OrdersPage() {
       meData?.staff?.designation?.toLowerCase() === "telemarketer"
     );
   }, [session, meData]);
+  const canSeeFinancials = useMemo(() => {
+    const r = session?.user?.role;
+    return r === Role.SUPER_ADMIN || r === Role.ADMIN || r === Role.HR_MANAGER;
+  }, [session]);
   const [page, setPage] = useState(1);
   const [filters, setFilters] = useState<OrderFilters>({
     search: "",
@@ -1270,7 +1274,7 @@ export default function OrdersPage() {
                           </div>
                         </TableCell>
                         <TableCell className="text-right">
-                          <span className="font-bold text-sm">
+                          <span className={cn("font-bold text-sm", !canSeeFinancials && "blur-[4px] select-none pointer-events-none")}>
                             {order.quotationSnapshot?.currency === "USD" ? "$" : order.quotationSnapshot?.currency || "$"}
                             {(
                               order.quotationSnapshot?.grandTotal ||
@@ -1290,7 +1294,7 @@ export default function OrdersPage() {
                             
                             const due = (phases.upfront?.amountDue || 0) + (phases.delivery?.amountDue || 0) + (phases.final?.amountDue || 0);
                             const paid = (phases.upfront?.amountPaid || 0) + (phases.delivery?.amountPaid || 0) + (phases.final?.amountPaid || 0);
-                            const pct = due > 0 ? Math.min(100, Math.floor((paid / due) * 100)) : 0;
+                            const pct = typeof phases.totalPercentage === "number" ? phases.totalPercentage : (due > 0 ? Math.min(100, Math.floor((paid / due) * 100)) : 0);
                             
                             let stage = "Upfront";
                             let stageStyle = "bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-950/30 dark:text-amber-400";

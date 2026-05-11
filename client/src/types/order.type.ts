@@ -166,9 +166,10 @@ export interface IOrder {
     invoiceNumber?: string;
     isPaid?: boolean;
     paymentPhases?: {
-        upfront: { status: string; amountDue: number; amountPaid: number };
-        delivery: { status: string; amountDue: number; amountPaid: number };
-        final: { status: string; amountDue: number; amountPaid: number };
+        totalPercentage?: number;
+        upfront: { status: string; amountDue?: number; amountPaid?: number; percentage?: number };
+        delivery: { status: string; amountDue?: number; amountPaid?: number; percentage?: number };
+        final: { status: string; amountDue?: number; amountPaid?: number; percentage?: number };
     } | null;
     createdBy: string;
     createdAt: string;

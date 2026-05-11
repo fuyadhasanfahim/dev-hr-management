@@ -41,6 +41,8 @@ import {
   X,
   Loader2
 } from "lucide-react";
+import { useSession } from "@/lib/auth-client";
+import { Role } from "@/constants/role";
 
 /** Resolve the client `_id` even when the API populates `clientId` as an object. */
 function resolveClientId(q: QuotationData): string | undefined {
@@ -52,6 +54,12 @@ function resolveClientId(q: QuotationData): string | undefined {
 
 export default function QuotationsPage() {
   const router = useRouter();
+  const { data: session } = useSession();
+  const canSeeFinancials = useMemo(() => {
+    const r = session?.user?.role;
+    return r === Role.SUPER_ADMIN || r === Role.ADMIN || r === Role.HR_MANAGER;
+  }, [session]);
+
   const [page] = useState(1);
   const [status, setStatus] = useState<string>("");
   const [search, setSearch] = useState<string>("");
@@ -318,6 +326,7 @@ export default function QuotationsPage() {
                 if (q) handleOpenPicker(q);
               }}
               sendingId={sendingId}
+              canSeeFinancials={canSeeFinancials}
             />
           </div>
         </CardContent>

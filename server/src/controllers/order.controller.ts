@@ -1,6 +1,7 @@
 import type { Request, Response, NextFunction } from 'express';
 import OrderService from '../services/order.service.js';
 import { AppError } from '../utils/AppError.js';
+import { maskOrder, maskOrders } from '../utils/masking.js';
 
 /**
  * CRITICAL: POST / (createOrder) has been intentionally removed.
@@ -14,6 +15,12 @@ import { AppError } from '../utils/AppError.js';
 async function getAllOrders(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
         const result = await OrderService.getAllOrdersFromDB(req.query);
+        
+        // Inject logic masking for staff
+        if (result.data && Array.isArray(result.data)) {
+            result.data = maskOrders(result.data, req.user?.role);
+        }
+
         res.status(200).json({
             success: true,
             message: 'Orders fetched successfully',
@@ -37,7 +44,9 @@ async function getOrderById(req: Request, res: Response, next: NextFunction): Pr
             res.status(404).json({ success: false, message: 'Order not found' });
             return;
         }
-        res.status(200).json({ success: true, data: result });
+        
+        const sanitized = maskOrder(result, req.user?.role);
+        res.status(200).json({ success: true, data: sanitized });
     } catch (err) {
         next(err);
     }
@@ -75,7 +84,8 @@ async function updateOrderStatus(req: Request, res: Response, next: NextFunction
                 selectedEmails,
             },
         );
-        res.status(200).json({ success: true, data: result });
+        const sanitized = maskOrder(result, req.user?.role);
+        res.status(200).json({ success: true, data: sanitized });
     } catch (err) {
         next(err);
     }
@@ -98,10 +108,11 @@ async function markDelivered(req: Request, res: Response, next: NextFunction): P
         }
 
         const result = await OrderService.markDelivered(req.params.id, userId);
+        const sanitized = maskOrder(result, req.user?.role);
         res.status(200).json({
             success: true,
             message: 'Order marked as delivered. Client has been notified.',
-            data: result,
+            data: sanitized,
         });
     } catch (err) {
         next(err);
@@ -187,11 +198,12 @@ async function convertQuotationToOrder(req: Request, res: Response, next: NextFu
         }
 
         const result = await OrderService.createOrderFromQuotation(quotationGroupId, userId);
+        const sanitized = maskOrder(result, req.user?.role);
 
         res.status(201).json({
             success: true,
             message: 'Order successfully created from quotation',
-            data: result,
+            data: sanitized,
         });
     } catch (err) {
         next(err);

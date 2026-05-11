@@ -2,6 +2,7 @@ import type { Request, Response, NextFunction } from 'express';
 import { QuotationService } from '../services/quotation.service.js';
 import { QuotationPuppeteerPdfService } from '../services/quotation-puppeteer-pdf.service.js';
 import { logger } from '../lib/logger.js';
+import { maskQuotation, maskQuotations } from '../utils/masking.js';
 
 // ─── Staff / Admin Handlers ───────────────────────────────────────────────────
 
@@ -10,7 +11,8 @@ const createQuotation = async (req: Request, res: Response, next: NextFunction) 
         const userId = req.user?.id;
         if (!userId) return next(new Error('Unauthorized'));
         const result = await QuotationService.createQuotation(req.body, userId);
-        res.status(201).json({ success: true, message: 'Quotation created successfully', data: result });
+        const sanitized = maskQuotation(result, req.user?.role);
+        res.status(201).json({ success: true, message: 'Quotation created successfully', data: sanitized });
     } catch (err) {
         next(err);
     }
@@ -23,8 +25,9 @@ const updateQuotation = async (req: Request, res: Response, next: NextFunction) 
         const { id } = req.params;
         if (!id) return next(new Error('Quotation ID is required'));
         const result = await QuotationService.updateQuotation(id, req.body, userId);
+        const sanitized = maskQuotation(result, req.user?.role);
 
-        res.status(200).json({ success: true, message: 'Quotation updated successfully', data: result });
+        res.status(200).json({ success: true, message: 'Quotation updated successfully', data: sanitized });
     } catch (err) {
         next(err);
     }
@@ -95,10 +98,12 @@ const createNewVersion = async (req: Request, res: Response, next: NextFunction)
             idempotencyKey,
         );
 
+        const sanitized = maskQuotation(result, req.user?.role);
+
         res.status(201).json({
             success: true,
             message: `New version v${result.version} created successfully`,
-            data: result,
+            data: sanitized,
         });
     } catch (err) {
         next(err);
@@ -121,6 +126,11 @@ const getAllQuotations = async (req: Request, res: Response, next: NextFunction)
         };
 
         const result = await QuotationService.getQuotations(filters, options);
+        
+        if (result.items && Array.isArray(result.items)) {
+            result.items = maskQuotations(result.items, req.user?.role);
+        }
+
         res.status(200).json({ success: true, data: result });
     } catch (err) {
         next(err);
@@ -133,7 +143,9 @@ const getQuotationById = async (req: Request, res: Response, next: NextFunction)
         if (!id) return next(new Error('ID is required'));
         const result = await QuotationService.getQuotationById(id);
         if (!result) return res.status(404).json({ success: false, message: 'Quotation not found' });
-        return res.status(200).json({ success: true, data: result });
+        
+        const sanitized = maskQuotation(result, req.user?.role);
+        return res.status(200).json({ success: true, data: sanitized });
 
     } catch (err) {
         next(err);
@@ -158,7 +170,8 @@ const getGroupVersions = async (req: Request, res: Response, next: NextFunction)
         const { groupId } = req.params;
         if (!groupId) return next(new Error('groupId is required'));
         const result = await QuotationService.getGroupVersions(groupId);
-        return res.status(200).json({ success: true, data: result });
+        const sanitized = maskQuotations(result, req.user?.role);
+        return res.status(200).json({ success: true, data: sanitized });
 
     } catch (err) {
         next(err);

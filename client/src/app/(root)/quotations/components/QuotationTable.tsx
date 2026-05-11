@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Eye, Edit2, FileText, Trash2, Send, Loader2, GitBranch, Briefcase } from "lucide-react";
 import Link from "next/link";
+import { cn } from "@/lib/utils";
 import { QuotationData, QuotationStatus } from "@/types/quotation.type";
 import { format } from "date-fns";
 
@@ -41,6 +42,7 @@ interface QuotationTableProps {
   onSend: (id: string) => void;
   onConvertToOrder?: (quotationGroupId: string) => void;
   sendingId?: string | null;
+  canSeeFinancials?: boolean;
 }
 
 export function QuotationTable({
@@ -51,6 +53,7 @@ export function QuotationTable({
   onSend,
   onConvertToOrder,
   sendingId,
+  canSeeFinancials = true,
 }: QuotationTableProps) {
   // ── Loading skeleton ───────────────────────────────────────────────────
   if (isLoading) {
@@ -162,8 +165,14 @@ export function QuotationTable({
                 </TableCell>
 
                 {/* Total */}
-                <TableCell className="font-bold text-slate-900 dark:text-slate-100">
-                  {(q.currency || "৳")}{(q.totals?.grandTotal ?? 0).toLocaleString()}
+                <TableCell className={cn("font-bold text-slate-900 dark:text-slate-100", !canSeeFinancials && "blur-[3px] select-none opacity-60")}>
+                  {canSeeFinancials ? (
+                    <>
+                      {(q.currency || "৳")}{(q.totals?.grandTotal ?? 0).toLocaleString()}
+                    </>
+                  ) : (
+                    "******"
+                  )}
                 </TableCell>
 
                 {/* Status badge */}

@@ -231,6 +231,7 @@ const acceptInvitation = async (data: IAcceptInvitation) => {
             await auth.api.sendVerificationEmail({
                 body: {
                     email: invitation.email,
+                    callbackURL: `${envConfig.client_url}/sign-in`,
                 },
             });
             console.log(
