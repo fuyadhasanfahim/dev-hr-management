@@ -139,14 +139,16 @@ export function OrderTasksTab({ order, canManage }: OrderTasksTabProps) {
                                 <SelectContent>
                                     <SelectItem value="none" className="text-muted-foreground italic">No explicit leader</SelectItem>
                                     {staffs.map((s: any) => (
-                                        <SelectItem key={s._id} value={s._id}>{s.name}</SelectItem>
+                                        <SelectItem key={s._id} value={s._id}>
+                                            {s.user?.name || s.name || "Unknown"}
+                                        </SelectItem>
                                     ))}
                                 </SelectContent>
                             </Select>
                         ) : (
                             <div className="flex items-center gap-2 mt-2 font-bold">
                                 <ShieldAlert className="h-4 w-4 text-primary" />
-                                {order.teamLeader ? staffs.find((s: any) => s._id === (order.teamLeader?._id || order.teamLeader))?.name || "Assigned Supervisor" : "Not Assigned"}
+                                {order.teamLeader ? staffs.find((s: any) => s._id === (order.teamLeader?._id || order.teamLeader))?.user?.name || "Assigned Supervisor" : "Not Assigned"}
                             </div>
                         )}
                     </CardContent>
@@ -230,11 +232,11 @@ export function OrderTasksTab({ order, canManage }: OrderTasksTabProps) {
                                         <TableCell className="pl-6">
                                             <div className="flex items-center gap-3">
                                                 <Avatar className="h-9 w-9 border">
-                                                    <AvatarImage src={task.assignedTo?.avatar} />
-                                                    <AvatarFallback className="text-xs bg-primary/5">{task.assignedTo?.name?.charAt(0) || "?"}</AvatarFallback>
+                                                    <AvatarImage src={task.assignedTo?.userId?.image || task.assignedTo?.avatar} />
+                                                    <AvatarFallback className="text-xs bg-primary/5">{(task.assignedTo?.userId?.name || task.assignedTo?.name)?.charAt(0) || "?"}</AvatarFallback>
                                                 </Avatar>
                                                 <div className="flex flex-col">
-                                                    <span className="font-bold text-sm leading-tight">{task.assignedTo?.name || "Unknown User"}</span>
+                                                    <span className="font-bold text-sm leading-tight">{task.assignedTo?.userId?.name || task.assignedTo?.name || "Unknown User"}</span>
                                                     <span className="text-[10px] text-muted-foreground capitalize">{task.assignedTo?.designation || "Staff"}</span>
                                                 </div>
                                             </div>

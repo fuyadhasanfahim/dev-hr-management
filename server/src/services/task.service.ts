@@ -12,7 +12,15 @@ const createTask = async (payload: Partial<IOrderTask>) => {
 
 const getTasksByOrder = async (orderId: string) => {
     return await OrderTaskModel.find({ orderId })
-        .populate('assignedTo', 'name avatar designation')
+        .populate({
+            path: 'assignedTo',
+            select: 'userId designation avatar',
+            populate: {
+                path: 'userId',
+                model: 'User',
+                select: 'name email image',
+            },
+        })
         .populate('assignedBy', 'name')
         .sort({ dueDate: 1 });
 };
