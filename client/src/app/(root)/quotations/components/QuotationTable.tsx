@@ -187,13 +187,14 @@ export function QuotationTable({
                     {/* Convert to Order (only when accepted but not yet converted) */}
                     {q.isLatestVersion !== false && !q.orderId && !["superseded", "expired"].includes(q.status || "") && onConvertToOrder && (
                       <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-emerald-500 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
+                        variant="default"
+                        size="sm"
+                        className="h-7 px-2.5 text-[11px] font-semibold gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white whitespace-nowrap shrink-0"
                         onClick={() => q.quotationGroupId && onConvertToOrder(q.quotationGroupId)}
                         title="Convert to Order"
                       >
-                        <Briefcase className="h-4 w-4" />
+                        <Briefcase className="h-3 w-3" />
+                        Convert
                       </Button>
                     )}
 
@@ -211,14 +212,14 @@ export function QuotationTable({
 
                     {/* Send (only for draft / change_requested on latest version) */}
                     {q.isLatestVersion !== false &&
-                      (q.status === "draft" || q.status === "change_requested") && (
+                      !["superseded", "rejected", "expired"].includes(q.status || "") && (
                         <Button
                           variant="ghost"
                           size="icon"
                           className="h-8 w-8 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400"
                           onClick={() => q._id && onSend(q._id)}
                           disabled={sendingId === q._id}
-                          title="Send to Client"
+                          title={q.status === "draft" ? "Send to Client" : "Send Again"}
                         >
                           {sendingId === q._id ? (
                             <Loader2 className="h-4 w-4 animate-spin" />

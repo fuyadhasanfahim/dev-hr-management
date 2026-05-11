@@ -256,17 +256,16 @@ export default function ViewQuotationPage() {
 
 
 
-          {data.isLatestVersion &&
-            (data.status === "draft" || data.status === "change_requested") && (
-              <Button onClick={openSendPicker} disabled={isSending}>
-                {isSending ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Send className="h-4 w-4" />
-                )}
-                Send to Client
-              </Button>
-            )}
+          {data.isLatestVersion && !["superseded", "rejected", "expired"].includes(data.status || "") && (
+            <Button onClick={openSendPicker} disabled={isSending}>
+              {isSending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Send className="h-4 w-4" />
+              )}
+              {data.status === "draft" ? "Send to Client" : "Send Again"}
+            </Button>
+          )}
 
           {data.isLatestVersion && !data.orderId && !["superseded", "expired"].includes(data.status || "") && (
             <Button 
