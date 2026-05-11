@@ -64,7 +64,7 @@ export function OrderTasksTab({ order, canManage }: OrderTasksTabProps) {
     const { data: staffsRes } = useGetStaffsQuery({ limit: 100 });
 
     const tasks = tasksRes?.data || [];
-    const staffs = staffsRes?.data?.data || staffsRes?.data || [];
+    const staffs = staffsRes?.staffs || [];
 
     // Setup handling for Team Leader nomination
     const handleSetTeamLeader = async (leaderId: string) => {
