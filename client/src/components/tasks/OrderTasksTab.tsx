@@ -5,7 +5,9 @@ import { format, formatDistanceToNow } from "date-fns";
 import { 
     useGetOrderTasksQuery, 
     useDeleteTaskMutation,
-    useReviewTaskMutation
+    useReviewTaskMutation,
+    useUpdateTaskStatusMutation,
+    useSubmitTaskMutation,
 } from "@/redux/features/task/taskApi";
 import { useUpdateOrderTeamMutation } from "@/redux/features/order/orderApi";
 import { useGetStaffsQuery } from "@/redux/features/staff/staffApi";
@@ -47,8 +49,13 @@ import {
     XCircle, 
     ExternalLink,
     Calendar,
-    ShieldAlert
+    ShieldAlert,
+    PlayCircle,
+    Send,
 } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 
 interface OrderTasksTabProps {
     order: any;
@@ -57,9 +64,13 @@ interface OrderTasksTabProps {
 
 export function OrderTasksTab({ order, canManage }: OrderTasksTabProps) {
     const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
+    const [submitModalTask, setSubmitModalTask] = useState<any>(null);
+    const [submitNote, setSubmitNote] = useState("");
     const { data: tasksRes, isLoading: isTasksLoading } = useGetOrderTasksQuery(order._id);
     const [deleteTask] = useDeleteTaskMutation();
     const [reviewTask] = useReviewTaskMutation();
+    const [updateTaskStatus] = useUpdateTaskStatusMutation();
+    const [submitTask, { isLoading: isSubmitting }] = useSubmitTaskMutation();
     const [updateTeam, { isLoading: isUpdatingTeam }] = useUpdateOrderTeamMutation();
     const { data: staffsRes } = useGetStaffsQuery({ limit: 100 });
 
@@ -88,6 +99,27 @@ export function OrderTasksTab({ order, canManage }: OrderTasksTabProps) {
             toast.success(`Task successfully ${decision}d.`);
         } catch (err) {
             toast.error("Failed to record review decision.");
+        }
+    };
+
+    const handleUpdateStatus = async (taskId: string, status: string, currentStatus: string) => {
+        try {
+            await updateTaskStatus({ taskId, status, currentStatus }).unwrap();
+            toast.success(`Task marked as ${status.replace("_", " ")}`);
+        } catch (err: any) {
+            toast.error(err?.data?.message || "Failed to update status.");
+        }
+    };
+
+    const handleSubmitForReview = async () => {
+        if (!submitModalTask) return;
+        try {
+            await submitTask({ taskId: submitModalTask._id, data: { note: submitNote } }).unwrap();
+            toast.success("Task submitted for review!");
+            setSubmitModalTask(null);
+            setSubmitNote("");
+        } catch (err: any) {
+            toast.error(err?.data?.message || "Failed to submit task.");
         }
     };
 
@@ -223,7 +255,7 @@ export function OrderTasksTab({ order, canManage }: OrderTasksTabProps) {
                                     <TableHead className="font-bold">Assigned Mission</TableHead>
                                     <TableHead className="font-bold">Target Delivery</TableHead>
                                     <TableHead className="font-bold">Status</TableHead>
-                                    {canManage && <TableHead className="text-right pr-6">Action</TableHead>}
+                                    <TableHead className="text-right pr-6">Action</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -263,53 +295,78 @@ export function OrderTasksTab({ order, canManage }: OrderTasksTabProps) {
                                                 {task.status.replace("_", " ")}
                                             </Badge>
                                         </TableCell>
-                                        {canManage && (
-                                            <TableCell className="text-right pr-6">
+                                         <TableCell className="text-right pr-6">
                                                 <DropdownMenu>
-                                                            <DropdownMenuTrigger asChild>
-                                                                <Button variant="ghost" size="icon" className="h-8 w-8">
-                                                                    <MoreHorizontal className="h-4 w-4" />
-                                                                </Button>
-                                                            </DropdownMenuTrigger>
-                                                            <DropdownMenuContent align="end" className="w-48">
-                                                                {task.status === "under_review" && (
-                                                                    <>
-                                                                        <DropdownMenuItem 
-                                                                            onClick={() => handleReview(task._id, "approve")}
-                                                                            className="text-emerald-600 font-bold cursor-pointer"
-                                                                        >
-                                                                            <CheckCircle2 className="h-4 w-4 mr-2" />
-                                                                            Approve Work
-                                                                        </DropdownMenuItem>
-                                                                        <DropdownMenuItem 
-                                                                            onClick={() => handleReview(task._id, "reject")}
-                                                                            className="text-amber-600 font-bold cursor-pointer"
-                                                                        >
-                                                                            <XCircle className="h-4 w-4 mr-2" />
-                                                                            Request Revision
-                                                                        </DropdownMenuItem>
-                                                                        <div className="h-px bg-muted my-1" />
-                                                                    </>
-                                                                )}
-                                                                {task.submissionAttachment && (
-                                                                    <DropdownMenuItem asChild>
-                                                                        <a href={task.submissionAttachment} target="_blank" rel="noreferrer" className="flex items-center cursor-pointer">
-                                                                            <ExternalLink className="h-4 w-4 mr-2" />
-                                                                            View Deliverable
-                                                                        </a>
-                                                                    </DropdownMenuItem>
-                                                                )}
-                                                                <DropdownMenuItem 
-                                                                    onClick={() => handleDelete(task._id)}
-                                                                    className="text-destructive focus:text-destructive cursor-pointer"
+                                                    <DropdownMenuTrigger asChild>
+                                                        <Button variant="ghost" size="icon" className="h-8 w-8">
+                                                            <MoreHorizontal className="h-4 w-4" />
+                                                        </Button>
+                                                    </DropdownMenuTrigger>
+                                                    <DropdownMenuContent align="end" className="w-52">
+                                                        {/* Staff actions: pending or rejected → start working */}
+                                                        {(task.status === "pending" || task.status === "rejected") && (
+                                                            <DropdownMenuItem
+                                                                onClick={() => handleUpdateStatus(task._id, "in_progress", task.status)}
+                                                                className="text-blue-600 font-bold cursor-pointer"
+                                                            >
+                                                                <PlayCircle className="h-4 w-4 mr-2" />
+                                                                Mark In Progress
+                                                            </DropdownMenuItem>
+                                                        )}
+
+                                                        {/* Staff action: in_progress → submit for review */}
+                                                        {task.status === "in_progress" && (
+                                                            <DropdownMenuItem
+                                                                onClick={() => { setSubmitModalTask(task); setSubmitNote(""); }}
+                                                                className="text-amber-600 font-bold cursor-pointer"
+                                                            >
+                                                                <Send className="h-4 w-4 mr-2" />
+                                                                Submit for Review
+                                                            </DropdownMenuItem>
+                                                        )}
+
+                                                        {/* Manager actions: approve/reject under_review */}
+                                                        {canManage && task.status === "under_review" && (
+                                                            <>
+                                                                <DropdownMenuItem
+                                                                    onClick={() => handleReview(task._id, "approve")}
+                                                                    className="text-emerald-600 font-bold cursor-pointer"
                                                                 >
-                                                                    <Trash2 className="h-4 w-4 mr-2" />
-                                                                    Delete Task
+                                                                    <CheckCircle2 className="h-4 w-4 mr-2" />
+                                                                    Approve Work
                                                                 </DropdownMenuItem>
-                                                            </DropdownMenuContent>
-                                                        </DropdownMenu>
+                                                                <DropdownMenuItem
+                                                                    onClick={() => handleReview(task._id, "reject")}
+                                                                    className="text-amber-600 font-bold cursor-pointer"
+                                                                >
+                                                                    <XCircle className="h-4 w-4 mr-2" />
+                                                                    Request Revision
+                                                                </DropdownMenuItem>
+                                                                <div className="h-px bg-muted my-1" />
+                                                            </>
+                                                        )}
+
+                                                        {task.submissionAttachment && (
+                                                            <DropdownMenuItem asChild>
+                                                                <a href={task.submissionAttachment} target="_blank" rel="noreferrer" className="flex items-center cursor-pointer">
+                                                                    <ExternalLink className="h-4 w-4 mr-2" />
+                                                                    View Deliverable
+                                                                </a>
+                                                            </DropdownMenuItem>
+                                                        )}
+
+                                                        {canManage && (
+                                                            <DropdownMenuItem
+                                                                onClick={() => handleDelete(task._id)}
+                                                                className="text-destructive focus:text-destructive cursor-pointer"
+                                                            >
+                                                                <Trash2 className="h-4 w-4 mr-2" />
+                                                                Delete Task
+                                                            </DropdownMenuItem>
+                                                        )}
+                                                    </DropdownMenuContent>
+                                                </DropdownMenu>
                                             </TableCell>
-                                        )}
                                     </TableRow>
                                 ))}
                             </TableBody>
@@ -324,6 +381,42 @@ export function OrderTasksTab({ order, canManage }: OrderTasksTabProps) {
                 orderId={order._id}
                 phases={order.quotationSnapshot?.scopeOfWork}
             />
+
+            {/* Submit for Review Modal */}
+            <Dialog open={!!submitModalTask} onOpenChange={(o) => !o && setSubmitModalTask(null)}>
+                <DialogContent className="sm:max-w-[440px]">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <Send className="h-5 w-5 text-amber-500" />
+                            Submit Task for Review
+                        </DialogTitle>
+                        <DialogDescription>
+                            Add a note describing what you completed. Optionally include a link to your deliverable.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-2">
+                        <div className="space-y-2">
+                            <Label className="font-semibold">Completion Note <span className="text-destructive">*</span></Label>
+                            <Textarea
+                                placeholder="Describe what was done, any known issues, etc..."
+                                value={submitNote}
+                                onChange={(e) => setSubmitNote(e.target.value)}
+                                className="min-h-[100px] resize-none"
+                            />
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setSubmitModalTask(null)}>Cancel</Button>
+                        <Button
+                            onClick={handleSubmitForReview}
+                            disabled={isSubmitting || !submitNote.trim()}
+                            className="font-bold"
+                        >
+                            {isSubmitting ? "Submitting..." : "Submit for Review"}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

@@ -124,6 +124,48 @@ async function reviewTask(req: Request, res: Response, next: NextFunction): Prom
     }
 }
 
+async function updateTaskStatus(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+        const { taskId } = req.params;
+        const { status } = req.body;
+        const user = req.user;
+
+        if (!taskId) throw new AppError('Task ID is required', 400);
+        if (!status) throw new AppError('Status is required', 400);
+        if (!user || !user.id) throw new AppError('User context not available', 401);
+
+        // Resolve to staff (for staff-level actors)
+        const staff = await StaffModel.findOne({ user: user.id });
+
+        // Allowed staff transitions: pending→in_progress, rejected→in_progress
+        const STAFF_ALLOWED: Record<string, string[]> = {
+            pending: ['in_progress'],
+            rejected: ['in_progress'],
+            in_progress: ['in_progress'], // idempotent
+        };
+
+        // Admin/lead can force any status
+        const isManager = ['admin', 'super_admin', 'hr_manager', 'team_leader'].includes(user.role as string);
+
+        if (!isManager && staff) {
+            const allowed = STAFF_ALLOWED[req.body.currentStatus ?? ''] ?? [];
+            if (!allowed.includes(status)) {
+                throw new AppError(`You cannot change task status to "${status}" from its current state.`, 403);
+            }
+        }
+
+        const result = await TaskService.updateTaskStatus(taskId, status);
+
+        res.status(200).json({
+            success: true,
+            message: 'Task status updated',
+            data: result,
+        });
+    } catch (err) {
+        next(err);
+    }
+}
+
 async function deleteTask(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
         const { taskId } = req.params;
@@ -149,5 +191,6 @@ export default {
     getMyTasks,
     submitTask,
     reviewTask,
+    updateTaskStatus,
     deleteTask,
 };
