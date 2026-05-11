@@ -15,6 +15,7 @@ import type { IQuotation } from '../types/quotation.type.js';
 import { logger } from '../lib/logger.js';
 import emailService from './email.service.js';
 import { QuotationService } from './quotation.service.js';
+import { QuotationPaymentService } from './quotation-payment.service.js';
 import { sendClientSmsIfBDT } from './sms-notification.service.js';
 
 
@@ -254,19 +255,35 @@ async function createOrderFromQuotation(
             return existing;
         }
 
-        // Fetch and validate the accepted quotation
+        // Fetch and validate the quotation. Allow draft/sent/viewed to be manually converted.
         const quotation = await QuotationModel.findOne({
             quotationGroupId,
             isLatestVersion: true,
-            status: 'accepted',
+            status: { $nin: ['superseded', 'expired'] },
         }).session(session);
 
         if (!quotation) {
             throw new AppError(
-                `No accepted quotation found for group ${quotationGroupId}. Cannot create order.`,
+                `No valid active quotation found for group ${quotationGroupId}. Cannot create order.`,
                 422,
             );
         }
+
+        // If it wasn't accepted yet, explicitly accept it now.
+        if (quotation.status !== 'accepted') {
+            quotation.status = 'accepted';
+            await quotation.save({ session });
+        }
+
+        // Ensure the payment tracker exists for future installment tracking
+        await QuotationPaymentService.initializePaymentTracker(
+            quotationGroupId,
+            quotation._id.toString(),
+            quotation.version,
+            quotation.clientId.toString(),
+            quotation.totals.grandTotal,
+            quotation.currency || '৳',
+        );
 
         const orderNumber = await generateOrderNumber();
         const snapshot = buildQuotationSnapshot(quotation);

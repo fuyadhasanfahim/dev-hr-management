@@ -185,7 +185,7 @@ export function QuotationTable({
                 <TableCell className="text-right">
                   <div className="flex items-center justify-end gap-1">
                     {/* Convert to Order (only when accepted but not yet converted) */}
-                    {q.status === "accepted" && !q.orderId && onConvertToOrder && (
+                    {q.isLatestVersion !== false && !q.orderId && !["superseded", "expired"].includes(q.status || "") && onConvertToOrder && (
                       <Button
                         variant="ghost"
                         size="icon"

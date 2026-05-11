@@ -268,7 +268,7 @@ export default function ViewQuotationPage() {
               </Button>
             )}
 
-          {data.status === "accepted" && !data.orderId && (
+          {data.isLatestVersion && !data.orderId && !["superseded", "expired"].includes(data.status || "") && (
             <Button 
               className="bg-emerald-600 hover:bg-emerald-700 text-white" 
               disabled={isConverting}
