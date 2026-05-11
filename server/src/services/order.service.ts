@@ -739,6 +739,31 @@ async function getAssetByAccessToken(
     };
 }
 
+async function updateOrderTeam(
+    orderId: string, 
+    payload: { assignedTeam?: string[]; teamLeader?: string }
+): Promise<IOrder> {
+    const order = await OrderModel.findById(orderId);
+    if (!order) throw new AppError('Order not found', 404);
+
+    const update: any = {};
+    if (payload.assignedTeam) {
+        update.assignedTeam = payload.assignedTeam.map(id => new Types.ObjectId(id));
+    }
+    if (payload.teamLeader !== undefined) {
+        update.teamLeader = payload.teamLeader ? new Types.ObjectId(payload.teamLeader) : null;
+    }
+
+    const updated = await OrderModel.findByIdAndUpdate(
+        orderId,
+        { $set: update },
+        { new: true }
+    );
+
+    if (!updated) throw new AppError('Order not found', 404);
+    return updated;
+}
+
 export default {
     createOrderFromQuotation,
     transitionStatus,
@@ -748,4 +773,5 @@ export default {
     getAllOrdersFromDB,
     getOrderByIdFromDB,
     getAssetByAccessToken,
+    updateOrderTeam,
 };

@@ -20,6 +20,7 @@ import {
     IconShieldLock,
     IconCalendarEvent,
     IconTarget,
+    IconClipboardList,
 } from "@tabler/icons-react";
 
 
@@ -56,6 +57,18 @@ export const sidebarGroups: SidebarGroup[] = [
                 title: "Profile",
                 url: "/account",
                 icon: IconUserCircle,
+                access: [
+                    Role.SUPER_ADMIN,
+                    Role.ADMIN,
+                    Role.HR_MANAGER,
+                    Role.TEAM_LEADER,
+                    Role.STAFF,
+                ],
+            },
+            {
+                title: "My Tasks",
+                url: "/tasks",
+                icon: IconClipboardList,
                 access: [
                     Role.SUPER_ADMIN,
                     Role.ADMIN,
@@ -110,7 +123,6 @@ export const sidebarGroups: SidebarGroup[] = [
                     Role.TEAM_LEADER,
                     Role.STAFF,
                 ],
-                requiredDesignation: "telemarketer",
             },
             {
                 title: "Earnings",

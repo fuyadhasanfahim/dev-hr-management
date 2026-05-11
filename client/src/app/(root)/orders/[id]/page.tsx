@@ -44,8 +44,12 @@ import {
     Wallet,
     DollarSign,
     Loader2,
-    ChevronDown
+    ChevronDown,
+    Users,
+    LayoutList
 } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { OrderTasksTab } from "@/components/tasks/OrderTasksTab";
 
 import { OrderStatus, IOrder } from "@/types/order.type";
 import { ORDER_STATUS_LABELS } from "@/lib/constants";
@@ -303,50 +307,70 @@ export default function OrderDetailsPage() {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                {/* Left Column: Details */}
-                <div className="lg:col-span-2 space-y-8">
-                    <Card className="shadow-md border-muted/60">
-                        <CardHeader className="border-b bg-muted/10">
-                            <CardTitle className="text-xl flex items-center gap-2">
-                                <FileText className="h-5 w-5 text-primary" />
-                                Project Overview
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="pt-6 space-y-6">
-                            <div>
-                                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Description</h3>
-                                <div className="mt-2 text-foreground/90 leading-relaxed bg-muted/20 p-4 rounded-lg border border-dashed">
-                                    {order.quotationSnapshot?.overview || "No detailed description provided for this order."}
-                                </div>
-                            </div>
-                            
-                            <div>
-                                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4">Service Breakdown (Scope of Work)</h3>
-                                <div className="grid gap-4">
-                                    {order.quotationSnapshot?.scopeOfWork?.map((item: any, index: number) => (
-                                        <div key={index} className="flex flex-col md:flex-row justify-between items-start md:items-center p-5 rounded-xl border bg-card hover:shadow-md transition-shadow">
-                                            <div className="flex items-start gap-4">
-                                                <div className="p-3 bg-primary/5 rounded-lg">
-                                                    <Package className="h-6 w-6 text-primary" />
-                                                </div>
-                                                <div>
-                                                    <p className="font-bold text-lg">{item.title}</p>
-                                                    <div className="flex items-center gap-2 mt-1">
-                                                        <span className="text-sm text-muted-foreground line-clamp-2">{item.description}</span>
+                {/* Left Column: Tabbed Sections */}
+                <div className="lg:col-span-2 space-y-6">
+                    <Tabs defaultValue="overview" className="w-full">
+                        <TabsList className="grid w-full grid-cols-2 bg-muted/50 border h-12 p-1 rounded-xl mb-6">
+                            <TabsTrigger value="overview" className="font-bold rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm gap-2">
+                                <LayoutDashboard className="h-4 w-4" />
+                                Overview
+                            </TabsTrigger>
+                            <TabsTrigger value="tasks" className="font-bold rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm gap-2">
+                                <LayoutList className="h-4 w-4" />
+                                Tasks & Team
+                            </TabsTrigger>
+                        </TabsList>
+
+                        <TabsContent value="overview" className="space-y-6 mt-0 animate-in slide-in-from-left-4 duration-300">
+                            <Card className="shadow-md border-muted/60">
+                                <CardHeader className="border-b bg-muted/10">
+                                    <CardTitle className="text-xl flex items-center gap-2">
+                                        <FileText className="h-5 w-5 text-primary" />
+                                        Project Overview
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent className="pt-6 space-y-6">
+                                    <div>
+                                        <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Description</h3>
+                                        <div className="mt-2 text-foreground/90 leading-relaxed bg-muted/20 p-4 rounded-lg border border-dashed">
+                                            {order.quotationSnapshot?.overview || "No detailed description provided for this order."}
+                                        </div>
+                                    </div>
+                                    
+                                    <div>
+                                        <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4">Service Breakdown (Scope of Work)</h3>
+                                        <div className="grid gap-4">
+                                            {order.quotationSnapshot?.scopeOfWork?.map((item: any, index: number) => (
+                                                <div key={index} className="flex flex-col md:flex-row justify-between items-start md:items-center p-5 rounded-xl border bg-card hover:shadow-md transition-shadow">
+                                                    <div className="flex items-start gap-4">
+                                                        <div className="p-3 bg-primary/5 rounded-lg">
+                                                            <Package className="h-6 w-6 text-primary" />
+                                                        </div>
+                                                        <div>
+                                                            <p className="font-bold text-lg">{item.title}</p>
+                                                            <div className="flex items-center gap-2 mt-1">
+                                                                <span className="text-sm text-muted-foreground line-clamp-2">{item.description}</span>
+                                                            </div>
+                                                        </div>
                                                     </div>
                                                 </div>
-                                            </div>
+                                            ))}
+                                            {(!order.quotationSnapshot?.scopeOfWork || order.quotationSnapshot.scopeOfWork.length === 0) && (
+                                                <div className="text-muted-foreground text-sm italic">No specific scope of work items found.</div>
+                                            )}
                                         </div>
-                                    ))}
-                                    {(!order.quotationSnapshot?.scopeOfWork || order.quotationSnapshot.scopeOfWork.length === 0) && (
-                                        <div className="text-muted-foreground text-sm italic">No specific scope of work items found.</div>
-                                    )}
-                                </div>
-                            </div>
-                        </CardContent>
-                    </Card>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        </TabsContent>
 
-                    {/* Timeline / History could go here */}
+                        <TabsContent value="tasks" className="space-y-6 mt-0 animate-in slide-in-from-right-4 duration-300">
+                            <OrderTasksTab 
+                                order={order} 
+                                canManage={canSeeFinancials || session?.user?.role === Role.TEAM_LEADER} 
+                            />
+                        </TabsContent>
+                    </Tabs>
                 </div>
 
                 {/* Right Column: Metadata & Stats */}

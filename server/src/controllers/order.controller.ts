@@ -210,6 +210,29 @@ async function convertQuotationToOrder(req: Request, res: Response, next: NextFu
     }
 }
 
+async function updateOrderTeam(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+        const { id } = req.params;
+        const { assignedTeam, teamLeader } = req.body;
+        
+        if (!id) {
+            next(new AppError('Order id is required', 400));
+            return;
+        }
+
+        const result = await OrderService.updateOrderTeam(id, { assignedTeam, teamLeader });
+        const sanitized = maskOrder(result, req.user?.role);
+
+        res.status(200).json({
+            success: true,
+            message: 'Order team updated successfully',
+            data: sanitized,
+        });
+    } catch (err) {
+        next(err);
+    }
+}
+
 export default {
     getAllOrders,
     getOrderById,
@@ -218,4 +241,5 @@ export default {
     getAsset,
     getAssetPublic,
     convertQuotationToOrder,
+    updateOrderTeam,
 };

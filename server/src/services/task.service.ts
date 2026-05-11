@@ -1,0 +1,100 @@
+import { Types } from 'mongoose';
+import OrderTaskModel, {
+    type IOrderTask,
+    TaskStatus,
+} from '../models/task.model.js';
+import { AppError } from '../utils/AppError.js';
+
+const createTask = async (payload: Partial<IOrderTask>) => {
+    const task = await OrderTaskModel.create(payload);
+    return task;
+};
+
+const getTasksByOrder = async (orderId: string) => {
+    return await OrderTaskModel.find({ orderId })
+        .populate('assignedTo', 'name avatar designation')
+        .populate('assignedBy', 'name')
+        .sort({ dueDate: 1 });
+};
+
+const getTasksByStaff = async (staffId: string) => {
+    return await OrderTaskModel.find({
+        assignedTo: staffId,
+        status: { $ne: TaskStatus.COMPLETED },
+    })
+        .populate('orderId', 'orderNumber status quotationSnapshot.clientName')
+        .sort({ dueDate: 1 });
+};
+
+const updateTaskStatus = async (taskId: string, status: TaskStatus) => {
+    const task = await OrderTaskModel.findById(taskId);
+    if (!task) {
+        throw new AppError('Task not found', 404);
+    }
+
+    task.status = status;
+    await task.save();
+    return task;
+};
+
+const submitTask = async (
+    taskId: string,
+    staffId: string,
+    payload: { note: string; attachment?: string },
+) => {
+    const task = await OrderTaskModel.findOne({
+        _id: taskId,
+        assignedTo: staffId,
+    });
+    if (!task) {
+        throw new AppError('Assigned task not found.', 404);
+    }
+
+    task.status = TaskStatus.UNDER_REVIEW;
+    task.submissionNote = payload.note;
+    if (payload.attachment) {
+        task.submissionAttachment = payload.attachment;
+    }
+    task.submittedAt = new Date();
+
+    await task.save();
+    return task;
+};
+
+const reviewTask = async (
+    taskId: string,
+    reviewerId: string,
+    payload: { decision: 'approve' | 'reject'; note?: string },
+) => {
+    const task = await OrderTaskModel.findById(taskId);
+    if (!task) {
+        throw new AppError('Task not found.', 404);
+    }
+
+    task.status =
+        payload.decision === 'approve'
+            ? TaskStatus.COMPLETED
+            : TaskStatus.REJECTED;
+    task.reviewNote = payload.note!;
+    task.reviewedBy = new Types.ObjectId(reviewerId);
+    task.reviewedAt = new Date();
+
+    await task.save();
+    return task;
+};
+
+const deleteTask = async (taskId: string) => {
+    return await OrderTaskModel.findByIdAndDelete(taskId);
+};
+
+const TaskService = {
+    createTask,
+    getTasksByOrder,
+    getTasksByStaff,
+    updateTaskStatus,
+    submitTask,
+    reviewTask,
+    deleteTask,
+};
+
+export default TaskService;

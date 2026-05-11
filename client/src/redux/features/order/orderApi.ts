@@ -123,6 +123,21 @@ export const orderApi = apiSlice.injectEndpoints({
             ],
         }),
 
+        updateOrderTeam: builder.mutation<
+            OrderResponse,
+            { id: string; data: { assignedTeam?: string[]; teamLeader?: string } }
+        >({
+            query: ({ id, data }) => ({
+                url: `/orders/${id}/team`,
+                method: 'PATCH',
+                body: data,
+            }),
+            invalidatesTags: (_result, _error, { id }) => [
+                { type: 'Order', id },
+                { type: 'Order', id: 'LIST' },
+            ],
+        }),
+
         extendDeadline: builder.mutation<
             OrderResponse,
             { id: string; data: ExtendDeadlineInput }
@@ -226,6 +241,7 @@ export const {
     useCreateOrderMutation,
     useUpdateOrderMutation,
     useUpdateOrderStatusMutation,
+    useUpdateOrderTeamMutation,
     useExtendDeadlineMutation,
     useAddRevisionMutation,
     useDeleteOrderMutation,

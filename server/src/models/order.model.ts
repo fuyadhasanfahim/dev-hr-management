@@ -126,6 +126,7 @@ export interface IOrder extends Document {
     status: OrderStatus;
     statusHistory: IStatusHistory[];
     assignedTeam: Types.ObjectId[];
+    teamLeader?: Types.ObjectId; // Designated supervisor Ref: Staff
     priority: 'low' | 'medium' | 'high' | 'urgent';
     internalNotes?: string;
     estimatedDeliveryDate?: Date;
@@ -266,6 +267,7 @@ const orderSchema = new Schema<IOrder>(
             },
         ],
         assignedTeam: [{ type: Schema.Types.ObjectId, ref: 'Staff' }],
+        teamLeader: { type: Schema.Types.ObjectId, ref: 'Staff', index: true },
         priority: {
             type: String,
             enum: ['low', 'medium', 'high', 'urgent'],

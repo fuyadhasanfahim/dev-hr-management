@@ -34,6 +34,8 @@ import { quotationPaymentRoute } from "./quotation-payment.route.js";
 import { meetingRoute } from "./meeting.route.js";
 import { leadRoute } from "./lead.route.js";
 import { leadSettingRoute } from "./lead-setting.route.js";
+import { TaskRoutes } from "./task.route.js";
+
 const router: Router = Router();
 
 const moduleRoutes = [
@@ -176,6 +178,10 @@ const moduleRoutes = [
     {
         path: "/lead-settings",
         route: leadSettingRoute,
+    },
+    {
+        path: "/tasks",
+        route: TaskRoutes,
     },
 ];
 

@@ -26,6 +26,7 @@ router.get('/',         authorize(...STAFF_ROLES), OrderController.getAllOrders)
 router.get('/:id',      authorize(...STAFF_ROLES), OrderController.getOrderById);
 
 router.patch('/:id/status',         authorize(...STAFF_ROLES), OrderController.updateOrderStatus);
+router.patch('/:id/team',           authorize(...STAFF_ROLES), OrderController.updateOrderTeam);
 router.post('/:id/deliver',         authorize(...STAFF_ROLES), OrderController.markDelivered);
 router.post('/convert-quotation',    authorize(...STAFF_ROLES), OrderController.convertQuotationToOrder);
 
