@@ -1,207 +1,235 @@
-import { apiSlice } from "../../api/apiSlice";
+import { apiSlice } from '../../api/apiSlice';
 import type {
-  IOrder,
-  IOrderStats,
-  CreateOrderInput,
-  UpdateOrderInput,
-  UpdateStatusInput,
-  ExtendDeadlineInput,
-  AddRevisionInput,
-  OrderFilters,
-} from "@/types/order.type";
+    IOrder,
+    IOrderStats,
+    CreateOrderInput,
+    UpdateOrderInput,
+    UpdateStatusInput,
+    ExtendDeadlineInput,
+    AddRevisionInput,
+    OrderFilters,
+} from '@/types/order.type';
 
 interface OrdersResponse {
-  message: string;
-  data: IOrder[];
-  meta: {
-    total: number;
-    page: number;
-    totalPages: number;
-  };
+    message: string;
+    data: IOrder[];
+    meta: {
+        total: number;
+        page: number;
+        totalPages: number;
+    };
 }
 
 interface OrderResponse {
-  message: string;
-  data: IOrder;
+    message: string;
+    data: IOrder;
 }
 
 interface OrderStatsResponse {
-  message: string;
-  data: IOrderStats;
+    message: string;
+    data: IOrderStats;
 }
 
 export const orderApi = apiSlice.injectEndpoints({
-  endpoints: (builder) => ({
-    getOrders: builder.query<OrdersResponse, OrderFilters | void>({
-      query: (params) => ({
-        url: "/orders",
-        params: params || {},
-      }),
-      providesTags: (result) =>
-        result?.data
-          ? [
-              ...result.data.map((item) => ({
-                type: "Order" as const,
-                id: item._id,
-              })),
-              { type: "Order", id: "LIST" },
-            ]
-          : [{ type: "Order", id: "LIST" }],
-    }),
+    endpoints: (builder) => ({
+        getOrders: builder.query<OrdersResponse, OrderFilters | void>({
+            query: (params) => ({
+                url: '/orders',
+                params: params || {},
+            }),
+            providesTags: (result) =>
+                result?.data
+                    ? [
+                          ...result.data.map((item) => ({
+                              type: 'Order' as const,
+                              id: item._id,
+                          })),
+                          { type: 'Order', id: 'LIST' },
+                      ]
+                    : [{ type: 'Order', id: 'LIST' }],
+        }),
 
-    getOrderById: builder.query<OrderResponse, string>({
-      query: (id) => `/orders/${id}`,
-      providesTags: (_result, _error, id) => [{ type: "Order", id }],
-    }),
+        getOrderById: builder.query<OrderResponse, string>({
+            query: (id) => `/orders/${id}`,
+            providesTags: (_result, _error, id) => [{ type: 'Order', id }],
+        }),
 
-    getOrderStats: builder.query<OrderStatsResponse, void>({
-      query: () => "/orders/stats",
-      providesTags: [{ type: "Order", id: "STATS" }],
-    }),
+        getOrderStats: builder.query<OrderStatsResponse, void>({
+            query: () => '/orders/stats',
+            providesTags: [{ type: 'Order', id: 'STATS' }],
+        }),
 
-    getOrdersByClient: builder.query<
-      { message: string; data: IOrder[] },
-      { clientId: string; limit?: number }
-    >({
-      query: ({ clientId, limit }) => ({
-        url: `/orders/client/${clientId}`,
-        params: { limit },
-      }),
-      providesTags: (_result, _error, { clientId }) => [
-        { type: "Order", id: `CLIENT_${clientId}` },
-      ],
-    }),
+        getOrdersByClient: builder.query<
+            { message: string; data: IOrder[] },
+            { clientId: string; limit?: number }
+        >({
+            query: ({ clientId, limit }) => ({
+                url: `/orders/client/${clientId}`,
+                params: { limit },
+            }),
+            providesTags: (_result, _error, { clientId }) => [
+                { type: 'Order', id: `CLIENT_${clientId}` },
+            ],
+        }),
 
-    getOrderYears: builder.query<{ message: string; data: number[] }, void>({
-      query: () => "/orders/years",
-      providesTags: [{ type: "Order", id: "YEARS" }],
-    }),
+        getOrderYears: builder.query<{ message: string; data: number[] }, void>(
+            {
+                query: () => '/orders/years',
+                providesTags: [{ type: 'Order', id: 'YEARS' }],
+            },
+        ),
 
-    createOrder: builder.mutation<OrderResponse, CreateOrderInput>({
-      query: (data) => ({
-        url: "/orders",
-        method: "POST",
-        body: data,
-      }),
-      invalidatesTags: [
-        { type: "Order", id: "LIST" },
-        { type: "Order", id: "STATS" },
-      ],
-    }),
+        createOrder: builder.mutation<OrderResponse, CreateOrderInput>({
+            query: (data) => ({
+                url: '/orders',
+                method: 'POST',
+                body: data,
+            }),
+            invalidatesTags: [
+                { type: 'Order', id: 'LIST' },
+                { type: 'Order', id: 'STATS' },
+            ],
+        }),
 
-    updateOrder: builder.mutation<
-      OrderResponse,
-      { id: string; data: UpdateOrderInput }
-    >({
-      query: ({ id, data }) => ({
-        url: `/orders/${id}`,
-        method: "PATCH",
-        body: data,
-      }),
-      invalidatesTags: (_result, _error, { id }) => [
-        { type: "Order", id },
-        { type: "Order", id: "LIST" },
-        { type: "Order", id: "STATS" },
-      ],
-    }),
+        updateOrder: builder.mutation<
+            OrderResponse,
+            { id: string; data: UpdateOrderInput }
+        >({
+            query: ({ id, data }) => ({
+                url: `/orders/${id}`,
+                method: 'PATCH',
+                body: data,
+            }),
+            invalidatesTags: (_result, _error, { id }) => [
+                { type: 'Order', id },
+                { type: 'Order', id: 'LIST' },
+                { type: 'Order', id: 'STATS' },
+            ],
+        }),
 
-    updateOrderStatus: builder.mutation<
-      OrderResponse,
-      { id: string; data: UpdateStatusInput }
-    >({
-      query: ({ id, data }) => ({
-        url: `/orders/${id}/status`,
-        method: "PATCH",
-        body: data,
-      }),
-      invalidatesTags: (_result, _error, { id }) => [
-        { type: "Order", id },
-        { type: "Order", id: "LIST" },
-        { type: "Order", id: "STATS" },
-      ],
-    }),
+        updateOrderStatus: builder.mutation<
+            OrderResponse,
+            { id: string; data: UpdateStatusInput }
+        >({
+            query: ({ id, data }) => ({
+                url: `/orders/${id}/status`,
+                method: 'PATCH',
+                body: data,
+            }),
+            invalidatesTags: (_result, _error, { id }) => [
+                { type: 'Order', id },
+                { type: 'Order', id: 'LIST' },
+                { type: 'Order', id: 'STATS' },
+            ],
+        }),
 
-    extendDeadline: builder.mutation<
-      OrderResponse,
-      { id: string; data: ExtendDeadlineInput }
-    >({
-      query: ({ id, data }) => ({
-        url: `/orders/${id}/extend-deadline`,
-        method: "PATCH",
-        body: data,
-      }),
-      invalidatesTags: (_result, _error, { id }) => [
-        { type: "Order", id },
-        { type: "Order", id: "LIST" },
-      ],
-    }),
+        extendDeadline: builder.mutation<
+            OrderResponse,
+            { id: string; data: ExtendDeadlineInput }
+        >({
+            query: ({ id, data }) => ({
+                url: `/orders/${id}/extend-deadline`,
+                method: 'PATCH',
+                body: data,
+            }),
+            invalidatesTags: (_result, _error, { id }) => [
+                { type: 'Order', id },
+                { type: 'Order', id: 'LIST' },
+            ],
+        }),
 
-    addRevision: builder.mutation<
-      OrderResponse,
-      { id: string; data: AddRevisionInput }
-    >({
-      query: ({ id, data }) => ({
-        url: `/orders/${id}/revision`,
-        method: "POST",
-        body: data,
-      }),
-      invalidatesTags: (_result, _error, { id }) => [
-        { type: "Order", id },
-        { type: "Order", id: "LIST" },
-        { type: "Order", id: "STATS" },
-      ],
-    }),
+        addRevision: builder.mutation<
+            OrderResponse,
+            { id: string; data: AddRevisionInput }
+        >({
+            query: ({ id, data }) => ({
+                url: `/orders/${id}/revision`,
+                method: 'POST',
+                body: data,
+            }),
+            invalidatesTags: (_result, _error, { id }) => [
+                { type: 'Order', id },
+                { type: 'Order', id: 'LIST' },
+                { type: 'Order', id: 'STATS' },
+            ],
+        }),
 
-    deleteOrder: builder.mutation<{ message: string }, string>({
-      query: (id) => ({
-        url: `/orders/${id}`,
-        method: "DELETE",
-      }),
-      invalidatesTags: [
-        { type: "Order", id: "LIST" },
-        { type: "Order", id: "STATS" },
-      ],
-    }),
+        deleteOrder: builder.mutation<{ message: string }, string>({
+            query: (id) => ({
+                url: `/orders/${id}`,
+                method: 'DELETE',
+            }),
+            invalidatesTags: [
+                { type: 'Order', id: 'LIST' },
+                { type: 'Order', id: 'STATS' },
+            ],
+        }),
 
-    markDelivered: builder.mutation<OrderResponse, string>({
-      query: (id) => ({
-        url: `/orders/${id}/delivered`,
-        method: "POST",
-      }),
-      invalidatesTags: (_result, _error, id) => [
-        { type: "Order", id },
-        { type: "Order", id: "LIST" },
-      ],
-    }),
+        markDelivered: builder.mutation<OrderResponse, string>({
+            query: (id) => ({
+                url: `/orders/${id}/delivered`,
+                method: 'POST',
+            }),
+            invalidatesTags: (_result, _error, id) => [
+                { type: 'Order', id },
+                { type: 'Order', id: 'LIST' },
+            ],
+        }),
 
-    convertQuotationToOrder: builder.mutation<OrderResponse, { quotationGroupId: string }>({
-      query: (data) => ({
-        url: "/orders/convert-quotation",
-        method: "POST",
-        body: data,
-      }),
-      invalidatesTags: [
-        { type: "Order", id: "LIST" },
-        { type: "Order", id: "STATS" },
-        { type: "Quotation" as any, id: "LIST" },
-      ],
+        convertQuotationToOrder: builder.mutation<
+            OrderResponse,
+            { quotationGroupId: string }
+        >({
+            query: (data) => ({
+                url: '/orders/convert-quotation',
+                method: 'POST',
+                body: data,
+            }),
+            invalidatesTags: [
+                { type: 'Order', id: 'LIST' },
+                { type: 'Order', id: 'STATS' },
+                { type: 'Quotation', id: 'LIST' },
+            ],
+        }),
+
+        recordManualPayment: builder.mutation<
+            { success: boolean; message: string },
+            {
+                quotationGroupId: string;
+                orderId?: string; // to invalidate local cache
+                phase: 'upfront' | 'delivery' | 'final';
+                amount: number;
+                notes?: string;
+            }
+        >({
+            query: ({ ...data }) => ({
+                url: '/quotation-payments/record-manual',
+                method: 'POST',
+                body: data,
+            }),
+            invalidatesTags: (_result, _error, { orderId }) => [
+                ...(orderId ? [{ type: 'Order' as const, id: orderId }] : []),
+                { type: 'Order', id: 'LIST' },
+                { type: 'Order', id: 'STATS' },
+            ],
+        }),
     }),
-  }),
 });
 
 export const {
-  useGetOrdersQuery,
-  useLazyGetOrdersQuery,
-  useGetOrderByIdQuery,
-  useGetOrderStatsQuery,
-  useGetOrdersByClientQuery,
-  useGetOrderYearsQuery,
-  useCreateOrderMutation,
-  useUpdateOrderMutation,
-  useUpdateOrderStatusMutation,
-  useExtendDeadlineMutation,
-  useAddRevisionMutation,
-  useDeleteOrderMutation,
-  useMarkDeliveredMutation,
-  useConvertQuotationToOrderMutation,
+    useGetOrdersQuery,
+    useLazyGetOrdersQuery,
+    useGetOrderByIdQuery,
+    useGetOrderStatsQuery,
+    useGetOrdersByClientQuery,
+    useGetOrderYearsQuery,
+    useCreateOrderMutation,
+    useUpdateOrderMutation,
+    useUpdateOrderStatusMutation,
+    useExtendDeadlineMutation,
+    useAddRevisionMutation,
+    useDeleteOrderMutation,
+    useMarkDeliveredMutation,
+    useConvertQuotationToOrderMutation,
+    useRecordManualPaymentMutation,
 } = orderApi;

@@ -209,9 +209,21 @@ async function enrichOrdersWithPaymentInfo(orders: any[]): Promise<any[]> {
         return {
             ...orderObj,
             paymentPhases: tracker ? {
-                upfront: tracker.phases.upfront.status,
-                delivery: tracker.phases.delivery.status,
-                final: tracker.phases.final.status
+                upfront: {
+                    status: tracker.phases.upfront.status,
+                    amountDue: tracker.phases.upfront.amountDue,
+                    amountPaid: tracker.phases.upfront.amountPaid,
+                },
+                delivery: {
+                    status: tracker.phases.delivery.status,
+                    amountDue: tracker.phases.delivery.amountDue,
+                    amountPaid: tracker.phases.delivery.amountPaid,
+                },
+                final: {
+                    status: tracker.phases.final.status,
+                    amountDue: tracker.phases.final.amountDue,
+                    amountPaid: tracker.phases.final.amountPaid,
+                }
             } : null
         };
     });

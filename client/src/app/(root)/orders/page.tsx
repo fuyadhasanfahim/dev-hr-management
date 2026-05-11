@@ -162,9 +162,9 @@ const getFilteredStatusOptions = (order: IOrder): OrderStatus[] => {
   // For legacy orders without payment tracker, return defaults
   if (!payment) return baseOptions;
 
-  const isUpfrontPaid = payment.upfront === "paid";
-  const isDeliveryPaid = payment.delivery === "paid";
-  const isFinalPaid = payment.final === "paid";
+  const isUpfrontPaid = payment.upfront?.status === "paid";
+  const isDeliveryPaid = payment.delivery?.status === "paid";
+  const isFinalPaid = payment.final?.status === "paid";
 
   // Special Case: All phases paid
   if (isUpfrontPaid && isDeliveryPaid && isFinalPaid) {
@@ -1088,6 +1088,7 @@ export default function OrdersPage() {
                     <TableHead className="border-r">Time Left</TableHead>
                     <TableHead className="border-r">Qty</TableHead>
                     <TableHead className="border-r">Total</TableHead>
+                    <TableHead className="border-r">Payment</TableHead>
                     <TableHead className="border-r">Status</TableHead>
                     <TableHead className="border-r">Priority</TableHead>
                     <TableHead>Actions</TableHead>
@@ -1110,6 +1111,12 @@ export default function OrdersPage() {
                       </TableCell>
                       <TableCell className="border-r">
                         <Skeleton className="h-4 w-16" />
+                      </TableCell>
+                      <TableCell className="border-r">
+                        <div className="space-y-1 px-2">
+                          <div className="flex justify-between"><Skeleton className="h-2 w-8" /><Skeleton className="h-2 w-4" /></div>
+                          <Skeleton className="h-1.5 w-full" />
+                        </div>
                       </TableCell>
                       <TableCell className="border-r">
                         <Skeleton className="h-6 w-20" />
@@ -1157,6 +1164,9 @@ export default function OrdersPage() {
                     <TableHead className="font-semibold text-right">
                       Total
                     </TableHead>
+                    <TableHead className="font-semibold text-center">
+                      Payment
+                    </TableHead>
                     <TableHead className="text-center font-semibold">
                       Status
                     </TableHead>
@@ -1172,7 +1182,7 @@ export default function OrdersPage() {
                   {orders.length === 0 ? (
                     <TableRow>
                       <TableCell
-                        colSpan={isSelectionMode ? 10 : 9}
+                        colSpan={isSelectionMode ? 11 : 10}
                         className="h-[400px] text-center"
                       >
                         <div className="flex flex-col items-center justify-center gap-4 animate-in fade-in zoom-in duration-300">
@@ -1272,6 +1282,47 @@ export default function OrdersPage() {
                               maximumFractionDigits: 2,
                             })}
                           </span>
+                        </TableCell>
+                        <TableCell className="min-w-[120px]">
+                          {(() => {
+                            const phases = order.paymentPhases;
+                            if (!phases) return <div className="text-center text-[10px] text-muted-foreground font-medium italic bg-muted/30 rounded py-1 border border-dashed">No Data</div>;
+                            
+                            const due = (phases.upfront?.amountDue || 0) + (phases.delivery?.amountDue || 0) + (phases.final?.amountDue || 0);
+                            const paid = (phases.upfront?.amountPaid || 0) + (phases.delivery?.amountPaid || 0) + (phases.final?.amountPaid || 0);
+                            const pct = due > 0 ? Math.min(100, Math.floor((paid / due) * 100)) : 0;
+                            
+                            let stage = "Upfront";
+                            let stageStyle = "bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-950/30 dark:text-amber-400";
+                            
+                            if (phases.upfront?.status === "paid") {
+                              stage = "Delivery";
+                              stageStyle = "bg-sky-100 text-sky-800 border-sky-200 dark:bg-sky-950/30 dark:text-sky-400";
+                            }
+                            if (phases.delivery?.status === "paid") {
+                              stage = "Final";
+                              stageStyle = "bg-indigo-100 text-indigo-800 border-indigo-200 dark:bg-indigo-950/30 dark:text-indigo-400";
+                            }
+                            if (phases.final?.status === "paid") {
+                              stage = "Paid";
+                              stageStyle = "bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400";
+                            }
+                            
+                            return (
+                              <div className="space-y-1 px-1 w-full max-w-[110px] mx-auto">
+                                <div className="flex items-center justify-between gap-1 text-[9px] font-bold">
+                                  <span className={cn("px-1 rounded-[4px] border tracking-tight truncate uppercase scale-[0.95] origin-left", stageStyle)}>{stage}</span>
+                                  <span className={cn("font-mono tracking-tight", pct === 100 ? "text-emerald-600" : "text-foreground/80")}>{pct}%</span>
+                                </div>
+                                <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden ring-1 ring-inset ring-black/5 dark:ring-white/5">
+                                  <div 
+                                    className={cn("h-full transition-all duration-700 ease-out rounded-full", pct === 100 ? "bg-gradient-to-r from-emerald-500 to-emerald-400" : "bg-gradient-to-r from-primary/90 to-primary")} 
+                                    style={{ width: `${pct}%` }} 
+                                  />
+                                </div>
+                              </div>
+                            );
+                          })()}
                         </TableCell>
                         <TableCell>
                           <div className="flex justify-center">

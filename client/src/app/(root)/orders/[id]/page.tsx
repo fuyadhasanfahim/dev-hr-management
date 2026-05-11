@@ -1,13 +1,93 @@
 "use client";
 
+import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { useGetOrderByIdQuery } from "@/redux/features/order/orderApi";
+import { 
+    useGetOrderByIdQuery, 
+    useRecordManualPaymentMutation,
+    useUpdateOrderStatusMutation
+} from "@/redux/features/order/orderApi";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
-import { ArrowLeft, Package, Clock, CheckCircle, AlertCircle, FileText, LayoutDashboard } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { Progress } from "@/components/ui/progress";
+import { toast } from "sonner";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
+import { 
+    DropdownMenu, 
+    DropdownMenuContent, 
+    DropdownMenuItem, 
+    DropdownMenuTrigger 
+} from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { 
+    ArrowLeft, 
+    Package, 
+    Clock, 
+    CheckCircle, 
+    AlertCircle, 
+    FileText, 
+    LayoutDashboard, 
+    Wallet,
+    DollarSign,
+    Loader2,
+    ChevronDown
+} from "lucide-react";
+
+import { OrderStatus, IOrder } from "@/types/order.type";
+import { ORDER_STATUS_LABELS } from "@/lib/constants";
+import { EmailDialog } from "../EmailDialog";
+
+// Status workflow: defines which statuses can transition to which
+const statusWorkflow: Record<OrderStatus, OrderStatus[]> = {
+  pending: ["in_progress", "cancelled"],
+  in_progress: ["quality_check", "revision", "cancelled"],
+  quality_check: ["pending_delivery", "revision", "in_progress"],
+  revision: ["in_progress", "cancelled"],
+  completed: ["revision"],
+  delivered: ["pending_final", "revision", "cancelled"], 
+  cancelled: ["pending_upfront"],
+  pending_upfront: ["active", "cancelled"], 
+  active: ["in_progress", "cancelled"], 
+  pending_delivery: ["revision", "cancelled"], 
+  pending_final: ["cancelled"], 
+};
+
+const getFilteredStatusOptions = (order: IOrder): OrderStatus[] => {
+  const currentStatus = order.status;
+  const baseOptions = statusWorkflow[currentStatus] || [];
+  const payment = order.paymentPhases;
+
+  if (!payment) return baseOptions;
+
+  const isUpfrontPaid = payment.upfront?.status === "paid";
+  const isDeliveryPaid = payment.delivery?.status === "paid";
+  const isFinalPaid = payment.final?.status === "paid";
+
+  if (isUpfrontPaid && isDeliveryPaid && isFinalPaid) {
+    const restricted = ["delivered", "completed", "revision", "cancelled"] as OrderStatus[];
+    return restricted.filter(opt => opt !== currentStatus);
+  }
+
+  return baseOptions.map((opt) => {
+    if (opt === "pending_delivery" && isDeliveryPaid) return "delivered";
+    if (opt === "pending_final" && isFinalPaid) return "completed";
+    return opt;
+  }).filter((opt, index, self) => 
+    self.indexOf(opt) === index && opt !== currentStatus
+  );
+};
 
 export default function OrderDetailsPage() {
     const params = useParams();
@@ -16,6 +96,77 @@ export default function OrderDetailsPage() {
 
     const { data, isLoading, error } = useGetOrderByIdQuery(id);
     const order = data?.data;
+
+    const [recordManualPayment, { isLoading: isRecording }] = useRecordManualPaymentMutation();
+
+    // Modal Interaction State
+    const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false);
+    const [selectedPhase, setSelectedPhase] = useState<"upfront" | "delivery" | "final" | null>(null);
+    const [paymentAmount, setPaymentAmount] = useState("");
+    const [paymentNotes, setPaymentNotes] = useState("");
+
+    const openPaymentDialog = (phase: "upfront" | "delivery" | "final", defaultAmountCents: number) => {
+        setSelectedPhase(phase);
+        // Show user the standard dollar/taka units
+        setPaymentAmount((defaultAmountCents / 100).toString()); 
+        setPaymentNotes("");
+        setIsPaymentDialogOpen(true);
+    };
+
+    const handleRecordPayment = async () => {
+        if (!selectedPhase || !order?.quotationGroupId) return;
+        const amt = parseFloat(paymentAmount);
+        if (isNaN(amt) || amt <= 0) {
+            toast.error("Please enter a valid numeric amount greater than 0.");
+            return;
+        }
+        try {
+            const res = await recordManualPayment({
+                quotationGroupId: order.quotationGroupId,
+                orderId: id,
+                phase: selectedPhase,
+                amount: amt,
+                notes: paymentNotes
+            }).unwrap();
+            
+            toast.success(res.message || "Physical receipt recorded successfully!");
+            setIsPaymentDialogOpen(false);
+        } catch (err: any) {
+            toast.error(err?.data?.message || "Failed to record physical receipt.");
+        }
+    };
+
+    // -- Status Management Flow logic --
+    const [updateOrderStatus, { isLoading: isUpdatingStatus }] = useUpdateOrderStatusMutation();
+    const [isEmailDialogOpen, setIsEmailDialogOpen] = useState(false);
+    const [pendingTargetStatus, setPendingTargetStatus] = useState<OrderStatus | null>(null);
+
+    const handleStatusClick = (target: OrderStatus) => {
+        setPendingTargetStatus(target);
+        setIsEmailDialogOpen(true);
+    };
+
+    const handleSendStatusEmail = async (message: string, downloadLink?: string, selectedEmails?: string[]) => {
+        if (!pendingTargetStatus) return;
+        try {
+            await updateOrderStatus({
+                id: id,
+                data: {
+                    status: pendingTargetStatus,
+                    customEmailMessage: message,
+                    downloadLink,
+                    sendEmail: true,
+                    selectedEmails,
+                },
+            }).unwrap();
+            
+            toast.success(`Status successfully updated to ${ORDER_STATUS_LABELS[pendingTargetStatus] || pendingTargetStatus}`);
+            setIsEmailDialogOpen(false);
+            setPendingTargetStatus(null);
+        } catch (err: any) {
+            toast.error(err?.data?.message || "Failed to update order status.");
+        }
+    };
 
     // Debugging logs
     console.log("ORDER ID PARAM:", id);
@@ -114,9 +265,32 @@ export default function OrderDetailsPage() {
                         <FileText className="h-4 w-4" />
                         Export PDF
                     </Button>
-                    <Button variant="default" size="sm">
-                        Update Status
-                    </Button>
+                    {/* Update Status Dropdown Trigger */}
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button variant="default" size="sm" className="gap-2 shadow-sm font-bold">
+                                Update Status
+                                <ChevronDown className="h-4 w-4 opacity-80" />
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-[220px] border-border/50 shadow-xl">
+                            {getFilteredStatusOptions(order).length === 0 ? (
+                                <div className="p-3 text-center text-xs text-muted-foreground italic">
+                                    No manual workflow paths available from current status ({order.status})
+                                </div>
+                            ) : (
+                                getFilteredStatusOptions(order).map((nextStep) => (
+                                    <DropdownMenuItem 
+                                        key={nextStep} 
+                                        onClick={() => handleStatusClick(nextStep)}
+                                        className="cursor-pointer font-medium py-2 text-foreground/90 hover:text-primary transition-colors capitalize"
+                                    >
+                                        {ORDER_STATUS_LABELS[nextStep] || nextStep.replace("_", " ")}
+                                    </DropdownMenuItem>
+                                ))
+                            )}
+                        </DropdownMenuContent>
+                    </DropdownMenu>
                 </div>
             </div>
 
@@ -213,6 +387,68 @@ export default function OrderDetailsPage() {
                         </CardContent>
                     </Card>
 
+                    {/* Payment Installments Dash */}
+                    {order.paymentPhases && (
+                        <Card className="shadow-md border-muted/60 overflow-hidden animate-in slide-in-from-bottom-4 duration-500">
+                            <CardHeader className="bg-emerald-500/5 border-b">
+                                <CardTitle className="text-lg flex items-center gap-2">
+                                    <Wallet className="h-5 w-5 text-emerald-600" />
+                                    Collection Progress
+                                </CardTitle>
+                                <CardDescription className="text-xs">Track installment stages & manually record cash</CardDescription>
+                            </CardHeader>
+                            <CardContent className="pt-6 space-y-6">
+                                {(["upfront", "delivery", "final"] as const).map((phase) => {
+                                    const details = order.paymentPhases?.[phase];
+                                    if (!details) return null;
+
+                                    const rawDue = details.amountDue || 0;
+                                    const rawPaid = details.amountPaid || 0;
+                                    const remaining = Math.max(0, rawDue - rawPaid);
+                                    
+                                    // Floor the percentage so 99.9% doesn't look like 100% when money is still owed.
+                                    const pct = rawDue > 0 ? Math.min(100, Math.floor((rawPaid / rawDue) * 100)) : 0;
+                                    const isPhasePaid = details.status === "paid";
+
+                                    return (
+                                        <div key={phase} className="space-y-2 pb-4 border-b last:border-0 border-dashed last:pb-0">
+                                            <div className="flex items-center justify-between">
+                                                <h4 className="capitalize font-bold text-sm text-foreground/80 flex items-center gap-2">
+                                                    {phase} 
+                                                    {isPhasePaid ? (
+                                                        <CheckCircle className="h-3.5 w-3.5 text-emerald-600" />
+                                                    ) : (
+                                                        <span className="text-[9px] font-bold tracking-wider px-1.5 py-0.5 rounded bg-muted text-muted-foreground border uppercase">{details.status || 'pending'}</span>
+                                                    )}
+                                                </h4>
+                                                <span className={cn("text-xs font-mono font-bold", isPhasePaid ? "text-emerald-600" : "text-muted-foreground")}>{pct}%</span>
+                                            </div>
+                                            
+                                            <Progress value={pct} className={cn("h-2 bg-muted", isPhasePaid && "[&>div]:bg-emerald-600")} />
+
+                                            <div className="flex items-center justify-between text-[11px]">
+                                                <div className="text-muted-foreground font-medium">
+                                                    <span className="text-foreground font-bold">{(rawPaid / 100).toFixed(2)}</span> / {(rawDue / 100).toFixed(2)} {order.quotationSnapshot?.currency === "USD" ? "$" : order.quotationSnapshot?.currency || "$"}
+                                                </div>
+                                                {!isPhasePaid && remaining > 0 && (
+                                                    <Button 
+                                                        variant="ghost" 
+                                                        size="sm" 
+                                                        className="h-6 text-[10px] px-2 hover:bg-emerald-100 hover:text-emerald-900 dark:hover:bg-emerald-950/40 font-bold gap-1 border border-emerald-200 dark:border-emerald-900/50"
+                                                        onClick={() => openPaymentDialog(phase, remaining)}
+                                                    >
+                                                        <DollarSign className="h-3 w-3" />
+                                                        Record Cash
+                                                    </Button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </CardContent>
+                        </Card>
+                    )}
+
                     <Card className="shadow-md border-muted/60 bg-muted/20">
                         <CardHeader>
                             <CardTitle className="text-lg flex items-center gap-2">
@@ -233,6 +469,85 @@ export default function OrderDetailsPage() {
                     </Card>
                 </div>
             </div>
+            {/* Record Manual Payment Confirmation Modal */}
+            <Dialog open={isPaymentDialogOpen} onOpenChange={setIsPaymentDialogOpen}>
+                <DialogContent className="sm:max-w-[425px]">
+                    <DialogHeader>
+                        <DialogTitle className="capitalize flex items-center gap-2 text-xl font-bold">
+                            <Wallet className="h-6 w-6 text-emerald-600" />
+                            Record Receipt: {selectedPhase}
+                        </DialogTitle>
+                        <DialogDescription className="text-xs pt-1">
+                            Enter the physical cash/transfer payment received. Downstream logic will automatically lock in and trigger pipeline updates.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="grid gap-4 py-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="amount" className="text-sm font-semibold text-foreground/90">
+                                Amount Received ({order.quotationSnapshot?.currency || "$"})
+                            </Label>
+                            <div className="relative">
+                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-bold pointer-events-none">
+                                    {order.quotationSnapshot?.currency === "USD" ? "$" : order.quotationSnapshot?.currency || "$"}
+                                </span>
+                                <Input 
+                                    id="amount" 
+                                    type="number" 
+                                    className="pl-8 h-12 text-lg font-mono font-bold focus-visible:ring-emerald-500"
+                                    placeholder="0.00" 
+                                    step="0.01"
+                                    value={paymentAmount} 
+                                    onChange={(e) => setPaymentAmount(e.target.value)}
+                                />
+                            </div>
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="notes" className="text-sm font-semibold text-foreground/90">Internal Recording Note (Optional)</Label>
+                            <Input 
+                                id="notes" 
+                                placeholder="e.g. Hand-cash accepted at reception" 
+                                value={paymentNotes}
+                                onChange={(e) => setPaymentNotes(e.target.value)}
+                            />
+                        </div>
+                    </div>
+
+                    <DialogFooter className="flex gap-2 sm:gap-0">
+                        <Button variant="outline" onClick={() => setIsPaymentDialogOpen(false)} disabled={isRecording}>
+                            Cancel
+                        </Button>
+                        <Button 
+                            onClick={handleRecordPayment} 
+                            disabled={isRecording}
+                            className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2 font-bold"
+                        >
+                            {isRecording ? (
+                                <>
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                    Recording...
+                                </>
+                            ) : (
+                                <>
+                                    <CheckCircle className="h-4 w-4" />
+                                    Confirm Receipt
+                                </>
+                            )}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+            {/* Email confirmation dialog used for global status workflows */}
+            {pendingTargetStatus && (
+                <EmailDialog
+                    open={isEmailDialogOpen}
+                    onOpenChange={setIsEmailDialogOpen}
+                    order={order}
+                    status={pendingTargetStatus}
+                    onSend={handleSendStatusEmail}
+                    isLoading={isUpdatingStatus}
+                />
+            )}
         </div>
     );
 }

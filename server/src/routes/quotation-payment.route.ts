@@ -36,4 +36,10 @@ router.get('/:groupId/status', authorize(...STAFF_ROLES), QuotationPaymentContro
 // Utility: backfill missing orders (upfront paid but no orderId)
 router.post('/reconcile-orders', authorize(...STAFF_ROLES), QuotationPaymentController.reconcileMissingOrders);
 
+/**
+ * POST /api/quotation-payments/record-manual
+ * Manually record a cash or check receipt against a specific phase.
+ */
+router.post('/record-manual', authorize(...STAFF_ROLES), QuotationPaymentController.recordManualPayment);
+
 export const quotationPaymentRoute = router;

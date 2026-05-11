@@ -545,6 +545,120 @@ async function approveMilestone(req: Request, res: Response, next: NextFunction)
     }
 }
 
+/**
+ * Staff-only admin route.
+ * POST /api/quotation-payments/record-manual
+ * Body: { quotationGroupId, phase, amount, currency?, notes? }
+ */
+async function recordManualPayment(req: Request, res: Response, next: NextFunction) {
+    try {
+        const { quotationGroupId, phase, amount, currency, notes } = req.body;
+        const staffUserId = (req as any).user?._id?.toString() || '000000000000000000000000';
+
+        if (!quotationGroupId) return next(new AppError('quotationGroupId is required', 400));
+        if (!VALID_PHASES.includes(phase as Phase)) {
+            return next(new AppError(`phase must be one of: ${VALID_PHASES.join(', ')}`, 400));
+        }
+
+        const tracker = await QuotationPaymentModel.findOne({ quotationGroupId, isActive: true });
+        if (!tracker) {
+            return next(new AppError('Active payment tracker not found for group', 404));
+        }
+
+        const inputAmount = Number(amount);
+        if (!Number.isFinite(inputAmount) || inputAmount <= 0) {
+            return next(new AppError('Invalid numeric amount', 400));
+        }
+
+        // Assuming input amount is already in base units (dollars / taka) and should be mapped to "cents"
+        // Adjust rounding/multiplier strategy if incoming is formatted differently.
+        const amountCents = Math.round(inputAmount * 100);
+        const referenceId = `manual-${phase}-${Date.now()}`;
+
+        logger.info({ quotationGroupId, phase, amountCents, staffUserId }, 'payment.manual.recording_attempt');
+
+        const { tracker: updatedTracker, wasApplied } = await QuotationPaymentService.recordPhasePayment(
+            quotationGroupId,
+            phase as Phase,
+            amountCents,
+            referenceId,
+            tracker.quotationId.toString(),
+            currency || tracker.currency || undefined
+        );
+
+        if (!wasApplied) {
+            return res.status(200).json({ 
+                success: false, 
+                message: 'Payment recording was deemed duplicate or redundant', 
+                data: updatedTracker 
+            });
+        }
+
+        // Side-Effects Coordination
+        if (updatedTracker.orderId) {
+            const orderId = updatedTracker.orderId.toString();
+            try {
+                if (phase === 'upfront' && updatedTracker.phases.upfront.status === 'paid') {
+                    const order = await OrderModel.findById(orderId);
+                    if (order && order.status === 'pending_upfront') {
+                        await OrderService.transitionStatus(
+                            orderId,
+                            'active' as any,
+                            staffUserId,
+                            `Order activated after manual upfront cash payment (${notes || 'No note'}).`
+                        );
+                    }
+                } else if (phase === 'delivery' && updatedTracker.phases.delivery.status === 'paid') {
+                    await OrderService.unlockAssets(orderId);
+                    logger.info({ orderId, phase }, 'payment.manual.delivery_side_effects_triggered');
+                } else if (phase === 'final' && updatedTracker.phases.final.status === 'paid') {
+                    await OrderService.completeOrder(orderId);
+                    logger.info({ orderId, phase }, 'payment.manual.final_side_effects_triggered');
+                }
+            } catch (sideEffectErr: any) {
+                logger.error(
+                    { orderId, phase, err: sideEffectErr?.message || String(sideEffectErr) },
+                    'payment.manual.side_effects_failed'
+                );
+                // We still return success for the receipt itself, but log failure of the followup.
+            }
+        } else if (phase === 'upfront' && updatedTracker.phases.upfront.status === 'paid') {
+            // Case: tracker doesn't have orderId yet, creation fallback?
+            // Users should generally have converted the order first, but we can create it dynamically to be safe.
+            try {
+                const newOrder = await OrderService.createOrderFromQuotation(quotationGroupId, staffUserId);
+                await QuotationPaymentModel.findOneAndUpdate(
+                    { quotationGroupId, isActive: true },
+                    { $set: { orderId: newOrder._id } }
+                );
+                // Transition to ACTIVE immediately
+                await OrderService.transitionStatus(
+                    newOrder._id.toString(),
+                    'active' as any,
+                    staffUserId,
+                    `Created & activated order directly via manual upfront receipt.`
+                );
+            } catch (creationErr) {
+                 logger.error({ quotationGroupId, err: creationErr }, 'payment.manual.fallback_order_creation_failed');
+            }
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: `Successfully recorded ${inputAmount} as manual payment.`,
+            data: {
+                referenceId,
+                amountCents,
+                phase,
+                wasApplied: true
+            }
+        });
+
+    } catch (err) {
+        return next(err);
+    }
+}
+
 export default {
     createPaymentIntent,
     getPaymentStatus,
@@ -554,4 +668,5 @@ export default {
     confirmClientPayment,
     approveMilestone,
     reconcileMissingOrders,
+    recordManualPayment,
 };
