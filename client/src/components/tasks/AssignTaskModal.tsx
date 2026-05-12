@@ -23,16 +23,23 @@ import {
 import { useGetStaffsQuery } from "@/redux/features/staff/staffApi";
 import { useCreateTaskMutation } from "@/redux/features/task/taskApi";
 import { toast } from "sonner";
-import { Loader2, CalendarClock, UserPlus } from "lucide-react";
+import { Loader2, CalendarClock, UserPlus, CheckCircle2, Clock } from "lucide-react";
 
 interface AssignTaskModalProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     orderId: string;
     phases?: Array<{ title: string; description?: string; items?: string[]; startDate?: string; endDate?: string }>;
+    existingTasks?: any[];
 }
 
-export function AssignTaskModal({ open, onOpenChange, orderId, phases = [] }: AssignTaskModalProps) {
+export function AssignTaskModal({ 
+    open, 
+    onOpenChange, 
+    orderId, 
+    phases = [],
+    existingTasks = [] 
+}: AssignTaskModalProps) {
     const [title, setTitle] = useState("");
     const [customTitle, setCustomTitle] = useState("");
     const [description, setDescription] = useState("");
@@ -117,11 +124,32 @@ export function AssignTaskModal({ open, onOpenChange, orderId, phases = [] }: As
                                         <SelectValue placeholder="Select order phase..." />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        {phases.map((p, idx) => (
-                                            <SelectItem key={idx} value={p.title}>
-                                                {p.title}
-                                            </SelectItem>
-                                        ))}
+                                        {phases.map((p, idx) => {
+                                            const matchingTask = existingTasks.find((t: any) => t.title === p.title);
+                                            const isCompleted = matchingTask?.status === "completed";
+                                            const isAssigned = !!matchingTask;
+                                            
+                                            return (
+                                                <SelectItem key={idx} value={p.title}>
+                                                    <div className="flex items-center justify-between w-full gap-3 pr-2">
+                                                        <span className={isCompleted ? "text-muted-foreground line-through" : ""}>
+                                                            {p.title}
+                                                        </span>
+                                                        {isCompleted ? (
+                                                            <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/50 px-2 py-0.5 rounded border border-emerald-100 dark:border-emerald-900">
+                                                                <CheckCircle2 className="h-3 w-3" />
+                                                                Done
+                                                            </span>
+                                                        ) : isAssigned ? (
+                                                            <span className="flex items-center gap-1 text-[10px] font-bold text-blue-600 bg-blue-50 dark:bg-blue-950/50 px-2 py-0.5 rounded border border-blue-100 dark:border-blue-900">
+                                                                <Clock className="h-3 w-3" />
+                                                                Active
+                                                            </span>
+                                                        ) : null}
+                                                    </div>
+                                                </SelectItem>
+                                            );
+                                        })}
                                         <SelectItem value="_CUSTOM_" className="italic text-muted-foreground text-xs">
                                             + Custom task (not in scope)
                                         </SelectItem>

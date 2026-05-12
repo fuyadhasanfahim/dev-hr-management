@@ -47,15 +47,17 @@ const updateTaskStatus = async (taskId: string, status: TaskStatus) => {
 
 const submitTask = async (
     taskId: string,
-    staffId: string,
     payload: { note: string; attachment?: string },
+    actorStaffId?: string,
 ) => {
-    const task = await OrderTaskModel.findOne({
-        _id: taskId,
-        assignedTo: staffId,
-    });
+    const query: any = { _id: taskId };
+    if (actorStaffId) {
+        query.assignedTo = actorStaffId;
+    }
+
+    const task = await OrderTaskModel.findOne(query);
     if (!task) {
-        throw new AppError('Assigned task not found.', 404);
+        throw new AppError(actorStaffId ? 'Assigned task not found.' : 'Task not found.', 404);
     }
 
     task.status = TaskStatus.UNDER_REVIEW;

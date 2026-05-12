@@ -83,12 +83,16 @@ async function submitTask(req: Request, res: Response, next: NextFunction): Prom
             throw new AppError('User context not available', 401);
         }
 
+        const isManager = ['admin', 'super_admin', 'hr_manager', 'team_leader'].includes(user.role as string);
         const staff = await StaffModel.findOne({ user: user.id });
-        if (!staff) {
+        
+        if (!isManager && !staff) {
             throw new AppError('Unauthorized: staff profile required', 403);
         }
 
-        const result = await TaskService.submitTask(taskId, staff._id.toString(), req.body);
+        // Pass bounding staffId constraint ONLY if actor is NOT a manager.
+        const actorStaffConstraint = isManager ? undefined : staff?._id?.toString();
+        const result = await TaskService.submitTask(taskId, req.body, actorStaffConstraint);
 
         res.status(200).json({
             success: true,
