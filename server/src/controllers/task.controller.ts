@@ -54,7 +54,7 @@ async function getMyTasks(req: Request, res: Response, next: NextFunction): Prom
         }
 
         // Resolve user to staff first
-        const staff = await StaffModel.findOne({ user: user.id });
+        const staff = await StaffModel.findOne({ userId: user.id });
         if (!staff) {
             throw new AppError('Staff record not found for logged user', 404);
         }
@@ -84,7 +84,7 @@ async function submitTask(req: Request, res: Response, next: NextFunction): Prom
         }
 
         const isManager = ['admin', 'super_admin', 'hr_manager', 'team_leader'].includes(user.role as string);
-        const staff = await StaffModel.findOne({ user: user.id });
+        const staff = await StaffModel.findOne({ userId: user.id });
         
         if (!isManager && !staff) {
             throw new AppError('Unauthorized: staff profile required', 403);
@@ -139,7 +139,7 @@ async function updateTaskStatus(req: Request, res: Response, next: NextFunction)
         if (!user || !user.id) throw new AppError('User context not available', 401);
 
         // Resolve to staff (for staff-level actors)
-        const staff = await StaffModel.findOne({ user: user.id });
+        const staff = await StaffModel.findOne({ userId: user.id });
 
         // Allowed staff transitions: pending→in_progress, rejected→in_progress
         const STAFF_ALLOWED: Record<string, string[]> = {

@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import StaffHeader from './staff-header';
 import StaffTracking from './staff-tracking';
+import { StaffTasksWidget } from './staff-tasks-widget';
 
 import { useGetMonthlyStatsQuery } from '@/redux/features/attendance/attendanceApi';
 import { useGetMeQuery } from '@/redux/features/staff/staffApi';
@@ -79,158 +80,135 @@ export default function StaffDashboard() {
 
             <StaffTracking />
 
-            {/* This Month & Salary */}
-            <div className="grid lg:grid-cols-2 gap-6 items-start">
-                {/* This Month Stats */}
-                <Card>
-                    <CardHeader>
-                        <CardTitle>This Month</CardTitle>
-                        <CardDescription>
-                            {isLoading ? (
-                                <Skeleton className="h-4 w-20" />
-                            ) : (
-                                monthlyStats?.month || 'Loading...'
-                            )}
+            {/* Grid Layout */}
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 items-stretch">
+                
+                {/* Widget 1: Tasks & Deliverables */}
+                <div className="h-full">
+                    <StaffTasksWidget />
+                </div>
+
+                {/* Widget 2: This Month Stats */}
+                <Card className="h-full flex flex-col shadow-sm hover:shadow-md transition-shadow border-muted/50 overflow-hidden">
+                    <CardHeader className="pb-3 pt-4 bg-muted/5">
+                        <CardTitle className="text-base font-extrabold flex items-center gap-2">
+                            <div className="p-1 bg-emerald-100 dark:bg-emerald-900/40 rounded text-emerald-600 dark:text-emerald-400">
+                                <TrendingUp className="h-3.5 w-3.5" />
+                            </div>
+                            Overview
+                        </CardTitle>
+                        <CardDescription className="text-[10px] font-medium uppercase tracking-wider">
+                            {isLoading ? <Skeleton className="h-3 w-20" /> : monthlyStats?.month || 'This Month'}
                         </CardDescription>
                     </CardHeader>
-                    <CardContent>
-                        <div className="grid grid-cols-3 gap-4">
-                            <Card>
-                                <CardContent className="p-4 text-center">
-                                    <div className="text-sm text-muted-foreground mb-2">
-                                        Present
-                                    </div>
-                                    <div className="text-3xl font-bold text-green-600">
-                                        {isLoading ? (
-                                            <Skeleton className="h-8 w-12 mx-auto" />
-                                        ) : (
-                                            monthlyStats?.present || 0
-                                        )}
-                                    </div>
-                                </CardContent>
-                            </Card>
-                            <Card>
-                                <CardContent className="p-4 text-center">
-                                    <div className="text-sm text-muted-foreground mb-2">
-                                        Late In
-                                    </div>
-                                    <div className="text-3xl font-bold text-orange-600">
-                                        {isLoading ? (
-                                            <Skeleton className="h-8 w-12 mx-auto" />
-                                        ) : (
-                                            monthlyStats?.late || 0
-                                        )}
-                                    </div>
-                                </CardContent>
-                            </Card>
-                            <Card>
-                                <CardContent className="p-4 text-center">
-                                    <div className="text-sm text-muted-foreground mb-2">
-                                        Total OT
-                                    </div>
-                                    <div className="text-xl font-bold text-blue-600">
-                                        {isLoading ? (
-                                            <Skeleton className="h-8 w-16 mx-auto" />
-                                        ) : (
-                                            formatDuration(
-                                                monthlyStats?.totalOvertimeMinutes ||
-                                                    0,
-                                            )
-                                        )}
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        </div>
-                        <div className="flex items-center gap-2 mt-4 text-sm text-muted-foreground">
-                            <TrendingUp className="h-4 w-4" />
-                            <span>Updated now</span>
+                    <CardContent className="pt-4 flex-1">
+                        <div className="grid grid-cols-3 gap-3">
+                            <div className="flex flex-col items-center justify-center bg-muted/30 rounded-lg p-3 border">
+                                <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide mb-1">
+                                    Present
+                                </div>
+                                <div className="text-2xl font-black text-emerald-600 tracking-tighter">
+                                    {isLoading ? (
+                                        <Skeleton className="h-7 w-8 mx-auto" />
+                                    ) : (
+                                        monthlyStats?.present || 0
+                                    )}
+                                </div>
+                            </div>
+                            <div className="flex flex-col items-center justify-center bg-muted/30 rounded-lg p-3 border">
+                                <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide mb-1">
+                                    Late
+                                </div>
+                                <div className="text-2xl font-black text-orange-600 tracking-tighter">
+                                    {isLoading ? (
+                                        <Skeleton className="h-7 w-8 mx-auto" />
+                                    ) : (
+                                        monthlyStats?.late || 0
+                                    )}
+                                </div>
+                            </div>
+                            <div className="flex flex-col items-center justify-center bg-muted/30 rounded-lg p-3 border">
+                                <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide mb-1">
+                                    OT
+                                </div>
+                                <div className="text-base font-black text-blue-600 leading-tight mt-1">
+                                    {isLoading ? (
+                                        <Skeleton className="h-5 w-12 mx-auto" />
+                                    ) : (
+                                        formatDuration(monthlyStats?.totalOvertimeMinutes || 0)
+                                    )}
+                                </div>
+                            </div>
                         </div>
                     </CardContent>
                 </Card>
 
-                {/* Salary & PF */}
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle>Salary & PF</CardTitle>
+                {/* Widget 3: Salary & PF */}
+                <Card className="h-full md:col-span-2 xl:col-span-1 flex flex-col shadow-sm hover:shadow-md transition-shadow border-muted/50 overflow-hidden">
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3 pt-4 bg-muted/5">
+                        <div>
+                            <CardTitle className="text-base font-extrabold">Financials</CardTitle>
+                            <CardDescription className="text-[10px] uppercase tracking-wider">Earnings & PF</CardDescription>
+                        </div>
                         {isSalaryUnlocked && (
                             <Button
                                 variant="ghost"
                                 size="sm"
                                 onClick={handleLock}
-                                className="h-8 w-8 p-0"
+                                className="h-7 w-7 p-0 hover:bg-destructive/10 hover:text-destructive rounded-full"
                             >
-                                <LogOut className="h-4 w-4" />
+                                <LogOut className="h-3.5 w-3.5" />
                                 <span className="sr-only">Lock</span>
                             </Button>
                         )}
                     </CardHeader>
-                    <CardContent>
-                        <div className="grid grid-cols-2 gap-4">
-                            <Card>
-                                <CardContent className="p-4">
-                                    <div className="text-sm text-muted-foreground mb-2">
+                    <CardContent className="flex-1 pt-4">
+                        <div className="space-y-3">
+                            <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg border">
+                                <div>
+                                    <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">
                                         Monthly Salary
                                     </div>
-                                    <div className="text-3xl font-bold mb-2">
+                                    <div className="text-lg font-black tracking-tight text-foreground">
                                         {isSalaryUnlocked ? (
                                             `৳ ${staff?.salary?.toLocaleString() || 0}`
                                         ) : (
-                                            <span className="text-muted-foreground tracking-widest">
+                                            <span className="text-muted-foreground tracking-widest font-medium text-sm">
                                                 ••••
                                             </span>
                                         )}
                                     </div>
-                                    {!isSalaryUnlocked && (
-                                        <Button
-                                            size="sm"
-                                            variant="outline"
-                                            className="w-full"
-                                            onClick={() =>
-                                                setShowPinDialog(true)
-                                            }
-                                            disabled={isStaffLoading}
-                                        >
-                                            <AlertCircle className="h-4 w-4" />
-                                            {staff?.isSalaryPinSet
-                                                ? 'Unlock'
-                                                : 'Set PIN'}
-                                        </Button>
-                                    )}
-                                </CardContent>
-                            </Card>
-                            <Card>
-                                <CardContent className="p-4">
-                                    <div className="text-sm text-muted-foreground mb-2">
-                                        PF Status
+                                </div>
+                                {!isSalaryUnlocked && (
+                                    <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="h-7 px-3 text-[10px] font-black uppercase tracking-wider rounded-full bg-background hover:bg-primary hover:text-white transition-all shadow-sm"
+                                        onClick={() => setShowPinDialog(true)}
+                                        disabled={isStaffLoading}
+                                    >
+                                        {staff?.isSalaryPinSet ? 'Unlock' : 'Setup'}
+                                    </Button>
+                                )}
+                            </div>
+
+                            {isSalaryUnlocked ? (
+                                <div className="p-3 bg-accent/50 rounded-lg border border-dashed space-y-1.5">
+                                    <div className="flex justify-between items-center text-[10px]">
+                                        <span className="font-bold text-muted-foreground">PF Contribution (0%)</span>
+                                        <span className="font-black">৳ 0</span>
                                     </div>
-                                    <Badge variant="outline" className="mb-4">
-                                        N/A
-                                    </Badge>
-                                    {/* Placeholder for future PF logic */}
-                                </CardContent>
-                            </Card>
-                            {isSalaryUnlocked && (
-                                <Card className="col-span-2">
-                                    <CardContent className="p-4">
-                                        <div className="flex justify-between items-center mb-2">
-                                            <span className="text-sm text-muted-foreground">
-                                                Monthly PF (0%)
-                                            </span>
-                                            <span className="font-bold">
-                                                ৳ 0
-                                            </span>
-                                        </div>
-                                        <Separator className="my-2" />
-                                        <div className="flex justify-between items-center">
-                                            <span className="text-sm text-muted-foreground">
-                                                Total PF Balance
-                                            </span>
-                                            <span className="font-bold">
-                                                ৳ 0
-                                            </span>
-                                        </div>
-                                    </CardContent>
-                                </Card>
+                                    <Separator className="bg-muted-foreground/20" />
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-[10px] font-bold text-muted-foreground">Total Balance</span>
+                                        <span className="text-xs font-black text-primary">৳ 0</span>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="flex items-center justify-between p-3 bg-muted/10 rounded-lg border border-dashed opacity-60">
+                                    <span className="text-[10px] font-bold uppercase">PF Status</span>
+                                    <span className="text-[10px] font-black bg-muted px-2 py-0.5 rounded">N/A</span>
+                                </div>
                             )}
                         </div>
                     </CardContent>
@@ -248,22 +226,21 @@ export default function StaffDashboard() {
             <StaffAttendanceTable />
 
             {/* Notifications */}
-            <Card>
-                <CardHeader>
+            <Card className="border-muted/50 shadow-sm">
+                <CardHeader className="py-3">
                     <div className="flex items-center justify-between">
-                        <CardTitle>Notifications</CardTitle>
-                        <Button variant="ghost" size="sm">
+                        <CardTitle className="text-sm font-extrabold">System Board</CardTitle>
+                        <Button variant="ghost" size="sm" className="h-6 text-[10px] uppercase font-black tracking-wider">
                             Recent
                         </Button>
                     </div>
                 </CardHeader>
-                <CardContent>
-                    <Alert>
-                        <AlertCircle className="h-4 w-4" />
-                        <AlertDescription>
-                            Your account has been de-activated. You can no
-                            longer access the portal.
-                            <span className="text-xs text-muted-foreground ml-2">
+                <CardContent className="pb-4">
+                    <Alert className="bg-amber-50/50 border-amber-200/50 dark:bg-amber-950/10 dark:border-amber-900/50">
+                        <AlertCircle className="h-3.5 w-3.5 text-amber-600" />
+                        <AlertDescription className="text-[11px] font-medium leading-relaxed text-foreground/90">
+                            Your account has been de-activated. You can no longer access the portal.
+                            <span className="text-[10px] font-bold text-muted-foreground ml-2">
                                 3 months ago
                             </span>
                         </AlertDescription>

@@ -29,12 +29,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                                         alt="Company logo"
                                         width={150}
                                         height={45}
-                                        loading="eager"
-                                        style={{
-                                            width: 'auto',
-                                            height: 'auto',
-                                            maxWidth: '150px',
-                                        }}
+                                        priority
+                                        style={{ width: 'auto', height: 'auto' }}
+                                        className="max-w-[150px] object-contain"
                                     />
                                 </figure>
                             </Link>
