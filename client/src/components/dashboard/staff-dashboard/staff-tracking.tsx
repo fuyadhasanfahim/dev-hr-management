@@ -205,11 +205,11 @@ export default function StaffTracking() {
 
     return (
         <>
-            <Card>
-                <CardHeader>
+            <Card className="h-full shadow-sm hover:shadow-md transition-shadow border-muted/50 overflow-hidden">
+                <CardHeader className="pb-3 pt-4 bg-muted/5">
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                         <div className="flex items-center gap-3">
-                            <CardTitle className="text-xl font-bold">
+                            <CardTitle className="text-base font-extrabold tracking-tight">
                                 Time Tracking (Today)
                             </CardTitle>
                             {attendanceDay?.status && (
@@ -239,8 +239,8 @@ export default function StaffTracking() {
                     </div>
                 </CardHeader>
 
-                <CardContent>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                <CardContent className="pt-4">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
                         <Card>
                             <CardContent className="p-4 flex flex-col gap-1">
                                 <div className="flex items-center justify-between text-sm text-muted-foreground">

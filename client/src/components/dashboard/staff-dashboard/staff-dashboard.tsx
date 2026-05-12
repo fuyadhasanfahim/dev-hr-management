@@ -74,16 +74,17 @@ export default function StaffDashboard() {
             <ShiftOffNotice />
             <StaffHeader />
 
-            <StaffTracking />
-
-            {/* Grid Layout */}
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 items-stretch">
-                
-                {/* Widget 1: Tasks & Deliverables */}
-                <div className="h-full">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-stretch">
+                <div className="lg:col-span-2">
+                    <StaffTracking />
+                </div>
+                <div>
                     <StaffTasksWidget />
                 </div>
+            </div>
 
+            {/* Grid Layout */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-stretch">
                 {/* Widget 2: This Month Stats */}
                 <Card className="h-full flex flex-col shadow-sm hover:shadow-md transition-shadow border-muted/50 overflow-hidden">
                     <CardHeader className="pb-3 pt-4 bg-muted/5">
@@ -128,8 +129,8 @@ export default function StaffDashboard() {
                     </CardContent>
                 </Card>
 
-                {/* Widget 3: Salary & PF */}
-                <Card className="h-full md:col-span-2 xl:col-span-1 flex flex-col shadow-sm hover:shadow-md transition-shadow border-muted/50 overflow-hidden">
+
+                <Card className="h-full flex flex-col shadow-sm hover:shadow-md transition-shadow border-muted/50 overflow-hidden">
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3 pt-4 bg-muted/5">
                         <div>
                             <CardTitle className="text-base font-extrabold">Financials</CardTitle>

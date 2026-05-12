@@ -43,6 +43,10 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useDebounce } from "../../../hooks/use-debounce";
+import { useUpdateStaffMutation } from "@/redux/features/staff/staffApi";
+import { Role } from "@/constants/role";
+import { toast } from "sonner";
+import { Loader2, ShieldCheck } from "lucide-react";
 
 const statusColors: Record<string, string> = {
     active: "bg-green-500",
@@ -101,6 +105,49 @@ interface Staff {
         startTime: string;
         endTime: string;
     };
+}
+
+function RoleSwitcher({ staff }: { staff: Staff }) {
+    const [updateStaff, { isLoading }] = useUpdateStaffMutation();
+    const currentRole = staff.user?.role || Role.STAFF;
+
+    const handleRoleChange = async (newRole: string) => {
+        if (newRole === currentRole) return;
+        try {
+            // Optimistically perform update, leveraging RTK queries invalidation
+            await updateStaff({
+                id: staff.staffId,
+                data: {
+                    role: newRole,
+                },
+            }).unwrap();
+            toast.success(`Role updated for ${staff.user?.name || 'Staff'}`);
+        } catch (error: any) {
+            toast.error(error?.data?.message || "Failed to update role");
+        }
+    };
+
+    return (
+        <Select 
+            value={currentRole} 
+            onValueChange={handleRoleChange}
+            disabled={isLoading}
+        >
+            <SelectTrigger className="h-8 w-[130px] text-xs bg-background border-muted shadow-sm">
+                <div className="flex items-center gap-2 truncate">
+                    {isLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <ShieldCheck className="h-3 w-3 text-primary/80" />}
+                    <SelectValue />
+                </div>
+            </SelectTrigger>
+            <SelectContent>
+                <SelectItem value={Role.STAFF} className="text-xs">Staff</SelectItem>
+                <SelectItem value={Role.TEAM_LEADER} className="text-xs">Team Leader</SelectItem>
+                <SelectItem value={Role.HR_MANAGER} className="text-xs">HR Manager</SelectItem>
+                <SelectItem value={Role.ADMIN} className="text-xs">Admin</SelectItem>
+                <SelectItem value={Role.SUPER_ADMIN} className="text-xs">Super Admin</SelectItem>
+            </SelectContent>
+        </Select>
+    );
 }
 
 export default function StaffsPage() {
@@ -322,6 +369,7 @@ export default function StaffsPage() {
                                     <TableHead>Department</TableHead>
                                     <TableHead>Designation</TableHead>
                                     <TableHead>Shift</TableHead>
+                                    <TableHead>Role</TableHead>
                                     <TableHead>Today Status</TableHead>
                                     <TableHead>Action</TableHead>
                                 </TableRow>
@@ -346,6 +394,9 @@ export default function StaffsPage() {
                                                 <Skeleton className="h-8 w-full max-w-[150px]" />
                                             </TableCell>
                                             <TableCell>
+                                                <Skeleton className="h-8 w-28" />
+                                            </TableCell>
+                                            <TableCell>
                                                 <Skeleton className="h-6 w-20 rounded-full" />
                                             </TableCell>
                                             <TableCell>
@@ -356,7 +407,7 @@ export default function StaffsPage() {
                                 ) : staffs.length === 0 ? (
                                     <TableRow>
                                         <TableCell
-                                            colSpan={7}
+                                            colSpan={8}
                                             className="text-center py-12 text-muted-foreground"
                                         >
                                             <div className="flex flex-col items-center justify-center gap-2">
@@ -415,6 +466,9 @@ export default function StaffsPage() {
                                                         No Shift
                                                     </span>
                                                 )}
+                                            </TableCell>
+                                            <TableCell>
+                                                <RoleSwitcher staff={staff} />
                                             </TableCell>
                                             <TableCell>
                                                 {getStatusBadge(
