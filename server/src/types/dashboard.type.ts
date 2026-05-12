@@ -30,19 +30,11 @@ export interface IMonthlyAttendanceStats {
     averageAttendance: number;
 }
 
-export interface IOvertimeSummary {
-    total: number;
-    pending: number;
-    approved: number;
-    rejected: number;
-    completed: number;
-    totalHours: number;
-    totalAmount: number;
-}
+
 
 export interface IRecentActivity {
     _id: Types.ObjectId;
-    type: 'attendance' | 'overtime' | 'shift' | 'staff' | 'leave';
+    type: 'attendance' | 'shift' | 'staff' | 'leave';
     action: string;
     description: string;
     user: {
@@ -67,7 +59,7 @@ export interface IDashboardStats {
     staffStats: IStaffStats;
     attendanceOverview: IAttendanceOverview;
     monthlyAttendanceStats: IMonthlyAttendanceStats;
-    overtimeSummary: IOvertimeSummary;
+
     recentActivities: IRecentActivity[];
     financialStats?: IFinancialStats;
 }

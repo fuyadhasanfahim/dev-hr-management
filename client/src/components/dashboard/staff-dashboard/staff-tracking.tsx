@@ -29,12 +29,7 @@ import {
     useCheckOutMutation,
     useGetTodayAttendanceQuery,
 } from '@/redux/features/attendance/attendanceApi';
-import {
-    useGetMyOvertimeQuery,
-    useStartOvertimeMutation,
-    useStopOvertimeMutation,
-    useGetScheduledOvertimeTodayQuery,
-} from '@/redux/features/overtime/overtimeApi';
+
 import { useGetMyShiftQuery } from '@/redux/features/shift/shiftApi';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -49,26 +44,16 @@ const EARLY_CHECKIN_WINDOW_MINUTES = 15;
 
 export default function StaffTracking() {
     const { data: todaysData } = useGetTodayAttendanceQuery(undefined);
-    const { data: myOvertimeData } = useGetMyOvertimeQuery(undefined);
-    const { data: scheduledOT } = useGetScheduledOvertimeTodayQuery(undefined);
+
     const { data: myShiftData } = useGetMyShiftQuery(undefined);
 
     const attendanceDay = todaysData?.attendance?.attendanceDay;
 
     const [checkIn, { isLoading: isCheckingIn }] = useCheckInMutation();
     const [checkOut, { isLoading: isCheckingOut }] = useCheckOutMutation();
-    const [startOvertime, { isLoading: isStartingOT }] =
-        useStartOvertimeMutation();
-    const [stopOvertime, { isLoading: isStoppingOT }] =
-        useStopOvertimeMutation();
 
-    const [countdown, setCountdown] = useState<string>('');
 
-    // Find active OT (checked in but not ended)
-    const activeOT = useMemo(() => 
-        myOvertimeData?.find((ot: { actualStartTime?: string; endTime?: string }) => 
-            ot.actualStartTime && !ot.endTime
-        ), [myOvertimeData]);
+
 
     // Get shift start time for today
     const getShiftStartTime = useCallback(() => {
@@ -153,62 +138,7 @@ export default function StaffTracking() {
         await performCheckIn();
     };
 
-    // Update countdown every second if there's a scheduled OT
-    useEffect(() => {
-        if (!scheduledOT) return;
 
-        const interval = setInterval(() => {
-            const now = new Date();
-            const scheduledTime = new Date(scheduledOT.startTime);
-            const diff = scheduledTime.getTime() - now.getTime();
-
-            if (diff <= 0) {
-                setCountdown('Ready to start');
-            } else {
-                const minutes = Math.floor(diff / 1000 / 60);
-                const seconds = Math.floor((diff / 1000) % 60);
-                setCountdown(`Starts in ${minutes}m ${seconds}s`);
-            }
-        }, 1000);
-
-        return () => clearInterval(interval);
-    }, [scheduledOT]);
-
-    // Calculate current OT minutes
-    const getCurrentOTMinutes = useCallback(() => {
-        if (activeOT && activeOT.actualStartTime) {
-            // OT is running - calculate live duration
-            const now = new Date();
-            const startTime = new Date(activeOT.actualStartTime);
-            const durationMs = now.getTime() - startTime.getTime();
-            return Math.floor(durationMs / 1000 / 60);
-        }
-
-        // Check for completed OT today
-        const today = new Date();
-        const completedOTToday = myOvertimeData?.find((ot: { date: string; durationMinutes?: number; endTime?: string }) => {
-            const otDate = new Date(ot.date);
-            return (
-                otDate.getDate() === today.getDate() &&
-                otDate.getMonth() === today.getMonth() &&
-                otDate.getFullYear() === today.getFullYear() &&
-                ot.endTime // Completed
-            );
-        });
-
-        return completedOTToday?.durationMinutes || 0;
-    }, [activeOT, myOvertimeData]);
-
-    const [currentOTMinutes, setCurrentOTMinutes] = useState(0);
-
-    // Update OT minutes every second if OT is active
-    useEffect(() => {
-        const interval = setInterval(() => {
-            setCurrentOTMinutes(getCurrentOTMinutes());
-        }, 1000);
-
-        return () => clearInterval(interval);
-    }, [getCurrentOTMinutes]);
 
     // Live Duration Ticker
     const [currentDuration, setCurrentDuration] = useState(0);
@@ -265,33 +195,7 @@ export default function StaffTracking() {
         }
     };
 
-    const handleStartOT = async () => {
-        try {
-            await startOvertime({}).unwrap();
-            toast.success('Overtime started!');
-        } catch (error: unknown) {
-            const err = error as { data?: { message?: string } };
-            toast.error(err?.data?.message || 'Failed to start overtime');
-        }
-    };
 
-    const handleStopOT = async () => {
-        try {
-            const result = await stopOvertime({}).unwrap();
-
-            // Check if stopped early
-            if (result.data?.earlyStopMinutes > 0) {
-                toast.warning('OT stopped early!', {
-                    description: `You stopped ${result.data.earlyStopMinutes} minutes before the scheduled duration.`,
-                });
-            } else {
-                toast.success('Overtime stopped!');
-            }
-        } catch (error: unknown) {
-            const err = error as { data?: { message?: string } };
-            toast.error(err?.data?.message || 'Failed to stop overtime');
-        }
-    };
 
     const router = useRouter();
 
@@ -336,7 +240,7 @@ export default function StaffTracking() {
                 </CardHeader>
 
                 <CardContent>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
                         <Card>
                             <CardContent className="p-4 flex flex-col gap-1">
                                 <div className="flex items-center justify-between text-sm text-muted-foreground">
@@ -383,17 +287,7 @@ export default function StaffTracking() {
                             </CardContent>
                         </Card>
 
-                        <Card>
-                            <CardContent className="p-4 flex flex-col gap-1">
-                                <div className="flex items-center justify-between text-sm text-muted-foreground">
-                                    <span>Overtime</span>
-                                    <Timer className="h-4 w-4 text-orange-500" />
-                                </div>
-                                <div className="text-2xl font-bold">
-                                    {formatDuration(currentOTMinutes)}
-                                </div>
-                            </CardContent>
-                        </Card>
+
                     </div>
 
                     <div className="flex flex-col sm:flex-row gap-3">
@@ -468,54 +362,7 @@ export default function StaffTracking() {
                             </AlertDialog>
                         )}
 
-                        {activeOT ? (
-                            <Button
-                                size="lg"
-                                variant="destructive"
-                                className="flex-1 shadow-md"
-                                onClick={handleStopOT}
-                                disabled={isStoppingOT}
-                            >
-                                {isStoppingOT ? (
-                                    <Spinner />
-                                ) : (
-                                    <>
-                                        <Clock className="h-5 w-5" />
-                                        Stop OT
-                                    </>
-                                )}
-                            </Button>
-                        ) : scheduledOT ? (
-                            <Button
-                                size="lg"
-                                variant="secondary"
-                                className="flex-1 shadow-md"
-                                onClick={handleStartOT}
-                                disabled={
-                                    isStartingOT ||
-                                    countdown !== 'Ready to start'
-                                }
-                            >
-                                {isStartingOT ? (
-                                    <Spinner />
-                                ) : (
-                                    <>
-                                        <Clock className="h-5 w-5" />
-                                        {countdown || 'Start OT'}
-                                    </>
-                                )}
-                            </Button>
-                        ) : (
-                            <Button
-                                size="lg"
-                                variant="secondary"
-                                className="flex-1 shadow-md opacity-50 cursor-not-allowed"
-                                disabled={true}
-                            >
-                                <Clock className="h-5 w-5" />
-                                No OT Scheduled
-                            </Button>
-                        )}
+
 
                         <Button
                             size="lg"

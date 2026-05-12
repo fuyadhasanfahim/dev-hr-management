@@ -12,13 +12,13 @@ import {
     TableHeader,
     TableRow,
 } from '@/components/ui/table';
-import { useGetMyOvertimeQuery } from '@/redux/features/overtime/overtimeApi';
+
 import { useGetMyAttendanceHistoryQuery } from '@/redux/features/attendance/attendanceApi';
 import { format } from 'date-fns';
 import { Clock, CheckCircle2, XCircle, MinusCircle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { IAttendanceDay } from '@/types/attendance.type';
-import { IOvertime } from '@/types/overtime.type';
+
 
 const formatDuration = (minutes: number) => {
     const h = Math.floor(minutes / 60);
@@ -33,7 +33,7 @@ const formatTime = (date: string | Date | null | undefined) => {
 
 export default function StaffAttendanceTable() {
     const { data: attendanceHistory } = useGetMyAttendanceHistoryQuery(7);
-    const { data: overtimeData } = useGetMyOvertimeQuery(undefined);
+
 
     // Generate last 7 days (most recent first)
     const getLast7Days = () => {
@@ -62,16 +62,7 @@ export default function StaffAttendanceTable() {
 
         if (!attendance) return null;
 
-        // Find OT for this date
-        const otForDate = overtimeData?.find((ot: IOvertime) => {
-            const otDate = new Date(ot.date);
-            return (
-                otDate.getDate() === date.getDate() &&
-                otDate.getMonth() === date.getMonth() &&
-                otDate.getFullYear() === date.getFullYear() &&
-                ot.endTime // Completed OT
-            );
-        });
+
 
         return {
             date,
@@ -79,7 +70,7 @@ export default function StaffAttendanceTable() {
             checkIn: attendance.checkInAt,
             checkOut: attendance.checkOutAt,
             workHours: attendance.totalMinutes || 0,
-            otMinutes: otForDate?.durationMinutes || 0,
+
             status: attendance.status,
         };
     };
@@ -128,7 +119,7 @@ export default function StaffAttendanceTable() {
                                 <TableHead>Check In</TableHead>
                                 <TableHead>Check Out</TableHead>
                                 <TableHead>Work Hours</TableHead>
-                                <TableHead>OT Time</TableHead>
+
                                 <TableHead>Status</TableHead>
                             </TableRow>
                         </TableHeader>
@@ -145,7 +136,7 @@ export default function StaffAttendanceTable() {
                                                     {format(date, 'EEEE')}
                                                 </div>
                                             </TableCell>
-                                            <TableCell colSpan={6} className="text-center text-muted-foreground">
+                                            <TableCell colSpan={5} className="text-center text-muted-foreground">
                                                 Weekend
                                             </TableCell>
                                         </TableRow>
@@ -164,15 +155,7 @@ export default function StaffAttendanceTable() {
                                         <TableCell>{formatTime(attendance.checkIn)}</TableCell>
                                         <TableCell>{formatTime(attendance.checkOut)}</TableCell>
                                         <TableCell>{formatDuration(attendance.workHours)}</TableCell>
-                                        <TableCell>
-                                            {attendance.otMinutes > 0 ? (
-                                                <span className="text-orange-600 font-medium">
-                                                    {formatDuration(attendance.otMinutes)}
-                                                </span>
-                                            ) : (
-                                                '-'
-                                            )}
-                                        </TableCell>
+
                                         <TableCell>
                                             <div className="flex items-center gap-2">
                                                 {getStatusIcon(attendance.status)}

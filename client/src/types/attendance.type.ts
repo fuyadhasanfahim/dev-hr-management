@@ -19,10 +19,10 @@ export interface IAttendanceDay {
     totalMinutes: number;
     lateMinutes: number;
     earlyExitMinutes: number;
-    otMinutes: number;
+
     payableAmount: number;
     deductionAmount: number;
-    otAmount: number;
+
     leaveRequestId?: string;
     isManual: boolean;
     isAutoAbsent: boolean;
@@ -54,5 +54,5 @@ export interface IMonthlyAttendanceStats {
     month: string;
     present: number;
     late: number;
-    totalOvertimeMinutes: number;
+
 }

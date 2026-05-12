@@ -15,10 +15,10 @@ export interface IAttendanceDay {
     totalMinutes: number;
     lateMinutes: number;
     earlyExitMinutes: number;
-    otMinutes: number;
+
     payableAmount: number;
     deductionAmount: number;
-    otAmount: number;
+
     isManual: boolean;
     isAutoAbsent: boolean;
     shiftId: Types.ObjectId;

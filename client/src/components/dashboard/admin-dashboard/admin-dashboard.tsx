@@ -3,7 +3,7 @@
 import { useGetAdminDashboardQuery } from '@/redux/features/dashboard/dashboardApi';
 import { StatCard } from './stat-card';
 import { AttendanceOverviewChart } from './attendance-overview-chart';
-import { OvertimeSummaryTable } from './overtime-summary-table';
+
 import { RecentActivities } from './recent-activities';
 import { AdminDashboardSkeleton } from './admin-dashboard-skeleton';
 import { Users, UserCheck, Clock, TrendingUp, DollarSign, Receipt, Wallet, ArrowUpRight } from 'lucide-react';
@@ -37,7 +37,7 @@ export default function AdminDashboard() {
         return null;
     }
 
-    const { staffStats, attendanceOverview, monthlyAttendanceStats, overtimeSummary, recentActivities, financialStats } = data;
+    const { staffStats, attendanceOverview, monthlyAttendanceStats, recentActivities, financialStats } = data;
 
     const formatCurrency = (amount: number) => {
         return `৳${amount.toLocaleString('en-BD', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
@@ -46,7 +46,7 @@ export default function AdminDashboard() {
     return (
         <div className="space-y-6">
             {/* Stats Cards */}
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 <StatCard
                     title="Total Staff"
                     value={staffStats.total}
@@ -61,13 +61,7 @@ export default function AdminDashboard() {
                     description={`${attendanceOverview.present} out of ${attendanceOverview.total} present`}
                     variant="success"
                 />
-                <StatCard
-                    title="Pending Overtime"
-                    value={overtimeSummary.pending}
-                    icon={Clock}
-                    description={`${overtimeSummary.total} total requests`}
-                    variant="warning"
-                />
+
                 <StatCard
                     title="Monthly Attendance"
                     value={`${monthlyAttendanceStats.averageAttendance.toFixed(1)}%`}
@@ -78,14 +72,9 @@ export default function AdminDashboard() {
             </div>
 
             {/* Charts and Summary */}
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-                <div className="col-span-4">
+                <div className="col-span-full">
                     <AttendanceOverviewChart data={attendanceOverview} />
                 </div>
-                <div className="col-span-3">
-                    <OvertimeSummaryTable data={overtimeSummary} />
-                </div>
-            </div>
 
             {/* Department Stats */}
             {staffStats.byDepartment.length > 0 && (

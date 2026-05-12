@@ -30,8 +30,7 @@ import { Badge } from "@/components/ui/badge";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { useSession } from "@/lib/auth-client";
 import { Role } from "@/constants/role";
-import MyOvertime from "@/components/dashboard/overtime/my-overtime";
-import OvertimeList from "@/components/dashboard/overtime/overtime-list";
+
 import {
     ChevronLeft,
     ChevronRight,
@@ -349,11 +348,10 @@ export default function AttendancePage() {
         <div className="p-6 space-y-6">
             <div>
                 <h2 className="text-3xl font-bold tracking-tight bg-linear-to-r from-foreground to-foreground/70 bg-clip-text">
-                    Attendance & Overtime
+                    Attendance
                 </h2>
                 <p className="text-muted-foreground mt-1">
-                    Track staff attendance, overtime, check-ins, and daily
-                    status.
+                    Track staff attendance, check-ins, and daily status.
                 </p>
             </div>
 
@@ -363,9 +361,8 @@ export default function AttendancePage() {
                 className="w-full"
             >
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
-                    <TabsList className="grid w-full sm:w-[400px] grid-cols-2">
+                    <TabsList className="grid w-full sm:w-[200px] grid-cols-1">
                         <TabsTrigger value="attendance">Attendance</TabsTrigger>
-                        <TabsTrigger value="overtime">Overtime</TabsTrigger>
                     </TabsList>
                     <TabsList className="bg-transparent gap-2 h-auto">
                         <TabsTrigger
@@ -1116,9 +1113,7 @@ export default function AttendancePage() {
                     </Card>
                 </TabsContent>
 
-                <TabsContent value="overtime" className="mt-0">
-                    {role === Role.STAFF ? <MyOvertime /> : <OvertimeList />}
-                </TabsContent>
+
 
                 <TabsContent value="total-members" className="mt-0">
                     <Card className="border-border/60 shadow-md">

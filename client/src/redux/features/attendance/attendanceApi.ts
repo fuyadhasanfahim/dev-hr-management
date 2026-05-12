@@ -32,7 +32,7 @@ export const attendanceApi = apiSlice.injectEndpoints({
                 method: 'GET',
             }),
             transformResponse: (response: { data: IMonthlyAttendanceStats }) => response.data,
-            providesTags: ['Attendance', 'Overtime'],
+            providesTags: ['Attendance'],
         }),
         getMyAttendanceHistory: builder.query<IAttendanceDay[], number | void>({
             query: (days = 7) => ({

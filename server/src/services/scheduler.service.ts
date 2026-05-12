@@ -1,5 +1,5 @@
 import AttendanceDayModel from '../models/attendance-day.model.js';
-import OvertimeModel from '../models/overtime.model.js';
+
 import LeaveApplicationModel from '../models/leave_application.model.js';
 import ShiftAssignmentModel from '../models/shift-assignment.model.js';
 import StaffModel from '../models/staff.model.js';
@@ -116,7 +116,7 @@ async function processAttendanceCheck() {
                             totalMinutes: 0,
                             lateMinutes: 0,
                             earlyExitMinutes: 0,
-                            otMinutes: 0,
+
                             isAutoAbsent: false,
                             isManual: false,
                             notes: '[System] Auto-presence granted via flexible Administration shift',
@@ -265,71 +265,7 @@ async function processAttendanceCheck() {
     }
 }
 
-// ============================================
-// OVERTIME AUTO-STOP (Every 1 minute)
-// ============================================
 
-async function processOvertimeAutoStop() {
-    const now = getBDNow();
-    let closedCount = 0;
-
-    try {
-        // Find all active overtimes (checked in but not ended)
-        const activeOvertimes = await OvertimeModel.find({
-            actualStartTime: { $exists: true, $ne: null },
-            endTime: { $exists: false },
-            durationMinutes: { $gt: 0 } // Must have an allowed duration
-        }).populate('staffId');
-
-        for (const ot of activeOvertimes) {
-            try {
-                const actualStartTime = new Date(ot.actualStartTime!);
-                // Calculate when this OT should stop based on its allowed duration
-                const scheduledEndTime = new Date(actualStartTime.getTime() + (ot.durationMinutes * 60 * 1000));
-
-                if (now >= scheduledEndTime) {
-                    // Time to auto-stop!
-                    const actualDurationMinutes = Math.floor(
-                        (now.getTime() - actualStartTime.getTime()) / (1000 * 60)
-                    );
-
-                    ot.endTime = now;
-                    ot.actualDurationMinutes = actualDurationMinutes;
-                    ot.isAutoStopped = true;
-                    ot.reason = (ot.reason || '') + ' [Auto-stopped by system]';
-                    
-                    await ot.save();
-                    closedCount++;
-
-                    // Send notification
-                    const staff = ot.staffId as any;
-                    if (staff?.userId) {
-                        await notificationService.createNotification({
-                            userId: staff.userId,
-                            title: 'Overtime Auto-Stopped',
-                            message: `Your overtime session automatically ended after ${ot.durationMinutes} minutes.`,
-                            type: 'overtime',
-                            priority: 'medium',
-                            resourceType: 'overtime',
-                            resourceId: ot._id,
-                        });
-                    }
-                }
-            } catch (otError) {
-                console.error(`[Scheduler] Error auto-stopping overtime ${ot._id}:`, otError);
-            }
-        }
-
-        if (closedCount > 0) {
-            console.log(`[Scheduler] Overtime auto-stop: ${closedCount} overtime entries completed.`);
-        }
-
-        return { closedCount };
-    } catch (error) {
-        console.error('[Scheduler] Error in overtime auto-stop:', error);
-        throw error;
-    }
-}
 
 // ============================================
 // LEAVE EXPIRY (Daily at 11:59 PM)
@@ -563,7 +499,7 @@ const TEN_MINUTES = 10 * 60 * 1000;
 const ONE_MINUTE = 60 * 1000;
 
 let attendanceInterval: NodeJS.Timeout | null = null;
-let overtimeInterval: NodeJS.Timeout | null = null;
+
 let monthlySMSInterval: NodeJS.Timeout | null = null;
 let telemetryInterval: NodeJS.Timeout | null = null;
 
@@ -577,12 +513,7 @@ function startAllSchedulers() {
     }, TEN_MINUTES);
     console.log('[Scheduler] Attendance check: Running every 10 minutes');
 
-    // Overtime auto-stop - every 1 minute
-    processOvertimeAutoStop().catch(console.error);
-    overtimeInterval = setInterval(() => {
-        processOvertimeAutoStop().catch(console.error);
-    }, ONE_MINUTE);
-    console.log('[Scheduler] Overtime auto-stop: Running every 1 minute');
+
 
     // Monthly Finance SMS and Leave Expiry - check every minute
     const runScheduledTasksIfTime = () => {
@@ -643,10 +574,7 @@ function stopAllSchedulers() {
         clearInterval(attendanceInterval);
         attendanceInterval = null;
     }
-    if (overtimeInterval) {
-        clearInterval(overtimeInterval);
-        overtimeInterval = null;
-    }
+
     if (monthlySMSInterval) {
         clearInterval(monthlySMSInterval);
         monthlySMSInterval = null;
@@ -660,7 +588,7 @@ function stopAllSchedulers() {
 
 export default {
     processAttendanceCheck,
-    processOvertimeAutoStop,
+
     processLeaveExpiry,
     processMonthlyFinanceSMSReport,
     startAllSchedulers,

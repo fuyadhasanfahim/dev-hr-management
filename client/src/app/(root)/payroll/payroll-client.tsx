@@ -31,7 +31,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import PayrollTable from "../../../components/payroll/payroll-table";
-import OvertimeTable from "../../../components/payroll/overtime-table";
+
 import ExportPdfDialog from "../../../components/payroll/export-pdf-dialog";
 import {
     DollarSign,
@@ -182,29 +182,13 @@ export default function PayrollPage() {
     ).length;
     const salaryPendingCount = payrollData.length - salaryPaidCount;
 
-    // Overtime Stats
-    const totalOvertime = payrollData.reduce(
-        (acc, curr) => acc + (curr.otPayable || 0),
-        0,
-    );
-    const overtimePaid = payrollData
-        .filter((i) => i.otStatus === "paid")
-        .reduce((acc, curr) => acc + (curr.otPaidAmount || 0), 0); // Use otPaidAmount for accuracy
-    const overtimePending = totalOvertime - overtimePaid;
-    const overtimePaidCount = payrollData.filter(
-        (i) => i.otStatus === "paid",
-    ).length;
-    const overtimePendingCount = payrollData.filter(
-        (i) => i.otPayable > 0 && i.otStatus !== "paid",
-    ).length;
+
 
     // Active Display Stats
-    const isOvertimeTab = activeTab === "overtime";
-
-    const displayTotal = isOvertimeTab ? totalOvertime : totalSalary;
-    const displayPaid = isOvertimeTab ? overtimePaid : salaryPaid;
-    const displayPending = isOvertimeTab ? overtimePending : salaryPending;
-    const displayTotalStaff = payrollData.length; // Total staff remains same, or could filter by those having OT
+    const displayTotal = totalSalary;
+    const displayPaid = salaryPaid;
+    const displayPending = salaryPending;
+    const displayTotalStaff = payrollData.length;
 
     const formatCurrency = (amount: number) => {
         return new Intl.NumberFormat("bn-BD", {
@@ -227,43 +211,18 @@ export default function PayrollPage() {
         let dataToExport: Record<string, string | number>[] = [];
         let sheetName = "";
 
-        if (isOvertimeTab) {
-            sheetName = "Overtime";
-            dataToExport = payrollData
-                .filter((row) => row.otMinutes > 0) // Only export staff with OT
-                .map((row, index) => ({
-                    "Sl No": index + 1,
-                    Name: row.name || "",
-                    Designation: row.designation || "",
-                    "Bank Name": row.bank?.bankName || "N/A",
-                    "Account NO": row.bank?.accountNumber || "N/A",
-                    "Routing NO": row.bank?.routingNumber || "N/A",
-                    "OT Hours":
-                        Math.floor(row.otMinutes / 60) +
-                        "h " +
-                        (row.otMinutes % 60) +
-                        "m",
-                    "OT Rate":
-                        row.otMinutes > 0
-                            ? (row.otPayable / (row.otMinutes / 60)).toFixed(2)
-                            : "0.00",
-                    "Total OT Amount": row.otPayable || 0,
-                    Status: row.otStatus === "paid" ? "Paid" : "Pending",
-                }));
-        } else {
-            sheetName = "Salary";
-            dataToExport = payrollData.map((row, index) => ({
-                "Sl No": index + 1,
-                Name: row.name || "",
-                Designation: row.designation || "",
-                "Bank Name": row.bank?.bankName || "N/A",
-                "Account NO": row.bank?.accountNumber || "N/A",
-                "Routing NO": row.bank?.routingNumber || "N/A",
-                "Basic Salary": row.salary || 0,
-                "Payable Amount": row.payableSalary || 0,
-                Status: row.status === "paid" ? "Paid" : "Pending",
-            }));
-        }
+        sheetName = "Salary";
+        dataToExport = payrollData.map((row, index) => ({
+            "Sl No": index + 1,
+            Name: row.name || "",
+            Designation: row.designation || "",
+            "Bank Name": row.bank?.bankName || "N/A",
+            "Account NO": row.bank?.accountNumber || "N/A",
+            "Routing NO": row.bank?.routingNumber || "N/A",
+            "Basic Salary": row.salary || 0,
+            "Payable Amount": row.payableSalary || 0,
+            Status: row.status === "paid" ? "Paid" : "Pending",
+        }));
 
         if (dataToExport.length === 0) {
             toast.error("No data to export for " + sheetName);
@@ -427,9 +386,7 @@ export default function PayrollPage() {
                                 <TabsTrigger value="salary" className="font-semibold px-6">
                                     Salary Preview
                                 </TabsTrigger>
-                                <TabsTrigger value="overtime" className="font-semibold px-6">
-                                    Overtime Balance
-                                </TabsTrigger>
+
                             </TabsList>
 
                             <div className="flex items-center gap-3">
@@ -461,12 +418,11 @@ export default function PayrollPage() {
                                             <FileSpreadsheet className="h-4 w-4" />
                                             Export to Excel
                                         </DropdownMenuItem>
-                                        {!isOvertimeTab && (
+
                                             <DropdownMenuItem onClick={handleExportPDF} className="cursor-pointer gap-2">
                                                 <FileText className="h-4 w-4" />
                                                 Export to PDF
                                             </DropdownMenuItem>
-                                        )}
                                     </DropdownMenuContent>
                                 </DropdownMenu>
                             </div>
@@ -558,19 +514,7 @@ export default function PayrollPage() {
                             </div>
                         </TabsContent>
 
-                        <TabsContent value="overtime" className="mt-0">
-                            <div className="border rounded-lg overflow-hidden bg-background">
-                                {isLoading ? (
-                                    <TableSkeleton />
-                                ) : (
-                                    <OvertimeTable
-                                        data={payrollData}
-                                        month={formattedMonth}
-                                        isLocked={isLocked}
-                                    />
-                                )}
-                            </div>
-                        </TabsContent>
+
                     </Tabs>
                 </div>
             </Card>

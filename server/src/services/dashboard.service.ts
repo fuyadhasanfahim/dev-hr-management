@@ -1,7 +1,7 @@
 import { startOfDay, endOfDay, startOfMonth, endOfMonth } from 'date-fns';
 import StaffModel from '../models/staff.model.js';
 import AttendanceDayModel from '../models/attendance-day.model.js';
-import OvertimeModel from '../models/overtime.model.js';
+
 import EarningModel from '../models/earning.model.js';
 import ExpenseModel from '../models/expense.model.js';
 import OrderModel from '../models/order.model.js';
@@ -13,7 +13,7 @@ import type {
     IStaffStats,
     IAttendanceOverview,
     IMonthlyAttendanceStats,
-    IOvertimeSummary,
+
     IRecentActivity,
     IFinancialStats,
 } from '../types/dashboard.type.js';
@@ -153,43 +153,7 @@ const getMonthlyAttendanceStats =
         };
     };
 
-const getOvertimeSummary = async (): Promise<IOvertimeSummary> => {
-    const overtimeRecords = await OvertimeModel.find();
 
-    const total = overtimeRecords.length;
-    const pending = overtimeRecords.filter(
-        (r) => r.status === 'pending',
-    ).length;
-    const approved = overtimeRecords.filter(
-        (r) => r.status === 'approved',
-    ).length;
-    const rejected = overtimeRecords.filter(
-        (r) => r.status === 'rejected',
-    ).length;
-
-    // Completed is not a valid status in IOvertime, so we'll count approved as completed
-    const completed = approved;
-
-    const totalMinutes = overtimeRecords.reduce(
-        (sum, r) => sum + (r.durationMinutes || 0),
-        0,
-    );
-    const totalHours = Math.round((totalMinutes / 60) * 100) / 100;
-
-    // Calculate total amount based on duration and assumed rate
-    // Note: Amount is not in IOvertime, so we'll calculate it
-    const totalAmount = 0; // Will need to calculate based on staff rates
-
-    return {
-        total,
-        pending,
-        approved,
-        rejected,
-        completed,
-        totalHours,
-        totalAmount: Math.round(totalAmount * 100) / 100,
-    };
-};
 
 const getRecentActivities = async (): Promise<IRecentActivity[]> => {
     try {
@@ -199,11 +163,7 @@ const getRecentActivities = async (): Promise<IRecentActivity[]> => {
             .limit(5)
             .populate('staffId', 'name email');
 
-        // Get recent overtime records
-        const recentOvertime = await OvertimeModel.find()
-            .sort({ createdAt: -1 })
-            .limit(5)
-            .populate('staffId', 'name email');
+
 
         // Combine and format activities
         const activities: IRecentActivity[] = [];
@@ -225,22 +185,7 @@ const getRecentActivities = async (): Promise<IRecentActivity[]> => {
             }
         });
 
-        recentOvertime.forEach((record: any) => {
-            if (record.staffId && record.staffId.name && record.staffId.email) {
-                activities.push({
-                    _id: record._id,
-                    type: 'overtime',
-                    action: `Overtime ${record.status}`,
-                    description: `${record.staffId.name} overtime ${record.status}`,
-                    user: {
-                        _id: record.staffId._id,
-                        name: record.staffId.name,
-                        email: record.staffId.email,
-                    },
-                    timestamp: record.createdAt,
-                });
-            }
-        });
+
 
         // Sort by timestamp and return top 10
         return activities
@@ -342,14 +287,14 @@ const getAdminDashboardStats = async (): Promise<IDashboardStats> => {
         staffStats,
         attendanceOverview,
         monthlyAttendanceStats,
-        overtimeSummary,
+
         recentActivities,
         financialStats,
     ] = await Promise.all([
         getStaffStats(),
         getTodayAttendanceOverview(),
         getMonthlyAttendanceStats(),
-        getOvertimeSummary(),
+
         getRecentActivities(),
         getFinancialStats(),
     ]);
@@ -358,7 +303,7 @@ const getAdminDashboardStats = async (): Promise<IDashboardStats> => {
         staffStats,
         attendanceOverview,
         monthlyAttendanceStats,
-        overtimeSummary,
+
         recentActivities,
         financialStats,
     };
@@ -369,7 +314,7 @@ export default {
     getStaffStats,
     getTodayAttendanceOverview,
     getMonthlyAttendanceStats,
-    getOvertimeSummary,
+
     getRecentActivities,
     getFinancialStats,
 };

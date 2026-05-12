@@ -45,11 +45,11 @@ const attendanceDaySchema = new Schema<IAttendanceDay>(
         totalMinutes: { type: Number, default: 0 },
         lateMinutes: { type: Number, default: 0 },
         earlyExitMinutes: { type: Number, default: 0 },
-        otMinutes: { type: Number, default: 0 },
+
 
         payableAmount: { type: Number, default: 0 },
         deductionAmount: { type: Number, default: 0 },
-        otAmount: { type: Number, default: 0 },
+
 
         leaveRequestId: {
             type: Schema.Types.ObjectId,

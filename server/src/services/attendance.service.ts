@@ -165,7 +165,7 @@ const checkInInDB = async ({
       totalMinutes: 0,
       lateMinutes: 0,
       earlyExitMinutes: 0,
-      otMinutes: 0,
+
       isAutoAbsent: false,
       isManual: false,
       notes: null,
@@ -320,7 +320,7 @@ async function checkOutInDB({
       const otMinutes = Math.round(
         (now.getTime() - shiftEnd.getTime()) / 60000,
       );
-      attendanceDay.otMinutes = otMinutes;
+      // otMinutes removed
     } else {
       const earlyExitMinutes = Math.round(
         (shiftEnd.getTime() - now.getTime()) / 60000,
@@ -428,32 +428,10 @@ async function getMonthlyStatsInDB(userId: string) {
     },
   ]);
 
-  const { default: OvertimeModel } =
-    await import("../models/overtime.model.js");
-
-  // Get Overtime Stats
-  const overtimeStats = await OvertimeModel.aggregate([
-    {
-      $match: {
-        staffId: staffId,
-        date: { $gte: startDate, $lte: endDate },
-        // status: 'approved' // Should we only count approved? Or all? User just said dynamic.
-        // Usually "Total OT" implies verified or at least completed.
-        // Let's include all for now or maybe just those with endTime?
-        // Let's stick to simple sum of durationMinutes.
-      },
-    },
-    {
-      $group: {
-        _id: null,
-        totalMinutes: { $sum: "$durationMinutes" },
-      },
-    },
-  ]);
-
+  
   const present = attendanceStats[0]?.presentCount || 0;
   const late = attendanceStats[0]?.lateCount || 0;
-  const totalOvertimeMinutes = overtimeStats[0]?.totalMinutes || 0;
+  const totalOvertimeMinutes = 0;
 
   const monthNames = [
     "January",

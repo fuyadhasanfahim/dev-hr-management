@@ -28,7 +28,7 @@ export interface IPayrollItem {
 
     // Statuses
     status: "paid" | "pending" | "partially_paid" | string;
-    otStatus: "paid" | "pending" | string;
+
 
     // Salary Data
     salary: number;
@@ -48,10 +48,7 @@ export interface IPayrollItem {
     halfDay: number;
     unemployedDays: number;
 
-    // Overtime Data
-    otMinutes: number;
-    otPayable: number;
-    otPaidAmount: number;
+
 
     // Bank Details
     bankName?: string;

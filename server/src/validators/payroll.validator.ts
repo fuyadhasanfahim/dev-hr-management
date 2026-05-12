@@ -27,7 +27,7 @@ export const processPaymentSchema = z.object({
     note: z.string().max(500).optional(),
     bonus: z.number().min(0).default(0),
     deduction: z.number().min(0).default(0),
-    paymentType: z.enum(["salary", "overtime"]).default("salary"),
+    paymentType: z.literal("salary").default("salary"),
 });
 
 export const bulkProcessSchema = z.object({
@@ -46,7 +46,7 @@ export const bulkProcessSchema = z.object({
     paymentMethod: z
         .enum(["cash", "bank_transfer", "bkash", "nagad"])
         .default("cash"),
-    paymentType: z.enum(["salary", "overtime"]).default("salary"),
+    paymentType: z.literal("salary").default("salary"),
 });
 
 export const graceSchema = z.object({
@@ -60,7 +60,7 @@ export const graceSchema = z.object({
 export const undoPaymentSchema = z.object({
     staffId: objectId,
     month: monthFormat,
-    paymentType: z.enum(["salary", "overtime"]).default("salary"),
+    paymentType: z.literal("salary").default("salary"),
 });
 
 export const absentDatesSchema = z.object({

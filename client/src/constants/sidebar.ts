@@ -230,18 +230,7 @@ export const sidebarGroups: SidebarGroup[] = [
                 icon: IconCalendarStats,
                 access: [Role.SUPER_ADMIN, Role.ADMIN, Role.HR_MANAGER],
             },
-            {
-                title: "Overtime",
-                url: "/overtime",
-                icon: IconClock,
-                access: [
-                    Role.SUPER_ADMIN,
-                    Role.ADMIN,
-                    Role.HR_MANAGER,
-                    Role.TEAM_LEADER,
-                    Role.STAFF,
-                ],
-            },
+
         ],
     },
     {

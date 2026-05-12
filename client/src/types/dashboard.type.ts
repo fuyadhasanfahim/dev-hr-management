@@ -28,19 +28,11 @@ export interface MonthlyAttendanceStats {
     averageAttendance: number;
 }
 
-export interface OvertimeSummary {
-    total: number;
-    pending: number;
-    approved: number;
-    rejected: number;
-    completed: number;
-    totalHours: number;
-    totalAmount: number;
-}
+
 
 export interface RecentActivity {
     _id: string;
-    type: 'attendance' | 'overtime' | 'shift' | 'staff' | 'leave';
+    type: 'attendance' | 'shift' | 'staff' | 'leave';
     action: string;
     description: string;
     user: {
@@ -55,6 +47,6 @@ export interface DashboardStats {
     staffStats: StaffStats;
     attendanceOverview: AttendanceOverview;
     monthlyAttendanceStats: MonthlyAttendanceStats;
-    overtimeSummary: OvertimeSummary;
+
     recentActivities: RecentActivity[];
 }

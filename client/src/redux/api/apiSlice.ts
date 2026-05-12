@@ -14,7 +14,7 @@ export const apiSlice = createApi({
         "Attendance",
         "ShiftAssignment",
         "ShiftOffDates",
-        "Overtime",
+
         "Notification",
         "Invitation",
         "Expense",

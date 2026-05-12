@@ -29,7 +29,7 @@ import { format } from "date-fns";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { StaffAttendanceTab } from "@/app/(root)/staffs/[id]/_components/attendance-tab";
 import { StaffLeaveTab } from "@/app/(root)/staffs/[id]/_components/staff-leave-tab";
-import { StaffOvertimeTab } from "@/app/(root)/staffs/[id]/_components/overtime-tab";
+
 import { PaymentHistoryTab } from "@/app/(root)/staffs/[id]/_components/payment-history-tab";
 
 export default function RootAccount() {
@@ -174,9 +174,7 @@ export default function RootAccount() {
                                     Attendance
                                 </TabsTrigger>
                                 <TabsTrigger value="leave">Leaves</TabsTrigger>
-                                <TabsTrigger value="overtime">
-                                    Overtime
-                                </TabsTrigger>
+
                                 <TabsTrigger value="payments">
                                     Payments
                                 </TabsTrigger>
@@ -372,23 +370,7 @@ export default function RootAccount() {
                                     </Card>
                                 </TabsContent>
 
-                                <TabsContent value="overtime">
-                                    <Card>
-                                        <CardHeader>
-                                            <CardTitle>
-                                                Overtime Records
-                                            </CardTitle>
-                                            <CardDescription>
-                                                Extra hours worked
-                                            </CardDescription>
-                                        </CardHeader>
-                                        <CardContent>
-                                            <StaffOvertimeTab
-                                                staffId={staff._id}
-                                            />
-                                        </CardContent>
-                                    </Card>
-                                </TabsContent>
+
 
                                 <TabsContent value="payments">
                                     <Card>
@@ -397,7 +379,7 @@ export default function RootAccount() {
                                                 Payment History
                                             </CardTitle>
                                             <CardDescription>
-                                                Salary and overtime payments
+                                                Salary payments
                                             </CardDescription>
                                         </CardHeader>
                                         <CardContent>

@@ -5,7 +5,7 @@ import AttendanceDayModel from '../models/attendance-day.model.js';
 import ShiftAssignmentModel from '../models/shift-assignment.model.js';
 import ExpenseModel from '../models/expense.model.js';
 import ExpenseCategoryModel from '../models/expense-category.model.js';
-import OvertimeModel from '../models/overtime.model.js';
+
 import { PayrollLockModel } from '../models/payroll-lock.model.js';
 import SalaryAdjustmentLogModel from '../models/salary-adjustment-log.model.js';
 import ShiftOffDateModel from '../models/shift-off-date.model.js';
@@ -101,7 +101,7 @@ const getPayrollPreview = async ({
     const [
         shiftAssignments,
         allAttendance,
-        approvedOvertime,
+
         expenseCategories,
         shiftOffDates,
     ] = await Promise.all([
@@ -114,13 +114,9 @@ const getPayrollPreview = async ({
             staffId: { $in: staffIds },
             date: { $gte: startDate, $lte: endDate },
         }),
-        OvertimeModel.find({
-            staffId: { $in: staffIds },
-            date: { $gte: startDate, $lte: endDate },
-            status: 'approved',
-        }),
+
         ExpenseCategoryModel.find({
-            name: { $in: [/^Salary/i, /^Overtime/i] },
+            name: { $in: [/^Salary/i] },
         }),
         ShiftOffDateModel.find({
             isActive: true,
@@ -131,9 +127,7 @@ const getPayrollPreview = async ({
     const salaryCategory = expenseCategories.find((c) =>
         /^Salary/i.test(c.name),
     );
-    const overtimeCategory = expenseCategories.find((c) =>
-        /^Overtime/i.test(c.name),
-    );
+
 
     const categoryIds = expenseCategories.map((c) => c._id);
 
@@ -268,16 +262,7 @@ const getPayrollPreview = async ({
         const deduction = totalDeductionUnits * perDaySalary;
         const payableSalary = Math.max(0, staffSalary - deduction);
 
-        // D. Overtime from approved records only
-        const staffApprovedOvertime = approvedOvertime.filter(
-            (ot) => ot.staffId.toString() === staff._id.toString(),
-        );
-        const otMinutes = staffApprovedOvertime.reduce(
-            (sum, ot) => sum + (ot.durationMinutes || 0),
-            0,
-        );
-        const hourlyRate = staffSalary / 30 / 8;
-        const otPayable = otMinutes > 0 ? (otMinutes / 60) * hourlyRate : 0;
+
 
         // E. Payment status — strict match by staffId + categoryId
         const salaryExpense = paidExpenses.find(
@@ -287,12 +272,7 @@ const getPayrollPreview = async ({
                 e.categoryId.toString() === salaryCategory._id.toString(),
         );
 
-        const otExpense = paidExpenses.find(
-            (e) =>
-                e.staffId?.toString() === staff._id.toString() &&
-                overtimeCategory &&
-                e.categoryId.toString() === overtimeCategory._id.toString(),
-        );
+
 
         // F. Build daily attendance calendar with shift & check-in/out info
         const calendar = daysInMonth.map((day: Date) => {
@@ -364,10 +344,7 @@ const getPayrollPreview = async ({
             status: salaryExpense ? 'paid' : 'pending',
             expenseId: salaryExpense?._id,
             paidAmount: salaryExpense?.amount,
-            otMinutes,
-            otPayable: Math.round(otPayable),
-            otStatus: otExpense ? 'paid' : 'pending',
-            otPaidAmount: otExpense?.amount || 0,
+
             calendar,
         };
     });
@@ -415,7 +392,7 @@ interface IPayrollProcessParams {
     bonus?: number;
     deduction?: number;
     createdBy: string;
-    paymentType?: 'salary' | 'overtime';
+    paymentType?: 'salary';
     ipAddress?: string | undefined;
     userAgent?: string | undefined;
 }
@@ -573,10 +550,8 @@ const processPayroll = async ({
         }
 
         // Determine expense category
-        const categoryName =
-            paymentType === 'overtime' ? 'Overtime' : 'Salary & Wages';
-        const categoryRegex =
-            paymentType === 'overtime' ? /^Overtime/i : /^Salary/i;
+        const categoryName = 'Salary & Wages';
+        const categoryRegex = /^Salary/i;
 
         let category = await ExpenseCategoryModel.findOne({
             name: { $regex: categoryRegex },
@@ -604,9 +579,7 @@ const processPayroll = async ({
         const finalNote =
             (note || `${categoryName} Payment for ${monthName}`) + extraNote;
 
-        const expenseTitle = `${
-            paymentType === 'overtime' ? 'Overtime' : 'Salary'
-        } - ${staffId} - ${monthName}`;
+        const expenseTitle = `Salary - ${staffId} - ${monthName}`;
 
         const currentFinalAmount = await analyticsService.getCurrentFinalAmount(session);
 
@@ -734,7 +707,7 @@ interface IBulkPayrollParams {
     }[];
     paymentMethod: string;
     createdBy: string;
-    paymentType?: 'salary' | 'overtime';
+    paymentType?: 'salary';
     ipAddress?: string | undefined;
     userAgent?: string | undefined;
 }
@@ -1024,8 +997,7 @@ const undoPayroll = async (
 
     const { startDate, endDate } = parseMonthRange(month);
 
-    const categoryRegex =
-        paymentType === 'overtime' ? /^Overtime/i : /^Salary/i;
+    const categoryRegex = /^Salary/i;
 
     const category = await ExpenseCategoryModel.findOne({
         name: { $regex: categoryRegex },
@@ -1033,7 +1005,7 @@ const undoPayroll = async (
 
     if (!category) {
         throw new Error(
-            `${paymentType === 'overtime' ? 'Overtime' : 'Salary'} category not found`,
+            `Salary category not found`,
         );
     }
 

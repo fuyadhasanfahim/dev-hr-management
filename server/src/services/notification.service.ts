@@ -7,7 +7,7 @@ const createNotification = async (data: {
     title: string;
     message: string;
     type:
-        | "overtime"
+
         | "leave"
         | "attendance"
         | "shift"
@@ -15,7 +15,7 @@ const createNotification = async (data: {
         | "earning";
     priority?: "low" | "medium" | "high" | "urgent";
     resourceType?:
-        | "overtime"
+
         | "leave"
         | "staff"
         | "attendance"
@@ -144,38 +144,7 @@ const deleteAllNotifications = async (userId: string) => {
 // HELPER FUNCTIONS FOR SPECIFIC NOTIFICATIONS
 // ============================================
 
-// Notify staff about overtime status change
-const notifyOvertimeStatus = async (data: {
-    staffUserId: Types.ObjectId | string;
-    overtimeId: Types.ObjectId | string;
-    status: "approved" | "rejected";
-    hours: number;
-    date: string;
-    approvedBy: Types.ObjectId | string;
-}) => {
-    const title =
-        data.status === "approved"
-            ? "✅ Overtime Approved"
-            : "❌ Overtime Rejected";
 
-    const message =
-        data.status === "approved"
-            ? `Your overtime request for ${data.hours} hours on ${data.date} has been approved`
-            : `Your overtime request for ${data.hours} hours on ${data.date} has been rejected`;
-
-    await createNotification({
-        userId: data.staffUserId,
-        title,
-        message,
-        type: "overtime",
-        priority: "high",
-        resourceType: "overtime",
-        resourceId: data.overtimeId,
-        actionUrl: `/my-overtime`,
-        actionLabel: "View Details",
-        createdBy: data.approvedBy,
-    });
-};
 
 // Notify staff about new shift assignment
 const notifyShiftAssignment = async (data: {
@@ -218,38 +187,7 @@ const notifyShiftChange = async (data: {
     });
 };
 
-// Notify admins about overtime request
-const notifyAdminsOvertimeRequest = async (data: {
-    staffName: string;
-    staffUserId: Types.ObjectId | string;
-    overtimeId: Types.ObjectId | string;
-    hours: number;
-    date: string;
-}) => {
-    // Get all users with admin roles
-    const { default: UserModel } = await import("../models/user.model.js");
 
-    // UserModel is a native MongoDB collection, not a Mongoose model
-    const admins = await UserModel.find({
-        role: { $in: ["super_admin", "admin", "hr_manager"] },
-    }).toArray();
-
-    // Create notification for each admin
-    const notifications = admins.map((admin: any) => ({
-        userId: admin._id,
-        title: "⏰ Overtime Approval Needed",
-        message: `${data.staffName} requested ${data.hours} hours overtime for ${data.date}`,
-        type: "overtime" as const,
-        priority: "high" as const,
-        resourceType: "overtime" as const,
-        resourceId: data.overtimeId,
-        actionUrl: `/overtime/${data.overtimeId}`,
-        actionLabel: "Review Request",
-        createdBy: data.staffUserId,
-    }));
-
-    await NotificationModel.insertMany(notifications);
-};
 
 // ============================================
 // LEAVE NOTIFICATION HELPERS
@@ -390,10 +328,10 @@ export default {
     deleteNotification,
     deleteAllNotifications,
     // Helper functions
-    notifyOvertimeStatus,
+
     notifyShiftAssignment,
     notifyShiftChange,
-    notifyAdminsOvertimeRequest,
+
     // Leave helpers
     notifyLeaveStatus,
     notifyAdminsLeaveRequest,

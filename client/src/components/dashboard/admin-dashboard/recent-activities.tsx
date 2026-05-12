@@ -3,7 +3,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
-import { Clock, UserCheck, Timer, Calendar, Users } from 'lucide-react';
+import { Clock, UserCheck, Calendar, Users } from 'lucide-react';
 import type { RecentActivity } from '@/types/dashboard.type';
 import { formatDistanceToNow } from 'date-fns';
 
@@ -13,7 +13,7 @@ interface RecentActivitiesProps {
 
 const activityIcons = {
     attendance: UserCheck,
-    overtime: Timer,
+
     shift: Calendar,
     staff: Users,
     leave: Clock,
@@ -21,7 +21,7 @@ const activityIcons = {
 
 const activityColors = {
     attendance: 'text-blue-500',
-    overtime: 'text-purple-500',
+
     shift: 'text-green-500',
     staff: 'text-orange-500',
     leave: 'text-pink-500',

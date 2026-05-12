@@ -30,11 +30,7 @@ import { ProfileCompletionDialog } from '@/components/account/profile-completion
 import { toast } from 'sonner';
 import ShiftOffNotice from '@/components/shifting/shift-off-notice';
 
-const formatDuration = (minutes: number) => {
-    const h = Math.floor(minutes / 60);
-    const m = minutes % 60;
-    return `${h}h ${m}m`;
-};
+
 
 export default function StaffDashboard() {
     const { data: monthlyStats, isLoading } = useGetMonthlyStatsQuery(undefined);
@@ -102,7 +98,7 @@ export default function StaffDashboard() {
                         </CardDescription>
                     </CardHeader>
                     <CardContent className="pt-4 flex-1">
-                        <div className="grid grid-cols-3 gap-3">
+                        <div className="grid grid-cols-2 gap-3">
                             <div className="flex flex-col items-center justify-center bg-muted/30 rounded-lg p-3 border">
                                 <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide mb-1">
                                     Present
@@ -127,18 +123,7 @@ export default function StaffDashboard() {
                                     )}
                                 </div>
                             </div>
-                            <div className="flex flex-col items-center justify-center bg-muted/30 rounded-lg p-3 border">
-                                <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide mb-1">
-                                    OT
-                                </div>
-                                <div className="text-base font-black text-blue-600 leading-tight mt-1">
-                                    {isLoading ? (
-                                        <Skeleton className="h-5 w-12 mx-auto" />
-                                    ) : (
-                                        formatDuration(monthlyStats?.totalOvertimeMinutes || 0)
-                                    )}
-                                </div>
-                            </div>
+
                         </div>
                     </CardContent>
                 </Card>
