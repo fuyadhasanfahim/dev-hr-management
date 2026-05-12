@@ -158,7 +158,7 @@ async function updateTaskStatus(req: Request, res: Response, next: NextFunction)
             }
         }
 
-        const result = await TaskService.updateTaskStatus(taskId, status);
+        const result = await TaskService.updateTaskStatus(taskId, status, user.id);
 
         res.status(200).json({
             success: true,

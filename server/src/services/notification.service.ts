@@ -12,7 +12,8 @@ const createNotification = async (data: {
         | "attendance"
         | "shift"
         | "announcement"
-        | "earning";
+        | "earning"
+        | "task";
     priority?: "low" | "medium" | "high" | "urgent";
     resourceType?:
 
@@ -20,7 +21,8 @@ const createNotification = async (data: {
         | "staff"
         | "attendance"
         | "shift"
-        | "earning";
+        | "earning"
+        | "task";
     resourceId?: Types.ObjectId | string;
     actionUrl?: string;
     actionLabel?: string;
@@ -319,6 +321,114 @@ const notifyAdminsPaymentReceived = async (data: {
     }
 };
 
+// ============================================
+// TASK NOTIFICATION HELPERS
+// ============================================
+
+// Notify staff member when a task is assigned to them
+const notifyTaskAssigned = async (data: {
+    userId: Types.ObjectId | string;
+    taskTitle: string;
+    orderNumber?: string;
+    taskId: Types.ObjectId | string;
+    assignedBy: Types.ObjectId | string;
+}) => {
+    await createNotification({
+        userId: data.userId,
+        title: "📌 New Milestone Assigned",
+        message: `You have been assigned to: "${data.taskTitle}" ${data.orderNumber ? `for Order #${data.orderNumber}` : ''}`,
+        type: "task",
+        priority: "medium",
+        resourceType: "task",
+        resourceId: data.taskId,
+        actionUrl: "/tasks",
+        actionLabel: "View Task",
+        createdBy: data.assignedBy,
+    });
+};
+
+// Notify admins when a staff member submits a task for review
+const notifyAdminsTaskReview = async (data: {
+    taskId: Types.ObjectId | string;
+    taskTitle: string;
+    staffName: string;
+    orderNumber?: string;
+    submittedBy?: Types.ObjectId | string;
+}) => {
+    const { default: UserModel } = await import("../models/user.model.js");
+
+    // Get target management users
+    const management = await UserModel.find({
+        role: { $in: ["super_admin", "admin", "hr_manager"] },
+    }).toArray();
+
+    const notifications = management.map((user: any) => ({
+        userId: user._id,
+        title: "🔍 Milestone Review Required",
+        message: `${data.staffName} submitted "${data.taskTitle}" ${data.orderNumber ? `(Order #${data.orderNumber})` : ''} for approval.`,
+        type: "task" as const,
+        priority: "high" as const,
+        resourceType: "task" as const,
+        resourceId: data.taskId,
+        actionUrl: "/admin/tasks", 
+        actionLabel: "Review Milestone",
+        ...(data.submittedBy ? { createdBy: data.submittedBy } : {}),
+    }));
+
+    if (notifications.length > 0) {
+        await NotificationModel.insertMany(notifications);
+    }
+};
+
+// Notify staff when their submission is approved/rejected
+const notifyStaffTaskReviewed = async (data: {
+    userId: Types.ObjectId | string;
+    taskId: Types.ObjectId | string;
+    taskTitle: string;
+    decision: 'approve' | 'reject';
+    reviewedBy: Types.ObjectId | string;
+    note?: string;
+}) => {
+    const isApprove = data.decision === 'approve';
+    await createNotification({
+        userId: data.userId,
+        title: isApprove ? "✅ Milestone Approved" : "❌ Milestone Revision Requested",
+        message: isApprove 
+            ? `Great work! "${data.taskTitle}" has been approved.` 
+            : `Revision requested for "${data.taskTitle}". ${data.note || 'Please review the feedback.'}`,
+        type: "task",
+        priority: isApprove ? "medium" : "high",
+        resourceType: "task",
+        resourceId: data.taskId,
+        actionUrl: "/tasks",
+        actionLabel: "View Status",
+        createdBy: data.reviewedBy,
+    });
+};
+
+// Generic helper to notify someone of a specific action on a task
+const notifyTaskActivity = async (data: {
+    userId: Types.ObjectId | string;
+    taskId: Types.ObjectId | string;
+    title: string;
+    message: string;
+    actionUrl?: string;
+    createdBy?: Types.ObjectId | string;
+}) => {
+    await createNotification({
+        userId: data.userId,
+        title: data.title,
+        message: data.message,
+        type: "task",
+        priority: "medium",
+        resourceType: "task",
+        resourceId: data.taskId,
+        actionUrl: data.actionUrl || "/tasks",
+        actionLabel: "View Progress",
+        ...(data.createdBy ? { createdBy: data.createdBy } : {}),
+    });
+};
+
 export default {
     createNotification,
     getUserNotifications,
@@ -336,4 +446,10 @@ export default {
     notifyLeaveStatus,
     notifyAdminsLeaveRequest,
     notifyAdminsPaymentReceived,
+
+    // Task helpers
+    notifyTaskAssigned,
+    notifyAdminsTaskReview,
+    notifyStaffTaskReviewed,
+    notifyTaskActivity,
 };

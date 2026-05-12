@@ -4,9 +4,33 @@ import OrderTaskModel, {
     TaskStatus,
 } from '../models/task.model.js';
 import { AppError } from '../utils/AppError.js';
+import notificationService from './notification.service.js';
+import { logger } from '../lib/logger.js';
 
 const createTask = async (payload: Partial<IOrderTask>) => {
     const task = await OrderTaskModel.create(payload);
+
+    // Background notification broadcast
+    (async () => {
+        try {
+            const populated = await OrderTaskModel.findById(task._id)
+                .populate({ path: 'assignedTo', select: 'userId' })
+                .populate({ path: 'orderId', select: 'orderNumber' });
+
+            if (populated?.assignedTo && (populated.assignedTo as any).userId) {
+                await notificationService.notifyTaskAssigned({
+                    userId: (populated.assignedTo as any).userId,
+                    taskId: task._id as any,
+                    taskTitle: task.title,
+                    assignedBy: task.assignedBy,
+                    ...((populated.orderId as any)?.orderNumber ? { orderNumber: (populated.orderId as any).orderNumber } : {}),
+                });
+            }
+        } catch (err) {
+            logger.error({ err, taskId: task._id }, 'Failed to broadcast task assignment notification');
+        }
+    })();
+
     return task;
 };
 
@@ -34,14 +58,45 @@ const getTasksByStaff = async (staffId: string) => {
         .sort({ dueDate: 1 });
 };
 
-const updateTaskStatus = async (taskId: string, status: TaskStatus) => {
+const updateTaskStatus = async (taskId: string, status: TaskStatus, actorId?: string) => {
     const task = await OrderTaskModel.findById(taskId);
     if (!task) {
         throw new AppError('Task not found', 404);
     }
 
+    const oldStatus = task.status;
     task.status = status;
     await task.save();
+
+    // Background notification about random status changes
+    if (oldStatus !== status) {
+        (async () => {
+            try {
+                const populated = await OrderTaskModel.findById(task._id)
+                    .populate({ path: 'assignedTo', select: 'userId' })
+                    .populate({ path: 'orderId', select: 'orderNumber' });
+
+                if (populated) {
+                    const userIdToNotify = actorId?.toString() === task.assignedBy.toString()
+                        ? (populated.assignedTo as any).userId // Manager changed it, notify Staff
+                        : task.assignedBy; // Staff changed it, notify Manager
+
+                    if (userIdToNotify) {
+                        await notificationService.notifyTaskActivity({
+                            userId: userIdToNotify,
+                            taskId: task._id as any,
+                            title: `🔄 Milestone Status Updated`,
+                            message: `"${task.title}" moved from ${oldStatus} to ${status}.`,
+                            ...(actorId ? { createdBy: new Types.ObjectId(actorId) } : {}),
+                        });
+                    }
+                }
+            } catch (err) {
+                 logger.error({ err, taskId: task._id }, 'Failed to broadcast status change notification');
+            }
+        })();
+    }
+
     return task;
 };
 
@@ -68,6 +123,31 @@ const submitTask = async (
     task.submittedAt = new Date();
 
     await task.save();
+
+    // Background broadcast to Management/Admins
+    (async () => {
+        try {
+            const populated = await OrderTaskModel.findById(task._id)
+                .populate({ path: 'assignedTo', select: 'userId', populate: { path: 'userId', select: 'name' } })
+                .populate({ path: 'orderId', select: 'orderNumber' });
+
+            if (populated) {
+                const staffUser = (populated.assignedTo as any)?.userId;
+                const order = populated.orderId as any;
+                
+                await notificationService.notifyAdminsTaskReview({
+                    taskId: task._id as any,
+                    taskTitle: task.title,
+                    staffName: staffUser?.name || 'Team Member',
+                    ...(order?.orderNumber ? { orderNumber: order.orderNumber } : {}),
+                    ...(staffUser?._id ? { submittedBy: staffUser._id } : {}),
+                });
+            }
+        } catch (err) {
+            logger.error({ err, taskId: task._id }, 'Failed to broadcast review request notification');
+        }
+    })();
+
     return task;
 };
 
@@ -90,6 +170,30 @@ const reviewTask = async (
     task.reviewedAt = new Date();
 
     await task.save();
+
+    // Background notify the assigned staff member
+    (async () => {
+        try {
+            const populated = await OrderTaskModel.findById(task._id)
+                .populate({ path: 'assignedTo', select: 'userId' });
+            
+            const targetStaffUserId = (populated?.assignedTo as any)?.userId;
+            
+            if (targetStaffUserId) {
+                await notificationService.notifyStaffTaskReviewed({
+                    userId: targetStaffUserId,
+                    taskId: task._id as any,
+                    taskTitle: task.title,
+                    decision: payload.decision,
+                    reviewedBy: new Types.ObjectId(reviewerId),
+                    ...(payload.note ? { note: payload.note } : {}),
+                });
+            }
+        } catch (err) {
+            logger.error({ err, taskId: task._id }, 'Failed to broadcast review result notification');
+        }
+    })();
+
     return task;
 };
 
