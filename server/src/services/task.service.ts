@@ -82,11 +82,17 @@ const updateTaskStatus = async (taskId: string, status: TaskStatus, actorId?: st
                         : task.assignedBy; // Staff changed it, notify Manager
 
                     if (userIdToNotify) {
+                        const isManagerToNotify = actorId?.toString() !== task.assignedBy.toString();
+                        const actionUrl = isManagerToNotify && populated.orderId 
+                            ? `/orders/${(populated.orderId as any)._id}?tab=tasks` 
+                            : "/tasks";
+
                         await notificationService.notifyTaskActivity({
                             userId: userIdToNotify,
                             taskId: task._id as any,
                             title: `🔄 Milestone Status Updated`,
                             message: `"${task.title}" moved from ${oldStatus} to ${status}.`,
+                            actionUrl,
                             ...(actorId ? { createdBy: new Types.ObjectId(actorId) } : {}),
                         });
                     }
@@ -140,6 +146,7 @@ const submitTask = async (
                     taskTitle: task.title,
                     staffName: staffUser?.name || 'Team Member',
                     ...(order?.orderNumber ? { orderNumber: order.orderNumber } : {}),
+                    ...(order?._id ? { orderId: order._id } : {}),
                     ...(staffUser?._id ? { submittedBy: staffUser._id } : {}),
                 });
             }

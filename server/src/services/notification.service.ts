@@ -353,6 +353,7 @@ const notifyAdminsTaskReview = async (data: {
     taskTitle: string;
     staffName: string;
     orderNumber?: string;
+    orderId?: Types.ObjectId | string;
     submittedBy?: Types.ObjectId | string;
 }) => {
     const { default: UserModel } = await import("../models/user.model.js");
@@ -370,7 +371,7 @@ const notifyAdminsTaskReview = async (data: {
         priority: "high" as const,
         resourceType: "task" as const,
         resourceId: data.taskId,
-        actionUrl: "/admin/tasks", 
+        actionUrl: data.orderId ? `/orders/${data.orderId}?tab=tasks` : "/tasks", 
         actionLabel: "Review Milestone",
         ...(data.submittedBy ? { createdBy: data.submittedBy } : {}),
     }));

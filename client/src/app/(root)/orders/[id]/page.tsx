@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "@/lib/auth-client";
 import { Role } from "@/constants/role";
 import { 
@@ -98,7 +98,12 @@ const getFilteredStatusOptions = (order: IOrder): OrderStatus[] => {
 export default function OrderDetailsPage() {
     const params = useParams();
     const router = useRouter();
+    const searchParams = useSearchParams();
     const id = params.id as string;
+    
+    // Read incoming target tab from URL (useful for notification direct-links)
+    const initialTab = searchParams.get("tab") || "overview";
+    const [activeTab, setActiveTab] = useState(initialTab);
 
     const { data: session } = useSession();
     const canSeeFinancials = useMemo(() => {
@@ -309,7 +314,7 @@ export default function OrderDetailsPage() {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 {/* Left Column: Tabbed Sections */}
                 <div className="lg:col-span-2 space-y-6">
-                    <Tabs defaultValue="overview" className="w-full">
+                    <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
                         <TabsList className="grid w-full grid-cols-2 bg-muted/50 border h-12 p-1 rounded-xl mb-6">
                             <TabsTrigger value="overview" className="font-bold rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm gap-2">
                                 <LayoutDashboard className="h-4 w-4" />
