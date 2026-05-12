@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "@/lib/auth-client";
 import { Role } from "@/constants/role";
@@ -101,9 +101,15 @@ export default function OrderDetailsPage() {
     const searchParams = useSearchParams();
     const id = params.id as string;
     
-    // Read incoming target tab from URL (useful for notification direct-links)
-    const initialTab = searchParams.get("tab") || "overview";
-    const [activeTab, setActiveTab] = useState(initialTab);
+    const [activeTab, setActiveTab] = useState("overview");
+    
+    // Sync tab state with URL query params when URL changes or on hydration
+    useEffect(() => {
+        const t = searchParams.get("tab");
+        if (t && (t === "overview" || t === "tasks")) {
+            setActiveTab(t);
+        }
+    }, [searchParams]);
 
     const { data: session } = useSession();
     const canSeeFinancials = useMemo(() => {
