@@ -170,6 +170,30 @@ async function updateTaskStatus(req: Request, res: Response, next: NextFunction)
     }
 }
 
+async function updateTask(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+        const { taskId } = req.params;
+        const user = req.user;
+
+        if (!taskId) {
+            throw new AppError('Task ID is required', 400);
+        }
+        if (!user || !user.id) {
+            throw new AppError('User context not available', 401);
+        }
+
+        const result = await TaskService.updateTask(taskId, req.body, user.id);
+
+        res.status(200).json({
+            success: true,
+            message: 'Task updated successfully',
+            data: result,
+        });
+    } catch (err) {
+        next(err);
+    }
+}
+
 async function deleteTask(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
         const { taskId } = req.params;
@@ -195,6 +219,7 @@ export default {
     getMyTasks,
     submitTask,
     reviewTask,
+    updateTask,
     updateTaskStatus,
     deleteTask,
 };

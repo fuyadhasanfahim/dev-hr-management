@@ -317,10 +317,7 @@ async function checkOutInDB({
     }
 
     if (now > shiftEnd) {
-      const otMinutes = Math.round(
-        (now.getTime() - shiftEnd.getTime()) / 60000,
-      );
-      // otMinutes removed
+      // Overtime removed
     } else {
       const earlyExitMinutes = Math.round(
         (shiftEnd.getTime() - now.getTime()) / 60000,

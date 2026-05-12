@@ -10,6 +10,7 @@ const ALL_STAFF_ROLES = [...ADMIN_LEAD_ROLES, Role.STAFF];
 
 // Administrative creation and review
 router.post('/', authorize(...ADMIN_LEAD_ROLES), TaskController.createTask);
+router.patch('/:taskId', authorize(...ADMIN_LEAD_ROLES), TaskController.updateTask);
 router.patch('/:taskId/review', authorize(...ADMIN_LEAD_ROLES), TaskController.reviewTask);
 router.delete('/:taskId', authorize(...ADMIN_LEAD_ROLES), TaskController.deleteTask);
 

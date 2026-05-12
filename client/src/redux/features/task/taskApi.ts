@@ -40,6 +40,14 @@ export const taskApi = apiSlice.injectEndpoints({
             }),
             invalidatesTags: ["Task", "Order"],
         }),
+        updateTask: builder.mutation({
+            query: ({ taskId, data }) => ({
+                url: `/tasks/${taskId}`,
+                method: "PATCH",
+                body: data,
+            }),
+            invalidatesTags: ["Task"],
+        }),
         updateTaskStatus: builder.mutation({
             query: ({ taskId, status, currentStatus }) => ({
                 url: `/tasks/${taskId}/status`,
@@ -64,6 +72,7 @@ export const {
     useGetMyTasksQuery,
     useSubmitTaskMutation,
     useReviewTaskMutation,
+    useUpdateTaskMutation,
     useUpdateTaskStatusMutation,
     useDeleteTaskMutation,
 } = taskApi;

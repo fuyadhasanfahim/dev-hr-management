@@ -208,10 +208,54 @@ const deleteTask = async (taskId: string) => {
     return await OrderTaskModel.findByIdAndDelete(taskId);
 };
 
+const updateTask = async (taskId: string, payload: any, actorId?: string) => {
+    const oldTask = await OrderTaskModel.findById(taskId);
+    if (!oldTask) throw new Error('Task not found');
+
+    const updatedTask = await OrderTaskModel.findByIdAndUpdate(
+        taskId,
+        { $set: payload },
+        { new: true }
+    );
+
+    if (!updatedTask) throw new Error('Failed to update task');
+
+    // Logic: Notify staff if task details significantly change
+    (async () => {
+        try {
+            const targetStaffUserId = await (async () => {
+                const { default: StaffModel } = await import("../models/staff.model.js");
+                const staff = await StaffModel.findById(updatedTask.assignedTo);
+                return staff?.userId;
+            })();
+
+            if (targetStaffUserId) {
+                const isAssignmentChange = oldTask.assignedTo?.toString() !== updatedTask.assignedTo?.toString();
+                
+                await notificationService.notifyTaskActivity({
+                    userId: targetStaffUserId,
+                    taskId: updatedTask._id as any,
+                    title: isAssignmentChange ? "📌 Reassigned Milestone" : "✏️ Milestone Updated",
+                    message: isAssignmentChange 
+                        ? `You have been newly assigned to: "${updatedTask.title}".`
+                        : `Details for milestone "${updatedTask.title}" were amended by management.`,
+                    actionUrl: "/tasks",
+                    ...(actorId ? { createdBy: new Types.ObjectId(actorId) } : {}),
+                });
+            }
+        } catch (err) {
+            logger.error({ err, taskId: updatedTask._id }, 'Failed to broadcast task amendment notification');
+        }
+    })();
+
+    return updatedTask;
+};
+
 const TaskService = {
     createTask,
     getTasksByOrder,
     getTasksByStaff,
+    updateTask,
     updateTaskStatus,
     submitTask,
     reviewTask,

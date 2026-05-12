@@ -91,13 +91,8 @@ export const payrollApi = apiSlice.injectEndpoints({
                                     arg.staffId,
                             );
                             if (item) {
-                                if (arg.paymentType === "overtime") {
-                                    item.otStatus = "paid";
-                                    item.otPaidAmount = arg.amount;
-                                } else {
-                                    item.status = "paid";
-                                    item.paidAmount = arg.amount;
-                                }
+                                item.status = "paid";
+                                item.paidAmount = arg.amount;
                             }
                         },
                     ),
@@ -138,13 +133,8 @@ export const payrollApi = apiSlice.injectEndpoints({
                                         payment.staffId,
                                 );
                                 if (item) {
-                                    if (arg.paymentType === "overtime") {
-                                        item.otStatus = "paid";
-                                        item.otPaidAmount = payment.amount;
-                                    } else {
-                                        item.status = "paid";
-                                        item.paidAmount = payment.amount;
-                                    }
+                                    item.status = "paid";
+                                    item.paidAmount = payment.amount;
                                 }
                             });
                         },
@@ -185,14 +175,9 @@ export const payrollApi = apiSlice.injectEndpoints({
                                     arg.staffId,
                             );
                             if (item) {
-                                if (arg.paymentType === "overtime") {
-                                    item.otStatus = "pending";
-                                    item.otPaidAmount = 0;
-                                } else {
-                                    item.status = "pending";
-                                    item.paidAmount = 0;
-                                    item.expenseId = null;
-                                }
+                                item.status = "pending";
+                                item.paidAmount = 0;
+                                item.expenseId = null;
                             }
                         },
                     ),
