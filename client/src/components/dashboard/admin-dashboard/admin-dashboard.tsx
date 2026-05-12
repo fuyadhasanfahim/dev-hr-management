@@ -37,7 +37,7 @@ export default function AdminDashboard() {
         return null;
     }
 
-    const { staffStats, attendanceOverview, monthlyAttendanceStats, recentActivities, financialStats } = data;
+    const { staffStats, attendanceOverview, monthlyAttendanceStats, recentActivities } = data;
 
     const formatCurrency = (amount: number) => {
         return `৳${amount.toLocaleString('en-BD', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
