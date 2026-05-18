@@ -539,7 +539,8 @@ export class QuotationService {
 
                 // SMS for BDT-currency clients
                 if (emailSent && saved.clientId) {
-                    const smsMsg = `A quotation (${saved.quotationNumber}) has been sent to your email, please check. - WebBriks`;
+                    const emailsStr = emailedTo ? emailedTo.join(', ') : 'your email';
+                    const smsMsg = `A quotation (${saved.quotationNumber}) has been sent to ${emailsStr}, please check. - WebBriks`;
                     sendClientSmsIfBDT(saved.clientId.toString(), smsMsg).catch((err: any) =>
                         logger.error({ err }, 'quotation.send_sms.failed'),
                     );
