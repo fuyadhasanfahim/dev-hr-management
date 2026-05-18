@@ -35,6 +35,7 @@ import { meetingRoute } from "./meeting.route.js";
 import { leadRoute } from "./lead.route.js";
 import { leadSettingRoute } from "./lead-setting.route.js";
 import { TaskRoutes } from "./task.route.js";
+import { SupportRoutes } from "./support.route.js";
 
 const router: Router = Router();
 
@@ -179,6 +180,10 @@ const moduleRoutes = [
     {
         path: "/tasks",
         route: TaskRoutes,
+    },
+    {
+        path: "/support",
+        route: SupportRoutes,
     },
 ];
 

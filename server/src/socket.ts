@@ -1,5 +1,6 @@
 import { Server as SocketIOServer } from 'socket.io';
 import { Server as HttpServer } from 'http';
+import { registerSupportNamespace } from './socket/support.namespace.js';
 
 let io: SocketIOServer;
 
@@ -14,6 +15,9 @@ export const initSocket = (server: HttpServer) => {
             credentials: true,
         },
     });
+
+    // Initialize support namespace
+    registerSupportNamespace(io);
 
     io.on('connection', (socket) => {
         console.log(`Socket connected: ${socket.id}`);

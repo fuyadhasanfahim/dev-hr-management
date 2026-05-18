@@ -1,13 +1,11 @@
-import { model, Schema } from 'mongoose';
+import { Schema, model, Document, Types } from 'mongoose';
 
-export interface IAuditLog {
-    userId: Schema.Types.ObjectId;
-    action: string;
-    entity: string;
-    entityId?: Schema.Types.ObjectId;
-    details?: any;
+export interface IAuditLog extends Document {
+    userId?: Types.ObjectId; // Ref: User or Staff or Client
+    userType?: string; // 'Staff' | 'Client' | 'Guest' | 'System'
+    action: string; // e.g. 'ticket_transferred', 'queue_override'
+    details: Record<string, any>;
     ipAddress?: string;
-    userAgent?: string;
     createdAt: Date;
 }
 
@@ -15,37 +13,30 @@ const auditLogSchema = new Schema<IAuditLog>(
     {
         userId: {
             type: Schema.Types.ObjectId,
-            required: true,
+            index: true,
+        },
+        userType: {
+            type: String,
+            enum: ['Staff', 'Client', 'Guest', 'System'],
         },
         action: {
             type: String,
             required: true,
-            enum: [
-                'CREATE', 'UPDATE', 'DELETE', 'VIEW',
-                'LOGIN', 'LOGOUT',
-                'SALARY_VIEW', 'SALARY_UPDATE',
-                'INVITATION_CREATE', 'INVITATION_ACCEPT',
-                'PROFILE_UPDATE', 'PASSWORD_CHANGE',
-                'ATTENDANCE_UPDATE', 'GRACE_ATTENDANCE',
-                'PAYMENT_PROCESS', 'PAYMENT_UNDO',
-                'PAYROLL_LOCK', 'PAYROLL_UNLOCK'
-            ],
+            index: true,
         },
-        entity: {
+        details: {
+            type: Schema.Types.Map,
+            of: Schema.Types.Mixed,
+            default: {},
+        },
+        ipAddress: {
             type: String,
-            required: true,
         },
-        entityId: Schema.Types.ObjectId,
-        details: Schema.Types.Mixed,
-        ipAddress: String,
-        userAgent: String,
     },
-    { timestamps: true }
+    {
+        timestamps: { createdAt: true, updatedAt: false },
+    }
 );
-
-auditLogSchema.index({ userId: 1, createdAt: -1 });
-auditLogSchema.index({ action: 1, createdAt: -1 });
-auditLogSchema.index({ entity: 1, createdAt: -1 });
 
 const AuditLogModel = model<IAuditLog>('AuditLog', auditLogSchema);
 export default AuditLogModel;

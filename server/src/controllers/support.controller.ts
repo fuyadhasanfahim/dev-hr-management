@@ -1,0 +1,230 @@
+import type { Request, Response } from 'express';
+import guestAuthService from '../services/guest-auth.service.js';
+import attachmentService from '../services/attachment.service.js';
+import supportTicketService from '../services/support-ticket.service.js';
+import liveChatService from '../services/live-chat.service.js';
+import cloudinaryMigrationService from '../services/cloudinary-migration.service.js';
+
+/**
+ * Public: Request OTP for Guest email verification.
+ */
+async function requestGuestOtp(req: Request, res: Response) {
+    try {
+        const { email, name } = req.body;
+        const result = await guestAuthService.requestGuestOtp(email, name);
+        return res.status(200).json({ success: true, data: result });
+    } catch (err: any) {
+        return res.status(err.statusCode || 400).json({ success: false, message: err.message });
+    }
+}
+
+/**
+ * Public: Verify Guest OTP and return access token.
+ */
+async function verifyGuestOtp(req: Request, res: Response) {
+    try {
+        const { email, otp } = req.body;
+        const result = await guestAuthService.verifyGuestOtp(email, otp);
+        return res.status(200).json({ success: true, data: result });
+    } catch (err: any) {
+        return res.status(err.statusCode || 400).json({ success: false, message: err.message });
+    }
+}
+
+/**
+ * Protected: Request S3 pre-signed upload URL.
+ */
+async function requestPresignedUrl(req: Request, res: Response) {
+    try {
+        const { fileName, fileType, fileSize, folder, referenceId } = req.body;
+        const result = await attachmentService.requestPresignedUrl({
+            fileName,
+            fileType,
+            fileSize,
+            folder,
+            referenceId,
+        });
+        return res.status(200).json({ success: true, data: result });
+    } catch (err: any) {
+        return res.status(err.statusCode || 400).json({ success: false, message: err.message });
+    }
+}
+
+/**
+ * Client/Guest: Create support ticket.
+ */
+async function createSupportTicket(req: Request, res: Response) {
+    try {
+        const { subject, text, attachments, priority } = req.body;
+        
+        const args: any = {
+            subject,
+            text,
+            attachments,
+            priority,
+        };
+
+        if (req.user?.role === 'Guest') {
+            args.guestId = req.user.id;
+        } else if (req.user?.id) {
+            args.clientId = req.user.id;
+        }
+
+        const result = await supportTicketService.createTicket(args);
+        return res.status(201).json({ success: true, data: result });
+    } catch (err: any) {
+        return res.status(err.statusCode || 400).json({ success: false, message: err.message });
+    }
+}
+
+/**
+ * Retrieve ticket and details.
+ */
+async function getTicketDetails(req: Request, res: Response) {
+    try {
+        const result = await supportTicketService.getTicketDetails(req.params.id || '', {
+            id: req.user?.id || '',
+            role: req.user?.role || '',
+        });
+        return res.status(200).json({ success: true, data: result });
+    } catch (err: any) {
+        return res.status(err.statusCode || 400).json({ success: false, message: err.message });
+    }
+}
+
+/**
+ * Add reply to ticket.
+ */
+async function replyToTicket(req: Request, res: Response) {
+    try {
+        const { text, attachments } = req.body;
+        const senderType = req.user?.role === 'Guest' ? 'guest' : (req.user?.role === 'client' ? 'client' : 'staff');
+        const senderId = req.user?.id || '';
+
+        const result = await supportTicketService.addTicketReply({
+            ticketId: req.params.id || '',
+            senderId,
+            senderType,
+            text,
+            attachments,
+        });
+
+        return res.status(201).json({ success: true, data: result });
+    } catch (err: any) {
+        return res.status(err.statusCode || 400).json({ success: false, message: err.message });
+    }
+}
+
+/**
+ * Lists support tickets.
+ */
+async function listSupportTickets(req: Request, res: Response) {
+    try {
+        const args: any = {};
+        if (req.user?.role === 'client') {
+            args.clientId = req.user.id;
+        } else if (req.user?.role === 'Guest') {
+            args.guestId = req.user.id;
+        }
+
+        if (req.query.status) args.status = req.query.status;
+        if (req.query.priority) args.priority = req.query.priority;
+
+        const result = await supportTicketService.listTickets(args);
+        return res.status(200).json({ success: true, data: result });
+    } catch (err: any) {
+        return res.status(err.statusCode || 400).json({ success: false, message: err.message });
+    }
+}
+
+/**
+ * Update support ticket (Staff only).
+ */
+async function updateTicket(req: Request, res: Response) {
+    try {
+        const { status, priority, assignedTo, tags } = req.body;
+        
+        const updates: any = {};
+        if (status) updates.status = status;
+        if (priority) updates.priority = priority;
+        if (assignedTo) updates.assignedTo = assignedTo;
+        if (tags) updates.tags = tags;
+
+        const result = await supportTicketService.updateTicket(req.params.id || '', updates);
+        return res.status(200).json({ success: true, data: result });
+    } catch (err: any) {
+        return res.status(err.statusCode || 400).json({ success: false, message: err.message });
+    }
+}
+
+/**
+ * Creates live support chat session (Client/Guest).
+ */
+async function createChatSession(req: Request, res: Response) {
+    try {
+        const args: any = {};
+        if (req.user?.role === 'Guest') {
+            args.guestId = req.user.id;
+        } else if (req.user?.id) {
+            args.clientId = req.user.id;
+        }
+
+        const result = await liveChatService.createChatSession(args);
+        return res.status(201).json({ success: true, data: result });
+    } catch (err: any) {
+        return res.status(err.statusCode || 400).json({ success: false, message: err.message });
+    }
+}
+
+/**
+ * Claim/Assign agent to active chat session (Staff only).
+ */
+async function claimChatSession(req: Request, res: Response) {
+    try {
+        const { sessionId } = req.body;
+        const result = await liveChatService.assignAgentToSession(sessionId, req.user?.id || '');
+        return res.status(200).json({ success: true, data: result });
+    } catch (err: any) {
+        return res.status(err.statusCode || 400).json({ success: false, message: err.message });
+    }
+}
+
+/**
+ * Manually convert chat session to ticket.
+ */
+async function convertChatToTicket(req: Request, res: Response) {
+    try {
+        const { sessionId, reason } = req.body;
+        const result = await liveChatService.convertChatToTicket(sessionId, reason);
+        return res.status(200).json({ success: true, data: result });
+    } catch (err: any) {
+        return res.status(err.statusCode || 400).json({ success: false, message: err.message });
+    }
+}
+
+/**
+ * Admin only: Trigger Cloudinary to S3 background migration.
+ */
+async function triggerCloudinaryMigration(_req: Request, res: Response) {
+    try {
+        const result = await cloudinaryMigrationService.runCloudinaryMigration();
+        return res.status(200).json({ success: true, data: result });
+    } catch (err: any) {
+        return res.status(500).json({ success: false, message: err.message });
+    }
+}
+
+export default {
+    requestGuestOtp,
+    verifyGuestOtp,
+    requestPresignedUrl,
+    createSupportTicket,
+    getTicketDetails,
+    replyToTicket,
+    listSupportTickets,
+    updateTicket,
+    createChatSession,
+    claimChatSession,
+    convertChatToTicket,
+    triggerCloudinaryMigration,
+};

@@ -7,6 +7,8 @@ import notificationService from './notification.service.js';
 import analyticsService from './analytics.service.js';
 import meetingService from './meeting.service.js';
 import { sendBulkSMS } from '../utils/sms.util.js';
+import ChatSessionModel, { ChatSessionStatus } from '../models/chat-session.model.js';
+import { convertChatToTicket } from './live-chat.service.js';
 
 import {
     getBDNow,
@@ -492,6 +494,31 @@ async function processMonthlyFinanceSMSReport() {
 }
 
 // ============================================
+// AUTO-CONVERT UNCLAIMED SUPPORT CHATS TO TICKETS
+// ============================================
+
+async function processChatAutoTicketConversion() {
+    try {
+        const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
+        const queuedSessions = await ChatSessionModel.find({
+            status: ChatSessionStatus.QUEUED,
+            createdAt: { $lt: tenMinutesAgo },
+        });
+
+        for (const session of queuedSessions) {
+            try {
+                console.log(`[Scheduler] Auto-converting queued chat session ${session.sessionId} to ticket due to no agent claim.`);
+                await convertChatToTicket(session.sessionId, 'Auto-converted due to no support agent claiming within 10 minutes.');
+            } catch (err: any) {
+                console.error(`[Scheduler] Failed to auto-convert chat session ${session.sessionId}:`, err);
+            }
+        }
+    } catch (err) {
+        console.error('[Scheduler] Error in processChatAutoTicketConversion:', err);
+    }
+}
+
+// ============================================
 // SCHEDULER MANAGER
 // ============================================
 
@@ -546,6 +573,9 @@ function startAllSchedulers() {
 
         // Meeting reminders — every minute check
         meetingService.processMeetingReminders().catch(console.error);
+
+        // Support chat auto ticket conversion — every minute check
+        processChatAutoTicketConversion().catch(console.error);
     };
 
     

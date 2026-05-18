@@ -566,6 +566,43 @@ const sendMeetingCancellationEmail = async (data: SendMeetingCancellationData) =
     }
 };
 
+interface SendSupportOtpData {
+    to: string;
+    guestName: string;
+    otp: string;
+}
+
+const sendSupportOtpEmail = async (data: SendSupportOtpData) => {
+    try {
+        const emailHtml = `
+            <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e5e5ea; border-radius: 12px;">
+                <h2 style="color: #009999; margin-top: 0;">Verify Your Support Session</h2>
+                <p>Hi ${data.guestName},</p>
+                <p>You requested to initiate a support chat or create a ticket with Dev-HR.</p>
+                <p>Use the following 6-digit One-Time Password (OTP) to verify your email address:</p>
+                <div style="background-color: #f2f2f7; padding: 15px; text-align: center; font-size: 28px; font-weight: bold; letter-spacing: 4px; border-radius: 8px; margin: 20px 0; color: #1c1c1e;">
+                    ${data.otp}
+                </div>
+                <p style="color: #8e8e93; font-size: 13px;">This OTP is valid for 10 minutes. If you did not make this request, please ignore this email.</p>
+                <hr style="border: 0; border-top: 1px solid #e5e5ea; margin: 20px 0;" />
+                <p style="font-size: 12px; color: #8e8e93; margin-bottom: 0;">Web Briks LLC</p>
+            </div>
+        `;
+
+        const mailOptions = {
+            from: 'Support | WebBriks',
+            to: data.to,
+            subject: 'Support OTP Code - WebBriks',
+            html: emailHtml,
+        };
+
+        return await transporter.sendMail(mailOptions);
+    } catch (error) {
+        console.error('Error sending support OTP email:', error);
+        throw error;
+    }
+};
+
 export default {
     sendInvoiceEmail,
     sendPinResetEmail,
@@ -581,6 +618,7 @@ export default {
     sendMeetingInviteEmail,
     sendMeetingReminderEmail,
     sendMeetingCancellationEmail,
+    sendSupportOtpEmail,
 };
 
 

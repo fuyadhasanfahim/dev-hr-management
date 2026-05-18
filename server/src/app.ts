@@ -129,6 +129,9 @@ app.use(
         const isPublicQuotationPdfPuppeteerRoute =
             req.method === "GET" && /^\/quotations\/[^/]+\/pdf\/puppeteer$/.test(req.path);
 
+        // Support routes bypass the global auth middleware because they implement unified/guest auth internally
+        const isSupportRoute = req.path.startsWith("/support");
+
         if (
             isPublicInvitationRoute ||
             isPublicMetadataRoute ||
@@ -136,7 +139,8 @@ app.use(
             isPublicInvoiceRoute ||
             isPublicQuotationTokenRoute ||
             isPublicQuotationPaymentTokenRoute ||
-            isPublicQuotationPdfPuppeteerRoute
+            isPublicQuotationPdfPuppeteerRoute ||
+            isSupportRoute
         ) {
             return next();
         }

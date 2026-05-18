@@ -93,5 +93,11 @@ const envConfig = {
     google_service_account_email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || '',
     google_service_account_private_key: process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY || '',
     google_calendar_id: process.env.GOOGLE_CALENDAR_ID || 'primary',
+
+    // AWS S3
+    aws_access_key_id: process.env.AWS_ACCESS_KEY_ID || '',
+    aws_secret_access_key: process.env.AWS_SECRET_ACCESS_KEY || '',
+    aws_region: process.env.AWS_REGION || 'us-east-1',
+    aws_bucket_name: process.env.AWS_BUCKET_NAME || '',
 };
 export default envConfig;
