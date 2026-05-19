@@ -1,10 +1,10 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
-import { useSupportStore, ChatMessage } from '../store/useSupportStore';
+import { useSupportStore, ChatMessage, ChatSession } from '../store/useSupportStore';
 import { useSession } from '@/lib/auth-client';
 import { toast } from 'sonner';
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:5000';
+const BACKEND_URL = process.env.NEXT_PUBLIC_APP_URL!;
 
 // Global single socket reference to prevent multiple initializations
 let supportSocket: Socket | null = null;
@@ -14,7 +14,9 @@ let supportSocket: Socket | null = null;
  */
 function playPingSound() {
     try {
-        const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+        const AudioContextClass = window.AudioContext || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+        if (!AudioContextClass) return;
+        const audioCtx = new AudioContextClass();
         const osc = audioCtx.createOscillator();
         const gain = audioCtx.createGain();
 
@@ -30,7 +32,7 @@ function playPingSound() {
 
         osc.start();
         osc.stop(audioCtx.currentTime + 0.3);
-    } catch (e) {
+    } catch {
         // Safe bypass if audio context is blocked by browser policy
     }
 }
@@ -61,7 +63,7 @@ export function useSupportSocket() {
         const isGuest = token !== null;
         
         // Handshake auth credentials
-        const authData: any = {};
+        const authData: { token?: string | null } = {};
         if (isGuest) {
             authData.token = token;
         }
@@ -123,15 +125,16 @@ export function useSupportSocket() {
             }
         };
 
-        const handleTyping = (data: { userId: string; name: string; isTyping: boolean }) => {
-            setTyping(data.userId, data.name, data.isTyping);
+        const handleTyping = (data: { userId: string; userName?: string; name?: string; isTyping: boolean }) => {
+            const displayName = data.userName || data.name || 'Client';
+            setTyping(data.userId, displayName, data.isTyping);
         };
 
         const handleSeen = (data: { messageId: string; seenBy: string[] }) => {
             updateMessage(data.messageId, { seenBy: data.seenBy });
         };
 
-        const handleAgentAssigned = (data: { session: any }) => {
+        const handleAgentAssigned = (data: { session: ChatSession }) => {
             setActiveSession(data.session);
             toast.success(`Agent ${data.session.agentId?.name || 'Support'} has claimed the chat session.`);
         };
@@ -142,7 +145,7 @@ export function useSupportSocket() {
             resetSupport();
         };
 
-        const handleStaffQueueUpdate = (data: { queued: any[]; active: any[] }) => {
+        const handleStaffQueueUpdate = (data: { queued: ChatSession[]; active: ChatSession[] }) => {
             setQueuedSessions(data.queued);
             setActiveSessions(data.active);
         };
@@ -191,7 +194,7 @@ export function useSupportSocket() {
     }, []);
 
     // Emit helper: Send message payload
-    const sendMessage = useCallback((content: string, attachments: any[] = [], isInternal = false) => {
+    const sendMessage = useCallback((content: string, attachments: unknown[] = [], isInternal = false) => {
         if (!activeSession?.sessionId) return;
         if (supportSocket?.connected) {
             supportSocket.emit('chat:message', {
@@ -201,7 +204,7 @@ export function useSupportSocket() {
                 isInternal,
             });
         }
-    }, [activeSession?.sessionId]);
+    }, [activeSession]);
 
     // Emit helper: Trigger typing notice
     const sendTyping = useCallback((isTyping: boolean) => {
@@ -212,7 +215,7 @@ export function useSupportSocket() {
                 isTyping,
             });
         }
-    }, [activeSession?.sessionId]);
+    }, [activeSession]);
 
     // Debounced typing trigger
     const triggerTyping = useCallback(() => {

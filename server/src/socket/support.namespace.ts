@@ -55,7 +55,7 @@ export function registerSupportNamespace(io: Server) {
             }
         });
 
-        socket.on('chat:message', async ({ sessionId, text, attachments }: { sessionId: string; text?: string; attachments?: string[] }) => {
+        socket.on('chat:message', async ({ sessionId, text, content, attachments }: { sessionId: string; text?: string; content?: string; attachments?: string[] }) => {
             try {
                 if (!sessionId) {
                     socket.emit('error', { message: 'Session ID is required' });
@@ -85,7 +85,7 @@ export function registerSupportNamespace(io: Server) {
                     sender: new Types.ObjectId(user.id),
                     senderModel,
                     senderName: user.name,
-                    content: text || '',
+                    content: text || content || '',
                     attachments: attachments || [],
                 });
 

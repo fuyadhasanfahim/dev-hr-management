@@ -5,6 +5,7 @@ import { useSupportSocket } from '@/hooks/useSupportSocket';
 import { useSupportStore } from '@/store/useSupportStore';
 import { useS3Upload } from '@/hooks/useS3Upload';
 import { useSession } from '@/lib/auth-client';
+import { publicApiUrl } from '@/lib/public-api';
 import {
     Headset,
     MessageSquare,
@@ -52,6 +53,8 @@ export default function StaffSupportConsole() {
         setActiveSessions,
         setMessages,
         addMessage,
+        setActiveSession,
+        activeSession,
     } = useSupportStore();
 
     const { isConnected, sendMessage, triggerTyping, joinChat, socket } = useSupportSocket();
@@ -67,6 +70,15 @@ export default function StaffSupportConsole() {
     const [selectedChatFiles, setSelectedChatFiles] = useState<File[]>([]);
     const [uploadingChatFiles, setUploadingChatFiles] = useState<string[]>([]);
     const [actionLoading, setActionLoading] = useState(false);
+
+    // Synchronize local selectedSession with global activeSession from socket hook / store
+    useEffect(() => {
+        if (!activeSession && selectedSession) {
+            setSelectedSession(null);
+        } else if (activeSession && (!selectedSession || selectedSession.sessionId !== activeSession.sessionId)) {
+            setSelectedSession(activeSession);
+        }
+    }, [activeSession, selectedSession]);
 
     // Tickets hub states
     const [adminTickets, setAdminTickets] = useState<any[]>([]);
@@ -87,8 +99,8 @@ export default function StaffSupportConsole() {
     const fetchSupportState = useCallback(async () => {
         try {
             // 1. Fetch live queues
-            const qRes = await fetch('/api/support/chat/sessions/queued');
-            const aRes = await fetch('/api/support/chat/sessions/active');
+            const qRes = await fetch(publicApiUrl('/api/support/chat/sessions/queued'), { credentials: 'include' });
+            const aRes = await fetch(publicApiUrl('/api/support/chat/sessions/active'), { credentials: 'include' });
             
             if (qRes.ok) {
                 const qData = await qRes.json();
@@ -106,7 +118,7 @@ export default function StaffSupportConsole() {
     const fetchAdminTickets = useCallback(async () => {
         setLoadingTickets(true);
         try {
-            const response = await fetch('/api/support/tickets/admin');
+            const response = await fetch(publicApiUrl('/api/support/tickets/admin'), { credentials: 'include' });
             if (response.ok) {
                 const data = await response.json();
                 setAdminTickets(data.data || []);
@@ -150,11 +162,12 @@ export default function StaffSupportConsole() {
     // Handle session selection & loading message logs
     const handleSelectSession = async (sessionItem: any) => {
         setSelectedSession(sessionItem);
+        setActiveSession(sessionItem);
         joinChat(sessionItem.sessionId);
         setMessages([]); // reset list
 
         try {
-            const response = await fetch(`/api/support/chat/sessions/${sessionItem.sessionId}/messages`);
+            const response = await fetch(publicApiUrl(`/api/support/chat/sessions/${sessionItem.sessionId}/messages`), { credentials: 'include' });
             if (response.ok) {
                 const data = await response.json();
                 setMessages(data.data || []);
@@ -168,9 +181,10 @@ export default function StaffSupportConsole() {
     const handleClaimSession = async (sessionId: string) => {
         setActionLoading(true);
         try {
-            const response = await fetch(`/api/support/chat/sessions/${sessionId}/claim`, {
+            const response = await fetch(publicApiUrl(`/api/support/chat/sessions/${sessionId}/claim`), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
             });
 
             if (!response.ok) {
@@ -195,9 +209,15 @@ export default function StaffSupportConsole() {
 
         setActionLoading(true);
         try {
-            const response = await fetch(`/api/support/chat/sessions/${selectedSession.sessionId}/close`, {
+            // Emit socket event to notify room immediately (both guest and agent)
+            if (socket?.connected) {
+                socket.emit('chat:close', { sessionId: selectedSession.sessionId });
+            }
+
+            const response = await fetch(publicApiUrl(`/api/support/chat/sessions/${selectedSession.sessionId}/close`), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
             });
 
             if (!response.ok) {
@@ -206,6 +226,7 @@ export default function StaffSupportConsole() {
 
             toast.info('Chat session closed and archived.');
             setSelectedSession(null);
+            setActiveSession(null);
             fetchSupportState();
         } catch (err: any) {
             toast.error(err.message || 'Close error.');
@@ -221,9 +242,10 @@ export default function StaffSupportConsole() {
 
         setActionLoading(true);
         try {
-            const response = await fetch(`/api/support/chat/sessions/${selectedSession.sessionId}/convert`, {
+            const response = await fetch(publicApiUrl(`/api/support/chat/sessions/${selectedSession.sessionId}/convert`), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
             });
 
             if (!response.ok) {
@@ -233,6 +255,7 @@ export default function StaffSupportConsole() {
             const { data } = await response.json();
             toast.success(`Chat successfully converted to Ticket: ${data.ticketId}`);
             setSelectedSession(null);
+            setActiveSession(null);
             fetchSupportState();
             fetchAdminTickets();
         } catch (err: any) {
@@ -267,18 +290,6 @@ export default function StaffSupportConsole() {
         // Emit socket
         sendMessage(chatInput, attachments, isInternalNote);
 
-        // Optimistically render
-        addMessage({
-            sessionId: selectedSession.sessionId,
-            sender: session?.user?.id || 'staff',
-            senderModel: 'User',
-            senderName: session?.user?.name || 'Agent',
-            content: chatInput,
-            attachments,
-            isInternal: isInternalNote,
-            createdAt: new Date().toISOString(),
-        });
-
         setChatInput('');
         setSelectedChatFiles([]);
         setIsInternalNote(false);
@@ -301,13 +312,14 @@ export default function StaffSupportConsole() {
                 setUploadingTicketFiles((prev) => prev.filter((n) => n !== file.name));
             }
 
-            const response = await fetch(`/api/support/tickets/${selectedAdminTicket._id}/reply`, {
+            const response = await fetch(publicApiUrl(`/api/support/tickets/${selectedAdminTicket._id}/reply`), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     text: ticketReplyText,
                     attachments,
                 }),
+                credentials: 'include',
             });
 
             if (!response.ok) {
@@ -334,10 +346,11 @@ export default function StaffSupportConsole() {
     // Ticket status update
     const handleUpdateTicketStatus = async (ticketId: string, status: string) => {
         try {
-            const response = await fetch(`/api/support/tickets/${ticketId}/status`, {
+            const response = await fetch(publicApiUrl(`/api/support/tickets/${ticketId}/status`), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ status }),
+                credentials: 'include',
             });
 
             if (!response.ok) {
@@ -357,9 +370,10 @@ export default function StaffSupportConsole() {
     // Ticket assignment update
     const handleAssignTicket = async (ticketId: string) => {
         try {
-            const response = await fetch(`/api/support/tickets/${ticketId}/assign`, {
+            const response = await fetch(publicApiUrl(`/api/support/tickets/${ticketId}/assign`), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
             });
 
             if (!response.ok) {
@@ -388,7 +402,7 @@ export default function StaffSupportConsole() {
     });
 
     return (
-        <div className="flex-1 flex flex-col min-h-0 space-y-4 select-none">
+        <div className="flex-1 flex flex-col h-[calc(100vh-12rem)] min-h-0 overflow-hidden space-y-4 select-none">
             {/* CONSOLE NAVIGATION HEADER */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b pb-4 shrink-0">
                 <div className="flex items-center gap-2.5">
@@ -431,9 +445,9 @@ export default function StaffSupportConsole() {
 
             {/* TAB VIEW 1: LIVE CHATS CONSOLE */}
             {activeTab === 'chats' && (
-                <div className="flex-1 grid grid-cols-1 md:grid-cols-12 gap-6 min-h-0">
+                <div className="flex-1 flex flex-col md:flex-row gap-6 min-h-0 overflow-hidden">
                     {/* PANEL A: QUEUES SIDEBAR */}
-                    <div className="md:col-span-4 flex flex-col min-h-0 bg-background rounded-2xl border shadow-sm">
+                    <div className="w-80 flex flex-col min-h-0 bg-background rounded-2xl border shadow-sm shrink-0">
                         <div className="p-4 border-b shrink-0">
                             <h3 className="text-xs font-bold text-foreground">Active Connection Queues</h3>
                             <p className="text-[10px] text-muted-foreground mt-0.5">Real-time claiming wait lines.</p>
@@ -491,28 +505,49 @@ export default function StaffSupportConsole() {
                                         <div className="space-y-1.5">
                                             {activeSessions.map((sessionItem) => {
                                                 const isSelected = selectedSession?.sessionId === sessionItem.sessionId;
+                                                const clientName = sessionItem.clientId?.name || sessionItem.guestId?.name || 'Customer';
+                                                const clientEmail = sessionItem.clientId?.email || sessionItem.guestId?.email || 'No email';
+                                                
+                                                // Resolve last message
+                                                const lastMsg = sessionItem.lastMessage;
+                                                const hasAttachments = lastMsg?.attachments && lastMsg.attachments.length > 0;
+                                                
+                                                // Time string
+                                                const timeStr = lastMsg
+                                                    ? new Date(lastMsg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                                                    : new Date(sessionItem.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
                                                 return (
                                                     <div
                                                         key={sessionItem._id}
                                                         onClick={() => handleSelectSession(sessionItem)}
-                                                        className={`p-3 rounded-xl border transition-all cursor-pointer ${
+                                                        className={`p-3.5 rounded-xl border flex flex-col gap-1.5 transition-all cursor-pointer select-none leading-tight ${
                                                             isSelected
                                                                 ? 'bg-primary/5 border-primary shadow-sm'
-                                                                : 'border-border bg-card/65 hover:bg-card'
+                                                                : 'border-border bg-card/65 hover:bg-card hover:border-slate-300 dark:hover:border-slate-700'
                                                         }`}
                                                     >
-                                                        <div className="flex items-center justify-between mb-1">
-                                                            <span className="text-[9px] font-bold text-indigo-600 dark:text-indigo-400">ACTIVE CHAT</span>
-                                                            <span className="text-[9px] text-muted-foreground">
-                                                                {new Date(sessionItem.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                        <div className="flex w-full items-center justify-between gap-2">
+                                                            <span className="text-xs font-bold text-foreground truncate max-w-[70%]">
+                                                                {clientName}
+                                                            </span>
+                                                            <span className="text-[9px] text-muted-foreground shrink-0 font-medium">
+                                                                {timeStr}
                                                             </span>
                                                         </div>
-                                                        <h4 className="text-xs font-bold text-foreground truncate">
-                                                            {sessionItem.clientId?.name || sessionItem.guestId?.name || 'Customer'}
-                                                        </h4>
-                                                        <p className="text-[10px] text-muted-foreground truncate">
-                                                            {sessionItem.clientId?.email || sessionItem.guestId?.email}
-                                                        </p>
+                                                        
+                                                        <div className="text-[10px] text-muted-foreground truncate font-medium">
+                                                            {clientEmail}
+                                                        </div>
+
+                                                        <div className="flex items-center gap-1 mt-0.5 min-w-0">
+                                                            {hasAttachments && (
+                                                                <Paperclip className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                                                            )}
+                                                            <p className="text-[10px] text-muted-foreground/80 line-clamp-1 truncate w-full whitespace-break-spaces">
+                                                                {lastMsg ? lastMsg.content : 'No messages yet'}
+                                                            </p>
+                                                        </div>
                                                     </div>
                                                 );
                                             })}
@@ -524,16 +559,16 @@ export default function StaffSupportConsole() {
                     </div>
 
                     {/* PANEL B: CHAT WINDOW & REPLY EDITOR */}
-                    <div className="md:col-span-8 flex flex-col min-h-0 bg-background rounded-2xl border shadow-sm overflow-hidden">
+                    <div className="flex-1 flex flex-col min-h-0 bg-background rounded-2xl border shadow-sm overflow-hidden">
                         {!selectedSession ? (
                             <EmptySupportState
                                 title="No Active Live Chat claimed"
                                 description="Select an active chat session from your claimed list on the left to start real-time messaging, or claim an unclaimed session from the waiting queue."
                             />
                         ) : (
-                            <div className="flex-1 flex flex-col min-h-0 lg:grid lg:grid-cols-12">
+                            <div className="flex-1 flex flex-row min-h-0 overflow-hidden">
                                 {/* CENTER: MESSAGE STREAM */}
-                                <div className="lg:col-span-8 flex flex-col min-h-0 border-r border-border/55">
+                                <div className="flex-1 flex flex-col min-h-0 border-r border-border/55">
                                     {/* Header Status */}
                                     <div className="px-5 py-3 border-b flex items-center justify-between shrink-0 bg-card/15">
                                         <div className="min-w-0 pr-1">
@@ -585,17 +620,17 @@ export default function StaffSupportConsole() {
                                                         }`}
                                                     >
                                                         <div className="flex items-baseline gap-1.5 mb-0.5 px-1">
-                                                            <span className={`text-[10px] font-bold ${isInternal ? 'text-amber-600 dark:text-amber-400' : 'text-slate-700 dark:text-slate-300'}`}>
+                                                            <span className={`text-xs font-bold ${isInternal ? 'text-amber-600 dark:text-amber-400' : 'text-slate-700 dark:text-slate-300'}`}>
                                                                 {isSelf ? 'You' : msg.senderName}
                                                                 {isInternal && ' (Internal Note)'}
                                                             </span>
-                                                            <span className="text-[8px] text-muted-foreground">
+                                                            <span className="text-[10px] text-muted-foreground">
                                                                 {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                                             </span>
                                                         </div>
 
                                                         <div
-                                                            className={`px-3.5 py-2 rounded-2xl max-w-[85%] text-xs leading-relaxed ${
+                                                            className={`px-3.5 py-2 rounded-2xl max-w-[85%] text-sm leading-relaxed ${
                                                                 isInternal
                                                                     ? 'bg-amber-500/10 dark:bg-amber-400/5 text-amber-900 dark:text-amber-400 rounded-2xl border border-amber-500/20'
                                                                     : isSelf
@@ -724,7 +759,7 @@ export default function StaffSupportConsole() {
                                 </div>
 
                                 {/* RIGHT: CUSTOMER METADATA CARD */}
-                                <div className="lg:col-span-4 p-4 space-y-5 bg-card/5 shrink-0 border-t lg:border-t-0 select-none">
+                                <div className="hidden lg:block w-72 p-4 space-y-5 bg-card/5 shrink-0 select-none overflow-y-auto border-l border-border/25">
                                     <div className="space-y-1">
                                         <h4 className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Customer Context</h4>
                                         <p className="text-[10px] text-muted-foreground">Detailed identity verification audit.</p>
@@ -779,9 +814,9 @@ export default function StaffSupportConsole() {
 
             {/* TAB VIEW 2: TICKETING HUB */}
             {activeTab === 'tickets' && (
-                <div className="flex-1 grid grid-cols-1 md:grid-cols-12 gap-6 min-h-0">
+                <div className="flex-1 flex flex-col md:flex-row gap-6 min-h-0 overflow-hidden">
                     {/* PANEL A: SEARCH & ALL TICKETS TABLE */}
-                    <div className="md:col-span-4 flex flex-col min-h-0 bg-background rounded-2xl border shadow-sm">
+                    <div className="w-80 flex flex-col min-h-0 bg-background rounded-2xl border shadow-sm shrink-0">
                         <div className="p-4 border-b space-y-3 shrink-0">
                             <div className="relative">
                                 <Search className="absolute left-3 top-2.5 w-4 h-4 text-muted-foreground" />
@@ -845,16 +880,16 @@ export default function StaffSupportConsole() {
                     </div>
 
                     {/* PANEL B: SELECTED TICKET DETAILED PANEL */}
-                    <div className="md:col-span-8 flex flex-col min-h-0 bg-background rounded-2xl border shadow-sm overflow-hidden">
+                    <div className="flex-1 flex flex-col min-h-0 bg-background rounded-2xl border shadow-sm overflow-hidden">
                         {!selectedAdminTicket ? (
                             <EmptySupportState
                                 title="No Ticket Selected"
                                 description="Select a formal ticket from the search table on the left to claim agent assignments, respond directly, view attached PDF/screenshot media logs, and edit status progressions."
                             />
                         ) : (
-                            <div className="flex-1 flex flex-col min-h-0 lg:grid lg:grid-cols-12">
+                            <div className="flex-1 flex flex-row min-h-0 overflow-hidden">
                                 {/* CENTER: TICKET REPLIES timelines */}
-                                <div className="lg:col-span-8 flex flex-col min-h-0 border-r border-border/55">
+                                <div className="flex-1 flex flex-col min-h-0 border-r border-border/55">
                                     {/* Header action panel */}
                                     <div className="px-5 py-3.5 border-b bg-card/25 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
                                         <div className="space-y-0.5">
@@ -1022,7 +1057,7 @@ export default function StaffSupportConsole() {
                                 </div>
 
                                 {/* RIGHT: TICKET ASSIGNMENT METRICS CARD */}
-                                <div className="lg:col-span-4 p-4 space-y-5 bg-card/5 shrink-0 border-t lg:border-t-0 select-none">
+                                <div className="hidden lg:block w-72 p-4 space-y-5 bg-card/5 shrink-0 select-none overflow-y-auto border-l border-border/25">
                                     <div className="space-y-1">
                                         <h4 className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Ticket Management</h4>
                                         <p className="text-[10px] text-muted-foreground">Admin-only controls and metrics.</p>

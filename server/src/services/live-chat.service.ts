@@ -53,6 +53,10 @@ export async function assignAgentToSession(sessionId: string, agentId: string): 
 
     await removeFromChatQueue(sessionId);
 
+    await session.populate('clientId', 'name email');
+    await session.populate('guestId', 'name email');
+    await session.populate('assignedAgent', 'name email');
+
     return session;
 }
 

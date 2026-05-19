@@ -74,11 +74,19 @@ router.get('/tickets/:id', requireUnifiedAuth, SupportController.getTicketDetail
 router.post('/tickets/:id/replies', requireUnifiedAuth, SupportController.replyToTicket);
 router.post('/chats/session', requireUnifiedAuth, SupportController.createChatSession);
 
-router.patch('/tickets/:id', requireUnifiedAuth, restrictTo('admin', 'super-admin', 'manager', 'staff'), SupportController.updateTicket);
-router.post('/chats/claim', requireUnifiedAuth, restrictTo('admin', 'super-admin', 'manager', 'staff'), SupportController.claimChatSession);
-router.post('/chats/convert', requireUnifiedAuth, restrictTo('admin', 'super-admin', 'manager', 'staff'), SupportController.convertChatToTicket);
+// Live Support Chat Console Endpoints (for staff dashboard)
+router.get('/chat/sessions/queued', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), SupportController.listQueuedChatSessions);
+router.get('/chat/sessions/active', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), SupportController.listActiveChatSessions);
+router.get('/chat/sessions/:sessionId/messages', requireUnifiedAuth, SupportController.getChatSessionMessages);
+router.post('/chat/sessions/:sessionId/claim', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), SupportController.claimChatSessionParam);
+router.post('/chat/sessions/:sessionId/close', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), SupportController.closeChatSessionParam);
+router.post('/chat/sessions/:sessionId/convert', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), SupportController.convertChatToTicketParam);
 
-router.post('/admin/migrate-cloudinary', requireUnifiedAuth, restrictTo('admin', 'super-admin'), SupportController.triggerCloudinaryMigration);
+router.patch('/tickets/:id', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), SupportController.updateTicket);
+router.post('/chats/claim', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), SupportController.claimChatSession);
+router.post('/chats/convert', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), SupportController.convertChatToTicket);
+
+router.post('/admin/migrate-cloudinary', requireUnifiedAuth, restrictTo('admin', 'super_admin'), SupportController.triggerCloudinaryMigration);
 
 export const SupportRoutes = router;
 export default SupportRoutes;

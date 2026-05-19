@@ -29,6 +29,11 @@ export interface ChatSession {
     status: 'queued' | 'active' | 'closed';
     createdAt: string;
     updatedAt: string;
+    lastMessage?: {
+        content: string;
+        attachments?: unknown[];
+        createdAt: string;
+    } | null;
 }
 
 interface SupportState {

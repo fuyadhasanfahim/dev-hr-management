@@ -214,6 +214,147 @@ async function triggerCloudinaryMigration(_req: Request, res: Response) {
     }
 }
 
+import ChatSessionModel from '../models/chat-session.model.js';
+import ChatMessageModel from '../models/chat-message.model.js';
+
+/**
+ * Staff: List all queued support chat sessions.
+ */
+async function listQueuedChatSessions(_req: Request, res: Response) {
+    try {
+        const sessions = await ChatSessionModel.find({ status: 'queued' })
+            .populate('clientId', 'name email')
+            .populate('guestId', 'name email')
+            .sort({ createdAt: 1 });
+
+        const result = await Promise.all(
+            sessions.map(async (session) => {
+                const lastMessage = await ChatMessageModel.findOne({ sessionId: session._id })
+                    .sort({ createdAt: -1 });
+                return {
+                    ...session.toObject(),
+                    lastMessage: lastMessage ? {
+                        content: lastMessage.content,
+                        attachments: lastMessage.attachments,
+                        createdAt: lastMessage.createdAt,
+                    } : null,
+                };
+            })
+        );
+
+        return res.status(200).json({ success: true, data: result });
+    } catch (err: any) {
+        return res.status(500).json({ success: false, message: err.message });
+    }
+}
+
+/**
+ * Staff: List all active support chat sessions.
+ */
+async function listActiveChatSessions(_req: Request, res: Response) {
+    try {
+        const sessions = await ChatSessionModel.find({ status: 'active' })
+            .populate('clientId', 'name email')
+            .populate('guestId', 'name email')
+            .populate('assignedAgent', 'name email')
+            .sort({ updatedAt: -1 });
+
+        const result = await Promise.all(
+            sessions.map(async (session) => {
+                const lastMessage = await ChatMessageModel.findOne({ sessionId: session._id })
+                    .sort({ createdAt: -1 });
+                return {
+                    ...session.toObject(),
+                    lastMessage: lastMessage ? {
+                        content: lastMessage.content,
+                        attachments: lastMessage.attachments,
+                        createdAt: lastMessage.createdAt,
+                    } : null,
+                };
+            })
+        );
+
+        return res.status(200).json({ success: true, data: result });
+    } catch (err: any) {
+        return res.status(500).json({ success: false, message: err.message });
+    }
+}
+
+/**
+ * Protected: Fetch chat message logs for a session.
+ */
+async function getChatSessionMessages(req: Request, res: Response) {
+    try {
+        const { sessionId } = req.params;
+        if (!sessionId) {
+            return res.status(400).json({ success: false, message: 'Session ID is required' });
+        }
+
+        const session = await ChatSessionModel.findOne({ sessionId });
+        if (!session) {
+            return res.status(404).json({ success: false, message: 'Chat session not found' });
+        }
+
+        const messages = await ChatMessageModel.find({ sessionId: session._id })
+            .sort({ createdAt: 1 });
+        return res.status(200).json({ success: true, data: messages });
+    } catch (err: any) {
+        return res.status(500).json({ success: false, message: err.message });
+    }
+}
+
+/**
+ * Staff: Claim a support chat session (param based).
+ */
+async function claimChatSessionParam(req: Request, res: Response) {
+    try {
+        const { sessionId } = req.params;
+        if (!sessionId) {
+            return res.status(400).json({ success: false, message: 'Session ID is required' });
+        }
+
+        const result = await liveChatService.assignAgentToSession(sessionId, req.user?.id || '');
+        return res.status(200).json({ success: true, data: result });
+    } catch (err: any) {
+        return res.status(err.statusCode || 400).json({ success: false, message: err.message });
+    }
+}
+
+/**
+ * Staff: Close/End an active support chat session (param based).
+ */
+async function closeChatSessionParam(req: Request, res: Response) {
+    try {
+        const { sessionId } = req.params;
+        if (!sessionId) {
+            return res.status(400).json({ success: false, message: 'Session ID is required' });
+        }
+
+        const result = await liveChatService.endChatSession(sessionId);
+        return res.status(200).json({ success: true, data: result });
+    } catch (err: any) {
+        return res.status(err.statusCode || 400).json({ success: false, message: err.message });
+    }
+}
+
+/**
+ * Staff: Convert chat session to ticket (param based).
+ */
+async function convertChatToTicketParam(req: Request, res: Response) {
+    try {
+        const { sessionId } = req.params;
+        if (!sessionId) {
+            return res.status(400).json({ success: false, message: 'Session ID is required' });
+        }
+
+        const { reason } = req.body;
+        const result = await liveChatService.convertChatToTicket(sessionId, reason);
+        return res.status(200).json({ success: true, data: result });
+    } catch (err: any) {
+        return res.status(err.statusCode || 400).json({ success: false, message: err.message });
+    }
+}
+
 export default {
     requestGuestOtp,
     verifyGuestOtp,
@@ -227,4 +368,10 @@ export default {
     claimChatSession,
     convertChatToTicket,
     triggerCloudinaryMigration,
+    listQueuedChatSessions,
+    listActiveChatSessions,
+    getChatSessionMessages,
+    claimChatSessionParam,
+    closeChatSessionParam,
+    convertChatToTicketParam,
 };
