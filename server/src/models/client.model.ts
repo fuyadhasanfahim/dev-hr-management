@@ -30,8 +30,7 @@ const ClientSchema = new Schema<IClient>(
     {
         clientId: {
             type: String,
-            required: true,
-            unique: true,
+            required: false,
             index: true,
         },
         name: {
@@ -42,13 +41,7 @@ const ClientSchema = new Schema<IClient>(
         },
         emails: {
             type: [String],
-            required: true,
-            validate: {
-                validator: function (v: string[]) {
-                    return v && v.length > 0;
-                },
-                message: 'At least one email is required',
-            },
+            default: [],
         },
         phone: {
             type: String,

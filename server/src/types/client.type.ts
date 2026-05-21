@@ -8,9 +8,9 @@ export interface ITeamMember {
 }
 
 export interface IClient extends Document {
-    clientId: string;
+    clientId?: string;
     name: string;
-    emails: string[];
+    emails?: string[];
     phone?: string;
     address?: string;
     officeAddress?: string;

@@ -33,7 +33,7 @@ import { SoundToggle, TypingIndicator, AttachmentPreview, formatBytes } from '..
 
 export function ChatWidget() {
     const pathname = usePathname();
-    if (pathname?.startsWith('/dashboard/support')) return null;
+    if (pathname?.startsWith('/support-console')) return null;
 
     const { data: session } = useSession();
     const {

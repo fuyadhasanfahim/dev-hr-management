@@ -37,7 +37,12 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
     }, [pathname]);
 
     const isPublicRoute = useMemo(() => {
-        return publicRoutes.has(pathname) || pathname.startsWith('/sign-up') || pathname.startsWith('/support');
+        return (
+            publicRoutes.has(pathname) ||
+            pathname.startsWith('/sign-up') ||
+            pathname === '/support' ||
+            pathname.startsWith('/support/')
+        );
     }, [pathname]);
 
     useEffect(() => {

@@ -234,21 +234,23 @@ const createClientInDB = async (
     }
 
     // Check if any of the emails already exist
-    const emailsToMatch = payload.emails.map((e) => e.toLowerCase());
-    const existingClient = await ClientModel.findOne({
-        emails: { $in: emailsToMatch },
-    });
-    if (existingClient) {
-        throw new Error(
-            'One or more of these emails are already associated with another client',
-        );
+    const emailsToMatch = payload.emails ? payload.emails.map((e) => e.toLowerCase()) : [];
+    if (emailsToMatch.length > 0) {
+        const existingClient = await ClientModel.findOne({
+            emails: { $in: emailsToMatch },
+        });
+        if (existingClient) {
+            throw new Error(
+                'One or more of these emails are already associated with another client',
+            );
+        }
     }
 
     // Prepare data for creation
     const clientData = {
         clientId: finalClientId,
         name: payload.name,
-        emails: payload.emails.map((e) => e.toLowerCase()),
+        emails: emailsToMatch,
         status: payload.status,
         createdBy: new Types.ObjectId(payload.createdBy),
         ...(payload.phone && { phone: payload.phone }),
@@ -281,6 +283,9 @@ const updateClientInDB = async (id: string, payload: UpdateClientInput) => {
         }
     }
 
+    // Convert assignedServices string IDs to ObjectIds if provided
+    const updateData: Record<string, unknown> = { ...payload };
+    
     // If updating emails, check if they are unique
     if (payload.emails) {
         const emailsToMatch = payload.emails.map((e) => e.toLowerCase());
@@ -293,9 +298,9 @@ const updateClientInDB = async (id: string, payload: UpdateClientInput) => {
                 'One or more of these emails are already associated with another client',
             );
         }
+        updateData.emails = emailsToMatch;
     }
-    // Convert assignedServices string IDs to ObjectIds if provided
-    const updateData: Record<string, unknown> = { ...payload };
+
     if (payload.assignedServices) {
         updateData.assignedServices = payload.assignedServices.map(
             (id) => new Types.ObjectId(id),

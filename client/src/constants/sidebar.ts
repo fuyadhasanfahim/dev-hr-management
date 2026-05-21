@@ -290,7 +290,7 @@ export const sidebarGroups: SidebarGroup[] = [
             },
             {
                 title: "Support Console",
-                url: "/dashboard/support",
+                url: "/support-console",
                 icon: IconSpeakerphone,
                 access: [
                     Role.SUPER_ADMIN,

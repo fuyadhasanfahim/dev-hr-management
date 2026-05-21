@@ -16,7 +16,7 @@ export const createClientSchema = z.object({
         .max(100, 'Name must be at most 100 characters'),
     emails: z
         .array(z.string().email('Invalid email address'))
-        .min(1, 'At least one email is required'),
+        .optional(),
     phone: z.string().optional(),
     address: z.string().max(500, 'Address too long').optional(),
     officeAddress: z.string().max(500, 'Office address too long').optional(),
@@ -36,7 +36,6 @@ export const updateClientSchema = z.object({
         .optional(),
     emails: z
         .array(z.string().email('Invalid email address'))
-        .min(1, 'At least one email is required')
         .optional(),
     phone: z.string().optional(),
     address: z.string().max(500, 'Address too long').optional(),
