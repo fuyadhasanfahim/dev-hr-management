@@ -53,9 +53,15 @@ async function getMyTasks(req: Request, res: Response, next: NextFunction): Prom
             throw new AppError('User context not available', 401);
         }
 
-        // Resolve user to staff first
+        const isManager = ['admin', 'super_admin', 'hr_manager', 'team_leader'].includes(user.role as string);
         const staff = await StaffModel.findOne({ userId: user.id });
+
+        // Managers without a Staff record (pure admin accounts) have no personal task queue
         if (!staff) {
+            if (isManager) {
+                res.status(200).json({ success: true, message: 'Your tasks fetched successfully', data: [] });
+                return;
+            }
             throw new AppError('Staff record not found for logged user', 404);
         }
 
@@ -158,7 +164,9 @@ async function updateTaskStatus(req: Request, res: Response, next: NextFunction)
             }
         }
 
-        const result = await TaskService.updateTaskStatus(taskId, status, user.id);
+        // Non-managers can only update tasks assigned to them
+        const staffConstraint = isManager ? undefined : staff?._id?.toString();
+        const result = await TaskService.updateTaskStatus(taskId, status, user.id, staffConstraint);
 
         res.status(200).json({
             success: true,

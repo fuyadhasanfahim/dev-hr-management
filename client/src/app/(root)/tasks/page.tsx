@@ -117,7 +117,7 @@ export default function MyTasksPage() {
                     className="px-4 py-1.5 text-sm font-bold"
                     variant="secondary"
                 >
-                    {tasks.length} Pending Action
+                    {tasks.filter((t: any) => ['pending', 'in_progress', 'rejected'].includes(t.status)).length} Pending Action
                 </Badge>
             </div>
 

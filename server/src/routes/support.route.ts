@@ -70,8 +70,12 @@ router.post('/guest/verify', SupportController.verifyGuestOtp);
 router.post('/attachments/presigned-url', requireUnifiedAuth, SupportController.requestPresignedUrl);
 router.post('/tickets', requireUnifiedAuth, SupportController.createSupportTicket);
 router.get('/tickets', requireUnifiedAuth, SupportController.listSupportTickets);
+// Must be registered before /tickets/:id to avoid 'admin' being captured as :id
+router.get('/tickets/admin', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), SupportController.listSupportTickets);
 router.get('/tickets/:id', requireUnifiedAuth, SupportController.getTicketDetails);
 router.post('/tickets/:id/replies', requireUnifiedAuth, SupportController.replyToTicket);
+// Alias for clients that call the singular form
+router.post('/tickets/:id/reply', requireUnifiedAuth, SupportController.replyToTicket);
 router.post('/chats/session', requireUnifiedAuth, SupportController.createChatSession);
 
 // Live Support Chat Console Endpoints (for staff dashboard)
@@ -83,6 +87,8 @@ router.post('/chat/sessions/:sessionId/close', requireUnifiedAuth, restrictTo('a
 router.post('/chat/sessions/:sessionId/convert', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), SupportController.convertChatToTicketParam);
 
 router.patch('/tickets/:id', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), SupportController.updateTicket);
+router.patch('/tickets/:id/status', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), SupportController.updateTicketStatus);
+router.post('/tickets/:id/assign', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), SupportController.assignTicketToSelf);
 router.post('/chats/claim', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), SupportController.claimChatSession);
 router.post('/chats/convert', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), SupportController.convertChatToTicket);
 

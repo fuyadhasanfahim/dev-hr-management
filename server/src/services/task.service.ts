@@ -58,10 +58,13 @@ const getTasksByStaff = async (staffId: string) => {
         .sort({ dueDate: 1 });
 };
 
-const updateTaskStatus = async (taskId: string, status: TaskStatus, actorId?: string) => {
-    const task = await OrderTaskModel.findById(taskId);
+const updateTaskStatus = async (taskId: string, status: TaskStatus, actorId?: string, staffConstraint?: string) => {
+    const query: any = { _id: taskId };
+    if (staffConstraint) query.assignedTo = staffConstraint;
+
+    const task = await OrderTaskModel.findOne(query);
     if (!task) {
-        throw new AppError('Task not found', 404);
+        throw new AppError(staffConstraint ? 'Assigned task not found.' : 'Task not found', 404);
     }
 
     const oldStatus = task.status;
@@ -119,6 +122,10 @@ const submitTask = async (
     const task = await OrderTaskModel.findOne(query);
     if (!task) {
         throw new AppError(actorStaffId ? 'Assigned task not found.' : 'Task not found.', 404);
+    }
+
+    if (task.status !== TaskStatus.IN_PROGRESS) {
+        throw new AppError('Task must be in progress before submitting deliverables.', 400);
     }
 
     task.status = TaskStatus.UNDER_REVIEW;

@@ -4,6 +4,7 @@ import attachmentService from '../services/attachment.service.js';
 import supportTicketService from '../services/support-ticket.service.js';
 import liveChatService from '../services/live-chat.service.js';
 import cloudinaryMigrationService from '../services/cloudinary-migration.service.js';
+import StaffModel from '../models/staff.model.js';
 
 /**
  * Public: Request OTP for Guest email verification.
@@ -355,6 +356,40 @@ async function convertChatToTicketParam(req: Request, res: Response) {
     }
 }
 
+/**
+ * Staff: Update ticket status only.
+ */
+async function updateTicketStatus(req: Request, res: Response) {
+    try {
+        const { status } = req.body;
+        if (!status) {
+            return res.status(400).json({ success: false, message: 'Status is required' });
+        }
+        const result = await supportTicketService.updateTicket(req.params.id || '', { status });
+        return res.status(200).json({ success: true, data: result });
+    } catch (err: any) {
+        return res.status(err.statusCode || 400).json({ success: false, message: err.message });
+    }
+}
+
+/**
+ * Staff: Assign ticket to the calling staff member (resolves User → Staff).
+ */
+async function assignTicketToSelf(req: Request, res: Response) {
+    try {
+        const staff = await StaffModel.findOne({ userId: req.user?.id });
+        if (!staff) {
+            return res.status(404).json({ success: false, message: 'Staff profile not found for your account.' });
+        }
+        const result = await supportTicketService.updateTicket(req.params.id || '', {
+            assignedTo: staff._id.toString(),
+        });
+        return res.status(200).json({ success: true, data: result });
+    } catch (err: any) {
+        return res.status(err.statusCode || 400).json({ success: false, message: err.message });
+    }
+}
+
 export default {
     requestGuestOtp,
     verifyGuestOtp,
@@ -374,4 +409,6 @@ export default {
     claimChatSessionParam,
     closeChatSessionParam,
     convertChatToTicketParam,
+    updateTicketStatus,
+    assignTicketToSelf,
 };

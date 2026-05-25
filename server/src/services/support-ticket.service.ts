@@ -101,11 +101,20 @@ export async function getTicketDetails(ticketId: string, user: { id: string; rol
         throw new AppError('Access denied', 403);
     }
 
-    const messages = await TicketMessageModel.find({ ticketId: ticket._id }).sort({ createdAt: 1 });
+    const messages = await TicketMessageModel.find({ ticketId: ticket._id })
+        .populate('senderId', 'name email')
+        .sort({ createdAt: 1 });
+
+    const [firstMessage, ...replyMessages] = messages;
 
     return {
-        ticket,
-        messages,
+        ...ticket.toObject(),
+        text: firstMessage?.content ?? '',
+        replies: replyMessages.map(m => ({
+            ...m.toObject(),
+            text: m.content,
+            senderType: m.senderModel.toLowerCase(),
+        })),
     };
 }
 

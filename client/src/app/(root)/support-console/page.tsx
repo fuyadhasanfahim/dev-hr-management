@@ -118,7 +118,7 @@ export default function StaffSupportConsole() {
     const fetchAdminTickets = useCallback(async () => {
         setLoadingTickets(true);
         try {
-            const response = await fetch(publicApiUrl('/api/support/tickets/admin'), { credentials: 'include' });
+            const response = await fetch(publicApiUrl('/api/support/tickets'), { credentials: 'include' });
             if (response.ok) {
                 const data = await response.json();
                 setAdminTickets(data.data || []);
@@ -346,8 +346,8 @@ export default function StaffSupportConsole() {
     // Ticket status update
     const handleUpdateTicketStatus = async (ticketId: string, status: string) => {
         try {
-            const response = await fetch(publicApiUrl(`/api/support/tickets/${ticketId}/status`), {
-                method: 'POST',
+            const response = await fetch(publicApiUrl(`/api/support/tickets/${ticketId}`), {
+                method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ status }),
                 credentials: 'include',
@@ -1113,7 +1113,7 @@ export default function StaffSupportConsole() {
                                                             </span>
                                                             <span className="font-semibold">{new Date(reply.createdAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</span>
                                                         </div>
-                                                        <p className="text-xs sm:text-sm text-foreground leading-relaxed whitespace-pre-wrap font-medium">{reply.text}</p>
+                                                        <p className="text-xs sm:text-sm text-foreground leading-relaxed whitespace-pre-wrap font-medium">{reply.content}</p>
 
                                                         {reply.attachments && reply.attachments.length > 0 && (
                                                             <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-slate-200/40 dark:border-slate-800/40">
