@@ -9,7 +9,6 @@ import { ToasterProps } from 'sonner';
 import AuthGuard from './AuthGuard';
 import { SocketProvider } from '@/contexts/SocketContext';
 import { GlobalPolicyPrompt } from '@/components/policy/GlobalPolicyPrompt';
-import { ChatWidget } from '@/components/live-chat/chat-widget';
 
 if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
     const originalError = console.error;
@@ -43,7 +42,6 @@ export default function Main({ children }: { children: ReactNode }) {
                     <SocketProvider>
                         {children}
                         <GlobalPolicyPrompt />
-                        <ChatWidget />
                     </SocketProvider>
                     <Toaster
                         theme={theme}

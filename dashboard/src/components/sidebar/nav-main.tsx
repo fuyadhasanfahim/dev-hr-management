@@ -71,17 +71,26 @@ export function NavMain() {
         }).filter(group => group.items.length > 0);
     }, [userRole, staff, searchQuery]);
 
-    // Accordion expanded values
+    // Find the group that contains the active route
+    const activeGroup = React.useMemo(() => {
+        return sidebarGroups.find(g =>
+            g.items.some(item => !item.external && pathname.startsWith(item.url))
+        )?.groupLabel ?? null;
+    }, [pathname]);
+
+    // Accordion expanded values — only active group open by default
     const [expandedItems, setExpandedItems] = React.useState<string[]>(
-        sidebarGroups.map(g => g.groupLabel)
+        activeGroup ? [activeGroup] : []
     );
 
-    // Auto-expand all matching categories when searching
+    // Auto-expand all matching categories when searching; collapse back to active when cleared
     React.useEffect(() => {
         if (searchQuery.trim() !== "") {
             setExpandedItems(filteredGroups.map(g => g.groupLabel));
+        } else {
+            setExpandedItems(activeGroup ? [activeGroup] : []);
         }
-    }, [searchQuery, filteredGroups]);
+    }, [searchQuery, filteredGroups, activeGroup]);
 
     const isLoading =
         isSessionPending || isMeLoading || (isRefetching && !session);
@@ -110,20 +119,32 @@ export function NavMain() {
                             <SidebarMenuButton
                                 tooltip={item.title}
                                 className={cn(
-                                    pathname.startsWith(item.url) &&
+                                    !item.external && pathname.startsWith(item.url) &&
                                         "bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground",
                                 )}
                                 asChild
                             >
-                                <Link href={item.url}>
-                                    {item.icon && (
-                                        <item.icon
-                                            strokeWidth={2}
-                                            className="size-4 shrink-0"
-                                        />
-                                    )}
-                                    <span>{item.title}</span>
-                                </Link>
+                                {item.external ? (
+                                    <a href={item.url} target="_blank" rel="noopener noreferrer">
+                                        {item.icon && (
+                                            <item.icon
+                                                strokeWidth={2}
+                                                className="size-4 shrink-0"
+                                            />
+                                        )}
+                                        <span>{item.title}</span>
+                                    </a>
+                                ) : (
+                                    <Link href={item.url}>
+                                        {item.icon && (
+                                            <item.icon
+                                                strokeWidth={2}
+                                                className="size-4 shrink-0"
+                                            />
+                                        )}
+                                        <span>{item.title}</span>
+                                    </Link>
+                                )}
                             </SidebarMenuButton>
                         </SidebarMenuItem>
                     ))}
@@ -188,20 +209,32 @@ export function NavMain() {
                                                 <SidebarMenuButton
                                                     tooltip={item.title}
                                                     className={cn(
-                                                        pathname.startsWith(item.url) &&
+                                                        !item.external && pathname.startsWith(item.url) &&
                                                             "bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground font-medium",
                                                     )}
                                                     asChild
                                                 >
-                                                    <Link href={item.url}>
-                                                        {item.icon && (
-                                                            <item.icon
-                                                                strokeWidth={2}
-                                                                className="size-4 shrink-0"
-                                                            />
-                                                        )}
-                                                        <span>{item.title}</span>
-                                                    </Link>
+                                                    {item.external ? (
+                                                        <a href={item.url} target="_blank" rel="noopener noreferrer">
+                                                            {item.icon && (
+                                                                <item.icon
+                                                                    strokeWidth={2}
+                                                                    className="size-4 shrink-0"
+                                                                />
+                                                            )}
+                                                            <span>{item.title}</span>
+                                                        </a>
+                                                    ) : (
+                                                        <Link href={item.url}>
+                                                            {item.icon && (
+                                                                <item.icon
+                                                                    strokeWidth={2}
+                                                                    className="size-4 shrink-0"
+                                                                />
+                                                            )}
+                                                            <span>{item.title}</span>
+                                                        </Link>
+                                                    )}
                                                 </SidebarMenuButton>
                                             </SidebarMenuItem>
                                         ))}

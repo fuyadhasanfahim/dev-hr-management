@@ -29,6 +29,7 @@ export interface SidebarItem {
     icon: React.ComponentType<{ strokeWidth?: number; className?: string }>;
     access: Role[];
     requiredDesignation?: string;
+    external?: boolean;
 }
 
 export interface SidebarGroup {
@@ -290,8 +291,9 @@ export const sidebarGroups: SidebarGroup[] = [
             },
             {
                 title: "Support Console",
-                url: "/support-console",
+                url: process.env.NEXT_PUBLIC_SUPPORT_URL || 'http://localhost:3002',
                 icon: IconSpeakerphone,
+                external: true,
                 access: [
                     Role.SUPER_ADMIN,
                     Role.ADMIN,
