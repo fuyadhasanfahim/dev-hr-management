@@ -1,7 +1,45 @@
 # ================================
-# ROOT LEVEL
+# GLOBAL — applies everywhere in repo
 # ================================
 node_modules/
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.pem
+
+# Debug logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# TypeScript
+*.tsbuildinfo
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Yarn
+.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# ================================
+# ENV FILES — root + all apps
+# ================================
 .env
 .env.*
 .env.local
@@ -9,62 +47,85 @@ node_modules/
 .env.production.local
 .env.test.local
 
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-
-.DS_Store
-Thumbs.db
-Desktop.ini
+# ================================
+# NEXT.JS — shared across all apps
+# ================================
+.next/
+out/
+next-env.d.ts
+.vercel
+/coverage
 
 # ================================
-# NEXT.JS (CLIENT)
+# APPS — DASHBOARD (apps/dashboard/)
 # ================================
-client/.next/
-client/out/
-client/node_modules/
-client/.env
-client/.env.*
-client/.env.local
-client/.vercel
-
-# Next.js build output
-client/build/
-client/dist/
-
-# Next.js / TS auto-generated
-client/next-env.d.ts
+apps/dashboard/.env
+apps/dashboard/.env.*
+apps/dashboard/node_modules/
+apps/dashboard/.next/
+apps/dashboard/out/
+apps/dashboard/build/
+apps/dashboard/dist/
+apps/dashboard/coverage/
+apps/dashboard/next-env.d.ts
+apps/dashboard/.vercel
 
 # ================================
-# EXPRESS (SERVER)
+# APPS — AUTH (apps/auth/)
 # ================================
-server/node_modules/
+apps/auth/.env
+apps/auth/.env.*
+apps/auth/node_modules/
+apps/auth/.next/
+apps/auth/out/
+apps/auth/build/
+apps/auth/coverage/
+apps/auth/next-env.d.ts
+apps/auth/.vercel
+
+# ================================
+# APPS — SUPPORT (apps/support/)
+# ================================
+apps/support/.env
+apps/support/.env.*
+apps/support/node_modules/
+apps/support/.next/
+apps/support/out/
+apps/support/build/
+apps/support/coverage/
+apps/support/next-env.d.ts
+apps/support/.vercel
+
+# ================================
+# APPS — PAYMENT (apps/payment/)
+# ================================
+apps/payment/.env
+apps/payment/.env.*
+apps/payment/node_modules/
+apps/payment/.next/
+apps/payment/out/
+apps/payment/build/
+apps/payment/coverage/
+apps/payment/next-env.d.ts
+apps/payment/.vercel
+
+# ================================
+# SERVER (server/)
+# ================================
 server/.env
 server/.env.*
+server/node_modules/
 server/dist/
 server/build/
 server/logs/
 server/uploads/
 
 # ================================
-# TYPESCRIPT
+# SUPPORT TEST CLIENT (support-test-client/)
 # ================================
-*.tsbuildinfo
-
-# ================================
-# IDE / EDITOR
-# ================================
-.vscode/
-.idea/
-*.swp
-*.swo
-
-# ================================
-# PAYMENT APP
-# ================================
-payment/.env
-payment/.env.*
-payment/node_modules/
-payment/.next/
-
+support-test-client/.env
+support-test-client/.env.*
+support-test-client/node_modules/
+support-test-client/dist/
+support-test-client/dist-ssr/
+support-test-client/*.local
