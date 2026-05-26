@@ -23,7 +23,7 @@ import { useTheme } from 'next-themes';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -81,10 +81,11 @@ interface NavContentProps {
     pathname: string;
     userName: string;
     userRole: string;
+    userImage?: string;
     onNavigate?: () => void;
 }
 
-function NavContent({ pathname, userName, userRole, onNavigate }: NavContentProps) {
+function NavContent({ pathname, userName, userRole, userImage, onNavigate }: NavContentProps) {
     const { theme, setTheme, systemTheme } = useTheme();
     const [mounted, setMounted] = useState(false);
     const [signingOut, setSigningOut] = useState(false);
@@ -178,6 +179,7 @@ function NavContent({ pathname, userName, userRole, onNavigate }: NavContentProp
                         <DropdownMenuTrigger asChild>
                             <button className="flex flex-1 items-center gap-2.5 rounded-md px-1 py-1 hover:bg-accent transition-colors min-w-0">
                                 <Avatar className="size-7 shrink-0">
+                                    <AvatarImage src={userImage || undefined} alt={userName} />
                                     <AvatarFallback className="bg-primary/20 text-primary text-xs font-semibold">
                                         {initial}
                                     </AvatarFallback>
@@ -256,6 +258,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     const userName = session?.user?.name ?? 'Staff User';
     const userRoleRaw = (session?.user as { role?: string } | undefined)?.role ?? '';
     const userRole = formatRole(userRoleRaw) || 'Support Agent';
+    const userImage = session?.user?.image ?? undefined;
     const initial = userName.trim().charAt(0).toUpperCase() || 'S';
 
     return (
@@ -273,6 +276,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                         pathname={pathname}
                         userName={userName}
                         userRole={userRole}
+                        userImage={userImage}
                     />
                 </div>
             </aside>
@@ -285,6 +289,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                         pathname={pathname}
                         userName={userName}
                         userRole={userRole}
+                        userImage={userImage}
                         onNavigate={() => setMobileOpen(false)}
                     />
                 </SheetContent>
@@ -331,6 +336,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                         </Button>
                         {mounted && (
                             <Avatar className="size-7 cursor-pointer ml-1">
+                                <AvatarImage src={userImage || undefined} alt={userName} />
                                 <AvatarFallback className="bg-primary/20 text-primary text-xs font-semibold">
                                     {initial}
                                 </AvatarFallback>

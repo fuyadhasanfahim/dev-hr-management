@@ -4,6 +4,7 @@ import './globals.css';
 import { cn } from '@/lib/utils';
 import { ThemeProvider } from '@/components/providers/theme-provider';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import ReduxProvider from '@/components/providers/redux-provider';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-sans' });
 
@@ -32,9 +33,11 @@ export default function RootLayout({
                     defaultTheme="system"
                     enableSystem
                 >
-                    <TooltipProvider>
-                        {children}
-                    </TooltipProvider>
+                    <ReduxProvider>
+                        <TooltipProvider>
+                            {children}
+                        </TooltipProvider>
+                    </ReduxProvider>
                 </ThemeProvider>
             </body>
         </html>
