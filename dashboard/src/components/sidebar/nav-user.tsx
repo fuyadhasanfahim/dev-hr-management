@@ -22,8 +22,8 @@ import { Skeleton } from '../ui/skeleton';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { redirectToSignIn } from '@/lib/auth-redirect';
 import { useTheme } from 'next-themes';
 import { IconMoonStars, IconSun } from '@tabler/icons-react';
 import { Button } from '../ui/button';
@@ -32,7 +32,6 @@ export function NavUser() {
     const { theme, setTheme, systemTheme } = useTheme();
     const { data, isPending, isRefetching } = useSession();
     const [signingOut, setSigningOut] = useState(false);
-    const router = useRouter();
     const isLoading = isPending || isRefetching;
 
     const handleSignout = async () => {
@@ -45,7 +44,7 @@ export function NavUser() {
 
             if (res.data?.success) {
                 toast.success('Signed out successfully.');
-                router.push('/sign-in');
+                redirectToSignIn();
             } else {
                 toast.error(
                     res.error?.message || 'Failed to signout. Try again later.'

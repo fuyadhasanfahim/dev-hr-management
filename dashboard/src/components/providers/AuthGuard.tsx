@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef } from 'react';
 import { canAccess } from '@/utils/canAccess';
 import { Role } from '@/constants/role';
+import { redirectToSignIn } from '@/lib/auth-redirect';
 
 const publicRoutes = new Set([
     '/sign-in',
@@ -58,7 +59,7 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
         if (!session) {
             if (isPublicRoute) return;
             hasRedirected.current = true;
-            router.replace('/sign-in');
+            redirectToSignIn();
             return;
         }
 
