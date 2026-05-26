@@ -31,10 +31,29 @@ type FormValues = z.infer<typeof schema>;
 const DEFAULT_REDIRECT =
     process.env.NEXT_PUBLIC_DEFAULT_REDIRECT ?? 'https://webbriks.com';
 
+const TRUSTED_ORIGINS = [
+    process.env.NEXT_PUBLIC_AUTH_URL,
+    process.env.NEXT_PUBLIC_DASHBOARD_URL,
+    process.env.NEXT_PUBLIC_SUPPORT_URL,
+].filter(Boolean) as string[];
+
+function isTrustedCallbackUrl(url: string): boolean {
+    try {
+        const { origin } = new URL(url);
+        return TRUSTED_ORIGINS.some(
+            (trusted) => new URL(trusted).origin === origin,
+        );
+    } catch {
+        return false;
+    }
+}
+
 function SignInContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
-    const callbackUrl = searchParams.get('callbackUrl') || DEFAULT_REDIRECT;
+    const raw = searchParams.get('callbackUrl');
+    const callbackUrl =
+        raw && isTrustedCallbackUrl(raw) ? raw : DEFAULT_REDIRECT;
     const successParam = searchParams.get('success');
 
     const { data: session, isPending } = useSession();

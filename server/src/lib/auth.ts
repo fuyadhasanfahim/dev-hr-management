@@ -14,6 +14,13 @@ export const auth = betterAuth({
     database: mongodbAdapter(db, {
         client: mongoClient,
     }),
+    advanced: {
+        defaultCookieAttributes: {
+            httpOnly: true,
+            sameSite: 'lax',
+            secure: process.env.NODE_ENV === 'production',
+        },
+    },
     user: {
         additionalFields: {
             role: {
