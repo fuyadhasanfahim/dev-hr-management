@@ -37,8 +37,8 @@ import {
     SheetTitle,
 } from '@/components/ui/sheet';
 import Logo from '@/components/logo';
-import { useSession } from '@/lib/auth-client';
-import { redirectAfterSignOut } from '@/lib/auth-redirect';
+import { authClient, useSession } from '@/lib/auth-client';
+import { redirectToSignIn } from '@/lib/auth-redirect';
 import { formatRole } from '@/lib/format-role';
 
 const NAV_GROUPS = [
@@ -94,9 +94,10 @@ function NavContent({ pathname, userName, userRole, onNavigate }: NavContentProp
     const isDark = (theme === 'system' ? systemTheme : theme) === 'dark';
     const initial = userName.trim().charAt(0).toUpperCase() || 'S';
 
-    const handleSignOut = () => {
+    const handleSignOut = async () => {
         setSigningOut(true);
-        redirectAfterSignOut();
+        await authClient.signOut();
+        redirectToSignIn();
     };
 
     return (

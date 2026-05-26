@@ -12,7 +12,3 @@ export function getSignInUrl(callbackUrl?: string) {
 export function redirectToSignIn() {
     window.location.href = getSignInUrl(SUPPORT_URL);
 }
-
-export function redirectAfterSignOut() {
-    window.location.href = `${AUTH_URL}/sign-out`;
-}

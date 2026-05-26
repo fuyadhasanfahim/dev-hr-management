@@ -14,7 +14,7 @@ export default function Logo({ className }: LogoProps) {
             height={50}
             priority
             style={{ width: 'auto', height: 'auto' }}
-            className={cn('max-w-[150px] object-contain', className)}
+            className={cn('max-w-37.5 object-contain', className)}
         />
     );
 }
