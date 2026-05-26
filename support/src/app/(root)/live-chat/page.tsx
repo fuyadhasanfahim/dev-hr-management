@@ -35,7 +35,7 @@ import {
     type ChatMessage,
 } from '@/store/api/chatApi';
 import { baseApi } from '@/store/api/baseApi';
-import { connectSocket, disconnectSocket } from '@/lib/socket';
+import { connectSocket } from '@/lib/socket';
 import type { AppDispatch } from '@/store';
 import { useSession } from '@/lib/auth-client';
 
@@ -247,7 +247,6 @@ export default function LiveChatPage() {
             socket.off('connect', onConnect);
             socket.off('disconnect', onDisconnect);
             socket.off('queue:new_message', onQueueUpdate);
-            disconnectSocket();
         };
     }, [dispatch]);
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import {
@@ -16,10 +16,10 @@ import {
     Sun,
     LogOut,
     ChevronRight,
-    Circle,
     Loader2,
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
+import { useDispatch } from 'react-redux';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -40,29 +40,49 @@ import Logo from '@/components/logo';
 import { authClient, useSession } from '@/lib/auth-client';
 import { redirectToSignIn } from '@/lib/auth-redirect';
 import { formatRole } from '@/lib/format-role';
+import { useGetQueuedSessionsQuery } from '@/store/api/chatApi';
+import { useGetUnreadNotificationCountQuery } from '@/store/api/notificationApi';
+import { baseApi } from '@/store/api/baseApi';
+import { connectSocket, disconnectSocket } from '@/lib/socket';
+import type { AppDispatch } from '@/store';
+import type { Socket } from 'socket.io-client';
 
-const NAV_GROUPS = [
+// ─── nav config ──────────────────────────────────────────────────────────────
+
+interface NavItem {
+    label: string;
+    href: string;
+    icon: React.ElementType;
+    badgeVariant?: 'destructive' | 'secondary';
+}
+
+interface NavGroup {
+    label: string;
+    items: NavItem[];
+}
+
+const NAV_GROUPS: NavGroup[] = [
     {
         label: 'MAIN',
         items: [
-            { label: 'Overview', href: '/dashboard', icon: LayoutDashboard, badge: null },
-            { label: 'Live Chat', href: '/live-chat', icon: MessageSquare, badge: 3, badgeVariant: 'destructive' as const },
+            { label: 'Overview', href: '/dashboard', icon: LayoutDashboard },
+            { label: 'Live Chat', href: '/live-chat', icon: MessageSquare, badgeVariant: 'destructive' },
         ],
     },
     {
         label: 'SUPPORT',
         items: [
-            { label: 'Tickets', href: '/tickets', icon: Ticket, badge: 12, badgeVariant: 'secondary' as const },
-            { label: 'Clients', href: '/clients', icon: Users, badge: null },
+            { label: 'Tickets', href: '/tickets', icon: Ticket, badgeVariant: 'secondary' },
+            { label: 'Clients', href: '/clients', icon: Users },
         ],
     },
     {
         label: 'SYSTEM',
         items: [
-            { label: 'Settings', href: '/settings', icon: Settings, badge: null },
+            { label: 'Settings', href: '/settings', icon: Settings },
         ],
     },
-] as const;
+];
 
 function isActive(href: string, pathname: string): boolean {
     return pathname === href || pathname.startsWith(href + '/');
@@ -77,15 +97,18 @@ function getPageTitle(pathname: string): string {
     return 'Support Console';
 }
 
+// ─── NavContent ───────────────────────────────────────────────────────────────
+
 interface NavContentProps {
     pathname: string;
     userName: string;
     userRole: string;
     userImage?: string;
+    liveChatCount: number;
     onNavigate?: () => void;
 }
 
-function NavContent({ pathname, userName, userRole, userImage, onNavigate }: NavContentProps) {
+function NavContent({ pathname, userName, userRole, userImage, liveChatCount, onNavigate }: NavContentProps) {
     const { theme, setTheme, systemTheme } = useTheme();
     const [mounted, setMounted] = useState(false);
     const [signingOut, setSigningOut] = useState(false);
@@ -99,6 +122,11 @@ function NavContent({ pathname, userName, userRole, userImage, onNavigate }: Nav
         setSigningOut(true);
         await authClient.signOut();
         redirectToSignIn();
+    };
+
+    // Map href → dynamic badge count
+    const dynamicBadge: Record<string, number> = {
+        '/live-chat': liveChatCount,
     };
 
     return (
@@ -136,6 +164,7 @@ function NavContent({ pathname, userName, userRole, userImage, onNavigate }: Nav
                             {group.items.map((item) => {
                                 const Icon = item.icon;
                                 const active = isActive(item.href, pathname);
+                                const badge = dynamicBadge[item.href] ?? 0;
                                 return (
                                     <Link
                                         key={item.href}
@@ -150,7 +179,7 @@ function NavContent({ pathname, userName, userRole, userImage, onNavigate }: Nav
                                     >
                                         <Icon className="size-4 shrink-0" />
                                         <span className="flex-1 truncate">{item.label}</span>
-                                        {item.badge != null && (
+                                        {badge > 0 && (
                                             <span
                                                 className={cn(
                                                     'inline-flex items-center justify-center rounded-full text-[10px] font-semibold min-w-[18px] h-[18px] px-1',
@@ -161,7 +190,7 @@ function NavContent({ pathname, userName, userRole, userImage, onNavigate }: Nav
                                                             : 'bg-muted text-muted-foreground',
                                                 )}
                                             >
-                                                {item.badge}
+                                                {badge}
                                             </span>
                                         )}
                                     </Link>
@@ -233,12 +262,49 @@ function NavContent({ pathname, userName, userRole, userImage, onNavigate }: Nav
     );
 }
 
+// ─── AppLayout ────────────────────────────────────────────────────────────────
+
 export default function AppLayout({ children }: { children: React.ReactNode }) {
     const pathname = usePathname();
     const { data: session } = useSession();
+    const dispatch = useDispatch<AppDispatch>();
+    const socketRef = useRef<Socket | null>(null);
+
     const [sidebarOpen, setSidebarOpen] = useState(true);
     const [mobileOpen, setMobileOpen] = useState(false);
     const [mounted, setMounted] = useState(false);
+
+    // ── real-time data ────────────────────────────────────────────────────────
+    const { data: queuedSessions = [] } = useGetQueuedSessionsQuery(undefined, {
+        pollingInterval: 30_000,
+    });
+    const { data: unreadCount = 0 } = useGetUnreadNotificationCountQuery(undefined, {
+        pollingInterval: 30_000,
+    });
+
+    const liveChatCount = queuedSessions.length;
+
+    // ── socket: live queue updates ─────────────────────────────��──────────────
+    useEffect(() => {
+        const socket = connectSocket();
+        socketRef.current = socket;
+
+        const onConnect = () => socket.emit('agent:register_presence');
+        const onQueueUpdate = () => {
+            dispatch(baseApi.util.invalidateTags(['QueuedSessions']));
+        };
+
+        socket.on('connect', onConnect);
+        socket.on('queue:new_message', onQueueUpdate);
+
+        if (socket.connected) onConnect();
+
+        return () => {
+            socket.off('connect', onConnect);
+            socket.off('queue:new_message', onQueueUpdate);
+            disconnectSocket();
+        };
+    }, [dispatch]);
 
     useEffect(() => {
         setMounted(true);
@@ -277,6 +343,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                         userName={userName}
                         userRole={userRole}
                         userImage={userImage}
+                        liveChatCount={liveChatCount}
                     />
                 </div>
             </aside>
@@ -290,6 +357,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                         userName={userName}
                         userRole={userRole}
                         userImage={userImage}
+                        liveChatCount={liveChatCount}
                         onNavigate={() => setMobileOpen(false)}
                     />
                 </SheetContent>
@@ -299,7 +367,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             <div className="flex flex-1 flex-col overflow-hidden">
                 {/* Header */}
                 <header className="flex h-12 shrink-0 items-center gap-2 border-b bg-background px-4">
-                    {/* Mobile toggle */}
                     <Button
                         variant="ghost"
                         size="icon"
@@ -310,7 +377,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                         <PanelLeft className="size-4" />
                     </Button>
 
-                    {/* Desktop toggle */}
                     <Button
                         variant="ghost"
                         size="icon"
@@ -325,15 +391,21 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
                     <div className="flex-1" />
 
-                    {/* Right actions */}
                     <div className="flex items-center gap-1">
                         <Button variant="ghost" size="icon" aria-label="Search">
                             <Search className="size-4" />
                         </Button>
+
+                        {/* Notification bell with real-time badge */}
                         <Button variant="ghost" size="icon" aria-label="Notifications" className="relative">
                             <Bell className="size-4" />
-                            <Circle className="absolute top-1.5 right-1.5 size-2 fill-destructive text-destructive" />
+                            {unreadCount > 0 && (
+                                <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-destructive text-destructive-foreground text-[10px] font-semibold flex items-center justify-center leading-none">
+                                    {unreadCount > 99 ? '99+' : unreadCount}
+                                </span>
+                            )}
                         </Button>
+
                         {mounted && (
                             <Avatar className="size-7 cursor-pointer ml-1">
                                 <AvatarImage src={userImage || undefined} alt={userName} />
