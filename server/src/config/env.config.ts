@@ -99,5 +99,8 @@ const envConfig = {
     aws_secret_access_key: process.env.AWS_SECRET_ACCESS_KEY || '',
     aws_region: process.env.AWS_REGION || 'us-east-1',
     aws_bucket_name: process.env.AWS_BUCKET_NAME || '',
+
+    // Gemini AI
+    gemini_api_key: process.env.GEMINI_API_KEY || '',
 };
 export default envConfig;
