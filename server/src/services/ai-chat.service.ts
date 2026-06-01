@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenAI } from '@google/genai';
 import ServiceModel from '../models/service.model.js';
 import { logger } from '../lib/logger.js';
 
@@ -85,7 +85,7 @@ We serve clients globally and pride ourselves on delivering high-quality, afford
 - If a question is outside your knowledge (not about Web Briks services), politely redirect.
 `;
 
-interface ChatMessage {
+interface ChatHistoryMessage {
     role: 'user' | 'model';
     parts: { text: string }[];
 }
@@ -96,16 +96,16 @@ interface AIChatResponse {
     actionReason?: string;
 }
 
-let genAI: GoogleGenerativeAI | null = null;
+let ai: GoogleGenAI | null = null;
 
-function getGenAI(): GoogleGenerativeAI {
-    if (!genAI) {
+function getAI(): GoogleGenAI {
+    if (!ai) {
         if (!GEMINI_API_KEY) {
             throw new Error('GEMINI_API_KEY environment variable is not set');
         }
-        genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+        ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
     }
-    return genAI;
+    return ai;
 }
 
 async function getServicesContext(): Promise<string> {
@@ -128,10 +128,9 @@ async function getServicesContext(): Promise<string> {
 
 export async function processAIChat(
     userMessage: string,
-    history: ChatMessage[],
+    history: ChatHistoryMessage[],
 ): Promise<AIChatResponse> {
-    const ai = getGenAI();
-    const model = ai.getGenerativeModel({ model: 'gemini-2.0-flash' });
+    const genAI = getAI();
 
     const servicesContext = await getServicesContext();
 
@@ -153,18 +152,19 @@ The JSON must have exactly these fields:
 
 Always set action to "continue" unless there is a clear reason to escalate.`;
 
-    const chatHistory: ChatMessage[] = history.map((msg) => ({
+    const chatContents = history.map((msg) => ({
         role: msg.role,
         parts: msg.parts,
     }));
 
-    const chat = model.startChat({
-        history: chatHistory,
-        systemInstruction,
+    const chat = genAI.chats.create({
+        model: 'gemini-3.5-flash',
+        config: { systemInstruction },
+        history: chatContents,
     });
 
-    const result = await chat.sendMessage(userMessage);
-    const responseText = result.response.text().trim();
+    const result = await chat.sendMessage({ message: userMessage });
+    const responseText = (result.text ?? '').trim();
 
     try {
         const cleaned = responseText
@@ -177,14 +177,20 @@ Always set action to "continue" unless there is a clear reason to escalate.`;
             throw new Error('Invalid AI response structure');
         }
 
-        if (!['continue', 'create_ticket', 'connect_live_support'].includes(parsed.action)) {
+        if (
+            !['continue', 'create_ticket', 'connect_live_support'].includes(
+                parsed.action,
+            )
+        ) {
             parsed.action = 'continue';
         }
 
         return parsed;
     } catch {
         return {
-            reply: responseText || "I'm sorry, I couldn't process that. Could you try rephrasing?",
+            reply:
+                responseText ||
+                "I'm sorry, I couldn't process that. Could you try rephrasing?",
             action: 'continue',
         };
     }
@@ -209,7 +215,8 @@ export async function getWebBriksInfo(): Promise<{
             currency: s.currency,
             description: s.description,
         })),
-        pricing: 'We offer flexible pricing: Fixed price, Hourly rates, and Milestone-based billing. Pricing depends on the scope and complexity of the project.',
+        pricing:
+            'We offer flexible pricing: Fixed price, Hourly rates, and Milestone-based billing. Pricing depends on the scope and complexity of the project.',
         process: [
             'Consultation — We discuss your needs and goals',
             'Quotation — We provide a detailed quote with timeline',

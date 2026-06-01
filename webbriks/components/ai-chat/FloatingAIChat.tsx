@@ -227,13 +227,14 @@ export function FloatingAIChat() {
             {!isOpen && (
                 <button
                     onClick={openChat}
-                    className="fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full shadow-lg transition-transform hover:scale-110 active:scale-95 overflow-hidden"
+                    className="fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full shadow-lg transition-transform hover:scale-110 active:scale-95"
                     style={{
+                        background: 'linear-gradient(134deg, #9C46F4 1.15%, #6A25E0 17.12%, #390CA4 47.7%, #28048B 71.73%)',
                         boxShadow: '0 0 24px 0 rgba(106, 37, 224, 0.5)',
                     }}
                     aria-label="Open AI Chat"
                 >
-                    <Image src={AVATAR_URL} alt="Chat" width={56} height={56} className="h-full w-full object-cover" />
+                    <MessageCircle className="h-6 w-6 text-white" />
                 </button>
             )}
 

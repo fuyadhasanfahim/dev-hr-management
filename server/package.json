@@ -30,7 +30,7 @@
     "dependencies": {
         "@aws-sdk/client-s3": "^3.1048.0",
         "@aws-sdk/s3-request-presigner": "^3.1048.0",
-        "@google/generative-ai": "^0.24.1",
+        "@google/genai": "^2.7.0",
         "@paypal/checkout-server-sdk": "^1.0.3",
         "@react-email/components": "^1.0.6",
         "@react-email/render": "^2.0.4",
