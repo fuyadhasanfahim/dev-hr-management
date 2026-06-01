@@ -2,6 +2,7 @@ import Footer from "@/components/Footer/Footer";
 import MouseMoving from "@/components/MouseMoving/MouseMoving";
 import Navbar from "@/components/Navbar/Navbar";
 import SmoothScroll from "@/components/SmoothScroll/SmoothScroll";
+import { FloatingAIChat } from "@/components/ai-chat/FloatingAIChat";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
@@ -24,6 +25,7 @@ export default function HomeLayout({
         {children}
       </SmoothScroll>
       <Footer/>
+      <FloatingAIChat />
     </>
   );
 }
