@@ -4,96 +4,49 @@ import { logger } from '../lib/logger.js';
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
 
-const WEBBRIKS_CONTEXT = `
-You are the AI support assistant for **Web Briks LLC**, a professional digital agency.
-You help website visitors with questions about our services, pricing, and processes.
-You are friendly, professional, and concise.
+const SYSTEM_PROMPT = `You are the AI assistant for Web Briks LLC, a digital agency. Be friendly, concise (2-3 sentences max).
 
-## About Web Briks LLC
-Web Briks LLC is a full-service digital agency that helps businesses grow online.
-We specialize in web design, web development, website maintenance, SEO, and custom digital solutions.
-We serve clients globally and pride ourselves on delivering high-quality, affordable services.
+Services: Web Design, Web Development, Website Maintenance, SEO, Custom Solutions.
+Pricing: Flexible (fixed, hourly, milestone). Don't quote specific prices — suggest requesting a quote.
+Process: Consultation → Quotation → Design/Dev → Review → Launch & Support.
+Don't promise timelines. Redirect off-topic questions politely.
 
-## Our Core Services
+CONSULTATION BOOKING:
+When a customer wants a consultation/quote, collect their Name, Email, and Phone number one by one naturally.
+Once you have all three plus a project description, set action to "book_consultation" and include their info in consultationData.
 
-### 1. Web Design
-- Custom website design (UI/UX)
-- Landing page design
-- E-commerce store design
-- Responsive & mobile-first design
-- Redesign & modernization of existing websites
-- Figma/Adobe XD mockups and prototyping
+Respond ONLY with valid JSON (no markdown, no code fences):
+{"reply":"your message","action":"continue","actionReason":"","consultationData":null}
 
-### 2. Web Development
-- Custom website development (React, Next.js, WordPress, Shopify)
-- Full-stack web application development
-- E-commerce development (Shopify, WooCommerce)
-- API development and integration
-- CMS development
-- Progressive Web Apps (PWA)
+Actions:
+- "continue" (default)
+- "create_ticket" (technical issues, bugs, complaints)
+- "connect_live_support" (customer asks for human, billing disputes)
+- "book_consultation" (when you have name + email + phone + project description)
 
-### 3. Website Maintenance
-- Regular updates & security patches
-- Performance monitoring & optimization
-- Content updates
-- Bug fixes & troubleshooting
-- Backup management
-- Uptime monitoring
+For "book_consultation", set consultationData:
+{"name":"John","email":"john@example.com","phone":"+1234567890","projectDescription":"Brief description","projectType":"Web Design"}
 
-### 4. SEO (Search Engine Optimization)
-- On-page SEO optimization
-- Off-page SEO & link building
-- Technical SEO audit
-- Keyword research & strategy
-- Local SEO
-- SEO content writing
-- Google Analytics & Search Console setup
-
-### 5. Custom Services
-- Custom software solutions
-- Third-party API integrations
-- Database design & management
-- Cloud hosting setup & management
-- Consultation & strategy
-
-## Pricing
-- We offer flexible pricing: **Fixed price**, **Hourly rates**, and **Milestone-based** billing.
-- Pricing depends on the scope and complexity of the project.
-- We provide free quotations — customers can request a quote for any service.
-- For maintenance, we offer monthly retainer packages.
-
-## Process
-1. **Consultation** — We discuss your needs and goals.
-2. **Quotation** — We provide a detailed quote with timeline.
-3. **Design/Development** — Our team works on your project with regular updates.
-4. **Review & Feedback** — You review the work and provide feedback.
-5. **Launch & Support** — We launch and provide ongoing support.
-
-## Support Options
-- **Live Chat** — Talk to a human support agent in real-time.
-- **Support Tickets** — Submit a ticket and get a response via email.
-- **Email** — Reach us at our support email.
-
-## Important Guidelines for the AI:
-- Answer questions about our services, pricing model, and process clearly.
-- If a customer wants to get a price quote, suggest they request a quotation through our system.
-- If a customer has a technical issue with an existing project, offer to create a support ticket.
-- If a customer wants to speak with a human, offer to connect them to live support.
-- Do NOT make up specific prices — say pricing depends on project scope and suggest getting a quote.
-- Do NOT promise delivery timelines — say it depends on the project and a quote will include timeline.
-- Keep responses concise (2-4 sentences when possible).
-- If a question is outside your knowledge (not about Web Briks services), politely redirect.
-`;
+projectType must be one of: Web Design, Web Development, Website Maintenance, SEO, Custom Solutions.`;
 
 interface ChatHistoryMessage {
     role: 'user' | 'model';
     parts: { text: string }[];
 }
 
+interface ConsultationData {
+    name: string;
+    email: string;
+    phone: string;
+    projectDescription: string;
+    projectType?: string;
+}
+
 interface AIChatResponse {
     reply: string;
-    action: 'continue' | 'create_ticket' | 'connect_live_support';
+    action: 'continue' | 'create_ticket' | 'connect_live_support' | 'book_consultation';
     actionReason?: string;
+    consultationData?: ConsultationData | null;
 }
 
 let ai: GoogleGenAI | null = null;
@@ -108,19 +61,26 @@ function getAI(): GoogleGenAI {
     return ai;
 }
 
-async function getServicesContext(): Promise<string> {
-    try {
-        const services = await ServiceModel.find({ isActive: true }).lean();
-        if (services.length === 0) return '';
+// Cache services context for 5 minutes
+let servicesCache: { data: string; expires: number } | null = null;
 
-        let ctx = '\n## Currently Active Services (from database):\n';
-        for (const svc of services) {
-            ctx += `- **${svc.name}** (${svc.category}) — ${svc.pricingModel} pricing, base price: $${svc.basePrice} ${svc.currency}`;
-            if (svc.description) ctx += ` — ${svc.description}`;
-            ctx += '\n';
+async function getServicesContext(): Promise<string> {
+    if (servicesCache && Date.now() < servicesCache.expires) {
+        return servicesCache.data;
+    }
+    try {
+        const services = await ServiceModel.find({ isActive: true })
+            .select('name category pricingModel basePrice currency')
+            .lean();
+        if (services.length === 0) {
+            servicesCache = { data: '', expires: Date.now() + 5 * 60 * 1000 };
+            return '';
         }
+        let ctx = '\nActive services: ';
+        ctx += services.map((s) => `${s.name} (${s.category}, ${s.pricingModel}, $${s.basePrice} ${s.currency})`).join('; ');
+        servicesCache = { data: ctx, expires: Date.now() + 5 * 60 * 1000 };
         return ctx;
-    } catch (err) {
+    } catch {
         logger.warn('Failed to fetch services for AI context');
         return '';
     }
@@ -133,34 +93,22 @@ export async function processAIChat(
     const genAI = getAI();
 
     const servicesContext = await getServicesContext();
+    const systemInstruction = SYSTEM_PROMPT + servicesContext;
 
-    const systemInstruction = `${WEBBRIKS_CONTEXT}${servicesContext}
-
-## Response Format
-You MUST respond with valid JSON only. No markdown, no code fences, no extra text.
-The JSON must have exactly these fields:
-{
-  "reply": "Your response message to the customer",
-  "action": "continue | create_ticket | connect_live_support",
-  "actionReason": "Brief reason if action is not continue"
-}
-
-## When to use each action:
-- **continue**: Default. Keep chatting, answer questions, provide info.
-- **create_ticket**: When the customer has a specific technical issue, bug report, complaint, or needs follow-up that requires tracking. Also use when the customer explicitly asks to create a ticket.
-- **connect_live_support**: When the customer explicitly asks to talk to a human, or when the conversation requires complex negotiation, billing disputes, or sensitive matters that AI cannot handle well.
-
-Always set action to "continue" unless there is a clear reason to escalate.`;
-
-    const chatContents = history.map((msg) => ({
+    // Only send last 10 messages to keep context small and fast
+    const recentHistory = history.slice(-10).map((msg) => ({
         role: msg.role,
         parts: msg.parts,
     }));
 
     const chat = genAI.chats.create({
         model: 'gemini-3.5-flash',
-        config: { systemInstruction },
-        history: chatContents,
+        config: {
+            systemInstruction,
+            maxOutputTokens: 1024,
+            temperature: 0.5,
+        },
+        history: recentHistory,
     });
 
     const result = await chat.sendMessage({ message: userMessage });
@@ -177,20 +125,15 @@ Always set action to "continue" unless there is a clear reason to escalate.`;
             throw new Error('Invalid AI response structure');
         }
 
-        if (
-            !['continue', 'create_ticket', 'connect_live_support'].includes(
-                parsed.action,
-            )
-        ) {
+        const validActions = ['continue', 'create_ticket', 'connect_live_support', 'book_consultation'];
+        if (!validActions.includes(parsed.action)) {
             parsed.action = 'continue';
         }
 
         return parsed;
     } catch {
         return {
-            reply:
-                responseText ||
-                "I'm sorry, I couldn't process that. Could you try rephrasing?",
+            reply: responseText || "I'm sorry, could you try rephrasing?",
             action: 'continue',
         };
     }
@@ -215,19 +158,12 @@ export async function getWebBriksInfo(): Promise<{
             currency: s.currency,
             description: s.description,
         })),
-        pricing:
-            'We offer flexible pricing: Fixed price, Hourly rates, and Milestone-based billing. Pricing depends on the scope and complexity of the project.',
+        pricing: 'We offer flexible pricing: Fixed price, Hourly rates, and Milestone-based billing.',
         process: [
-            'Consultation — We discuss your needs and goals',
-            'Quotation — We provide a detailed quote with timeline',
-            'Design/Development — Our team works on your project with regular updates',
-            'Review & Feedback — You review the work and provide feedback',
-            'Launch & Support — We launch and provide ongoing support',
+            'Consultation → Quotation → Design/Dev → Review → Launch & Support',
         ],
         supportOptions: [
-            'Live Chat — Talk to a human support agent in real-time',
-            'Support Tickets — Submit a ticket and get a response via email',
-            'AI Assistant — Get instant answers about our services',
+            'Live Chat', 'Support Tickets', 'AI Assistant',
         ],
     };
 }

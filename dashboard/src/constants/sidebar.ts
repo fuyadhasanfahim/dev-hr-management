@@ -20,6 +20,7 @@ import {
     IconCalendarEvent,
     IconTarget,
     IconClipboardList,
+    IconMessageChatbot,
 } from "@tabler/icons-react";
 
 
@@ -147,6 +148,12 @@ export const sidebarGroups: SidebarGroup[] = [
                 url: "/meetings",
                 icon: IconCalendarEvent,
                 access: [Role.SUPER_ADMIN, Role.ADMIN, Role.TEAM_LEADER],
+            },
+            {
+                title: "Consultations",
+                url: "/consultations",
+                icon: IconMessageChatbot,
+                access: [Role.SUPER_ADMIN, Role.ADMIN],
             },
 
             {

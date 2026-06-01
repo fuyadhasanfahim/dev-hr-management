@@ -1,5 +1,6 @@
 import type { Request, Response } from 'express';
 import { processAIChat, getWebBriksInfo } from '../services/ai-chat.service.js';
+import consultationService from '../services/consultation.service.js';
 import liveChatService from '../services/live-chat.service.js';
 import supportTicketService from '../services/support-ticket.service.js';
 import { logger } from '../lib/logger.js';
@@ -15,6 +16,36 @@ async function chat(req: Request, res: Response) {
         const chatHistory = Array.isArray(history) ? history : [];
 
         const result = await processAIChat(message, chatHistory);
+
+        // Auto-save consultation when AI decides to book
+        if (result.action === 'book_consultation' && result.consultationData) {
+            const { name, email, phone, projectDescription, projectType } = result.consultationData;
+            if (name && email && projectDescription) {
+                try {
+                    const transcript = chatHistory
+                        .map((msg: any) => {
+                            const role = msg.role === 'user' ? 'Customer' : 'AI';
+                            const text = msg.parts?.[0]?.text || '';
+                            return `[${role}]: ${text}`;
+                        })
+                        .join('\n');
+
+                    await consultationService.createConsultation({
+                        name,
+                        email,
+                        phone,
+                        projectDescription,
+                        projectType,
+                        source: 'ai_chat',
+                        chatTranscript: transcript,
+                    });
+
+                    logger.info(`Consultation auto-created for ${name} (${email}) via AI chat`);
+                } catch (err: any) {
+                    logger.error(`Failed to auto-create consultation: ${err.message}`);
+                }
+            }
+        }
 
         return res.status(200).json({ success: true, data: result });
     } catch (err: any) {

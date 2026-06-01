@@ -37,6 +37,7 @@ import { leadSettingRoute } from "./lead-setting.route.js";
 import { TaskRoutes } from "./task.route.js";
 import { SupportRoutes } from "./support.route.js";
 import { AIChatRoutes } from "./ai-chat.route.js";
+import { ConsultationRoutes } from "./consultation.route.js";
 
 const router: Router = Router();
 
@@ -189,6 +190,10 @@ const moduleRoutes = [
     {
         path: "/ai-chat",
         route: AIChatRoutes,
+    },
+    {
+        path: "/consultations",
+        route: ConsultationRoutes,
     },
 ];
 

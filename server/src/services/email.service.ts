@@ -603,6 +603,58 @@ const sendSupportOtpEmail = async (data: SendSupportOtpData) => {
     }
 };
 
+interface SendConsultationScheduledData {
+    to: string;
+    clientName: string;
+    scheduledAt: Date;
+    meetingLink?: string;
+}
+
+const sendConsultationScheduledEmail = async (data: SendConsultationScheduledData) => {
+    try {
+        const dateStr = new Intl.DateTimeFormat('en-US', {
+            weekday: 'long',
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            timeZoneName: 'short',
+        }).format(new Date(data.scheduledAt));
+
+        const emailHtml = `
+            <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e5e5ea; border-radius: 12px;">
+                <h2 style="color: #6A25E0; margin-top: 0;">Your Consultation is Scheduled!</h2>
+                <p>Hi ${data.clientName},</p>
+                <p>Thank you for your interest in Web Briks LLC! We've scheduled your free consultation.</p>
+                <div style="background-color: #f2f2f7; padding: 15px; border-radius: 8px; margin: 20px 0;">
+                    <p style="margin: 5px 0; font-weight: bold;">Date & Time:</p>
+                    <p style="margin: 5px 0; font-size: 16px;">${dateStr}</p>
+                </div>
+                ${data.meetingLink ? `
+                <div style="text-align: center; margin: 20px 0;">
+                    <a href="${data.meetingLink}" style="display: inline-block; background: linear-gradient(134deg, #9C46F4, #6A25E0); color: white; padding: 12px 30px; border-radius: 8px; text-decoration: none; font-weight: bold;">Join Meeting</a>
+                </div>
+                ` : ''}
+                <p>During the consultation, we'll discuss your project requirements, timeline, and provide a custom quote.</p>
+                <p>If you need to reschedule, please reply to this email.</p>
+                <hr style="border: 0; border-top: 1px solid #e5e5ea; margin: 20px 0;" />
+                <p style="font-size: 12px; color: #8e8e93; margin-bottom: 0;">Web Briks LLC — Global Creative Agency</p>
+            </div>
+        `;
+
+        return await transporter.sendMail({
+            from: 'Consultations | WebBriks',
+            to: data.to,
+            subject: `Your Consultation is Scheduled — ${dateStr}`,
+            html: emailHtml,
+        });
+    } catch (error) {
+        console.error('Error sending consultation scheduled email:', error);
+        throw error;
+    }
+};
+
 export default {
     sendInvoiceEmail,
     sendPinResetEmail,
@@ -619,6 +671,7 @@ export default {
     sendMeetingReminderEmail,
     sendMeetingCancellationEmail,
     sendSupportOtpEmail,
+    sendConsultationScheduledEmail,
 };
 
 

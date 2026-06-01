@@ -48,6 +48,7 @@ export const apiSlice = createApi({
         "Lead",
         "LeadSetting",
         "Task",
+        "Consultation",
     ],
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars

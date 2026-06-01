@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { MessageCircle, X, Send, User, Loader2, Ticket, Headphones, RotateCcw } from 'lucide-react';
+import { MessageCircle, X, Send, User, Ticket, Headphones, RotateCcw, CalendarCheck } from 'lucide-react';
 import Image from 'next/image';
 
 const API_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:5000';
@@ -16,8 +16,27 @@ interface DisplayMessage {
     id: string;
     role: 'user' | 'assistant' | 'system';
     text: string;
-    action?: 'continue' | 'create_ticket' | 'connect_live_support';
+    action?: 'continue' | 'create_ticket' | 'connect_live_support' | 'book_consultation';
     actionReason?: string;
+}
+
+function TypingIndicator() {
+    return (
+        <div className="flex items-center gap-1 px-1 py-1">
+            <span
+                className="h-2 w-2 rounded-full bg-[#A7ADBE]"
+                style={{ animation: 'typingBounce 1.4s infinite ease-in-out', animationDelay: '0ms' }}
+            />
+            <span
+                className="h-2 w-2 rounded-full bg-[#A7ADBE]"
+                style={{ animation: 'typingBounce 1.4s infinite ease-in-out', animationDelay: '200ms' }}
+            />
+            <span
+                className="h-2 w-2 rounded-full bg-[#A7ADBE]"
+                style={{ animation: 'typingBounce 1.4s infinite ease-in-out', animationDelay: '400ms' }}
+            />
+        </div>
+    );
 }
 
 export function FloatingAIChat() {
@@ -27,21 +46,53 @@ export function FloatingAIChat() {
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [showActions, setShowActions] = useState<'create_ticket' | 'connect_live_support' | null>(null);
+    const messagesContainerRef = useRef<HTMLDivElement>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
-    const inputRef = useRef<HTMLInputElement>(null);
+    const inputRef = useRef<HTMLTextAreaElement>(null);
 
     const scrollToBottom = useCallback(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+        if (messagesContainerRef.current) {
+            messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+        }
     }, []);
 
     useEffect(() => {
         scrollToBottom();
-    }, [messages, scrollToBottom]);
+    }, [messages, isLoading, scrollToBottom]);
 
     useEffect(() => {
         if (isOpen && inputRef.current) {
             inputRef.current.focus();
         }
+    }, [isOpen]);
+
+    // Prevent scroll from leaking to the page behind
+    useEffect(() => {
+        const container = messagesContainerRef.current;
+        if (!container || !isOpen) return;
+
+        function handleWheel(e: WheelEvent) {
+            const { scrollTop, scrollHeight, clientHeight } = container!;
+            const atTop = scrollTop === 0 && e.deltaY < 0;
+            const atBottom = scrollTop + clientHeight >= scrollHeight - 1 && e.deltaY > 0;
+
+            if (atTop || atBottom) {
+                e.preventDefault();
+            }
+        }
+
+        function handleTouch(e: TouchEvent) {
+            if (e.touches.length > 1) return;
+            e.stopPropagation();
+        }
+
+        container.addEventListener('wheel', handleWheel, { passive: false });
+        container.addEventListener('touchmove', handleTouch, { passive: false });
+
+        return () => {
+            container.removeEventListener('wheel', handleWheel);
+            container.removeEventListener('touchmove', handleTouch);
+        };
     }, [isOpen]);
 
     function openChat() {
@@ -223,6 +274,20 @@ export function FloatingAIChat() {
 
     return (
         <>
+            {/* Typing animation keyframes */}
+            <style jsx global>{`
+                @keyframes typingBounce {
+                    0%, 60%, 100% {
+                        transform: translateY(0);
+                        opacity: 0.4;
+                    }
+                    30% {
+                        transform: translateY(-4px);
+                        opacity: 1;
+                    }
+                }
+            `}</style>
+
             {/* Floating button */}
             {!isOpen && (
                 <button
@@ -279,55 +344,104 @@ export function FloatingAIChat() {
                     </div>
 
                     {/* Messages */}
-                    <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3" style={{ background: '#060A14' }}>
+                    <div
+                        ref={messagesContainerRef}
+                        className="flex-1 overflow-y-auto overscroll-none px-4 py-3 space-y-3"
+                        style={{ background: '#060A14', isolation: 'isolate', touchAction: 'pan-y' }}
+                    >
                         {messages.map((msg) => (
-                            <div
-                                key={msg.id}
-                                className={`flex gap-2 ${
-                                    msg.role === 'user' ? 'justify-end' : 'justify-start'
-                                }`}
-                            >
-                                {msg.role !== 'user' && (
-                                    <Image src={AVATAR_URL} alt="AI" width={28} height={28} className="mt-1 h-7 w-7 shrink-0 rounded-full object-cover" />
-                                )}
+                            <div key={msg.id}>
                                 <div
-                                    className={`max-w-[75%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed ${
-                                        msg.role === 'user'
-                                            ? 'text-white'
-                                            : msg.role === 'system'
-                                              ? 'text-[#A7ADBE]'
-                                              : 'text-[#E0E4ED]'
+                                    className={`flex gap-2 ${
+                                        msg.role === 'user' ? 'justify-end' : 'justify-start'
                                     }`}
-                                    style={
-                                        msg.role === 'user'
-                                            ? {
-                                                  background: 'linear-gradient(134deg, #6A25E0 0%, #390CA4 100%)',
-                                              }
-                                            : msg.role === 'system'
-                                              ? {
-                                                    background: '#0F1423',
-                                                    border: '1px solid rgba(51, 102, 255, 0.15)',
-                                                }
-                                              : {
-                                                    background: '#161C44',
-                                                }
-                                    }
                                 >
-                                    {msg.text}
+                                    {msg.role !== 'user' && (
+                                        <Image src={AVATAR_URL} alt="AI" width={28} height={28} className="mt-1 h-7 w-7 shrink-0 rounded-full object-cover" />
+                                    )}
+                                    <div
+                                        className={`max-w-[75%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed ${
+                                            msg.role === 'user'
+                                                ? 'text-white'
+                                                : msg.role === 'system'
+                                                  ? 'text-[#A7ADBE]'
+                                                  : 'text-[#E0E4ED]'
+                                        }`}
+                                        style={
+                                            msg.role === 'user'
+                                                ? {
+                                                      background: 'linear-gradient(134deg, #6A25E0 0%, #390CA4 100%)',
+                                                  }
+                                                : msg.role === 'system'
+                                                  ? {
+                                                        background: '#0F1423',
+                                                        border: '1px solid rgba(51, 102, 255, 0.15)',
+                                                    }
+                                                  : {
+                                                        background: '#161C44',
+                                                    }
+                                        }
+                                    >
+                                        {msg.text}
+                                    </div>
+                                    {msg.role === 'user' && (
+                                        <div className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#161C44]">
+                                            <User className="h-4 w-4 text-[#A7ADBE]" />
+                                        </div>
+                                    )}
                                 </div>
-                                {msg.role === 'user' && (
-                                    <div className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#161C44]">
-                                        <User className="h-4 w-4 text-[#A7ADBE]" />
+
+                                {/* AI-decided action buttons inline after the message */}
+                                {msg.action && msg.action !== 'continue' && (
+                                    <div className="flex gap-2 mt-2 ml-9">
+                                        {msg.action === 'create_ticket' && (
+                                            <button
+                                                onClick={handleCreateTicket}
+                                                disabled={isLoading}
+                                                className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium text-white transition-all hover:brightness-125 disabled:opacity-50"
+                                                style={{
+                                                    background: 'linear-gradient(134deg, #9C46F4 1.15%, #6A25E0 17.12%, #390CA4 47.7%, #28048B 71.73%)',
+                                                }}
+                                            >
+                                                <Ticket className="h-3.5 w-3.5" />
+                                                Create Support Ticket
+                                            </button>
+                                        )}
+                                        {msg.action === 'connect_live_support' && (
+                                            <button
+                                                onClick={handleConnectLive}
+                                                disabled={isLoading}
+                                                className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium text-white transition-all hover:brightness-125 disabled:opacity-50"
+                                                style={{
+                                                    background: 'linear-gradient(135deg, #3366FF 0%, #1A4FFF 100%)',
+                                                }}
+                                            >
+                                                <Headphones className="h-3.5 w-3.5" />
+                                                Connect to Live Support
+                                            </button>
+                                        )}
+                                        {msg.action === 'book_consultation' && (
+                                            <div
+                                                className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium text-white"
+                                                style={{
+                                                    background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
+                                                }}
+                                            >
+                                                <CalendarCheck className="h-3.5 w-3.5" />
+                                                Consultation Booked!
+                                            </div>
+                                        )}
                                     </div>
                                 )}
                             </div>
                         ))}
 
+                        {/* Typing indicator */}
                         {isLoading && (
                             <div className="flex gap-2">
                                 <Image src={AVATAR_URL} alt="AI" width={28} height={28} className="mt-1 h-7 w-7 shrink-0 rounded-full object-cover" />
-                                <div className="rounded-2xl px-3.5 py-2.5" style={{ background: '#161C44' }}>
-                                    <Loader2 className="h-4 w-4 animate-spin text-[#A7ADBE]" />
+                                <div className="rounded-2xl px-4 py-3" style={{ background: '#161C44' }}>
+                                    <TypingIndicator />
                                 </div>
                             </div>
                         )}
@@ -335,92 +449,55 @@ export function FloatingAIChat() {
                         <div ref={messagesEndRef} />
                     </div>
 
-                    {/* Action buttons */}
-                    {showActions && (
-                        <div className="flex gap-2 px-4 py-2" style={{ borderTop: '1px solid rgba(51, 102, 255, 0.15)', background: '#0A0E1A' }}>
-                            {showActions === 'create_ticket' && (
-                                <button
-                                    onClick={handleCreateTicket}
-                                    disabled={isLoading}
-                                    className="flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium text-white transition-all hover:brightness-125 disabled:opacity-50"
-                                    style={{
-                                        background: 'linear-gradient(134deg, #9C46F4 1.15%, #6A25E0 17.12%, #390CA4 47.7%, #28048B 71.73%)',
-                                    }}
-                                >
-                                    <Ticket className="h-3.5 w-3.5" />
-                                    Create Support Ticket
-                                </button>
-                            )}
-                            {showActions === 'connect_live_support' && (
-                                <button
-                                    onClick={handleConnectLive}
-                                    disabled={isLoading}
-                                    className="flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium text-white transition-all hover:brightness-125 disabled:opacity-50"
-                                    style={{
-                                        background: 'linear-gradient(135deg, #3366FF 0%, #1A4FFF 100%)',
-                                    }}
-                                >
-                                    <Headphones className="h-3.5 w-3.5" />
-                                    Connect to Live Support
-                                </button>
-                            )}
-                        </div>
-                    )}
-
-                    {/* Quick actions (always visible) */}
-                    {!showActions && messages.length > 1 && (
-                        <div className="flex gap-2 px-4 py-2" style={{ borderTop: '1px solid rgba(51, 102, 255, 0.15)', background: '#0A0E1A' }}>
-                            <button
-                                onClick={handleCreateTicket}
-                                disabled={isLoading}
-                                className="flex flex-1 items-center justify-center gap-1 rounded-lg px-2 py-1.5 text-[11px] font-medium text-[#A7ADBE] transition-colors hover:text-white hover:bg-[#161C44] disabled:opacity-50"
-                                style={{ border: '1px solid rgba(51, 102, 255, 0.2)' }}
-                            >
-                                <Ticket className="h-3 w-3" />
-                                Create Ticket
-                            </button>
-                            <button
-                                onClick={handleConnectLive}
-                                disabled={isLoading}
-                                className="flex flex-1 items-center justify-center gap-1 rounded-lg px-2 py-1.5 text-[11px] font-medium text-[#A7ADBE] transition-colors hover:text-white hover:bg-[#161C44] disabled:opacity-50"
-                                style={{ border: '1px solid rgba(51, 102, 255, 0.2)' }}
-                            >
-                                <Headphones className="h-3 w-3" />
-                                Live Support
-                            </button>
-                        </div>
-                    )}
-
                     {/* Input */}
-                    <form
-                        onSubmit={sendMessage}
-                        className="flex items-center gap-2 px-3 py-3"
+                    <div
+                        className="px-3 py-3"
                         style={{ borderTop: '1px solid rgba(51, 102, 255, 0.15)', background: '#0A0E1A' }}
                     >
-                        <input
-                            ref={inputRef}
-                            type="text"
-                            value={input}
-                            onChange={(e) => setInput(e.target.value)}
-                            placeholder="Type your message..."
-                            disabled={isLoading}
-                            className="flex-1 rounded-lg px-3 py-2 text-sm text-white placeholder:text-[#A7ADBE]/50 focus:outline-none disabled:opacity-50"
+                        <div
+                            className="flex items-end gap-2 rounded-xl px-3 py-2"
                             style={{
                                 background: '#161C44',
                                 border: '1px solid rgba(51, 102, 255, 0.2)',
                             }}
-                        />
-                        <button
-                            type="submit"
-                            disabled={!input.trim() || isLoading}
-                            className="flex h-9 w-9 items-center justify-center rounded-lg text-white transition-all hover:brightness-125 disabled:opacity-50"
-                            style={{
-                                background: 'linear-gradient(134deg, #9C46F4 1.15%, #6A25E0 17.12%, #390CA4 47.7%, #28048B 71.73%)',
-                            }}
                         >
-                            <Send className="h-4 w-4" />
-                        </button>
-                    </form>
+                            <textarea
+                                ref={inputRef}
+                                value={input}
+                                onChange={(e) => {
+                                    setInput(e.target.value);
+                                    e.target.style.height = 'auto';
+                                    e.target.style.height = Math.min(e.target.scrollHeight, 100) + 'px';
+                                }}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter' && !e.shiftKey) {
+                                        e.preventDefault();
+                                        sendMessage();
+                                    }
+                                }}
+                                placeholder="Type a message..."
+                                disabled={isLoading}
+                                rows={1}
+                                className="flex-1 resize-none bg-transparent text-sm text-white placeholder:text-[#A7ADBE]/50 focus:outline-none disabled:opacity-50"
+                                style={{
+                                    maxHeight: '100px',
+                                    overflowY: 'auto',
+                                }}
+                            />
+                            <button
+                                onClick={(e) => { e.preventDefault(); sendMessage(); }}
+                                disabled={!input.trim() || isLoading}
+                                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-white transition-all hover:brightness-125 disabled:opacity-30"
+                                style={{
+                                    background: input.trim() && !isLoading
+                                        ? 'linear-gradient(134deg, #9C46F4 1.15%, #6A25E0 17.12%, #390CA4 47.7%, #28048B 71.73%)'
+                                        : 'rgba(255,255,255,0.1)',
+                                }}
+                            >
+                                <Send className="h-4 w-4" />
+                            </button>
+                        </div>
+                    </div>
                 </div>
             )}
         </>
