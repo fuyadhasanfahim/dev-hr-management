@@ -1,5 +1,6 @@
 import express from 'express';
 import SupportController from '../controllers/support.controller.js';
+import MeetingController from '../controllers/meeting.controller.js';
 import { requireAuth, restrictTo } from '../middlewares/auth.middleware.js';
 import jwt from 'jsonwebtoken';
 import envConfig from '../config/env.config.js';
@@ -79,12 +80,17 @@ router.post('/tickets/:id/reply', requireUnifiedAuth, SupportController.replyToT
 router.post('/chats/session', requireUnifiedAuth, SupportController.createChatSession);
 
 // Live Support Chat Console Endpoints (for staff dashboard)
+// Static routes must come before :sessionId param routes
 router.get('/chat/sessions/queued', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), SupportController.listQueuedChatSessions);
 router.get('/chat/sessions/active', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), SupportController.listActiveChatSessions);
+router.get('/chat/sessions/unread-counts', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), SupportController.getUnreadCounts);
+router.get('/chat/agents', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), SupportController.listAvailableAgents);
+router.post('/meetings', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), MeetingController.createMeeting);
 router.get('/chat/sessions/:sessionId/messages', requireUnifiedAuth, SupportController.getChatSessionMessages);
 router.post('/chat/sessions/:sessionId/claim', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), SupportController.claimChatSessionParam);
 router.post('/chat/sessions/:sessionId/close', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), SupportController.closeChatSessionParam);
 router.post('/chat/sessions/:sessionId/convert', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), SupportController.convertChatToTicketParam);
+router.post('/chat/sessions/:sessionId/reassign', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), SupportController.reassignChatSession);
 
 router.patch('/tickets/:id', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), SupportController.updateTicket);
 router.patch('/tickets/:id/status', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), SupportController.updateTicketStatus);

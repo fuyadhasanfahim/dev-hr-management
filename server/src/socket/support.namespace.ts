@@ -1,4 +1,4 @@
-import { Server, Socket } from 'socket.io';
+import { Server, Socket, Namespace } from 'socket.io';
 import { socketAuthMiddleware } from './socket-auth.middleware.js';
 import ChatSessionModel, { ChatSessionStatus } from '../models/chat-session.model.js';
 import ChatMessageModel, { ChatSenderModel } from '../models/chat-message.model.js';
@@ -6,8 +6,15 @@ import { addToChatQueue, removeFromChatQueue } from '../services/redis-queue.ser
 import { logger } from '../lib/logger.js';
 import { Types } from 'mongoose';
 
+let supportNamespaceRef: Namespace | null = null;
+
+export function getSupportNamespace(): Namespace | null {
+    return supportNamespaceRef;
+}
+
 export function registerSupportNamespace(io: Server) {
     const supportNamespace = io.of('/support');
+    supportNamespaceRef = supportNamespace;
 
     supportNamespace.use(socketAuthMiddleware);
 
@@ -134,6 +141,7 @@ export function registerSupportNamespace(io: Server) {
                         sessionId,
                         endedBy: user.name,
                     });
+                    supportNamespace.to('agents_presence').emit('session:state_change', { type: 'closed', sessionId });
                     logger.info(`[Support Socket] Support session ${sessionId} closed by ${user.name}`);
                 }
             } catch (err: any) {

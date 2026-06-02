@@ -114,22 +114,26 @@ export function FloatingAIChat() {
         if (isOpen && mode === 'live-chat' && liveInputRef.current) liveInputRef.current.focus();
     }, [isOpen, mode]);
 
-    // scroll containment
+    // scroll containment — prevent wheel events from reaching the main page
+    const chatPanelRef = useRef<HTMLDivElement>(null);
     useEffect(() => {
         if (!isOpen) return;
-        const container = messagesContainerRef.current;
-        if (!container) return;
+        const panel = chatPanelRef.current;
+        if (!panel) return;
 
         function handleWheel(e: WheelEvent) {
-            const el = container!;
-            const { scrollTop, scrollHeight, clientHeight } = el;
+            e.stopPropagation();
+
+            const scrollable = messagesContainerRef.current;
+            if (!scrollable) return;
+            const { scrollTop, scrollHeight, clientHeight } = scrollable;
             const atTop = scrollTop <= 0 && e.deltaY < 0;
             const atBottom = scrollTop + clientHeight >= scrollHeight - 1 && e.deltaY > 0;
             if (atTop || atBottom) e.preventDefault();
         }
 
-        container.addEventListener('wheel', handleWheel, { passive: false });
-        return () => container.removeEventListener('wheel', handleWheel);
+        panel.addEventListener('wheel', handleWheel, { passive: false });
+        return () => panel.removeEventListener('wheel', handleWheel);
     }, [isOpen, mode]);
 
     // cleanup socket on unmount
@@ -456,6 +460,7 @@ export function FloatingAIChat() {
             <AnimatePresence>
                 {isOpen && (
                     <motion.div
+                        ref={chatPanelRef}
                         initial={{ opacity: 0, y: 24, scale: 0.92 }}
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: 24, scale: 0.92 }}

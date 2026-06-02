@@ -132,6 +132,11 @@ app.use(
         // Support routes bypass the global auth middleware because they implement unified/guest auth internally
         const isSupportRoute = req.path.startsWith("/support");
 
+        // AI chat public endpoints (chat and info)
+        const isPublicAIChatRoute =
+            (req.method === "POST" && req.path === "/ai-chat/chat") ||
+            (req.method === "GET" && req.path === "/ai-chat/info");
+
         if (
             isPublicInvitationRoute ||
             isPublicMetadataRoute ||
@@ -140,7 +145,8 @@ app.use(
             isPublicQuotationTokenRoute ||
             isPublicQuotationPaymentTokenRoute ||
             isPublicQuotationPdfPuppeteerRoute ||
-            isSupportRoute
+            isSupportRoute ||
+            isPublicAIChatRoute
         ) {
             return next();
         }

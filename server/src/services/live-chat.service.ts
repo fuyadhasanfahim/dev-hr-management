@@ -151,9 +151,57 @@ export async function endChatSession(sessionId: string): Promise<any> {
     return session;
 }
 
+/**
+ * Reassign a session to a different agent.
+ */
+export async function reassignSession(sessionId: string, newAgentId: string): Promise<any> {
+    const session = await ChatSessionModel.findOne({ sessionId }) as any;
+    if (!session) {
+        throw new AppError('Chat session not found', 404);
+    }
+    if (session.status !== 'active') {
+        throw new AppError('Only active sessions can be reassigned', 400);
+    }
+
+    session.assignedAgent = new Types.ObjectId(newAgentId);
+    await session.save();
+
+    await session.populate('clientId', 'name email');
+    await session.populate('guestId', 'name email');
+    await session.populate('assignedAgent', 'name email');
+
+    return session;
+}
+
+/**
+ * Get unread message counts per session for an agent.
+ */
+export async function getUnreadCountsForAgent(agentId: string): Promise<Record<string, number>> {
+    const sessions = await ChatSessionModel.find({
+        assignedAgent: new Types.ObjectId(agentId),
+        status: 'active',
+    });
+
+    const counts: Record<string, number> = {};
+    for (const session of sessions) {
+        const unread = await ChatMessageModel.countDocuments({
+            sessionId: session._id,
+            sender: { $ne: new Types.ObjectId(agentId) },
+            readBy: { $ne: new Types.ObjectId(agentId) },
+        });
+        if (unread > 0) {
+            counts[session.sessionId] = unread;
+        }
+    }
+
+    return counts;
+}
+
 export default {
     createChatSession,
     assignAgentToSession,
     convertChatToTicket,
     endChatSession,
+    reassignSession,
+    getUnreadCountsForAgent,
 };

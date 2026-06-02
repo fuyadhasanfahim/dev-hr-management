@@ -10,7 +10,6 @@ import {
     Users,
     Settings,
     PanelLeft,
-    Bell,
     Search,
     Moon,
     Sun,
@@ -41,9 +40,9 @@ import { authClient, useSession } from '@/lib/auth-client';
 import { redirectToSignIn } from '@/lib/auth-redirect';
 import { formatRole } from '@/lib/format-role';
 import { useGetQueuedSessionsQuery } from '@/store/api/chatApi';
-import { useGetUnreadNotificationCountQuery } from '@/store/api/notificationApi';
 import { baseApi } from '@/store/api/baseApi';
 import { connectSocket, disconnectSocket } from '@/lib/socket';
+import { NotificationDropdown } from '@/components/layout/notification-dropdown';
 import type { AppDispatch } from '@/store';
 import type { Socket } from 'socket.io-client';
 
@@ -200,9 +199,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     const { data: queuedSessions = [] } = useGetQueuedSessionsQuery(undefined, {
         pollingInterval: 30_000,
     });
-    const { data: unreadCount = 0 } = useGetUnreadNotificationCountQuery(undefined, {
-        pollingInterval: 30_000,
-    });
 
     const liveChatCount = queuedSessions.length;
 
@@ -215,15 +211,20 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         const onQueueUpdate = () => {
             dispatch(baseApi.util.invalidateTags(['QueuedSessions']));
         };
+        const onSessionStateChange = () => {
+            dispatch(baseApi.util.invalidateTags(['QueuedSessions', 'ActiveSessions', 'UnreadCounts']));
+        };
 
         socket.on('connect', onConnect);
         socket.on('queue:new_message', onQueueUpdate);
+        socket.on('session:state_change', onSessionStateChange);
 
         if (socket.connected) onConnect();
 
         return () => {
             socket.off('connect', onConnect);
             socket.off('queue:new_message', onQueueUpdate);
+            socket.off('session:state_change', onSessionStateChange);
             disconnectSocket();
         };
     }, [dispatch]);
@@ -320,15 +321,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                             <Search className="size-4" />
                         </Button>
 
-                        {/* Notification bell with real-time badge */}
-                        <Button variant="ghost" size="icon" aria-label="Notifications" className="relative">
-                            <Bell className="size-4" />
-                            {unreadCount > 0 && (
-                                <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-destructive text-destructive-foreground text-[10px] font-semibold flex items-center justify-center leading-none">
-                                    {unreadCount > 99 ? '99+' : unreadCount}
-                                </span>
-                            )}
-                        </Button>
+                        <NotificationDropdown />
 
                         {mounted && (
                             <DropdownMenu>

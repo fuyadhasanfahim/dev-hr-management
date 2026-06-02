@@ -5,6 +5,12 @@ import supportTicketService from '../services/support-ticket.service.js';
 import liveChatService from '../services/live-chat.service.js';
 import cloudinaryMigrationService from '../services/cloudinary-migration.service.js';
 import StaffModel from '../models/staff.model.js';
+import { getSupportNamespace } from '../socket/support.namespace.js';
+
+function emitSessionStateChange(type: string, sessionId: string) {
+    const ns = getSupportNamespace();
+    if (ns) ns.to('agents_presence').emit('session:state_change', { type, sessionId });
+}
 
 /**
  * Public: Request OTP for Guest email verification.
@@ -216,7 +222,8 @@ async function triggerCloudinaryMigration(_req: Request, res: Response) {
 }
 
 import ChatSessionModel from '../models/chat-session.model.js';
-import ChatMessageModel from '../models/chat-message.model.js';
+import ChatMessageModel, { ChatSenderModel } from '../models/chat-message.model.js';
+import { Types } from 'mongoose';
 
 /**
  * Staff: List all queued support chat sessions.
@@ -315,6 +322,7 @@ async function claimChatSessionParam(req: Request, res: Response) {
         }
 
         const result = await liveChatService.assignAgentToSession(sessionId, req.user?.id || '');
+        emitSessionStateChange('claimed', sessionId);
         return res.status(200).json({ success: true, data: result });
     } catch (err: any) {
         return res.status(err.statusCode || 400).json({ success: false, message: err.message });
@@ -332,6 +340,7 @@ async function closeChatSessionParam(req: Request, res: Response) {
         }
 
         const result = await liveChatService.endChatSession(sessionId);
+        emitSessionStateChange('closed', sessionId);
         return res.status(200).json({ success: true, data: result });
     } catch (err: any) {
         return res.status(err.statusCode || 400).json({ success: false, message: err.message });
@@ -350,6 +359,7 @@ async function convertChatToTicketParam(req: Request, res: Response) {
 
         const { reason } = req.body;
         const result = await liveChatService.convertChatToTicket(sessionId, reason);
+        emitSessionStateChange('converted', sessionId);
         return res.status(200).json({ success: true, data: result });
     } catch (err: any) {
         return res.status(err.statusCode || 400).json({ success: false, message: err.message });
@@ -390,6 +400,72 @@ async function assignTicketToSelf(req: Request, res: Response) {
     }
 }
 
+/**
+ * Staff: Reassign a chat session to another agent.
+ */
+async function reassignChatSession(req: Request, res: Response) {
+    try {
+        const { sessionId } = req.params;
+        const { agentId } = req.body;
+        if (!sessionId || !agentId) {
+            return res.status(400).json({ success: false, message: 'Session ID and agent ID are required' });
+        }
+
+        const result = await liveChatService.reassignSession(sessionId, agentId);
+
+        const agent = await StaffModel.findOne({ userId: agentId }).populate('userId', 'name').lean() as any;
+        const agentName = agent?.userId?.name || 'another agent';
+        const ns = getSupportNamespace();
+        if (ns) {
+            const session = await ChatSessionModel.findOne({ sessionId });
+            if (session) {
+                const sysMsg = await ChatMessageModel.create({
+                    sessionId: session._id,
+                    sender: new Types.ObjectId(req.user?.id),
+                    senderModel: ChatSenderModel.SYSTEM,
+                    senderName: 'System',
+                    content: `Chat reassigned to ${agentName}.`,
+                    attachments: [],
+                });
+                ns.to(sessionId).emit('chat:message', sysMsg);
+            }
+            ns.to('agents_presence').emit('session:state_change', { type: 'reassigned', sessionId });
+        }
+
+        return res.status(200).json({ success: true, data: result });
+    } catch (err: any) {
+        return res.status(err.statusCode || 400).json({ success: false, message: err.message });
+    }
+}
+
+/**
+ * Staff: Get unread message counts per active session.
+ */
+async function getUnreadCounts(req: Request, res: Response) {
+    try {
+        const agentId = req.user?.id || '';
+        const counts = await liveChatService.getUnreadCountsForAgent(agentId);
+        return res.status(200).json({ success: true, data: counts });
+    } catch (err: any) {
+        return res.status(500).json({ success: false, message: err.message });
+    }
+}
+
+/**
+ * Staff: List available staff members for reassignment.
+ */
+async function listAvailableAgents(_req: Request, res: Response) {
+    try {
+        const agents = await StaffModel.find({})
+            .select('name userId department designation')
+            .populate('userId', 'name email image')
+            .lean();
+        return res.status(200).json({ success: true, data: agents });
+    } catch (err: any) {
+        return res.status(500).json({ success: false, message: err.message });
+    }
+}
+
 export default {
     requestGuestOtp,
     verifyGuestOtp,
@@ -411,4 +487,7 @@ export default {
     convertChatToTicketParam,
     updateTicketStatus,
     assignTicketToSelf,
+    reassignChatSession,
+    getUnreadCounts,
+    listAvailableAgents,
 };
