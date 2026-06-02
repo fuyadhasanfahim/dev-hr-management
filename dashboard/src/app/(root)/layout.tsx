@@ -3,7 +3,6 @@ import { SiteHeader } from '@/components/sidebar/site-header';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
 import { FloatingNoticePopup } from '@/components/notice/FloatingNoticePopup';
 import { ProfileCompletionDialog } from '@/components/account/profile-completion-dialog';
-import { FloatingAIChat } from '@/components/ai-chat/FloatingAIChat';
 
 export default function Layout({ children }: { children: React.ReactNode }) {
     return (
@@ -26,7 +25,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             </SidebarInset>
             <FloatingNoticePopup />
             <ProfileCompletionDialog />
-            <FloatingAIChat />
         </SidebarProvider>
     );
 }
