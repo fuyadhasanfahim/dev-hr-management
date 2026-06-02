@@ -1,8 +1,7 @@
 import { GoogleGenAI } from '@google/genai';
 import ServiceModel from '../models/service.model.js';
+import envConfig from '../config/env.config.js';
 import { logger } from '../lib/logger.js';
-
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
 
 const SYSTEM_PROMPT = `You are the AI assistant for Web Briks LLC, a digital agency. Be friendly, concise (2-3 sentences max).
 
@@ -53,10 +52,11 @@ let ai: GoogleGenAI | null = null;
 
 function getAI(): GoogleGenAI {
     if (!ai) {
-        if (!GEMINI_API_KEY) {
+        const apiKey = envConfig.gemini_api_key;
+        if (!apiKey) {
             throw new Error('GEMINI_API_KEY environment variable is not set');
         }
-        ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
+        ai = new GoogleGenAI({ apiKey });
     }
     return ai;
 }
@@ -101,18 +101,29 @@ export async function processAIChat(
         parts: msg.parts,
     }));
 
-    const chat = genAI.chats.create({
-        model: 'gemini-3.5-flash',
-        config: {
-            systemInstruction,
-            maxOutputTokens: 1024,
-            temperature: 0.5,
-        },
-        history: recentHistory,
-    });
+    let responseText = '';
+    for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+            const chat = genAI.chats.create({
+                model: 'gemini-3.5-flash',
+                config: {
+                    systemInstruction,
+                    maxOutputTokens: 1024,
+                    temperature: 0.5,
+                },
+                history: recentHistory,
+            });
 
-    const result = await chat.sendMessage({ message: userMessage });
-    const responseText = (result.text ?? '').trim();
+            const result = await chat.sendMessage({ message: userMessage });
+            responseText = (result.text ?? '').trim();
+            break;
+        } catch (err: any) {
+            const isRetryable = /503|UNAVAILABLE|high demand|overloaded/i.test(err.message);
+            if (!isRetryable || attempt === 2) throw err;
+            logger.warn(`Gemini API attempt ${attempt + 1} failed (retryable), retrying...`);
+            await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
+        }
+    }
 
     try {
         const cleaned = responseText

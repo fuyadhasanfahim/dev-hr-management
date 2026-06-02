@@ -15,19 +15,19 @@ import {
     Moon,
     Sun,
     LogOut,
-    ChevronRight,
     Loader2,
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useDispatch } from 'react-redux';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
     DropdownMenu,
     DropdownMenuContent,
+    DropdownMenuGroup,
     DropdownMenuItem,
+    DropdownMenuLabel,
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
@@ -101,30 +101,11 @@ function getPageTitle(pathname: string): string {
 
 interface NavContentProps {
     pathname: string;
-    userName: string;
-    userRole: string;
-    userImage?: string;
     liveChatCount: number;
     onNavigate?: () => void;
 }
 
-function NavContent({ pathname, userName, userRole, userImage, liveChatCount, onNavigate }: NavContentProps) {
-    const { theme, setTheme, systemTheme } = useTheme();
-    const [mounted, setMounted] = useState(false);
-    const [signingOut, setSigningOut] = useState(false);
-
-    useEffect(() => { setMounted(true); }, []);
-
-    const isDark = (theme === 'system' ? systemTheme : theme) === 'dark';
-    const initial = userName.trim().charAt(0).toUpperCase() || 'S';
-
-    const handleSignOut = async () => {
-        setSigningOut(true);
-        await authClient.signOut();
-        redirectToSignIn();
-    };
-
-    // Map href → dynamic badge count
+function NavContent({ pathname, liveChatCount, onNavigate }: NavContentProps) {
     const dynamicBadge: Record<string, number> = {
         '/live-chat': liveChatCount,
     };
@@ -135,11 +116,7 @@ function NavContent({ pathname, userName, userRole, userImage, liveChatCount, on
             <div className="px-4 py-3 border-b shrink-0">
                 <div className="flex items-center gap-2 mb-0.5">
                     <Logo className="max-w-[110px]" />
-                    <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 font-medium">
-                        Beta
-                    </Badge>
                 </div>
-                <p className="text-xs text-muted-foreground mt-1">Support Console</p>
             </div>
 
             {/* Search */}
@@ -201,63 +178,6 @@ function NavContent({ pathname, userName, userRole, userImage, liveChatCount, on
                 ))}
             </nav>
 
-            {/* Footer */}
-            <div className="border-t px-3 py-3 shrink-0">
-                <div className="flex items-center gap-2">
-                    <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <button className="flex flex-1 items-center gap-2.5 rounded-md px-1 py-1 hover:bg-accent transition-colors min-w-0">
-                                <Avatar className="size-7 shrink-0">
-                                    <AvatarImage src={userImage || undefined} alt={userName} />
-                                    <AvatarFallback className="bg-primary/20 text-primary text-xs font-semibold">
-                                        {initial}
-                                    </AvatarFallback>
-                                </Avatar>
-                                <div className="flex-1 min-w-0 text-left">
-                                    <p className="text-[13px] font-medium leading-tight truncate">{userName}</p>
-                                    <p className="text-[11px] text-muted-foreground leading-tight truncate">{userRole}</p>
-                                </div>
-                                <ChevronRight className="size-3.5 text-muted-foreground shrink-0" />
-                            </button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent side="top" align="start" sideOffset={6} className="min-w-48">
-                            <div className="px-2 py-1.5">
-                                <p className="text-sm font-medium">{userName}</p>
-                                <p className="text-xs text-muted-foreground">{userRole}</p>
-                            </div>
-                            <DropdownMenuSeparator />
-                            {mounted && (
-                                <DropdownMenuItem onClick={() => setTheme(isDark ? 'light' : 'dark')}>
-                                    {isDark ? <Sun className="size-4" /> : <Moon className="size-4" />}
-                                    {isDark ? 'Light mode' : 'Dark mode'}
-                                </DropdownMenuItem>
-                            )}
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                                onClick={handleSignOut}
-                                disabled={signingOut}
-                                className="text-destructive focus:text-destructive"
-                            >
-                                {signingOut
-                                    ? <Loader2 className="size-4 animate-spin" />
-                                    : <LogOut className="size-4" />
-                                }
-                                {signingOut ? 'Signing out...' : 'Log out'}
-                            </DropdownMenuItem>
-                        </DropdownMenuContent>
-                    </DropdownMenu>
-
-                    {mounted && (
-                        <button
-                            onClick={() => setTheme(isDark ? 'light' : 'dark')}
-                            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-                            aria-label="Toggle theme"
-                        >
-                            {isDark ? <Sun className="size-3.5" /> : <Moon className="size-3.5" />}
-                        </button>
-                    )}
-                </div>
-            </div>
         </div>
     );
 }
@@ -270,9 +190,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     const dispatch = useDispatch<AppDispatch>();
     const socketRef = useRef<Socket | null>(null);
 
+    const { theme, setTheme, systemTheme } = useTheme();
     const [sidebarOpen, setSidebarOpen] = useState(true);
     const [mobileOpen, setMobileOpen] = useState(false);
     const [mounted, setMounted] = useState(false);
+    const [signingOut, setSigningOut] = useState(false);
 
     // ── real-time data ────────────────────────────────────────────────────────
     const { data: queuedSessions = [] } = useGetQueuedSessionsQuery(undefined, {
@@ -324,8 +246,16 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     const userName = session?.user?.name ?? 'Staff User';
     const userRoleRaw = (session?.user as { role?: string } | undefined)?.role ?? '';
     const userRole = formatRole(userRoleRaw) || 'Support Agent';
+    const userEmail = session?.user?.email ?? '';
     const userImage = session?.user?.image ?? undefined;
     const initial = userName.trim().charAt(0).toUpperCase() || 'S';
+    const isDark = (theme === 'system' ? systemTheme : theme) === 'dark';
+
+    const handleSignOut = async () => {
+        setSigningOut(true);
+        await authClient.signOut();
+        redirectToSignIn();
+    };
 
     return (
         <div className="flex h-screen overflow-hidden bg-background">
@@ -340,9 +270,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 <div className="w-[260px] flex flex-col h-full">
                     <NavContent
                         pathname={pathname}
-                        userName={userName}
-                        userRole={userRole}
-                        userImage={userImage}
                         liveChatCount={liveChatCount}
                     />
                 </div>
@@ -354,9 +281,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     <SheetTitle className="sr-only">Navigation</SheetTitle>
                     <NavContent
                         pathname={pathname}
-                        userName={userName}
-                        userRole={userRole}
-                        userImage={userImage}
                         liveChatCount={liveChatCount}
                         onNavigate={() => setMobileOpen(false)}
                     />
@@ -407,12 +331,61 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                         </Button>
 
                         {mounted && (
-                            <Avatar className="size-7 cursor-pointer ml-1">
-                                <AvatarImage src={userImage || undefined} alt={userName} />
-                                <AvatarFallback className="bg-primary/20 text-primary text-xs font-semibold">
-                                    {initial}
-                                </AvatarFallback>
-                            </Avatar>
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <button className="flex items-center gap-2 ml-1 rounded-md px-2 py-1 hover:bg-accent transition-colors cursor-pointer">
+                                        <Avatar className="size-8 rounded-full">
+                                            <AvatarImage src={userImage || undefined} alt={userName} />
+                                            <AvatarFallback className="rounded-full bg-primary/20 text-primary text-xs font-semibold">
+                                                {initial}
+                                            </AvatarFallback>
+                                        </Avatar>
+                                        <div className="hidden sm:grid text-left text-sm leading-tight">
+                                            <span className="truncate font-medium text-[13px]">{userName}</span>
+                                            <span className="truncate text-[11px] text-muted-foreground">{userEmail}</span>
+                                        </div>
+                                    </button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent
+                                    className="min-w-56 rounded-lg"
+                                    align="end"
+                                    sideOffset={8}
+                                >
+                                    <DropdownMenuLabel className="p-0 font-normal">
+                                        <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
+                                            <Avatar className="size-8 rounded-full">
+                                                <AvatarImage src={userImage || undefined} alt={userName} />
+                                                <AvatarFallback className="rounded-full bg-primary/20 text-primary text-xs font-semibold">
+                                                    {initial}
+                                                </AvatarFallback>
+                                            </Avatar>
+                                            <div className="grid flex-1 text-left text-sm leading-tight">
+                                                <span className="truncate font-medium">{userName}</span>
+                                                <span className="truncate text-xs text-muted-foreground">{userRole}</span>
+                                            </div>
+                                        </div>
+                                    </DropdownMenuLabel>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuGroup>
+                                        <DropdownMenuItem onClick={() => setTheme(isDark ? 'light' : 'dark')}>
+                                            {isDark ? <Sun className="size-4" /> : <Moon className="size-4" />}
+                                            {isDark ? 'Light mode' : 'Dark mode'}
+                                        </DropdownMenuItem>
+                                    </DropdownMenuGroup>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem
+                                        onClick={handleSignOut}
+                                        disabled={signingOut}
+                                        className="text-destructive focus:text-destructive"
+                                    >
+                                        {signingOut
+                                            ? <Loader2 className="size-4 animate-spin" />
+                                            : <LogOut className="size-4" />
+                                        }
+                                        {signingOut ? 'Signing out...' : 'Log out'}
+                                    </DropdownMenuItem>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
                         )}
                     </div>
                 </header>
