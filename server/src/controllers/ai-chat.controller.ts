@@ -50,9 +50,13 @@ async function chat(req: Request, res: Response) {
         return res.status(200).json({ success: true, data: result });
     } catch (err: any) {
         logger.error(`AI Chat error: ${err.message} ${err.stack ?? ''}`);
-        return res.status(500).json({
+        const isTransient = /503|UNAVAILABLE|high demand|overloaded/i.test(err.message);
+        return res.status(isTransient ? 503 : 500).json({
             success: false,
-            message: 'AI assistant is temporarily unavailable. Please try again or connect to live support.',
+            retryable: isTransient,
+            message: isTransient
+                ? 'AI assistant is experiencing high demand. Please try again in a moment.'
+                : 'AI assistant is temporarily unavailable. Please try again or connect to live support.',
         });
     }
 }
