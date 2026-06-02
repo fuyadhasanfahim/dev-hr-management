@@ -194,22 +194,25 @@ export function FloatingAIChat() {
 
         try {
             let data: any = null;
-            for (let attempt = 0; attempt < 2; attempt++) {
-                const res = await fetch(`${API_URL}/api/ai-chat/chat`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    credentials: 'include',
-                    body: JSON.stringify({ message: text, history: chatHistory }),
-                });
-                data = await res.json();
-                if (data.success) break;
-                if (data.retryable && attempt === 0) {
-                    await new Promise((r) => setTimeout(r, 2000));
-                    continue;
+            let lastError: Error | null = null;
+            for (let attempt = 0; attempt < 3; attempt++) {
+                if (attempt > 0) await new Promise((r) => setTimeout(r, 2000 * attempt));
+                try {
+                    const res = await fetch(`${API_URL}/api/ai-chat/chat`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'include',
+                        body: JSON.stringify({ message: text, history: chatHistory }),
+                    });
+                    data = await res.json();
+                    if (data.success) break;
+                    lastError = new Error(data.message);
+                    if (!data.retryable) break;
+                } catch (err) {
+                    lastError = err instanceof Error ? err : new Error('Network error');
                 }
-                throw new Error(data.message);
             }
-            if (!data?.success) throw new Error(data?.message || 'Failed to get AI response');
+            if (!data?.success) throw lastError || new Error('Failed to get AI response');
 
             const { reply, action, actionReason } = data.data;
             setMessages((prev) => [...prev, {

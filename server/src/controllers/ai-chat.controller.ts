@@ -49,8 +49,12 @@ async function chat(req: Request, res: Response) {
 
         return res.status(200).json({ success: true, data: result });
     } catch (err: any) {
-        logger.error(`AI Chat error: ${err.message} ${err.stack ?? ''}`);
-        const isTransient = /503|UNAVAILABLE|high demand|overloaded/i.test(err.message);
+        const geminiStatus = err.status ?? err.statusCode ?? 0;
+        logger.error(`AI Chat error: [status=${geminiStatus}] ${err.message} ${err.stack ?? ''}`);
+        const isTransient = [429, 500, 502, 503, 504].includes(geminiStatus)
+            || /UNAVAILABLE|RESOURCE_EXHAUSTED|high demand|overloaded|quota|INTERNAL|rate.limit|capacity/i.test(err.message)
+            || err.name === 'APIConnectionError'
+            || err.name === 'APIConnectionTimeoutError';
         return res.status(isTransient ? 503 : 500).json({
             success: false,
             retryable: isTransient,

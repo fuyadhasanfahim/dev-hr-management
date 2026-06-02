@@ -118,10 +118,15 @@ export async function processAIChat(
             responseText = (result.text ?? '').trim();
             break;
         } catch (err: any) {
-            const isRetryable = /503|UNAVAILABLE|high demand|overloaded/i.test(err.message);
+            const status = err.status ?? err.statusCode ?? 0;
+            logger.error(`Gemini API attempt ${attempt + 1} failed: [${status}] ${err.message}`);
+            const retryableStatus = [429, 500, 502, 503, 504].includes(status);
+            const retryableMessage = /UNAVAILABLE|RESOURCE_EXHAUSTED|high demand|overloaded|quota|INTERNAL|rate.limit|capacity/i.test(err.message);
+            const isRetryable = retryableStatus || retryableMessage || err.name === 'APIConnectionError' || err.name === 'APIConnectionTimeoutError';
             if (!isRetryable || attempt === 2) throw err;
-            logger.warn(`Gemini API attempt ${attempt + 1} failed (retryable), retrying...`);
-            await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
+            const delay = 1000 * Math.pow(2, attempt);
+            logger.warn(`Retryable error (status=${status}), retrying in ${delay}ms...`);
+            await new Promise((r) => setTimeout(r, delay));
         }
     }
 
