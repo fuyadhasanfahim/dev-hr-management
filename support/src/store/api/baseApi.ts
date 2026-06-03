@@ -6,6 +6,6 @@ export const baseApi = createApi({
         baseUrl: `${process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:5000'}/api`,
         credentials: 'include',
     }),
-    tagTypes: ['QueuedSessions', 'ActiveSessions', 'SessionMessages', 'UnreadCounts', 'Notifications'],
+    tagTypes: ['QueuedSessions', 'ActiveSessions', 'SessionMessages', 'UnreadCounts', 'Notifications', 'ClientMeetings', 'Tickets', 'TicketDetail'],
     endpoints: () => ({}),
 });

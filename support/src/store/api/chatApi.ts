@@ -44,6 +44,18 @@ export interface AgentInfo {
     designation?: string;
 }
 
+export interface Meeting {
+    _id: string;
+    meetingTitle: string;
+    scheduledAt: string;
+    durationMinutes: number;
+    status: 'scheduled' | 'completed' | 'cancelled';
+    googleMeetLink?: string;
+    description?: string;
+    clientId?: string;
+    createdAt: string;
+}
+
 export const chatApi = baseApi.injectEndpoints({
     endpoints: (builder) => ({
         getQueuedSessions: builder.query<ChatSession[], void>({
@@ -134,6 +146,12 @@ export const chatApi = baseApi.injectEndpoints({
                 body,
             }),
             transformResponse: (res: { data: any }) => res.data,
+            invalidatesTags: ['ClientMeetings'],
+        }),
+        getClientMeetings: builder.query<Meeting[], string>({
+            query: (clientId) => `/meetings?clientId=${clientId}&status=scheduled`,
+            transformResponse: (res: { data: Meeting[] }) => res.data ?? [],
+            providesTags: ['ClientMeetings'],
         }),
     }),
 });
@@ -150,4 +168,5 @@ export const {
     useGetAvailableAgentsQuery,
     useReassignSessionMutation,
     useCreateMeetingMutation,
+    useGetClientMeetingsQuery,
 } = chatApi;

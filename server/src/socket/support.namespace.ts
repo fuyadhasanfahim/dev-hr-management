@@ -96,13 +96,31 @@ export function registerSupportNamespace(io: Server) {
                     attachments: attachments || [],
                 });
 
+                // Touch the session so list ordering + "last active" time stay fresh.
+                session.updatedAt = new Date();
+                await session.save();
+
                 supportNamespace.to(sessionId).emit('chat:message', message);
 
-                if (senderModel === ChatSenderModel.CLIENT || senderModel === ChatSenderModel.GUEST) {
-                    if (session.status === ChatSessionStatus.QUEUED) {
-                        await addToChatQueue(sessionId);
-                        supportNamespace.to('agents_presence').emit('queue:new_message', { sessionId });
-                    }
+                const fromClient =
+                    senderModel === ChatSenderModel.CLIENT || senderModel === ChatSenderModel.GUEST;
+
+                // Notify every agent's sidebar so unread counts, last-message preview
+                // and timestamps update live (not just on the slow polling interval).
+                supportNamespace.to('agents_presence').emit('session:new_message', {
+                    sessionId,
+                    status: session.status,
+                    fromClient,
+                    lastMessage: {
+                        content: message.content,
+                        attachments: message.attachments,
+                        createdAt: message.createdAt,
+                    },
+                });
+
+                if (fromClient && session.status === ChatSessionStatus.QUEUED) {
+                    await addToChatQueue(sessionId);
+                    supportNamespace.to('agents_presence').emit('queue:new_message', { sessionId });
                 }
             } catch (err: any) {
                 logger.error(`[Support Socket] Error in chat:message: ${err.message}`);
@@ -118,12 +136,21 @@ export function registerSupportNamespace(io: Server) {
             });
         });
 
-        socket.on('chat:seen', async ({ sessionId, messageId }: { sessionId: string; messageId: string }) => {
+        socket.on('chat:seen', async ({ sessionId, messageId }: { sessionId: string; messageId?: string }) => {
             try {
-                if (messageId) {
-                    await ChatMessageModel.updateOne({ _id: messageId }, { $addToSet: { readBy: new Types.ObjectId(user.id) } });
-                    socket.to(sessionId).emit('chat:seen', { messageId });
-                }
+                const session = await ChatSessionModel.findOne({ sessionId });
+                if (!session) return;
+
+                const agentOid = new Types.ObjectId(user.id);
+                await ChatMessageModel.updateMany(
+                    {
+                        sessionId: session._id,
+                        sender: { $ne: agentOid },
+                        readBy: { $ne: agentOid },
+                    },
+                    { $addToSet: { readBy: agentOid } },
+                );
+                socket.to(sessionId).emit('chat:seen', { sessionId, messageId });
             } catch (err: any) {
                 logger.error(`[Support Socket] Error in chat:seen: ${err.message}`);
             }

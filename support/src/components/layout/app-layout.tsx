@@ -383,7 +383,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     </div>
                 </header>
 
-                <main className="flex-1 overflow-auto">
+                <main className="flex-1 overflow-auto min-h-0">
                     {children}
                 </main>
             </div>
