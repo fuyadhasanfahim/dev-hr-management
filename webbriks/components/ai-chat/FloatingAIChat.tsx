@@ -12,6 +12,10 @@ import Image from 'next/image';
 const API_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:5000';
 const AVATAR_URL = 'https://res.cloudinary.com/dny7zfbg9/image/upload/v1780327707/lnb5suhev8hzgixi0bbp.png';
 
+// sessionStorage keys for AI-conversation persistence (per-tab; new tab = fresh convo)
+const AI_CONVO_ID_KEY = 'webbriks_ai_conversation_id';
+const AI_HISTORY_KEY = 'webbriks_ai_history';
+
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 interface AIChatMessage {
@@ -72,6 +76,7 @@ export function FloatingAIChat() {
     // ── AI chat state ────────────────────────────────────────────────────────
     const [messages, setMessages] = useState<DisplayMessage[]>([]);
     const [chatHistory, setChatHistory] = useState<AIChatMessage[]>([]);
+    const [conversationId, setConversationId] = useState<string | null>(null);
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
 
@@ -146,6 +151,54 @@ export function FloatingAIChat() {
         };
     }, []);
 
+    // ── AI conversation persistence (sessionStorage) ─────────────────────────
+    // Rehydrate the AI conversation id + model context on mount so a refresh
+    // resumes the same conversation. Also restore a minimal visible thread from
+    // the stored history so the panel matches what the AI "remembers".
+    useEffect(() => {
+        try {
+            const savedHistory = sessionStorage.getItem(AI_HISTORY_KEY);
+            if (savedHistory) {
+                const parsed: AIChatMessage[] = JSON.parse(savedHistory);
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                    setChatHistory(parsed);
+                    setMessages(
+                        parsed.map((m, i) => ({
+                            id: `restored-${i}`,
+                            role: m.role === 'user' ? 'user' : 'assistant',
+                            text: m.parts?.[0]?.text ?? '',
+                        })),
+                    );
+                }
+            }
+            const savedId = sessionStorage.getItem(AI_CONVO_ID_KEY);
+            if (savedId) setConversationId(savedId);
+        } catch {
+            // sessionStorage can be unavailable (private mode / blocked) — ignore.
+        }
+    }, []);
+
+    // Persist the conversation id whenever it changes (non-null only).
+    useEffect(() => {
+        if (!conversationId) return;
+        try {
+            sessionStorage.setItem(AI_CONVO_ID_KEY, conversationId);
+        } catch {
+            // ignore storage failures
+        }
+    }, [conversationId]);
+
+    // Persist the model context whenever it changes. Skip empty arrays so the
+    // initial mount (and resetAll) never clobbers a freshly-restored history.
+    useEffect(() => {
+        if (chatHistory.length === 0) return;
+        try {
+            sessionStorage.setItem(AI_HISTORY_KEY, JSON.stringify(chatHistory));
+        } catch {
+            // ignore storage failures
+        }
+    }, [chatHistory]);
+
     // ── AI Chat ──────────────────────────────────────────────────────────────
 
     function openChat() {
@@ -172,6 +225,13 @@ export function FloatingAIChat() {
             text: "Hi! I'm the Web Briks AI assistant. I can help you with questions about our services, pricing, and more. How can I help you today?",
         }]);
         setChatHistory([]);
+        setConversationId(null);
+        try {
+            sessionStorage.removeItem(AI_CONVO_ID_KEY);
+            sessionStorage.removeItem(AI_HISTORY_KEY);
+        } catch {
+            // ignore storage failures
+        }
         setInput('');
         setGuestStep('info');
         setGuestName('');
@@ -206,7 +266,7 @@ export function FloatingAIChat() {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         credentials: 'include',
-                        body: JSON.stringify({ message: text, history: chatHistory }),
+                        body: JSON.stringify({ message: text, history: chatHistory, conversationId }),
                     });
                     data = await res.json();
                     if (data.success) break;
@@ -219,6 +279,9 @@ export function FloatingAIChat() {
             if (!data?.success) throw lastError || new Error('Failed to get AI response');
 
             const { reply, action, actionReason } = data.data;
+            // Capture the server-issued conversation id so every later turn
+            // re-sends it and appends to the same conversation document.
+            if (data.conversationId) setConversationId(data.conversationId);
             setMessages((prev) => [...prev, {
                 id: `assistant-${Date.now()}`,
                 role: 'assistant',
@@ -465,7 +528,7 @@ export function FloatingAIChat() {
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: 24, scale: 0.92 }}
                         transition={{ type: 'spring', stiffness: 350, damping: 30 }}
-                        className="fixed bottom-6 right-6 z-50 flex h-[520px] w-[380px] flex-col overflow-hidden rounded-2xl shadow-2xl"
+                        className="fixed bottom-6 right-6 z-50 flex h-130 w-95 flex-col overflow-hidden rounded-2xl shadow-2xl"
                         style={{
                             background: '#0A0E1A',
                             border: '1px solid rgba(51, 102, 255, 0.3)',
