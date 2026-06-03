@@ -3,6 +3,7 @@ import guestAuthService from '../services/guest-auth.service.js';
 import attachmentService from '../services/attachment.service.js';
 import supportTicketService from '../services/support-ticket.service.js';
 import liveChatService from '../services/live-chat.service.js';
+import chatSummaryService from '../services/chat-summary.service.js';
 import cloudinaryMigrationService from '../services/cloudinary-migration.service.js';
 import StaffModel from '../models/staff.model.js';
 import { getSupportNamespace, notifyNewSession } from '../socket/support.namespace.js';
@@ -290,6 +291,38 @@ async function listActiveChatSessions(_req: Request, res: Response) {
 }
 
 /**
+ * Staff: List resolved (ended / converted-to-ticket) chat sessions for history.
+ */
+async function listResolvedChatSessions(_req: Request, res: Response) {
+    try {
+        const sessions = await ChatSessionModel.find({ status: { $in: ['ended', 'converted_to_ticket'] } })
+            .populate('clientId', 'name email')
+            .populate('guestId', 'name email')
+            .populate('assignedAgent', 'name email')
+            .sort({ updatedAt: -1 });
+
+        const result = await Promise.all(
+            sessions.map(async (session) => {
+                const lastMessage = await ChatMessageModel.findOne({ sessionId: session._id })
+                    .sort({ createdAt: -1 });
+                return {
+                    ...session.toObject(),
+                    lastMessage: lastMessage ? {
+                        content: lastMessage.content,
+                        attachments: lastMessage.attachments,
+                        createdAt: lastMessage.createdAt,
+                    } : null,
+                };
+            })
+        );
+
+        return res.status(200).json({ success: true, data: result });
+    } catch (err: any) {
+        return res.status(500).json({ success: false, message: err.message });
+    }
+}
+
+/**
  * Protected: Fetch chat message logs for a session.
  */
 async function getChatSessionMessages(req: Request, res: Response) {
@@ -341,6 +374,33 @@ async function closeChatSessionParam(req: Request, res: Response) {
         }
 
         const result = await liveChatService.endChatSession(sessionId);
+
+        // Persist a clear "resolved" system line in the transcript and surface it
+        // to the visitor (mirrors the reassign system-message pattern).
+        const staff = await StaffModel.findOne({ userId: req.user?.id }).populate('userId', 'name').lean() as any;
+        const agentName = staff?.userId?.name || 'Support';
+        const ns = getSupportNamespace();
+        if (ns) {
+            const session = await ChatSessionModel.findOne({ sessionId });
+            if (session) {
+                const sysMsg = await ChatMessageModel.create({
+                    sessionId: session._id,
+                    sender: new Types.ObjectId(req.user?.id),
+                    senderModel: ChatSenderModel.SYSTEM,
+                    senderName: 'System',
+                    content: `This conversation has been marked as resolved by ${agentName}.`,
+                    attachments: [],
+                });
+                ns.to(sessionId).emit('chat:message', sysMsg);
+                // Flip the visitor's widget to the ended state on the REST close path.
+                ns.to(sessionId).emit('chat:closed', { sessionId, endedBy: agentName });
+            }
+        }
+
+        // Fire-and-forget: email the visitor a resolution summary + transcript.
+        // Best-effort and non-blocking — never delays or fails the close response.
+        chatSummaryService.sendResolutionEmail(sessionId, agentName).catch(() => {});
+
         emitSessionStateChange('closed', sessionId);
         return res.status(200).json({ success: true, data: result });
     } catch (err: any) {
@@ -482,6 +542,7 @@ export default {
     triggerCloudinaryMigration,
     listQueuedChatSessions,
     listActiveChatSessions,
+    listResolvedChatSessions,
     getChatSessionMessages,
     claimChatSessionParam,
     closeChatSessionParam,

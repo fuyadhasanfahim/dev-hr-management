@@ -61,9 +61,27 @@ export function registerSupportNamespace(io: Server) {
 
                 // NOTE: joining a room is silent. The "agent has joined" notice is
                 // emitted from the `chat:claim` handler, fired only on a real claim.
+
+                // Visitor presence: remember the room on the socket and announce the
+                // visitor is online so any "away" state clears when they return.
+                if (user.role === 'Guest' || user.role === 'client') {
+                    socket.data.joinedSessionId = sessionId;
+                    socket.to(sessionId).emit('chat:visitor_presence', { sessionId, online: true });
+                    supportNamespace.to('agents_presence').emit('chat:visitor_presence', { sessionId, online: true });
+                }
             } catch (err: any) {
                 logger.error(`[Support Socket] Error in chat:join: ${err.message}`);
                 socket.emit('error', { message: 'Failed to join support session' });
+            }
+        });
+
+        socket.on('chat:visitor_away', ({ sessionId }: { sessionId: string }) => {
+            try {
+                if (!sessionId) return;
+                // Visitor stepped out of live chat (back to AI) without ending it.
+                socket.to(sessionId).emit('chat:visitor_presence', { sessionId, online: false });
+            } catch (err: any) {
+                logger.error(`[Support Socket] Error in chat:visitor_away: ${err.message}`);
             }
         });
 
@@ -225,6 +243,16 @@ export function registerSupportNamespace(io: Server) {
 
         socket.on('disconnect', () => {
             logger.info(`[Support Socket] Socket disconnected: ${socket.id}`);
+            try {
+                const sid = socket.data.joinedSessionId;
+                if (sid && (user.role === 'Guest' || user.role === 'client')) {
+                    // Visitor's tab closed / navigated away — mark them offline.
+                    socket.to(sid).emit('chat:visitor_presence', { sessionId: sid, online: false });
+                    supportNamespace.to('agents_presence').emit('chat:visitor_presence', { sessionId: sid, online: false });
+                }
+            } catch (err: any) {
+                logger.error(`[Support Socket] Error broadcasting disconnect presence: ${err.message}`);
+            }
         });
     });
 }

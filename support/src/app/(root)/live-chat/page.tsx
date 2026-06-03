@@ -70,6 +70,7 @@ import { Textarea } from '@/components/ui/textarea';
 import {
     useGetQueuedSessionsQuery,
     useGetActiveSessionsQuery,
+    useGetResolvedSessionsQuery,
     useClaimSessionMutation,
     useCloseSessionMutation,
     useConvertToTicketMutation,
@@ -148,6 +149,7 @@ interface SessionItemProps {
     isSelected: boolean;
     onSelect: () => void;
     unreadCount: number;
+    visitorOnline?: boolean;
 }
 
 function SessionItem({
@@ -155,6 +157,7 @@ function SessionItem({
     isSelected,
     onSelect,
     unreadCount,
+    visitorOnline = true,
 }: SessionItemProps) {
     const user = getSessionUser(session);
     const initial = user.name.trim().charAt(0).toUpperCase() || '?';
@@ -184,7 +187,14 @@ function SessionItem({
                     </AvatarFallback>
                 </Avatar>
                 {session.status === 'active' && (
-                    <Circle className="absolute -bottom-0.5 -right-0.5 size-3 fill-emerald-500 text-background stroke-[3]" />
+                    <Circle
+                        className={cn(
+                            'absolute -bottom-0.5 -right-0.5 size-3 text-background stroke-[3]',
+                            visitorOnline
+                                ? 'fill-emerald-500'
+                                : 'fill-muted-foreground',
+                        )}
+                    />
                 )}
             </div>
             <div className="flex-1 min-w-0">
@@ -799,7 +809,7 @@ function ReassignDialog({
 
 // ─── main page ──────────────────────────────────────────────────────────────
 
-type TabType = 'queued' | 'active';
+type TabType = 'queued' | 'active' | 'resolved';
 
 export default function LiveChatPage() {
     const dispatch = useDispatch<AppDispatch>();
@@ -814,6 +824,8 @@ export default function LiveChatPage() {
         useGetQueuedSessionsQuery(undefined, { pollingInterval: 30_000 });
     const { data: activeSessions = [], isLoading: activeLoading } =
         useGetActiveSessionsQuery(undefined, { pollingInterval: 30_000 });
+    const { data: resolvedSessions = [], isLoading: resolvedLoading } =
+        useGetResolvedSessionsQuery(undefined, { pollingInterval: 60_000 });
     const { data: serverUnreadCounts = {} } = useGetUnreadCountsQuery(
         undefined,
         { pollingInterval: 15_000 },
@@ -848,6 +860,10 @@ export default function LiveChatPage() {
     const [meetingDialogOpen, setMeetingDialogOpen] = useState(false);
     const [reassignDialogOpen, setReassignDialogOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
+    // Visitor presence per session id (absent = treat as online; no false "away").
+    const [visitorOnline, setVisitorOnline] = useState<Record<string, boolean>>(
+        {},
+    );
 
     const selectedClientId = selectedSession?.clientId?._id;
     const { data: clientMeetings = [] } = useGetClientMeetingsQuery(
@@ -916,6 +932,7 @@ export default function LiveChatPage() {
                 baseApi.util.invalidateTags([
                     'QueuedSessions',
                     'ActiveSessions',
+                    'ResolvedSessions',
                     'UnreadCounts',
                 ]),
             );
@@ -937,12 +954,25 @@ export default function LiveChatPage() {
             dispatch(baseApi.util.invalidateTags(tags));
         };
 
+        // Visitor came online / went away (back to AI, tab closed, etc.).
+        const onVisitorPresence = ({
+            sessionId,
+            online,
+        }: {
+            sessionId?: string;
+            online?: boolean;
+        }) => {
+            if (!sessionId) return;
+            setVisitorOnline((prev) => ({ ...prev, [sessionId]: !!online }));
+        };
+
         socket.on('connect', onConnect);
         socket.on('disconnect', onDisconnect);
         socket.on('queue:new_message', onQueueUpdate);
         socket.on('session:created', onSessionCreated);
         socket.on('session:state_change', onSessionStateChange);
         socket.on('session:new_message', onSessionNewMessage);
+        socket.on('chat:visitor_presence', onVisitorPresence);
 
         if (socket.connected) onConnect();
 
@@ -953,6 +983,7 @@ export default function LiveChatPage() {
             socket.off('session:created', onSessionCreated);
             socket.off('session:state_change', onSessionStateChange);
             socket.off('session:new_message', onSessionNewMessage);
+            socket.off('chat:visitor_presence', onVisitorPresence);
         };
     }, [dispatch]);
 
@@ -1267,9 +1298,23 @@ export default function LiveChatPage() {
     const canSend =
         selectedSession?.status === 'active' && !sessionEnded && socketConnected;
     const canClaim = selectedSession?.status === 'queued';
+    // Default to online when we have no presence signal (avoids false "away").
+    const visitorPresent = selectedSession
+        ? visitorOnline[selectedSession.sessionId] ?? true
+        : true;
 
-    const tabSessions = tab === 'queued' ? queuedSessions : activeSessions;
-    const tabLoading = tab === 'queued' ? queuedLoading : activeLoading;
+    const tabSessions =
+        tab === 'queued'
+            ? queuedSessions
+            : tab === 'active'
+              ? activeSessions
+              : resolvedSessions;
+    const tabLoading =
+        tab === 'queued'
+            ? queuedLoading
+            : tab === 'active'
+              ? activeLoading
+              : resolvedLoading;
 
     const filteredSessions = searchQuery
         ? tabSessions.filter((s) => {
@@ -1337,6 +1382,20 @@ export default function LiveChatPage() {
                                     </Badge>
                                 )}
                             </TabsTrigger>
+                            <TabsTrigger
+                                value="resolved"
+                                className="flex-1 gap-1.5"
+                            >
+                                Resolved
+                                {resolvedSessions.length > 0 && (
+                                    <Badge
+                                        variant="outline"
+                                        className="h-5 min-w-5 px-1.5 text-[10px]"
+                                    >
+                                        {resolvedSessions.length}
+                                    </Badge>
+                                )}
+                            </TabsTrigger>
                         </TabsList>
                     </Tabs>
                 </div>
@@ -1358,7 +1417,9 @@ export default function LiveChatPage() {
                             <p className="text-xs text-muted-foreground mt-1">
                                 {tab === 'queued'
                                     ? 'No clients are waiting right now.'
-                                    : 'No active chats at the moment.'}
+                                    : tab === 'active'
+                                      ? 'No active chats at the moment.'
+                                      : 'No resolved chats yet.'}
                             </p>
                         </div>
                     ) : (
@@ -1373,6 +1434,9 @@ export default function LiveChatPage() {
                                     onSelect={() => handleSelectSession(s)}
                                     unreadCount={
                                         unreadCounts[s.sessionId] ?? 0
+                                    }
+                                    visitorOnline={
+                                        visitorOnline[s.sessionId] ?? true
                                     }
                                 />
                             ))}
@@ -1476,9 +1540,36 @@ export default function LiveChatPage() {
                                                     : selectedSession.status}
                                             </Badge>
                                         </div>
-                                        <p className="text-xs text-muted-foreground truncate">
-                                            {sessionUser?.email}
-                                        </p>
+                                        <div className="flex items-center gap-2">
+                                            <p className="text-xs text-muted-foreground truncate">
+                                                {sessionUser?.email}
+                                            </p>
+                                            {selectedSession.status ===
+                                                'active' && (
+                                                <span className="flex items-center gap-1 shrink-0">
+                                                    <span
+                                                        className={cn(
+                                                            'size-1.5 rounded-full',
+                                                            visitorPresent
+                                                                ? 'bg-emerald-500'
+                                                                : 'bg-muted-foreground',
+                                                        )}
+                                                    />
+                                                    <span
+                                                        className={cn(
+                                                            'text-[10px]',
+                                                            visitorPresent
+                                                                ? 'text-emerald-600 dark:text-emerald-400'
+                                                                : 'text-muted-foreground',
+                                                        )}
+                                                    >
+                                                        {visitorPresent
+                                                            ? 'Online'
+                                                            : 'Away'}
+                                                    </span>
+                                                </span>
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
 

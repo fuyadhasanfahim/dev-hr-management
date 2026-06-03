@@ -16,6 +16,12 @@ const AVATAR_URL = 'https://res.cloudinary.com/dny7zfbg9/image/upload/v178032770
 const AI_CONVO_ID_KEY = 'webbriks_ai_conversation_id';
 const AI_HISTORY_KEY = 'webbriks_ai_history';
 
+// localStorage keys for live-chat session persistence (survives a tab close — an
+// agent may reply hours later, unlike the anonymous AI thread)
+const LIVE_SESSION_ID_KEY = 'webbriks_live_session_id';
+const LIVE_GUEST_TOKEN_KEY = 'webbriks_live_guest_token';
+const LIVE_MODE_KEY = 'webbriks_live_mode';
+
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 interface AIChatMessage {
@@ -199,6 +205,59 @@ export function FloatingAIChat() {
         }
     }, [chatHistory]);
 
+    // ── Live chat session persistence (localStorage) ─────────────────────────
+    // Reconnect to an in-progress live support session on mount so a refresh (or
+    // tab close/reopen) drops the visitor back into the same chat. Only the
+    // token + sessionId are stored; the server replays full history via
+    // `chat:joined` on reconnect, which also sets mode to 'live-chat'. Runs after
+    // the AI rehydration above, so the live reconnect takes precedence for mode.
+    useEffect(() => {
+        try {
+            const savedMode = localStorage.getItem(LIVE_MODE_KEY);
+            const savedSid = localStorage.getItem(LIVE_SESSION_ID_KEY);
+            const savedToken = localStorage.getItem(LIVE_GUEST_TOKEN_KEY);
+            if (savedMode === 'live-chat' && savedSid && savedToken) {
+                setSessionId(savedSid);
+                setGuestToken(savedToken);
+                connectToLiveChat(savedToken, savedSid);
+            }
+        } catch {
+            // localStorage can be unavailable (private mode / blocked) — ignore.
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    // Persist the live session id while it is active.
+    useEffect(() => {
+        if (!sessionId) return;
+        try {
+            localStorage.setItem(LIVE_SESSION_ID_KEY, sessionId);
+        } catch {
+            // ignore storage failures
+        }
+    }, [sessionId]);
+
+    // Persist the guest token while it is active.
+    useEffect(() => {
+        if (!guestToken) return;
+        try {
+            localStorage.setItem(LIVE_GUEST_TOKEN_KEY, guestToken);
+        } catch {
+            // ignore storage failures
+        }
+    }, [guestToken]);
+
+    // Persist the mode only while in live chat. Clearing is handled explicitly on
+    // chat end / connect failure / reset — never when the mode merely changes away.
+    useEffect(() => {
+        if (mode !== 'live-chat') return;
+        try {
+            localStorage.setItem(LIVE_MODE_KEY, 'live-chat');
+        } catch {
+            // ignore storage failures
+        }
+    }, [mode]);
+
     // ── AI Chat ──────────────────────────────────────────────────────────────
 
     function openChat() {
@@ -232,6 +291,13 @@ export function FloatingAIChat() {
         } catch {
             // ignore storage failures
         }
+        try {
+            localStorage.removeItem(LIVE_SESSION_ID_KEY);
+            localStorage.removeItem(LIVE_GUEST_TOKEN_KEY);
+            localStorage.removeItem(LIVE_MODE_KEY);
+        } catch {
+            // ignore storage failures
+        }
         setInput('');
         setGuestStep('info');
         setGuestName('');
@@ -244,6 +310,18 @@ export function FloatingAIChat() {
         setLiveInput('');
         setAgentTyping(null);
         setChatEnded(false);
+    }
+
+    // Header back arrow. Leaving an ACTIVE live chat keeps the session alive (so
+    // the visitor can return via reconnect) and just tells the agent we're away.
+    // Otherwise (guest-login, or an already-ended chat) fall back to a full reset.
+    function handleHeaderBack() {
+        if (mode === 'live-chat' && socketRef.current && sessionId && !chatEnded) {
+            socketRef.current.emit('chat:visitor_away', { sessionId });
+            setMode('ai');
+            return;
+        }
+        resetAll();
     }
 
     async function sendAIMessage(e?: React.FormEvent) {
@@ -450,6 +528,14 @@ export function FloatingAIChat() {
 
         socket.on('chat:closed', ({ endedBy }: { endedBy: string }) => {
             setChatEnded(true);
+            // Session is dead — never restore it on reload.
+            try {
+                localStorage.removeItem(LIVE_SESSION_ID_KEY);
+                localStorage.removeItem(LIVE_GUEST_TOKEN_KEY);
+                localStorage.removeItem(LIVE_MODE_KEY);
+            } catch {
+                // ignore storage failures
+            }
             setLiveMessages((prev) => [...prev, {
                 _id: `system-closed-${Date.now()}`,
                 content: `Chat ended by ${endedBy}.`,
@@ -462,6 +548,14 @@ export function FloatingAIChat() {
         socket.on('connect_error', () => {
             setGuestError('Failed to connect to live chat. Please try again.');
             setMode('guest-login');
+            // Drop a permanently-dead session so reload doesn't keep retrying it.
+            try {
+                localStorage.removeItem(LIVE_SESSION_ID_KEY);
+                localStorage.removeItem(LIVE_GUEST_TOKEN_KEY);
+                localStorage.removeItem(LIVE_MODE_KEY);
+            } catch {
+                // ignore storage failures
+            }
         });
     }
 
@@ -547,7 +641,7 @@ export function FloatingAIChat() {
                             <div className="flex items-center gap-2">
                                 {mode !== 'ai' && (
                                     <button
-                                        onClick={resetAll}
+                                        onClick={handleHeaderBack}
                                         className="rounded-full p-1 text-white/70 hover:bg-white/10 hover:text-white transition-colors"
                                     >
                                         <ArrowLeft className="h-4 w-4" />

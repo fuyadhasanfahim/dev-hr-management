@@ -68,6 +68,11 @@ export const chatApi = baseApi.injectEndpoints({
             transformResponse: (res: { data: ChatSession[] }) => res.data ?? [],
             providesTags: ['ActiveSessions'],
         }),
+        getResolvedSessions: builder.query<ChatSession[], void>({
+            query: () => '/support/chat/sessions/resolved',
+            transformResponse: (res: { data: ChatSession[] }) => res.data ?? [],
+            providesTags: ['ResolvedSessions'],
+        }),
         getSessionMessages: builder.query<ChatMessage[], string>({
             query: (sessionId) => `/support/chat/sessions/${sessionId}/messages`,
             transformResponse: (res: { data: ChatMessage[] }) => res.data ?? [],
@@ -159,6 +164,7 @@ export const chatApi = baseApi.injectEndpoints({
 export const {
     useGetQueuedSessionsQuery,
     useGetActiveSessionsQuery,
+    useGetResolvedSessionsQuery,
     useGetSessionMessagesQuery,
     useClaimSessionMutation,
     useCloseSessionMutation,
