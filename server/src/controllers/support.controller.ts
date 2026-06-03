@@ -5,7 +5,7 @@ import supportTicketService from '../services/support-ticket.service.js';
 import liveChatService from '../services/live-chat.service.js';
 import cloudinaryMigrationService from '../services/cloudinary-migration.service.js';
 import StaffModel from '../models/staff.model.js';
-import { getSupportNamespace } from '../socket/support.namespace.js';
+import { getSupportNamespace, notifyNewSession } from '../socket/support.namespace.js';
 
 function emitSessionStateChange(type: string, sessionId: string) {
     const ns = getSupportNamespace();
@@ -177,6 +177,7 @@ async function createChatSession(req: Request, res: Response) {
         }
 
         const result = await liveChatService.createChatSession(args);
+        notifyNewSession(result.sessionId);
         return res.status(201).json({ success: true, data: result });
     } catch (err: any) {
         return res.status(err.statusCode || 400).json({ success: false, message: err.message });

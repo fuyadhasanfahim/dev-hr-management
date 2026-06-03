@@ -129,3 +129,4 @@ support-test-client/node_modules/
 support-test-client/dist/
 support-test-client/dist-ssr/
 support-test-client/*.local
+SUPPORT_AND_CHAT_SUGGESTIONS.md

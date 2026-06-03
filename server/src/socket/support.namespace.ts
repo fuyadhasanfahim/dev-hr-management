@@ -12,6 +12,15 @@ export function getSupportNamespace(): Namespace | null {
     return supportNamespaceRef;
 }
 
+/**
+ * Broadcasts a `session:created` event to all online agents so a brand-new
+ * queued session (created via REST when a visitor escalates) appears in the
+ * console queue instantly, without waiting for the polling interval.
+ */
+export function notifyNewSession(sessionId: string): void {
+    supportNamespaceRef?.to('agents_presence').emit('session:created', { sessionId });
+}
+
 export function registerSupportNamespace(io: Server) {
     const supportNamespace = io.of('/support');
     supportNamespaceRef = supportNamespace;
@@ -50,15 +59,46 @@ export function registerSupportNamespace(io: Server) {
                 const messages = await ChatMessageModel.find({ sessionId: session._id }).sort({ createdAt: 1 }).limit(100);
                 socket.emit('chat:joined', { session, messages });
 
-                if (user.role !== 'Guest' && user.role !== 'client') {
-                    socket.to(sessionId).emit('chat:agent_joined', {
-                        agentId: user.id,
-                        agentName: user.name,
-                    });
-                }
+                // NOTE: joining a room is silent. The "agent has joined" notice is
+                // emitted from the `chat:claim` handler, fired only on a real claim.
             } catch (err: any) {
                 logger.error(`[Support Socket] Error in chat:join: ${err.message}`);
                 socket.emit('error', { message: 'Failed to join support session' });
+            }
+        });
+
+        socket.on('chat:claim', async ({ sessionId }: { sessionId: string }) => {
+            try {
+                if (!sessionId) {
+                    socket.emit('error', { message: 'Session ID is required' });
+                    return;
+                }
+
+                const session = await ChatSessionModel.findOne({ sessionId });
+                if (!session) {
+                    socket.emit('error', { message: 'Chat session not found' });
+                    return;
+                }
+
+                // Staff only — visitors cannot claim a session.
+                if (user.role === 'Guest' || user.role === 'client') {
+                    return;
+                }
+
+                // Tell the visitor an agent has joined (fires on real claim only).
+                socket.to(sessionId).emit('chat:agent_joined', {
+                    agentId: user.id,
+                    agentName: user.name,
+                });
+
+                // Move the session queued → active live in every agent's sidebar.
+                supportNamespace.to('agents_presence').emit('session:state_change', {
+                    type: 'claimed',
+                    sessionId,
+                });
+            } catch (err: any) {
+                logger.error(`[Support Socket] Error in chat:claim: ${err.message}`);
+                socket.emit('error', { message: 'Failed to claim support session' });
             }
         });
 

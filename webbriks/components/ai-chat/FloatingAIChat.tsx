@@ -740,7 +740,7 @@ export function FloatingAIChat() {
                             <>
                                 <div
                                     ref={messagesContainerRef}
-                                    className="flex-1 overflow-y-auto overscroll-contain px-4 py-3 space-y-3"
+                                    className="flex-1 overflow-y-auto overscroll-contain px-4 py-3"
                                     style={{ background: '#060A14', touchAction: 'none' }}
                                     onTouchMove={(e) => e.stopPropagation()}
                                 >
@@ -756,12 +756,31 @@ export function FloatingAIChat() {
                                     )}
 
                                     <AnimatePresence initial={false}>
-                                        {liveMessages.map((msg) => {
+                                        {liveMessages.map((msg, i) => {
                                             const isMe = msg.senderModel === 'Guest';
                                             const isSystem = msg.senderModel === 'System';
+                                            const prev = i > 0 ? liveMessages[i - 1] : null;
+                                            // New group when sender changes, across a
+                                            // system boundary, or after a >60s gap.
+                                            const isFirstInGroup =
+                                                !prev ||
+                                                prev.senderModel === 'System' ||
+                                                msg.senderModel === 'System' ||
+                                                prev.senderModel !== msg.senderModel ||
+                                                new Date(msg.createdAt).getTime() -
+                                                    new Date(prev.createdAt).getTime() >
+                                                    60_000;
+                                            const time = new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
                                             return (
-                                                <motion.div key={msg._id} variants={messageVariants} initial="hidden" animate="visible" layout>
+                                                <motion.div
+                                                    key={msg._id}
+                                                    variants={messageVariants}
+                                                    initial="hidden"
+                                                    animate="visible"
+                                                    layout
+                                                    className={isSystem || isFirstInGroup ? 'mt-3' : 'mt-0.5'}
+                                                >
                                                     {isSystem ? (
                                                         <div className="flex justify-center">
                                                             <span className="text-[11px] text-[#A7ADBE] px-3 py-1 rounded-full" style={{ background: '#0F1423' }}>
@@ -771,12 +790,16 @@ export function FloatingAIChat() {
                                                     ) : (
                                                         <div className={`flex gap-2 ${isMe ? 'justify-end' : 'justify-start'}`}>
                                                             {!isMe && (
-                                                                <div className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full" style={{ background: '#1A4FFF' }}>
-                                                                    <Headphones className="h-3.5 w-3.5 text-white" />
-                                                                </div>
+                                                                isFirstInGroup ? (
+                                                                    <div className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full" style={{ background: '#1A4FFF' }}>
+                                                                        <Headphones className="h-3.5 w-3.5 text-white" />
+                                                                    </div>
+                                                                ) : (
+                                                                    <div className="h-7 w-7 shrink-0" aria-hidden />
+                                                                )
                                                             )}
                                                             <div className="max-w-[75%]">
-                                                                {!isMe && (
+                                                                {!isMe && isFirstInGroup && (
                                                                     <p className="text-[10px] text-[#A7ADBE] mb-0.5 ml-1">{msg.senderName}</p>
                                                                 )}
                                                                 <div
@@ -788,11 +811,18 @@ export function FloatingAIChat() {
                                                                 >
                                                                     {msg.content}
                                                                 </div>
+                                                                <p className={`text-[10px] text-[#A7ADBE] mt-0.5 ${isMe ? 'text-right mr-1' : 'ml-1'}`}>
+                                                                    {time}
+                                                                </p>
                                                             </div>
                                                             {isMe && (
-                                                                <div className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#161C44]">
-                                                                    <User className="h-4 w-4 text-[#A7ADBE]" />
-                                                                </div>
+                                                                isFirstInGroup ? (
+                                                                    <div className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#161C44]">
+                                                                        <User className="h-4 w-4 text-[#A7ADBE]" />
+                                                                    </div>
+                                                                ) : (
+                                                                    <div className="h-7 w-7 shrink-0" aria-hidden />
+                                                                )
                                                             )}
                                                         </div>
                                                     )}
@@ -804,7 +834,7 @@ export function FloatingAIChat() {
                                     {/* Agent typing */}
                                     <AnimatePresence>
                                         {agentTyping && (
-                                            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 8 }} className="flex gap-2">
+                                            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 8 }} className="flex gap-2 mt-3">
                                                 <div className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full" style={{ background: '#1A4FFF' }}>
                                                     <Headphones className="h-3.5 w-3.5 text-white" />
                                                 </div>

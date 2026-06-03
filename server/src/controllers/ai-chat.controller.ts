@@ -3,11 +3,13 @@ import { processAIChat, getWebBriksInfo } from '../services/ai-chat.service.js';
 import consultationService from '../services/consultation.service.js';
 import liveChatService from '../services/live-chat.service.js';
 import supportTicketService from '../services/support-ticket.service.js';
+import aiConversationService from '../services/ai-conversation.service.js';
+import { notifyNewSession } from '../socket/support.namespace.js';
 import { logger } from '../lib/logger.js';
 
 async function chat(req: Request, res: Response) {
     try {
-        const { message, history } = req.body;
+        const { message, history, conversationId } = req.body;
 
         if (!message || typeof message !== 'string') {
             return res.status(400).json({ success: false, message: 'Message is required' });
@@ -47,7 +49,25 @@ async function chat(req: Request, res: Response) {
             }
         }
 
-        return res.status(200).json({ success: true, data: result });
+        // Persist the AI chat turn (non-blocking — never fail the chat on a logging error)
+        let savedConversationId: string | undefined;
+        try {
+            const isGuest = req.user?.role === 'Guest';
+            const conversation = await aiConversationService.appendTurn({
+                conversationId,
+                clientId: !isGuest ? req.user?.id : undefined,
+                guestId: isGuest ? req.user?.id : undefined,
+                visitorEmail: result.consultationData?.email,
+                userMessage: message,
+                aiReply: result.reply,
+                action: result.action,
+            });
+            savedConversationId = conversation.conversationId;
+        } catch (err: any) {
+            logger.error(`Failed to persist AI conversation: ${err.message}`);
+        }
+
+        return res.status(200).json({ success: true, data: result, conversationId: savedConversationId });
     } catch (err: any) {
         const geminiStatus = err.status ?? err.statusCode ?? 0;
         logger.error(`AI Chat error: [status=${geminiStatus}] ${err.message} ${err.stack ?? ''}`);
@@ -113,6 +133,7 @@ async function connectLiveSupport(req: Request, res: Response) {
         }
 
         const result = await liveChatService.createChatSession(args);
+        notifyNewSession(result.sessionId);
         return res.status(201).json({ success: true, data: result });
     } catch (err: any) {
         logger.error(`AI live support connect error: ${err.message}`);

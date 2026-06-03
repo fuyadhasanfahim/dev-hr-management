@@ -265,9 +265,10 @@ function AttachmentPreview({ url }: { url: string }) {
 interface MessageBubbleProps {
     message: ChatMessage;
     isOwn: boolean;
+    isFirstInGroup: boolean;
 }
 
-function MessageBubble({ message, isOwn }: MessageBubbleProps) {
+function MessageBubble({ message, isOwn, isFirstInGroup }: MessageBubbleProps) {
     const isSystem = message.senderModel === 'System';
     if (isSystem) {
         return (
@@ -282,24 +283,30 @@ function MessageBubble({ message, isOwn }: MessageBubbleProps) {
     return (
         <div
             className={cn(
-                'flex items-end gap-2.5 group',
+                'flex items-end gap-2.5',
                 isOwn ? 'flex-row-reverse' : 'flex-row',
+                // Tight stacking for grouped messages, breathing room for new groups.
+                isFirstInGroup ? 'mt-3' : 'mt-0.5',
             )}
         >
-            {!isOwn && (
-                <Avatar className="size-7 shrink-0 mb-5">
-                    <AvatarFallback className="text-[10px] bg-muted text-muted-foreground font-medium">
-                        {message.senderName.charAt(0).toUpperCase()}
-                    </AvatarFallback>
-                </Avatar>
-            )}
+            {!isOwn &&
+                (isFirstInGroup ? (
+                    <Avatar className="size-7 shrink-0 mb-5">
+                        <AvatarFallback className="text-[10px] bg-muted text-muted-foreground font-medium">
+                            {message.senderName.charAt(0).toUpperCase()}
+                        </AvatarFallback>
+                    </Avatar>
+                ) : (
+                    // Spacer keeps grouped bubbles aligned under the avatar.
+                    <div className="size-7 shrink-0" aria-hidden />
+                ))}
             <div
                 className={cn(
                     'max-w-[70%] space-y-1',
                     isOwn ? 'items-end' : 'items-start',
                 )}
             >
-                {!isOwn && (
+                {!isOwn && isFirstInGroup && (
                     <p className="text-[11px] text-muted-foreground px-1 font-medium">
                         {message.senderName}
                     </p>
@@ -323,7 +330,7 @@ function MessageBubble({ message, isOwn }: MessageBubbleProps) {
                 </div>
                 <p
                     className={cn(
-                        'text-[10px] text-muted-foreground px-1 opacity-0 group-hover:opacity-100 transition-opacity',
+                        'text-[10px] text-muted-foreground px-1',
                         isOwn && 'text-right',
                     )}
                 >
@@ -896,6 +903,14 @@ export default function LiveChatPage() {
             dispatch(baseApi.util.invalidateTags(['QueuedSessions']));
         };
 
+        // A brand-new session was created (visitor escalated via REST). Refresh
+        // the queue immediately so it appears without waiting for the poll.
+        const onSessionCreated = () => {
+            dispatch(baseApi.util.invalidateTags(['QueuedSessions']));
+        };
+
+        // State changed (claimed / closed / reassigned). Invalidate BOTH lists so
+        // a claimed session leaves the queue and enters active live.
         const onSessionStateChange = () => {
             dispatch(
                 baseApi.util.invalidateTags([
@@ -925,6 +940,7 @@ export default function LiveChatPage() {
         socket.on('connect', onConnect);
         socket.on('disconnect', onDisconnect);
         socket.on('queue:new_message', onQueueUpdate);
+        socket.on('session:created', onSessionCreated);
         socket.on('session:state_change', onSessionStateChange);
         socket.on('session:new_message', onSessionNewMessage);
 
@@ -934,6 +950,7 @@ export default function LiveChatPage() {
             socket.off('connect', onConnect);
             socket.off('disconnect', onDisconnect);
             socket.off('queue:new_message', onQueueUpdate);
+            socket.off('session:created', onSessionCreated);
             socket.off('session:state_change', onSessionStateChange);
             socket.off('session:new_message', onSessionNewMessage);
         };
@@ -1074,6 +1091,11 @@ export default function LiveChatPage() {
         async (session: ChatSession) => {
             const result = await claimSession(session.sessionId);
             if ('data' in result && result.data) {
+                // Announce the claim so the visitor sees "agent has joined" and
+                // every agent's sidebar moves the session queued → active.
+                socketRef.current?.emit('chat:claim', {
+                    sessionId: session.sessionId,
+                });
                 setSelectedSession(result.data);
                 setTab('active');
                 const params = new URLSearchParams(searchParams.toString());
@@ -1604,7 +1626,7 @@ export default function LiveChatPage() {
 
                         {/* Messages */}
                         <div className="flex-1 min-h-0 overflow-y-auto">
-                            <div className="px-5 py-5 space-y-4">
+                            <div className="px-5 py-5">
                                 {messages.length === 0 && (
                                     <div className="flex justify-center py-12">
                                         <p className="text-sm text-muted-foreground">
@@ -1613,13 +1635,27 @@ export default function LiveChatPage() {
                                         </p>
                                     </div>
                                 )}
-                                {messages.map((msg) => (
-                                    <MessageBubble
-                                        key={msg._id}
-                                        message={msg}
-                                        isOwn={msg.sender === currentUserId}
-                                    />
-                                ))}
+                                {messages.map((msg, i) => {
+                                    const prev = i > 0 ? messages[i - 1] : null;
+                                    // Start a new group when the sender changes,
+                                    // across a system boundary, or after a >60s gap.
+                                    const isFirstInGroup =
+                                        !prev ||
+                                        prev.senderModel === 'System' ||
+                                        msg.senderModel === 'System' ||
+                                        prev.sender !== msg.sender ||
+                                        new Date(msg.createdAt).getTime() -
+                                            new Date(prev.createdAt).getTime() >
+                                            60_000;
+                                    return (
+                                        <MessageBubble
+                                            key={msg._id}
+                                            message={msg}
+                                            isOwn={msg.sender === currentUserId}
+                                            isFirstInGroup={isFirstInGroup}
+                                        />
+                                    );
+                                })}
                                 <div ref={messagesEndRef} />
                             </div>
                         </div>
