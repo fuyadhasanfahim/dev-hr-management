@@ -44,6 +44,13 @@ export interface AgentInfo {
     designation?: string;
 }
 
+export interface DashboardStats {
+    openTickets: number;
+    liveChats: number;
+    resolvedToday: number;
+    avgResponseTimeMinutes: number | null;
+}
+
 export interface Meeting {
     _id: string;
     meetingTitle: string;
@@ -72,6 +79,11 @@ export const chatApi = baseApi.injectEndpoints({
             query: () => '/support/chat/sessions/resolved',
             transformResponse: (res: { data: ChatSession[] }) => res.data ?? [],
             providesTags: ['ResolvedSessions'],
+        }),
+        getDashboardStats: builder.query<DashboardStats, void>({
+            query: () => '/support/dashboard/stats',
+            transformResponse: (res: { data: DashboardStats }) => res.data,
+            providesTags: ['DashboardStats'],
         }),
         getSessionMessages: builder.query<ChatMessage[], string>({
             query: (sessionId) => `/support/chat/sessions/${sessionId}/messages`,
@@ -165,6 +177,7 @@ export const {
     useGetQueuedSessionsQuery,
     useGetActiveSessionsQuery,
     useGetResolvedSessionsQuery,
+    useGetDashboardStatsQuery,
     useGetSessionMessagesQuery,
     useClaimSessionMutation,
     useCloseSessionMutation,

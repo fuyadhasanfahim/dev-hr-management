@@ -225,6 +225,7 @@ async function triggerCloudinaryMigration(_req: Request, res: Response) {
 
 import ChatSessionModel from '../models/chat-session.model.js';
 import ChatMessageModel, { ChatSenderModel } from '../models/chat-message.model.js';
+import TicketModel from '../models/ticket.model.js';
 import { Types } from 'mongoose';
 
 /**
@@ -319,6 +320,40 @@ async function listResolvedChatSessions(_req: Request, res: Response) {
         return res.status(200).json({ success: true, data: result });
     } catch (err: any) {
         return res.status(500).json({ success: false, message: err.message });
+    }
+}
+
+/**
+ * Staff: Aggregate counters for the support console Overview page.
+ */
+async function getSupportDashboardStats(_req: Request, res: Response) {
+    try {
+        // Start of "today" in the server's local timezone.
+        const startOfToday = new Date();
+        startOfToday.setHours(0, 0, 0, 0);
+
+        const [openTickets, liveChats, resolvedToday] = await Promise.all([
+            TicketModel.countDocuments({
+                status: { $in: ['open', 'in_progress', 'pending_client'] },
+            }),
+            ChatSessionModel.countDocuments({ status: 'active' }),
+            ChatSessionModel.countDocuments({
+                status: { $in: ['ended', 'converted_to_ticket'] },
+                updatedAt: { $gte: startOfToday },
+            }),
+        ]);
+
+        // TODO: avg response time needs a per-session scan pairing each client/guest
+        // message with the next staff reply. Deferred to keep this endpoint fast and
+        // cheap; the UI hides this metric (shows "—") while it is null.
+        const avgResponseTimeMinutes: number | null = null;
+
+        return res.status(200).json({
+            success: true,
+            data: { openTickets, liveChats, resolvedToday, avgResponseTimeMinutes },
+        });
+    } catch (err: any) {
+        return res.status(err.statusCode || 500).json({ success: false, message: err.message });
     }
 }
 
@@ -543,6 +578,7 @@ export default {
     listQueuedChatSessions,
     listActiveChatSessions,
     listResolvedChatSessions,
+    getSupportDashboardStats,
     getChatSessionMessages,
     claimChatSessionParam,
     closeChatSessionParam,

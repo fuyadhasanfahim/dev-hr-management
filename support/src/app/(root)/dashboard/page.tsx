@@ -1,6 +1,5 @@
 'use client';
 
-import { useState, useEffect } from 'react';
 import {
     Ticket,
     MessageSquare,
@@ -14,43 +13,54 @@ import {
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
+import {
+    useGetDashboardStatsQuery,
+    type DashboardStats,
+} from '@/store/api/chatApi';
 
-interface StatCard {
+interface StatCardMeta {
     label: string;
-    value: string;
-    trend: number | null;
     icon: React.ElementType;
     color: string;
+    // Pull the display value for this card from the stats payload.
+    getValue: (d: DashboardStats | undefined) => string;
 }
 
-const STAT_CARDS: StatCard[] = [
+function fmtCount(n: number | undefined): string {
+    return typeof n === 'number' ? String(n) : '—';
+}
+
+function fmtAvgResponse(mins: number | null | undefined): string {
+    // null/undefined → genuinely unavailable; show an em dash (no fabricated trend).
+    if (mins == null) return '—';
+    if (mins < 1) return `${Math.round(mins * 60)}s`;
+    return `${Math.round(mins)}m`;
+}
+
+const STAT_CARDS: StatCardMeta[] = [
     {
         label: 'Open Tickets',
-        value: '—',
-        trend: null,
         icon: Ticket,
         color: 'bg-blue-500/15 text-blue-500',
+        getValue: (d) => fmtCount(d?.openTickets),
     },
     {
         label: 'Live Chats',
-        value: '—',
-        trend: null,
         icon: MessageSquare,
         color: 'bg-violet-500/15 text-violet-500',
+        getValue: (d) => fmtCount(d?.liveChats),
     },
     {
         label: 'Resolved Today',
-        value: '—',
-        trend: null,
         icon: CheckCircle,
         color: 'bg-emerald-500/15 text-emerald-500',
+        getValue: (d) => fmtCount(d?.resolvedToday),
     },
     {
         label: 'Avg. Response Time',
-        value: '—',
-        trend: null,
         icon: Clock,
         color: 'bg-amber-500/15 text-amber-500',
+        getValue: (d) => fmtAvgResponse(d?.avgResponseTimeMinutes),
     },
 ];
 
@@ -99,12 +109,9 @@ function StatCardSkeleton() {
 }
 
 export default function DashboardPage() {
-    const [loading, setLoading] = useState(true);
-
-    useEffect(() => {
-        const t = setTimeout(() => setLoading(false), 1200);
-        return () => clearTimeout(t);
-    }, []);
+    const { data, isLoading } = useGetDashboardStatsQuery(undefined, {
+        pollingInterval: 30_000,
+    });
 
     return (
         <div className="flex flex-col gap-6 p-6">
@@ -117,7 +124,7 @@ export default function DashboardPage() {
 
             {/* Stat Cards */}
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                {loading
+                {isLoading
                     ? STAT_CARDS.map((_, i) => <StatCardSkeleton key={i} />)
                     : STAT_CARDS.map((card) => {
                         const Icon = card.icon;
@@ -127,8 +134,9 @@ export default function DashboardPage() {
                                     <div className="flex items-start justify-between">
                                         <div className="space-y-1">
                                             <p className="text-sm text-muted-foreground">{card.label}</p>
-                                            <p className="text-3xl font-bold text-foreground">{card.value}</p>
-                                            <TrendBadge trend={card.trend} />
+                                            <p className="text-3xl font-bold text-foreground">{card.getValue(data)}</p>
+                                            {/* TODO: real trends need a day-over-day snapshot; keep null until then. */}
+                                            <TrendBadge trend={null} />
                                         </div>
                                         <div className={cn('size-10 rounded-xl flex items-center justify-center shrink-0', card.color)}>
                                             <Icon className="size-5" />
@@ -144,7 +152,7 @@ export default function DashboardPage() {
             <Card className="shadow-sm">
                 <CardContent className="p-5">
                     <p className="text-sm font-medium mb-4">Recent Activity</p>
-                    {loading ? (
+                    {isLoading ? (
                         <div className="space-y-3">
                             {[...Array(4)].map((_, i) => (
                                 <div key={i} className="flex items-center gap-3">
@@ -163,7 +171,7 @@ export default function DashboardPage() {
                             </div>
                             <p className="text-sm font-medium text-foreground">No recent activity</p>
                             <p className="text-xs text-muted-foreground mt-1">
-                                Activity will appear here once connected to the API.
+                                No recent activity yet.
                             </p>
                         </div>
                     )}
