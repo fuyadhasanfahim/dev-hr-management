@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import envConfig from '../config/env.config.js';
 import crypto from 'crypto';
@@ -47,6 +47,19 @@ export async function generatePresignedUploadUrl({
     };
 }
 
+/**
+ * Generates a pre-signed GET URL so the browser can view/download a private S3 object.
+ */
+export async function generatePresignedViewUrl(fileKey: string): Promise<string> {
+    const command = new GetObjectCommand({
+        Bucket: envConfig.aws_bucket_name || 'dummy-bucket',
+        Key: fileKey,
+    });
+
+    return await getSignedUrl(s3Client, command, { expiresIn: 900 });
+}
+
 export default {
     generatePresignedUploadUrl,
+    generatePresignedViewUrl,
 };

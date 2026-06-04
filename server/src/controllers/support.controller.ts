@@ -1,6 +1,7 @@
 import type { Request, Response } from 'express';
 import guestAuthService from '../services/guest-auth.service.js';
 import attachmentService from '../services/attachment.service.js';
+import { generatePresignedViewUrl } from '../services/s3-upload.service.js';
 import supportTicketService from '../services/support-ticket.service.js';
 import liveChatService from '../services/live-chat.service.js';
 import chatSummaryService from '../services/chat-summary.service.js';
@@ -55,6 +56,28 @@ async function requestPresignedUrl(req: Request, res: Response) {
         return res.status(200).json({ success: true, data: result });
     } catch (err: any) {
         return res.status(err.statusCode || 400).json({ success: false, message: err.message });
+    }
+}
+
+/**
+ * Protected: Get a pre-signed GET URL for viewing/downloading a private S3 object.
+ */
+async function getPresignedViewUrl(req: Request, res: Response) {
+    try {
+        const fileKey = req.query.fileKey as string;
+        if (!fileKey || typeof fileKey !== 'string') {
+            return res.status(400).json({ success: false, message: 'fileKey query parameter is required.' });
+        }
+
+        const ALLOWED_PREFIXES = ['chats/', 'tickets/'];
+        if (!ALLOWED_PREFIXES.some((p) => fileKey.startsWith(p))) {
+            return res.status(403).json({ success: false, message: 'Access denied: invalid file key.' });
+        }
+
+        const viewUrl = await generatePresignedViewUrl(fileKey);
+        return res.status(200).json({ success: true, data: { viewUrl } });
+    } catch (err: any) {
+        return res.status(err.statusCode || 500).json({ success: false, message: err.message });
     }
 }
 
@@ -667,6 +690,7 @@ export default {
     requestGuestOtp,
     verifyGuestOtp,
     requestPresignedUrl,
+    getPresignedViewUrl,
     createSupportTicket,
     getTicketDetails,
     replyToTicket,

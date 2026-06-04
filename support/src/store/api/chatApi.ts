@@ -142,6 +142,10 @@ export const chatApi = baseApi.injectEndpoints({
             }),
             transformResponse: (res: { data: { uploadUrl: string; fileUrl: string; fileKey: string } }) => res.data,
         }),
+        getPresignedViewUrl: builder.query<{ viewUrl: string }, string>({
+            query: (fileKey) => `/support/attachments/view-url?fileKey=${encodeURIComponent(fileKey)}`,
+            transformResponse: (res: { data: { viewUrl: string } }) => res.data,
+        }),
         getAvailableAgents: builder.query<AgentInfo[], void>({
             query: () => '/support/chat/agents',
             transformResponse: (res: { data: AgentInfo[] }) => res.data ?? [],
@@ -191,6 +195,7 @@ export const {
     useConvertToTicketMutation,
     useGetUnreadCountsQuery,
     useRequestPresignedUrlMutation,
+    useLazyGetPresignedViewUrlQuery,
     useGetAvailableAgentsQuery,
     useReassignSessionMutation,
     useCreateMeetingMutation,

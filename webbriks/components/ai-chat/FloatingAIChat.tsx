@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useCallback, Fragment, type ReactNode } fr
 import {
     MessageCircle, X, Send, User, Ticket, Headphones,
     RotateCcw, CalendarCheck, ArrowLeft, Mail, Loader2,
+    Paperclip, FileText, Download,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { io, type Socket } from 'socket.io-client';
@@ -43,6 +44,115 @@ interface LiveMessage {
     senderModel: 'Client' | 'Staff' | 'Guest' | 'System';
     senderName: string;
     createdAt: string;
+    attachments?: string[];
+}
+
+const MAX_UPLOAD_SIZE = 10 * 1024 * 1024; // 10MB
+
+function isImageUrl(url: string): boolean {
+    return /\.(png|jpe?g|gif|webp|svg)(\?|$)/i.test(url);
+}
+
+function getFileName(url: string): string {
+    try {
+        const pathname = new URL(url).pathname;
+        return decodeURIComponent(pathname.split('/').pop() || 'file');
+    } catch {
+        return 'file';
+    }
+}
+
+function extractS3Key(url: string): string | null {
+    try {
+        const u = new URL(url);
+        const key = u.pathname.replace(/^\//, '');
+        if (key.startsWith('chats/') || key.startsWith('tickets/')) return key;
+    } catch {
+        if (url.startsWith('chats/') || url.startsWith('tickets/')) return url;
+    }
+    return null;
+}
+
+function WidgetAttachment({ url, token }: { url: string; token: string | null }) {
+    const [viewUrl, setViewUrl] = useState<string | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(false);
+
+    useEffect(() => {
+        let cancelled = false;
+        const fileKey = extractS3Key(url);
+        if (!fileKey || !token) {
+            setViewUrl(url);
+            setLoading(false);
+            return;
+        }
+
+        fetch(`${API_URL}/api/support/attachments/view-url?fileKey=${encodeURIComponent(fileKey)}`, {
+            headers: { Authorization: `Bearer ${token}` },
+        })
+            .then((res) => res.json())
+            .then((data) => {
+                if (!cancelled) {
+                    if (data.success) {
+                        setViewUrl(data.data.viewUrl);
+                    } else {
+                        setError(true);
+                    }
+                    setLoading(false);
+                }
+            })
+            .catch(() => {
+                if (!cancelled) {
+                    setError(true);
+                    setLoading(false);
+                }
+            });
+
+        return () => { cancelled = true; };
+    }, [url, token]);
+
+    if (loading) {
+        return (
+            <div className="mt-1.5 flex items-center gap-1.5">
+                <Loader2 className="h-3 w-3 animate-spin text-[#A7ADBE]" />
+                <span className="text-[11px] text-[#A7ADBE]">Loading...</span>
+            </div>
+        );
+    }
+
+    if (error || !viewUrl) {
+        return (
+            <div className="mt-1.5 text-[11px] text-[#A7ADBE]/60">Attachment unavailable</div>
+        );
+    }
+
+    if (isImageUrl(url)) {
+        return (
+            <a href={viewUrl} target="_blank" rel="noopener noreferrer" className="block mt-1.5">
+                <img
+                    src={viewUrl}
+                    alt="Attachment"
+                    className="max-w-[180px] max-h-[120px] rounded-lg object-cover"
+                    style={{ border: '1px solid rgba(255,255,255,0.1)' }}
+                    loading="lazy"
+                />
+            </a>
+        );
+    }
+
+    return (
+        <a
+            href={viewUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1.5 mt-1.5 px-2.5 py-1.5 rounded-lg text-[11px] transition-colors hover:brightness-125 max-w-[180px]"
+            style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}
+        >
+            <FileText className="h-3.5 w-3.5 shrink-0 text-[#A7ADBE]" />
+            <span className="truncate flex-1 text-[#E0E4ED]">{getFileName(url)}</span>
+            <Download className="h-3 w-3 shrink-0 text-[#A7ADBE]" />
+        </a>
+    );
 }
 
 type Mode = 'ai' | 'guest-login' | 'live-chat';
@@ -281,10 +391,15 @@ export function FloatingAIChat() {
     const [agentTyping, setAgentTyping] = useState<string | null>(null);
     const [chatEnded, setChatEnded] = useState(false);
 
+    // ── file upload state ──────────────────────────────────────────────────
+    const [liveUploading, setLiveUploading] = useState(false);
+    const [liveUploadError, setLiveUploadError] = useState('');
+
     // ── refs ─────────────────────────────────────────────────────────────────
     const messagesContainerRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLTextAreaElement>(null);
     const liveInputRef = useRef<HTMLTextAreaElement>(null);
+    const liveFileInputRef = useRef<HTMLInputElement>(null);
     const socketRef = useRef<Socket | null>(null);
     const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     // True while a token-based silent reconnect is in flight, so connect_error can
@@ -529,6 +644,8 @@ export function FloatingAIChat() {
         setLiveInput('');
         setAgentTyping(null);
         setChatEnded(false);
+        setLiveUploading(false);
+        setLiveUploadError('');
     }
 
     // Header back arrow. Leaving an ACTIVE live chat keeps the session alive (so
@@ -888,6 +1005,72 @@ export function FloatingAIChat() {
         liveInputRef.current?.focus();
         // PART B: the new message isn't seen until the agent reads it next.
         setAgentHasSeen(false);
+    }
+
+    async function handleLiveFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+        const files = e.target.files;
+        if (!files?.length || !sessionId || !guestToken || chatEnded) return;
+
+        setLiveUploading(true);
+        setLiveUploadError('');
+        const uploadedUrls: string[] = [];
+
+        for (const file of Array.from(files)) {
+            if (file.size > MAX_UPLOAD_SIZE) {
+                setLiveUploadError(`${file.name} exceeds 10MB limit.`);
+                continue;
+            }
+
+            try {
+                const presignRes = await fetch(`${API_URL}/api/support/attachments/presigned-url`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Authorization: `Bearer ${guestToken}`,
+                    },
+                    body: JSON.stringify({
+                        fileName: file.name,
+                        fileType: file.type,
+                        fileSize: file.size,
+                        folder: 'chats',
+                        referenceId: sessionId,
+                    }),
+                });
+
+                const presignData = await presignRes.json();
+                if (!presignRes.ok || !presignData.success) {
+                    throw new Error(presignData.message || 'Failed to get upload URL');
+                }
+
+                const { uploadUrl, fileUrl } = presignData.data;
+
+                const uploadRes = await fetch(uploadUrl, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': file.type },
+                    body: file,
+                });
+
+                if (!uploadRes.ok) {
+                    throw new Error(`Upload failed (${uploadRes.status})`);
+                }
+
+                uploadedUrls.push(fileUrl);
+            } catch (err: any) {
+                console.error('File upload failed:', err);
+                setLiveUploadError(err.message || `Failed to upload ${file.name}`);
+            }
+        }
+
+        if (uploadedUrls.length > 0 && socketRef.current && sessionId) {
+            socketRef.current.emit('chat:message', {
+                sessionId,
+                text: '',
+                attachments: uploadedUrls,
+            });
+        }
+
+        setLiveUploading(false);
+        if (liveFileInputRef.current) liveFileInputRef.current.value = '';
     }
 
     function handleLiveInputChange(value: string) {
@@ -1310,7 +1493,14 @@ export function FloatingAIChat() {
                                                                         : { background: '#161C44' }
                                                                     }
                                                                 >
-                                                                    {msg.content}
+                                                                    {msg.content && <span>{msg.content}</span>}
+                                                                    {msg.attachments && msg.attachments.length > 0 && (
+                                                                        <div className="space-y-1">
+                                                                            {msg.attachments.map((aUrl, ai) => (
+                                                                                <WidgetAttachment key={ai} url={aUrl} token={guestToken} />
+                                                                            ))}
+                                                                        </div>
+                                                                    )}
                                                                 </div>
                                                                 <p className={`text-[10px] text-[#A7ADBE] mt-0.5 ${isMe ? 'text-right mr-1' : 'ml-1'}`}>
                                                                     {time}
@@ -1366,30 +1556,54 @@ export function FloatingAIChat() {
                                             Return to AI Assistant
                                         </button>
                                     ) : (
-                                        <div className="flex items-end gap-2 rounded-xl px-3 py-2" style={{ background: '#161C44', border: '1px solid rgba(51, 102, 255, 0.2)' }}>
-                                            <textarea
-                                                ref={liveInputRef}
-                                                value={liveInput}
-                                                onChange={(e) => { handleLiveInputChange(e.target.value); e.target.style.height = 'auto'; e.target.style.height = Math.min(e.target.scrollHeight, 100) + 'px'; }}
-                                                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendLiveMessage(); } }}
-                                                placeholder="Type a message..."
-                                                rows={1}
-                                                className="flex-1 resize-none bg-transparent text-sm text-white placeholder:text-[#A7ADBE]/50 focus:outline-none"
-                                                style={{ maxHeight: '100px', overflowY: 'auto' }}
+                                        <>
+                                            <input
+                                                ref={liveFileInputRef}
+                                                type="file"
+                                                multiple
+                                                accept="image/png,image/jpeg,image/gif,image/webp,application/pdf,.docx,.xlsx,.txt"
+                                                className="hidden"
+                                                onChange={handleLiveFileUpload}
                                             />
-                                            <button
-                                                onClick={(e) => { e.preventDefault(); sendLiveMessage(); }}
-                                                disabled={!liveInput.trim()}
-                                                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-white transition-all hover:brightness-125 disabled:opacity-30"
-                                                style={{
-                                                    background: liveInput.trim()
-                                                        ? 'linear-gradient(135deg, #3366FF 0%, #1A4FFF 100%)'
-                                                        : 'rgba(255,255,255,0.1)',
-                                                }}
-                                            >
-                                                <Send className="h-4 w-4" />
-                                            </button>
-                                        </div>
+                                            {liveUploadError && (
+                                                <p className="text-[11px] text-red-400 px-1 mb-1">{liveUploadError}</p>
+                                            )}
+                                            <div className="flex items-end gap-2 rounded-xl px-3 py-2" style={{ background: '#161C44', border: '1px solid rgba(51, 102, 255, 0.2)' }}>
+                                                <button
+                                                    onClick={() => liveFileInputRef.current?.click()}
+                                                    disabled={liveUploading}
+                                                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[#A7ADBE] transition-all hover:text-white hover:bg-white/5 disabled:opacity-30"
+                                                >
+                                                    {liveUploading ? (
+                                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                                    ) : (
+                                                        <Paperclip className="h-4 w-4" />
+                                                    )}
+                                                </button>
+                                                <textarea
+                                                    ref={liveInputRef}
+                                                    value={liveInput}
+                                                    onChange={(e) => { handleLiveInputChange(e.target.value); e.target.style.height = 'auto'; e.target.style.height = Math.min(e.target.scrollHeight, 100) + 'px'; }}
+                                                    onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendLiveMessage(); } }}
+                                                    placeholder="Type a message..."
+                                                    rows={1}
+                                                    className="flex-1 resize-none bg-transparent text-sm text-white placeholder:text-[#A7ADBE]/50 focus:outline-none"
+                                                    style={{ maxHeight: '100px', overflowY: 'auto' }}
+                                                />
+                                                <button
+                                                    onClick={(e) => { e.preventDefault(); sendLiveMessage(); }}
+                                                    disabled={!liveInput.trim()}
+                                                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-white transition-all hover:brightness-125 disabled:opacity-30"
+                                                    style={{
+                                                        background: liveInput.trim()
+                                                            ? 'linear-gradient(135deg, #3366FF 0%, #1A4FFF 100%)'
+                                                            : 'rgba(255,255,255,0.1)',
+                                                    }}
+                                                >
+                                                    <Send className="h-4 w-4" />
+                                                </button>
+                                            </div>
+                                        </>
                                     )}
                                 </div>
                             </>

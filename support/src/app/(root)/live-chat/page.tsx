@@ -76,6 +76,7 @@ import {
     useConvertToTicketMutation,
     useGetUnreadCountsQuery,
     useRequestPresignedUrlMutation,
+    useLazyGetPresignedViewUrlQuery,
     useGetAvailableAgentsQuery,
     useReassignSessionMutation,
     useCreateMeetingMutation,
@@ -220,7 +221,7 @@ function SessionItem({
                                 : 'text-muted-foreground',
                         )}
                     >
-                        {session.lastMessage?.content || 'No messages yet'}
+                        {session.lastMessage?.content || (session.lastMessage?.attachments?.length ? '📎 Attachment' : 'No messages yet')}
                     </p>
                     {unreadCount > 0 && (
                         <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-primary text-primary-foreground text-[11px] font-bold shrink-0">
@@ -239,17 +240,78 @@ function SessionItem({
     );
 }
 
+function extractS3Key(url: string): string | null {
+    try {
+        const u = new URL(url);
+        // Strip leading slash from pathname: "/chats/xxx/file.png" → "chats/xxx/file.png"
+        const key = u.pathname.replace(/^\//, '');
+        if (key.startsWith('chats/') || key.startsWith('tickets/')) return key;
+    } catch {
+        if (url.startsWith('chats/') || url.startsWith('tickets/')) return url;
+    }
+    return null;
+}
+
 function AttachmentPreview({ url }: { url: string }) {
+    const [viewUrl, setViewUrl] = useState<string | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(false);
+    const [fetchViewUrl] = useLazyGetPresignedViewUrlQuery();
+
+    useEffect(() => {
+        let cancelled = false;
+        const fileKey = extractS3Key(url);
+        if (!fileKey) {
+            setViewUrl(url);
+            setLoading(false);
+            return;
+        }
+
+        fetchViewUrl(fileKey)
+            .unwrap()
+            .then((data) => {
+                if (!cancelled) {
+                    setViewUrl(data.viewUrl);
+                    setLoading(false);
+                }
+            })
+            .catch(() => {
+                if (!cancelled) {
+                    setError(true);
+                    setLoading(false);
+                }
+            });
+
+        return () => { cancelled = true; };
+    }, [url, fetchViewUrl]);
+
+    if (loading) {
+        return (
+            <div className="mt-2 max-w-[220px]">
+                <Skeleton className="h-20 w-full rounded-lg" />
+            </div>
+        );
+    }
+
+    if (error || !viewUrl) {
+        return (
+            <div className="flex items-center gap-2 mt-2 px-3 py-2 rounded-lg bg-destructive/10 border border-destructive/20 max-w-[220px]">
+                <FileText className="size-4 shrink-0 text-muted-foreground" />
+                <span className="text-xs text-muted-foreground">Attachment unavailable</span>
+            </div>
+        );
+    }
+
     if (isImageUrl(url)) {
         return (
             <a
-                href={url}
+                href={viewUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="block mt-2"
             >
                 <img
-                    src={url}
+                    src={viewUrl}
                     alt="Attachment"
                     className="max-w-[220px] max-h-[160px] rounded-lg object-cover border border-border/40 shadow-sm"
                     loading="lazy"
@@ -260,7 +322,7 @@ function AttachmentPreview({ url }: { url: string }) {
 
     return (
         <a
-            href={url}
+            href={viewUrl}
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center gap-2 mt-2 px-3 py-2 rounded-lg bg-background/60 border border-border/40 hover:bg-accent/50 transition-colors max-w-[220px]"
@@ -329,7 +391,9 @@ function MessageBubble({ message, isOwn, isFirstInGroup }: MessageBubbleProps) {
                             : 'bg-muted text-foreground rounded-2xl rounded-bl-md',
                     )}
                 >
-                    {message.content}
+                    {message.content && (
+                        <span>{message.content}</span>
+                    )}
                     {message.attachments?.length > 0 && (
                         <div className="space-y-1.5">
                             {message.attachments.map((url, i) => (
@@ -857,6 +921,7 @@ export default function LiveChatPage() {
     const [socketConnected, setSocketConnected] = useState(false);
     const [isSending, setIsSending] = useState(false);
     const [uploading, setUploading] = useState(false);
+    const [uploadError, setUploadError] = useState<string | null>(null);
     const [meetingDialogOpen, setMeetingDialogOpen] = useState(false);
     const [reassignDialogOpen, setReassignDialogOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
@@ -1226,6 +1291,7 @@ export default function LiveChatPage() {
             if (!files?.length || !selectedSession) return;
 
             setUploading(true);
+            setUploadError(null);
             const uploadedUrls: string[] = [];
 
             for (const file of Array.from(files)) {
@@ -1238,15 +1304,20 @@ export default function LiveChatPage() {
                         referenceId: selectedSession.sessionId,
                     }).unwrap();
 
-                    await fetch(result.uploadUrl, {
+                    const uploadRes = await fetch(result.uploadUrl, {
                         method: 'PUT',
                         headers: { 'Content-Type': file.type },
                         body: file,
                     });
 
+                    if (!uploadRes.ok) {
+                        throw new Error(`S3 upload failed (${uploadRes.status})`);
+                    }
+
                     uploadedUrls.push(result.fileUrl);
-                } catch {
-                    // skip failed uploads
+                } catch (err) {
+                    console.error('File upload failed:', err);
+                    setUploadError(`Failed to upload ${file.name}`);
                 }
             }
 
@@ -1845,6 +1916,9 @@ export default function LiveChatPage() {
                                                 )}
                                             </Button>
                                         </div>
+                                        {uploadError && (
+                                            <p className="text-xs text-destructive mt-1.5 px-1">{uploadError}</p>
+                                        )}
                                     </>
                                 )}
                             </div>

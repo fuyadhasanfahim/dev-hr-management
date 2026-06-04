@@ -71,6 +71,7 @@ router.post('/guest/otp', otpLimiter, SupportController.requestGuestOtp);
 router.post('/guest/verify', generalPublicLimiter, SupportController.verifyGuestOtp);
 
 router.post('/attachments/presigned-url', requireUnifiedAuth, SupportController.requestPresignedUrl);
+router.get('/attachments/view-url', requireUnifiedAuth, SupportController.getPresignedViewUrl);
 router.post('/tickets', requireUnifiedAuth, SupportController.createSupportTicket);
 router.get('/tickets', requireUnifiedAuth, SupportController.listSupportTickets);
 // Must be registered before /tickets/:id to avoid 'admin' being captured as :id

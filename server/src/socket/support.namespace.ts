@@ -127,6 +127,15 @@ export function registerSupportNamespace(io: Server) {
                     return;
                 }
 
+                const messageContent = (text || content || '').trim();
+                const safeAttachments = Array.isArray(attachments) ? attachments.filter(Boolean) : [];
+
+                // Reject messages with no text AND no attachments.
+                if (!messageContent && safeAttachments.length === 0) {
+                    socket.emit('error', { message: 'Message content or attachments required' });
+                    return;
+                }
+
                 const session = await ChatSessionModel.findOne({ sessionId });
                 if (!session) {
                     socket.emit('error', { message: 'Chat session not found' });
@@ -150,8 +159,8 @@ export function registerSupportNamespace(io: Server) {
                     sender: new Types.ObjectId(user.id),
                     senderModel,
                     senderName: user.name,
-                    content: text || content || '',
-                    attachments: attachments || [],
+                    content: messageContent,
+                    attachments: safeAttachments,
                 });
 
                 // Touch the session so list ordering + "last active" time stay fresh.

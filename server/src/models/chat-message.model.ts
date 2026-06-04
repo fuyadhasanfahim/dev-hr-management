@@ -41,7 +41,7 @@ const chatMessageSchema = new Schema<IChatMessage>(
         },
         content: {
             type: String,
-            required: true,
+            default: '',
         },
         attachments: [{
             type: String,
