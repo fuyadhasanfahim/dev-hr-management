@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, Fragment, type ReactNode } from 'react';
 import {
     MessageCircle, X, Send, User, Ticket, Headphones,
     RotateCcw, CalendarCheck, ArrowLeft, Mail, Loader2,
@@ -72,12 +72,191 @@ function TypingIndicator() {
     );
 }
 
+// ─── Notification sound ──────────────────────────────────────────────────────
+// Tiny self-contained "beep" via the Web Audio API — no asset, no import.
+// Fully defensive: autoplay limits / unsupported browsers must never throw.
+function playNotificationSound() {
+    try {
+        const Ctx =
+            window.AudioContext ||
+            (window as unknown as { webkitAudioContext?: typeof AudioContext })
+                .webkitAudioContext;
+        if (!Ctx) return;
+
+        const ctx = new Ctx();
+        // If the browser blocks audio until a user gesture, skip silently.
+        if (ctx.state === 'suspended') {
+            ctx.close().catch(() => {});
+            return;
+        }
+
+        const now = ctx.currentTime;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(660, now);
+
+        // Soft attack + decay to avoid an audible click.
+        gain.gain.setValueAtTime(0.0001, now);
+        gain.gain.exponentialRampToValueAtTime(0.06, now + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.15);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc.start(now);
+        osc.stop(now + 0.16);
+        osc.onended = () => ctx.close().catch(() => {});
+    } catch {
+        // ignore — sound is best-effort only
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PART A — Safe, dependency-free Markdown renderer (AI replies only)
+// Builds React nodes (no dangerouslySetInnerHTML, no raw HTML injection).
+// Supports: **bold**, *italic*, `code`, [text](http/https url), bullet/numbered
+// lists, paragraphs/line breaks. Malformed patterns fall back to plain text.
+// ═══════════════════════════════════════════════════════════════════════════
+
+function parseInline(text: string): ReactNode[] {
+    const nodes: ReactNode[] = [];
+    // bold | italic | code | [text](url)
+    const re =
+        /(\*\*([^*]+)\*\*)|(\*([^*]+)\*)|(`([^`]+)`)|(\[([^\]]+)\]\(([^)]+)\))/g;
+    let lastIndex = 0;
+    let key = 0;
+    let m: RegExpExecArray | null;
+
+    while ((m = re.exec(text)) !== null) {
+        if (m.index > lastIndex) nodes.push(text.slice(lastIndex, m.index));
+
+        if (m[2] !== undefined) {
+            nodes.push(<strong key={key++}>{m[2]}</strong>);
+        } else if (m[4] !== undefined) {
+            nodes.push(<em key={key++}>{m[4]}</em>);
+        } else if (m[6] !== undefined) {
+            nodes.push(
+                <code
+                    key={key++}
+                    className="rounded bg-black/30 px-1 py-0.5 font-mono text-[12px]"
+                >
+                    {m[6]}
+                </code>,
+            );
+        } else if (m[8] !== undefined) {
+            const url = m[9];
+            // Only allow http/https — strip javascript: and other schemes.
+            if (/^https?:\/\//i.test(url)) {
+                nodes.push(
+                    <a
+                        key={key++}
+                        href={url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-[#b98bff] underline underline-offset-2 hover:text-[#cdacff]"
+                    >
+                        {m[8]}
+                    </a>,
+                );
+            } else {
+                // Unsafe scheme → render the literal markdown as plain text.
+                nodes.push(m[0]);
+            }
+        }
+        lastIndex = re.lastIndex;
+    }
+
+    if (lastIndex < text.length) nodes.push(text.slice(lastIndex));
+    return nodes;
+}
+
+function MarkdownText({ text }: { text: string }) {
+    const lines = (text ?? '').split('\n');
+    const blocks: ReactNode[] = [];
+    const ulRe = /^\s*[-*]\s+(.*)$/;
+    const olRe = /^\s*\d+\.\s+(.*)$/;
+    let i = 0;
+    let key = 0;
+
+    while (i < lines.length) {
+        const line = lines[i];
+
+        if (ulRe.test(line)) {
+            const items: string[] = [];
+            while (i < lines.length) {
+                const mm = ulRe.exec(lines[i]);
+                if (!mm) break;
+                items.push(mm[1]);
+                i++;
+            }
+            blocks.push(
+                <ul key={key++} className="list-disc pl-5 space-y-0.5">
+                    {items.map((it, k) => (
+                        <li key={k}>{parseInline(it)}</li>
+                    ))}
+                </ul>,
+            );
+            continue;
+        }
+
+        if (olRe.test(line)) {
+            const items: string[] = [];
+            while (i < lines.length) {
+                const mm = olRe.exec(lines[i]);
+                if (!mm) break;
+                items.push(mm[1]);
+                i++;
+            }
+            blocks.push(
+                <ol key={key++} className="list-decimal pl-5 space-y-0.5">
+                    {items.map((it, k) => (
+                        <li key={k}>{parseInline(it)}</li>
+                    ))}
+                </ol>,
+            );
+            continue;
+        }
+
+        if (line.trim() === '') {
+            i++;
+            continue;
+        }
+
+        // Paragraph: gather consecutive non-blank, non-list lines.
+        const para: string[] = [];
+        while (
+            i < lines.length &&
+            lines[i].trim() !== '' &&
+            !ulRe.test(lines[i]) &&
+            !olRe.test(lines[i])
+        ) {
+            para.push(lines[i]);
+            i++;
+        }
+        blocks.push(
+            <p key={key++} className="m-0">
+                {para.map((pl, k) => (
+                    <Fragment key={k}>
+                        {k > 0 && <br />}
+                        {parseInline(pl)}
+                    </Fragment>
+                ))}
+            </p>,
+        );
+    }
+
+    return <div className="space-y-1.5">{blocks}</div>;
+}
+
 // ─── Main Component ──────────────────────────────────────────────────────────
 
 export function FloatingAIChat() {
     // ── shared state ─────────────────────────────────────────────────────────
     const [isOpen, setIsOpen] = useState(false);
     const [mode, setMode] = useState<Mode>('ai');
+    const [unreadCount, setUnreadCount] = useState(0);
 
     // ── AI chat state ────────────────────────────────────────────────────────
     const [messages, setMessages] = useState<DisplayMessage[]>([]);
@@ -111,6 +290,43 @@ export function FloatingAIChat() {
     // True while a token-based silent reconnect is in flight, so connect_error can
     // fall back to OTP (instead of looping) when the stored token is dead.
     const silentReconnectRef = useRef(false);
+    // Mirror isOpen so the long-lived socket handlers read a fresh value
+    // (avoids a stale-closure bug when deciding whether to badge/beep).
+    const isOpenRef = useRef(isOpen);
+    useEffect(() => {
+        isOpenRef.current = isOpen;
+    }, [isOpen]);
+
+    // Opening the panel (by any path) clears the unread badge.
+    useEffect(() => {
+        if (isOpen) setUnreadCount(0);
+    }, [isOpen]);
+
+    // ── PART B: live-chat "Seen" state ───────────────────────────────────────
+    // Mirror mode for the same stale-closure reason as isOpen.
+    const modeRef = useRef(mode);
+    useEffect(() => {
+        modeRef.current = mode;
+    }, [mode]);
+    // Has the agent seen the visitor's most recent sent message?
+    const [agentHasSeen, setAgentHasSeen] = useState(false);
+    // True while there's an unacknowledged agent message (guards seen emits).
+    const hasUnseenAgentRef = useRef(false);
+
+    // When the visitor starts viewing live chat, tell the agent we've seen their
+    // messages — but only if there's actually an unread agent message.
+    useEffect(() => {
+        if (
+            isOpen &&
+            mode === 'live-chat' &&
+            hasUnseenAgentRef.current &&
+            socketRef.current &&
+            sessionId
+        ) {
+            socketRef.current.emit('chat:seen', { sessionId });
+            hasUnseenAgentRef.current = false;
+        }
+    }, [isOpen, mode, sessionId]);
 
     // ── helpers ──────────────────────────────────────────────────────────────
     const scrollToBottom = useCallback(() => {
@@ -577,6 +793,32 @@ export function FloatingAIChat() {
                 return [...prev, msg];
             });
             setAgentTyping(null);
+
+            // Notify only when the panel is closed and the message is from an
+            // agent/system (not the visitor's own message echoed back).
+            const fromAgent =
+                msg.senderModel === 'Staff' || msg.senderModel === 'System';
+            if (!isOpenRef.current && fromAgent) {
+                setUnreadCount((c) => c + 1);
+                playNotificationSound();
+            }
+
+            // PART B: track unread agent replies; if the visitor is actively
+            // viewing live chat, immediately tell the agent we've seen it.
+            if (msg.senderModel === 'Staff') {
+                hasUnseenAgentRef.current = true;
+                if (isOpenRef.current && modeRef.current === 'live-chat') {
+                    socket.emit('chat:seen', { sessionId: sid });
+                    hasUnseenAgentRef.current = false;
+                }
+            }
+        });
+
+        // PART B: the agent read the visitor's messages → mark the last own
+        // message as seen. (Server emits this to the room, excluding the sender,
+        // so the visitor only receives it when the AGENT has seen.)
+        socket.on('chat:seen', () => {
+            setAgentHasSeen(true);
         });
 
         socket.on('chat:agent_joined', ({ agentName }: { agentName: string }) => {
@@ -644,6 +886,8 @@ export function FloatingAIChat() {
         socketRef.current.emit('chat:message', { sessionId, text });
         setLiveInput('');
         liveInputRef.current?.focus();
+        // PART B: the new message isn't seen until the agent reads it next.
+        setAgentHasSeen(false);
     }
 
     function handleLiveInputChange(value: string) {
@@ -664,6 +908,15 @@ export function FloatingAIChat() {
         : mode === 'guest-login'
             ? 'Connect to Support'
             : 'Live Support';
+
+    // PART B: index of the visitor's most recent sent message (for the "Seen" tag).
+    let lastOwnLiveIndex = -1;
+    for (let j = liveMessages.length - 1; j >= 0; j--) {
+        if (liveMessages[j].senderModel === 'Guest') {
+            lastOwnLiveIndex = j;
+            break;
+        }
+    }
 
     return (
         <>
@@ -686,6 +939,14 @@ export function FloatingAIChat() {
                         aria-label="Open AI Chat"
                     >
                         <MessageCircle className="h-6 w-6 text-white" />
+                        {unreadCount > 0 && (
+                            <span
+                                aria-label={`${unreadCount} unread messages`}
+                                className="absolute -top-1 -right-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-500 px-1 text-[11px] font-bold leading-none text-white ring-2 ring-[#0A0E1A]"
+                            >
+                                {unreadCount > 9 ? '9+' : unreadCount}
+                            </span>
+                        )}
                     </motion.button>
                 )}
             </AnimatePresence>
@@ -774,7 +1035,13 @@ export function FloatingAIChat() {
                                                                     : { background: '#161C44' }
                                                         }
                                                     >
-                                                        {msg.text}
+                                                        {/* PART A: render markdown for AI replies only;
+                                                            user/system stay plain text (no injection). */}
+                                                        {msg.role === 'assistant' ? (
+                                                            <MarkdownText text={msg.text} />
+                                                        ) : (
+                                                            msg.text
+                                                        )}
                                                     </div>
                                                     {msg.role === 'user' && (
                                                         <div className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#161C44]">
@@ -1047,6 +1314,10 @@ export function FloatingAIChat() {
                                                                 </div>
                                                                 <p className={`text-[10px] text-[#A7ADBE] mt-0.5 ${isMe ? 'text-right mr-1' : 'ml-1'}`}>
                                                                     {time}
+                                                                    {/* PART B: WhatsApp-style "Seen" on the last own message only. */}
+                                                                    {isMe && i === lastOwnLiveIndex && agentHasSeen && (
+                                                                        <span className="ml-1 text-[#7CC4FF]">· Seen</span>
+                                                                    )}
                                                                 </p>
                                                             </div>
                                                             {isMe && (

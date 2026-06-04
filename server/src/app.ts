@@ -31,6 +31,13 @@ const corsAllowedOrigins = buildCorsAllowedOrigins();
 
 const app: Application = express();
 
+// SECURITY: This API is intended to run behind ONE reverse proxy / load balancer
+// (nginx, cloud LB, etc.), so trust a single proxy hop to derive the real client
+// IP (req.ip) for rate limiting. We intentionally avoid `true` ("trust everything"),
+// which lets clients spoof X-Forwarded-For and bypass per-IP limits. If the app is
+// deployed behind multiple chained proxies, bump this number to the proxy depth.
+app.set('trust proxy', 1);
+
 // Correlation IDs + request logging (must be early, also covers webhooks)
 app.use(requestContextMiddleware);
 

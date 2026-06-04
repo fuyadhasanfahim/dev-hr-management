@@ -5,6 +5,7 @@ import { requireAuth, restrictTo } from '../middlewares/auth.middleware.js';
 import jwt from 'jsonwebtoken';
 import envConfig from '../config/env.config.js';
 import GuestModel from '../models/guest.model.js';
+import { otpLimiter, generalPublicLimiter } from '../middlewares/rate-limit.middleware.js';
 import type { Request, Response, NextFunction } from 'express';
 
 const router = express.Router();
@@ -65,8 +66,9 @@ export async function requireUnifiedAuth(req: Request, res: Response, next: Next
     return res.status(401).json({ success: false, message: 'Authentication required. Please login or verify guest OTP.' });
 }
 
-router.post('/guest/otp', SupportController.requestGuestOtp);
-router.post('/guest/verify', SupportController.verifyGuestOtp);
+// Public + abuse-prone: OTP sends a real email → strict per-IP+email throttle.
+router.post('/guest/otp', otpLimiter, SupportController.requestGuestOtp);
+router.post('/guest/verify', generalPublicLimiter, SupportController.verifyGuestOtp);
 
 router.post('/attachments/presigned-url', requireUnifiedAuth, SupportController.requestPresignedUrl);
 router.post('/tickets', requireUnifiedAuth, SupportController.createSupportTicket);
@@ -77,7 +79,7 @@ router.get('/tickets/:id', requireUnifiedAuth, SupportController.getTicketDetail
 router.post('/tickets/:id/replies', requireUnifiedAuth, SupportController.replyToTicket);
 // Alias for clients that call the singular form
 router.post('/tickets/:id/reply', requireUnifiedAuth, SupportController.replyToTicket);
-router.post('/chats/session', requireUnifiedAuth, SupportController.createChatSession);
+router.post('/chats/session', generalPublicLimiter, requireUnifiedAuth, SupportController.createChatSession);
 
 // Live Support Chat Console Endpoints (for staff dashboard)
 // Static routes must come before :sessionId param routes
