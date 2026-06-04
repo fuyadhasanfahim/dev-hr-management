@@ -90,6 +90,7 @@ router.get('/chat/sessions/resolved', requireUnifiedAuth, restrictTo('admin', 's
 router.get('/dashboard/stats', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), SupportController.getSupportDashboardStats);
 router.get('/chat/sessions/unread-counts', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), SupportController.getUnreadCounts);
 router.get('/chat/agents', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), SupportController.listAvailableAgents);
+router.get('/chat/client-lookup', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), SupportController.lookupClientByEmail);
 router.post('/meetings', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), MeetingController.createMeeting);
 router.get('/chat/sessions/:sessionId/messages', requireUnifiedAuth, SupportController.getChatSessionMessages);
 router.post('/chat/sessions/:sessionId/claim', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), SupportController.claimChatSessionParam);

@@ -32,7 +32,9 @@ import {
     ChevronUp,
     ChevronDown,
     Video,
+    Image as ImageIcon,
     ExternalLink,
+    Building2,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -81,6 +83,7 @@ import {
     useReassignSessionMutation,
     useCreateMeetingMutation,
     useGetClientMeetingsQuery,
+    useLookupClientByEmailQuery,
     type ChatSession,
     type ChatMessage,
     type AgentInfo,
@@ -1376,6 +1379,12 @@ export default function LiveChatPage() {
     const visitorPresent = selectedSession
         ? visitorOnline[selectedSession.sessionId] ?? true
         : true;
+        
+    // Existing client badge lookup
+    const { data: matchedClient } = useLookupClientByEmailQuery(
+        sessionUser?.email ?? '',
+        { skip: !sessionUser?.email },
+    );
 
     const tabSessions =
         tab === 'queued'
@@ -1613,6 +1622,15 @@ export default function LiveChatPage() {
                                                     ? 'Converted'
                                                     : selectedSession.status}
                                             </Badge>
+                                            {matchedClient && (
+                                                <Badge
+                                                    variant="outline"
+                                                    className="text-[10px] px-2 py-0 h-5 gap-1 border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+                                                >
+                                                    <Building2 className="size-2.5" />
+                                                    {matchedClient.name}
+                                                </Badge>
+                                            )}
                                         </div>
                                         <div className="flex items-center gap-2">
                                             <p className="text-xs text-muted-foreground truncate">

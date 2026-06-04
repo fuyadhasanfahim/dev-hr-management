@@ -7,8 +7,8 @@ import {
     LayoutDashboard,
     Ticket,
     MessageCircle,
-    Users,
-    Settings,
+    // Users,
+    // Settings,
 } from 'lucide-react';
 import { NavUser } from '@/components/nav-user';
 import {
@@ -45,18 +45,18 @@ const navItems = [
         icon: MessageCircle,
         description: 'Handle real-time customer chat sessions',
     },
-    {
-        title: 'Clients',
-        url: '/clients',
-        icon: Users,
-        description: 'View and manage client information',
-    },
-    {
-        title: 'Settings',
-        url: '/settings',
-        icon: Settings,
-        description: 'Configure support preferences',
-    },
+    // {
+    //     title: 'Clients',
+    //     url: '/clients',
+    //     icon: Users,
+    //     description: 'View and manage client information',
+    // },
+    // {
+    //     title: 'Settings',
+    //     url: '/settings',
+    //     icon: Settings,
+    //     description: 'Configure support preferences',
+    // },
 ];
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {

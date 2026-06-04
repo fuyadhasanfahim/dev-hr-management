@@ -181,6 +181,10 @@ export const chatApi = baseApi.injectEndpoints({
             transformResponse: (res: { data: Meeting[] }) => res.data ?? [],
             providesTags: ['ClientMeetings'],
         }),
+        lookupClientByEmail: builder.query<{ name: string; clientId: string | null } | null, string>({
+            query: (email) => `/support/chat/client-lookup?email=${encodeURIComponent(email)}`,
+            transformResponse: (res: { data: { name: string; clientId: string | null } | null }) => res.data,
+        }),
     }),
 });
 
@@ -200,4 +204,6 @@ export const {
     useReassignSessionMutation,
     useCreateMeetingMutation,
     useGetClientMeetingsQuery,
+    useLookupClientByEmailQuery,
+    useLazyLookupClientByEmailQuery,
 } = chatApi;

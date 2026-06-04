@@ -6,6 +6,7 @@ import supportTicketService from '../services/support-ticket.service.js';
 import liveChatService from '../services/live-chat.service.js';
 import chatSummaryService from '../services/chat-summary.service.js';
 import cloudinaryMigrationService from '../services/cloudinary-migration.service.js';
+import ClientModel from '../models/client.model.js';
 import StaffModel from '../models/staff.model.js';
 import { getSupportNamespace, notifyNewSession } from '../socket/support.namespace.js';
 
@@ -686,6 +687,28 @@ async function listAvailableAgents(_req: Request, res: Response) {
     }
 }
 
+/**
+ * Staff: Look up whether a guest email matches an existing dashboard Client.
+ * Returns the matched client name or null.
+ */
+async function lookupClientByEmail(req: Request, res: Response) {
+    try {
+        const email = req.query.email as string;
+        if (!email || typeof email !== 'string') {
+            return res.status(400).json({ success: false, message: 'email query parameter is required.' });
+        }
+
+        const client = await ClientModel.findOne({
+            emails: { $elemMatch: { $regex: new RegExp(`^${email.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&')}$`, 'i') } },
+            status: 'active',
+        }).select('name emails clientId').lean();
+
+        return res.status(200).json({ success: true, data: client ? { name: client.name, clientId: (client as any).clientId || null } : null });
+    } catch (err: any) {
+        return res.status(500).json({ success: false, message: err.message });
+    }
+}
+
 export default {
     requestGuestOtp,
     verifyGuestOtp,
@@ -713,4 +736,5 @@ export default {
     reassignChatSession,
     getUnreadCounts,
     listAvailableAgents,
+    lookupClientByEmail,
 };
