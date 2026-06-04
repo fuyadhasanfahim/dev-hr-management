@@ -934,6 +934,9 @@ export default function LiveChatPage() {
                     'ActiveSessions',
                     'ResolvedSessions',
                     'UnreadCounts',
+                    // Refresh the Overview (Resolved Today / Live Chats / activity)
+                    // immediately on claim/close/convert instead of the 30s poll.
+                    'DashboardStats',
                 ]),
             );
         };
@@ -1167,7 +1170,7 @@ export default function LiveChatPage() {
     );
 
     const handleInputChange = useCallback(
-        (e: ChangeEvent<HTMLInputElement>) => {
+        (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
             setInputValue(e.target.value);
             if (!selectedSession) return;
             emitTyping(true);
@@ -1208,7 +1211,7 @@ export default function LiveChatPage() {
     );
 
     const handleKeyDown = useCallback(
-        (e: KeyboardEvent<HTMLInputElement>) => {
+        (e: KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
                 sendMessage();
@@ -1773,14 +1776,14 @@ export default function LiveChatPage() {
                         {!sessionEnded && (
                             <div className="px-5 py-4 border-t shrink-0 bg-background">
                                 {canClaim ? (
-                                    <div className="flex items-center justify-center py-2">
-                                        <p className="text-sm text-muted-foreground">
+                                    <div className="flex items-center justify-center py-3">
+                                        <p className="text-sm text-muted-foreground/70 italic">
                                             Claim this session to start
                                             chatting.
                                         </p>
                                     </div>
                                 ) : (
-                                    <div className="flex items-center gap-2">
+                                    <>
                                         <input
                                             ref={fileInputRef}
                                             type="file"
@@ -1789,53 +1792,60 @@ export default function LiveChatPage() {
                                             className="hidden"
                                             onChange={handleFileUpload}
                                         />
-                                        <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            className="size-10 shrink-0 rounded-full"
-                                            onClick={() =>
-                                                fileInputRef.current?.click()
-                                            }
-                                            disabled={!canSend || uploading}
-                                        >
-                                            {uploading ? (
-                                                <Loader2 className="size-4 animate-spin" />
-                                            ) : (
-                                                <Paperclip className="size-4" />
-                                            )}
-                                        </Button>
-                                        <Input
-                                            type="text"
-                                            value={inputValue}
-                                            onChange={handleInputChange}
-                                            onKeyDown={handleKeyDown}
-                                            placeholder={
-                                                canSend
-                                                    ? 'Type a message...'
-                                                    : !socketConnected
-                                                      ? 'Connecting...'
-                                                      : 'Cannot send messages'
-                                            }
-                                            disabled={!canSend}
-                                            className="flex-1"
-                                        />
-                                        <Button
-                                            size="icon"
-                                            onClick={() => sendMessage()}
-                                            disabled={
-                                                !canSend ||
-                                                !inputValue.trim() ||
-                                                isSending
-                                            }
-                                            className="size-10 shrink-0 rounded-full"
-                                        >
-                                            {isSending ? (
-                                                <Loader2 className="size-4 animate-spin" />
-                                            ) : (
-                                                <Send className="size-4" />
-                                            )}
-                                        </Button>
-                                    </div>
+                                        <div className="flex items-end gap-1.5 rounded-2xl border border-border/50 bg-muted/40 px-2 py-1.5 transition-all focus-within:ring-2 focus-within:ring-ring/30 focus-within:border-ring/50">
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="size-9 shrink-0 rounded-xl text-muted-foreground hover:text-foreground transition-colors"
+                                                onClick={() =>
+                                                    fileInputRef.current?.click()
+                                                }
+                                                disabled={!canSend || uploading}
+                                            >
+                                                {uploading ? (
+                                                    <Loader2 className="size-4 animate-spin" />
+                                                ) : (
+                                                    <Paperclip className="size-4" />
+                                                )}
+                                            </Button>
+                                            <textarea
+                                                value={inputValue}
+                                                onChange={handleInputChange}
+                                                onKeyDown={handleKeyDown}
+                                                placeholder={
+                                                    canSend
+                                                        ? 'Type a message...'
+                                                        : !socketConnected
+                                                          ? 'Connecting...'
+                                                          : 'Cannot send messages'
+                                                }
+                                                disabled={!canSend}
+                                                rows={1}
+                                                className="flex-1 resize-none bg-transparent border-0 text-sm leading-relaxed placeholder:text-muted-foreground/60 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed py-1.5 px-1 max-h-[6rem] overflow-y-auto scrollbar-thin"
+                                                onInput={(e) => {
+                                                    const t = e.target as HTMLTextAreaElement;
+                                                    t.style.height = 'auto';
+                                                    t.style.height = `${Math.min(t.scrollHeight, 96)}px`;
+                                                }}
+                                            />
+                                            <Button
+                                                size="icon"
+                                                onClick={() => sendMessage()}
+                                                disabled={
+                                                    !canSend ||
+                                                    !inputValue.trim() ||
+                                                    isSending
+                                                }
+                                                className="size-9 shrink-0 rounded-xl transition-all hover:scale-105 active:scale-95 disabled:opacity-40"
+                                            >
+                                                {isSending ? (
+                                                    <Loader2 className="size-4 animate-spin" />
+                                                ) : (
+                                                    <Send className="size-4" />
+                                                )}
+                                            </Button>
+                                        </div>
+                                    </>
                                 )}
                             </div>
                         )}

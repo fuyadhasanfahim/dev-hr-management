@@ -44,11 +44,18 @@ export interface AgentInfo {
     designation?: string;
 }
 
+export interface ActivityItem {
+    type: 'chat_new' | 'chat_resolved' | 'ticket_new';
+    label: string;
+    at: string;
+}
+
 export interface DashboardStats {
     openTickets: number;
     liveChats: number;
     resolvedToday: number;
     avgResponseTimeMinutes: number | null;
+    recentActivity?: ActivityItem[];
 }
 
 export interface Meeting {

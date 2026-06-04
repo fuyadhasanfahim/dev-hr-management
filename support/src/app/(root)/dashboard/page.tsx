@@ -16,7 +16,26 @@ import { cn } from '@/lib/utils';
 import {
     useGetDashboardStatsQuery,
     type DashboardStats,
+    type ActivityItem,
 } from '@/store/api/chatApi';
+
+const ACTIVITY_ICON: Record<ActivityItem['type'], React.ElementType> = {
+    chat_new: MessageSquare,
+    chat_resolved: CheckCircle,
+    ticket_new: Ticket,
+};
+
+function relativeTime(iso: string): string {
+    const diffMs = Date.now() - new Date(iso).getTime();
+    const diffMin = Math.floor(diffMs / 60000);
+    if (diffMin < 1) return 'just now';
+    if (diffMin < 60) return `${diffMin}m ago`;
+    const diffH = Math.floor(diffMin / 60);
+    if (diffH < 24) return `${diffH}h ago`;
+    const diffD = Math.floor(diffH / 24);
+    if (diffD < 7) return `${diffD}d ago`;
+    return new Date(iso).toLocaleDateString();
+}
 
 interface StatCardMeta {
     label: string;
@@ -163,6 +182,26 @@ export default function DashboardPage() {
                                     </div>
                                 </div>
                             ))}
+                        </div>
+                    ) : data?.recentActivity && data.recentActivity.length > 0 ? (
+                        <div className="space-y-1">
+                            {data.recentActivity.map((item, i) => {
+                                const ActIcon = ACTIVITY_ICON[item.type] ?? Inbox;
+                                return (
+                                    <div
+                                        key={`${item.type}-${item.at}-${i}`}
+                                        className="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-accent/50 transition-colors"
+                                    >
+                                        <div className="size-8 rounded-full bg-muted flex items-center justify-center shrink-0">
+                                            <ActIcon className="size-4 text-muted-foreground" />
+                                        </div>
+                                        <p className="flex-1 text-sm text-foreground truncate">{item.label}</p>
+                                        <span className="text-xs text-muted-foreground shrink-0">
+                                            {relativeTime(item.at)}
+                                        </span>
+                                    </div>
+                                );
+                            })}
                         </div>
                     ) : (
                         <div className="flex flex-col items-center justify-center py-10 text-center">

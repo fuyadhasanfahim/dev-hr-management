@@ -323,8 +323,111 @@ async function listResolvedChatSessions(_req: Request, res: Response) {
     }
 }
 
+interface DashboardActivityItem {
+    type: 'chat_new' | 'chat_resolved' | 'ticket_new';
+    label: string;
+    at: Date;
+}
+
 /**
- * Staff: Aggregate counters for the support console Overview page.
+ * Average minutes between a visitor message (Client/Guest) and the NEXT staff
+ * reply, across sessions touched today. Bounded to the 100 most recent such
+ * sessions. Self-contained try/catch → returns null on any failure so it never
+ * fails the parent endpoint.
+ */
+async function computeAvgResponseMinutes(startOfToday: Date): Promise<number | null> {
+    try {
+        const sessions = await ChatSessionModel.find({ updatedAt: { $gte: startOfToday } })
+            .sort({ updatedAt: -1 })
+            .limit(100)
+            .select('_id')
+            .lean();
+        if (sessions.length === 0) return null;
+
+        const ids = sessions.map((s) => s._id);
+        const messages = await ChatMessageModel.find({ sessionId: { $in: ids } })
+            .sort({ sessionId: 1, createdAt: 1 })
+            .select('sessionId senderModel createdAt')
+            .lean();
+
+        let totalSeconds = 0;
+        let pairs = 0;
+        let currentSession: string | null = null;
+        let pendingVisitorAt: number | null = null;
+
+        for (const m of messages as any[]) {
+            const sid = String(m.sessionId);
+            if (sid !== currentSession) {
+                currentSession = sid;
+                pendingVisitorAt = null;
+            }
+            if (m.senderModel === 'Client' || m.senderModel === 'Guest') {
+                // First unanswered visitor message starts the clock for this round.
+                if (pendingVisitorAt === null) pendingVisitorAt = new Date(m.createdAt).getTime();
+            } else if (m.senderModel === 'Staff') {
+                if (pendingVisitorAt !== null) {
+                    const gap = (new Date(m.createdAt).getTime() - pendingVisitorAt) / 1000;
+                    if (gap >= 0) {
+                        totalSeconds += gap;
+                        pairs++;
+                    }
+                    pendingVisitorAt = null;
+                }
+            }
+            // System messages are ignored (don't open or close a round).
+        }
+
+        if (pairs === 0) return null;
+        return totalSeconds / pairs / 60;
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * Latest ~6 activity events merged from recent chat sessions + tickets.
+ * Self-contained try/catch → returns [] on failure.
+ */
+async function computeRecentActivity(): Promise<DashboardActivityItem[]> {
+    try {
+        const [sessions, tickets] = await Promise.all([
+            ChatSessionModel.find({})
+                .sort({ updatedAt: -1 })
+                .limit(6)
+                .populate('clientId', 'name')
+                .populate('guestId', 'name')
+                .lean(),
+            TicketModel.find({})
+                .sort({ createdAt: -1 })
+                .limit(6)
+                .select('subject createdAt')
+                .lean(),
+        ]);
+
+        const items: DashboardActivityItem[] = [];
+
+        for (const s of sessions as any[]) {
+            const visitor = s.clientId ?? s.guestId;
+            const name = visitor?.name || 'Guest';
+            if (s.status === 'ended' || s.status === 'converted_to_ticket') {
+                items.push({ type: 'chat_resolved', label: `Chat resolved with ${name}`, at: s.updatedAt });
+            } else {
+                items.push({ type: 'chat_new', label: `New live chat from ${name}`, at: s.createdAt });
+            }
+        }
+        for (const t of tickets as any[]) {
+            items.push({ type: 'ticket_new', label: `New ticket: ${t.subject}`, at: t.createdAt });
+        }
+
+        items.sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
+        return items.slice(0, 6);
+    } catch {
+        return [];
+    }
+}
+
+/**
+ * Staff: Aggregate counters + recent activity for the support console Overview.
  */
 async function getSupportDashboardStats(_req: Request, res: Response) {
     try {
@@ -332,25 +435,23 @@ async function getSupportDashboardStats(_req: Request, res: Response) {
         const startOfToday = new Date();
         startOfToday.setHours(0, 0, 0, 0);
 
-        const [openTickets, liveChats, resolvedToday] = await Promise.all([
-            TicketModel.countDocuments({
-                status: { $in: ['open', 'in_progress', 'pending_client'] },
-            }),
-            ChatSessionModel.countDocuments({ status: 'active' }),
-            ChatSessionModel.countDocuments({
-                status: { $in: ['ended', 'converted_to_ticket'] },
-                updatedAt: { $gte: startOfToday },
-            }),
-        ]);
-
-        // TODO: avg response time needs a per-session scan pairing each client/guest
-        // message with the next staff reply. Deferred to keep this endpoint fast and
-        // cheap; the UI hides this metric (shows "—") while it is null.
-        const avgResponseTimeMinutes: number | null = null;
+        const [openTickets, liveChats, resolvedToday, avgResponseTimeMinutes, recentActivity] =
+            await Promise.all([
+                TicketModel.countDocuments({
+                    status: { $in: ['open', 'in_progress', 'pending_client'] },
+                }),
+                ChatSessionModel.countDocuments({ status: 'active' }),
+                ChatSessionModel.countDocuments({
+                    status: { $in: ['ended', 'converted_to_ticket'] },
+                    updatedAt: { $gte: startOfToday },
+                }),
+                computeAvgResponseMinutes(startOfToday),
+                computeRecentActivity(),
+            ]);
 
         return res.status(200).json({
             success: true,
-            data: { openTickets, liveChats, resolvedToday, avgResponseTimeMinutes },
+            data: { openTickets, liveChats, resolvedToday, avgResponseTimeMinutes, recentActivity },
         });
     } catch (err: any) {
         return res.status(err.statusCode || 500).json({ success: false, message: err.message });
