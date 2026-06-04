@@ -116,7 +116,7 @@ async function updateConsultation(
             const meeting = await meetingService.createMeeting({
                 meetingTitle: `Consultation: ${consultation.name} — ${consultation.projectType || 'Project Discussion'}`,
                 description: `Consultation for: ${consultation.projectDescription}\n\nClient: ${consultation.name}\nEmail: ${consultation.email}${consultation.phone ? `\nPhone: ${consultation.phone}` : ''}`,
-                scheduledAt: data.scheduledAt,
+                scheduledAt: data.scheduledAt.toISOString(),
                 durationMinutes: duration,
                 attendeeEmails,
                 attendeePhones,

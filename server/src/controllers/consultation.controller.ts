@@ -49,7 +49,7 @@ async function getAll(req: Request, res: Response) {
 
 async function getById(req: Request, res: Response) {
     try {
-        const consultation = await consultationService.getConsultationById(req.params.id);
+        const consultation = await consultationService.getConsultationById(req.params.id as string);
         return res.status(200).json({ success: true, data: consultation });
     } catch (err: any) {
         logger.error(`Get consultation error: ${err.message}`);
@@ -60,7 +60,7 @@ async function getById(req: Request, res: Response) {
 async function update(req: Request, res: Response) {
     try {
         const { status, scheduledAt, durationMinutes, adminNotes, assignedTo } = req.body;
-        const consultation = await consultationService.updateConsultation(req.params.id, {
+        const consultation = await consultationService.updateConsultation(req.params.id as string, {
             status,
             scheduledAt: scheduledAt ? new Date(scheduledAt) : undefined,
             durationMinutes: durationMinutes ? Number(durationMinutes) : undefined,
@@ -77,7 +77,7 @@ async function update(req: Request, res: Response) {
 
 async function remove(req: Request, res: Response) {
     try {
-        await consultationService.deleteConsultation(req.params.id);
+        await consultationService.deleteConsultation(req.params.id as string);
         return res.status(200).json({ success: true, message: 'Consultation deleted' });
     } catch (err: any) {
         logger.error(`Delete consultation error: ${err.message}`);
@@ -85,7 +85,7 @@ async function remove(req: Request, res: Response) {
     }
 }
 
-async function getStats(req: Request, res: Response) {
+async function getStats(_req: Request, res: Response) {
     try {
         const stats = await consultationService.getStats();
         return res.status(200).json({ success: true, data: stats });

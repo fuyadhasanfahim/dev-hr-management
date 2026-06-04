@@ -1,74 +1,82 @@
-# 🚀 BackendSafe — Professional MongoDB Backup System
+# Dev HR Management & Webbriks Monorepo
 
-BackendSafe is an enterprise-grade automated backup solution for MongoDB, featuring a modern web dashboard for real-time monitoring and dynamic management.
+Welcome to the Dev HR Management monorepo! This repository contains the complete suite of applications that power the Webbriks platform, including the main corporate website, the core ERP/HR dashboard, a dedicated customer support application, and a robust Node.js backend.
 
-## ✨ Core Features
+## 🏗️ Architecture & Apps
 
-- 🔄 **Dynamic Management** — Change MongoDB connection strings, database names, and backup locations via the dashboard without any restart.
-- 📦 **Smart Compression** — Automated `tar.gz` compression to optimize disk space.
-- ☁️ **Cloud Sync** — Instant off-site replication to **Nextcloud** or any other **rclone**-compatible storage.
-- 🔔 **Instant Failure Alerts** — Get notified via **Email (SMTP)** immediately if a backup or sync operation fails.
-- 📊 **Disk Analytics** — Real-time tracking of disk usage and backup growth with high-fidelity analytics snapshots.
-- 🧹 **Retention Controls** — Configurable auto-cleanup for local backups to prevent storage overflow.
-- 🔄 **One-Click Restore** — Simple, reliable restoration process from any successful backup record.
+This project is a monorepo consisting of 4 main applications:
 
----
+1. **Dashboard (`/dashboard`)**: The core ERP and HR management system for internal staff. Built with Next.js, featuring real-time features, payroll, attendance, client management, and extensive analytics.
+2. **Support (`/support`)**: A dedicated live chat and ticketing application for customer support agents. Built with Next.js, integrating Socket.io for real-time messaging with visitors from the main website.
+3. **Webbriks (`/webbriks`)**: The public-facing corporate website and portfolio. Built with Next.js, it includes a floating AI chat widget that connects visitors to live support agents in real-time.
+4. **Server (`/server`)**: The unified backend API powering all frontend applications. Built with Node.js, Express, TypeScript, and MongoDB. Handles authentication, real-time sockets (Socket.io), database operations, and third-party integrations (S3, Cloudinary).
 
 ## 🛠️ Technology Stack
 
-| Layer | Technologies |
-|-------|--------------|
-| **Frontend** | [Next.js](https://nextjs.org/), [Tailwind CSS 4](https://tailwindcss.com/) |
-| **Backend** | [Node.js](https://nodejs.org/), [Express](https://expressjs.com/), [TypeScript](https://www.typescriptlang.org/) |
-| **Database** | [Prisma](https://www.prisma.io/) (Metadata), [SQLite](https://sqlite.org/) |
-| **Automation** | Bash Shell scripts, [node-cron](https://github.com/node-cron/node-cron), [rclone](https://rclone.org/) |
+- **Frontend Framework:** Next.js (App Router), React
+- **Styling:** Tailwind CSS, Shadcn UI
+- **State Management:** Redux Toolkit (RTK Query)
+- **Backend Framework:** Node.js, Express.js
+- **Database:** MongoDB (Mongoose)
+- **Authentication:** Better Auth, JWT
+- **Real-time:** Socket.io
+- **Storage:** AWS S3 (Presigned URLs), Cloudinary
+- **Language:** TypeScript across the entire stack
 
----
+## 🚀 Getting Started
 
-## 🚀 Installation & Setup
+### Prerequisites
+- Node.js (v18 or higher)
+- MongoDB instance (local or Atlas)
+- Redis (optional, for queuing)
 
-### 1. Prerequisites
-- Node.js (v18+)
-- MongoDB (Target for backup)
-- Rclone (Optional, for Cloud sync)
-
-### 2. Environment Setup
-```bash
-cp .env.example .env
-# Edit .env with your initial variables
-```
-
-### 3. Server Initialization
+### 1. Backend Server Setup
 ```bash
 cd server
 npm install
-npx prisma db push
+# Configure your .env file
 npm run dev
 ```
 
-### 4. Dashboard Setup
+### 2. Main Dashboard Setup
 ```bash
 cd dashboard
 npm install
+# Configure your .env file
 npm run dev
 ```
 
+### 3. Support App Setup
+```bash
+cd support
+npm install
+# Configure your .env file
+npm run dev
+```
+
+### 4. Webbriks Website Setup
+```bash
+cd webbriks
+npm install
+# Configure your .env file
+npm run dev
+```
+
+## 📦 Build Commands
+
+Each application can be built for production using standard Next.js and TypeScript build commands:
+
+- Server: `cd server && npm run build` (Compiles TypeScript)
+- Dashboard: `cd dashboard && npm run build` (Next.js build)
+- Support: `cd support && npm run build` (Next.js build)
+- Webbriks: `cd webbriks && npm run build` (Next.js build)
+
+## 💡 Key Features
+
+- **Unified Authentication:** Seamless single sign-on experience across the dashboard and support apps using Better Auth.
+- **Live Support System:** Visitors on the Webbriks site can chat with an AI assistant or escalate to a live human agent. Agents manage these chats in real-time via the Support app.
+- **Client Recognition:** The system automatically recognizes existing clients based on their email when they request support.
+- **Comprehensive HR:** Full suite of HR tools including attendance tracking, payroll processing, leave management, and staff performance metrics.
+
 ---
-
-## 📂 Project Structure
-- **/dashboard**: Next.js monitoring panel.
-- **/server**: Node.js API and backup execution logic.
-- **/scripts**: Core shell scripts for backup, restore, and cron setup.
-- **/backups**: Default destination for local backup archives.
-
----
-
-## 📜 Commands
-- Trigger Manual Backup: Via the Dashboard UI or `POST /api/backups/trigger`
-- Setup Cron: `bash scripts/cron-setup.sh`
-
----
-
-## ❤️ Credits
-Developed as a robust solution for production MongoDB deployments.
-# dev-hr-management
+*Developed and maintained by the Webbriks Engineering Team.*

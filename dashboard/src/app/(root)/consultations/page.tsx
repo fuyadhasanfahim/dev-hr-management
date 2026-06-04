@@ -405,7 +405,7 @@ function ConsultationRow({ consultation }: { consultation: Consultation }) {
         try {
             await updateConsultation({
                 id: consultation._id,
-                data: { status },
+                data: { status: status as any },
             }).unwrap();
             toast.success(`Consultation marked as ${status}`);
         } catch (err: any) {
