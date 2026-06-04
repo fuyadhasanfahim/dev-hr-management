@@ -108,6 +108,9 @@ export function FloatingAIChat() {
     const liveInputRef = useRef<HTMLTextAreaElement>(null);
     const socketRef = useRef<Socket | null>(null);
     const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    // True while a token-based silent reconnect is in flight, so connect_error can
+    // fall back to OTP (instead of looping) when the stored token is dead.
+    const silentReconnectRef = useRef(false);
 
     // ── helpers ──────────────────────────────────────────────────────────────
     const scrollToBottom = useCallback(() => {
@@ -417,7 +420,81 @@ export function FloatingAIChat() {
         }
     }
 
+    // Token is dead/expired → forget it and route the visitor to the OTP screen.
+    function clearGuestTokenAndShowOtp(message?: string) {
+        try {
+            localStorage.removeItem(LIVE_GUEST_TOKEN_KEY);
+        } catch {
+            // ignore storage failures
+        }
+        setGuestToken(null);
+        setMode('guest-login');
+        setGuestStep('info');
+        setGuestError(message ?? 'Please verify your email to continue.');
+        silentReconnectRef.current = false;
+    }
+
+    // Single code path that turns a (valid) guest token into a live session.
+    // Used by both the OTP-verify success flow and the silent reconnect.
+    async function startLiveSupport(token: string) {
+        setGuestLoading(true);
+        silentReconnectRef.current = true;
+        try {
+            const sessionRes = await fetch(`${API_URL}/api/support/chats/session`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`,
+                },
+            });
+
+            // Token rejected → treat as dead and fall back to OTP (no loop).
+            if (sessionRes.status === 401 || sessionRes.status === 403) {
+                clearGuestTokenAndShowOtp(
+                    'Your session has expired. Please verify your email to continue.',
+                );
+                return;
+            }
+
+            const sessionData = await sessionRes.json();
+            if (!sessionRes.ok || !sessionData.success) {
+                clearGuestTokenAndShowOtp(
+                    'Your session has expired. Please verify your email to continue.',
+                );
+                return;
+            }
+
+            const sid = sessionData.data.sessionId;
+            setSessionId(sid);
+            setGuestToken(token);
+            connectToLiveChat(token, sid);
+        } catch {
+            // Couldn't reach the session endpoint — fall back to OTP cleanly.
+            clearGuestTokenAndShowOtp(
+                'Could not reconnect. Please verify your email to continue.',
+            );
+        } finally {
+            setGuestLoading(false);
+        }
+    }
+
     function handleConnectLive() {
+        // Reuse a stored guest token (valid 7 days) instead of re-asking for OTP.
+        let token: string | null = guestToken;
+        if (!token) {
+            try {
+                token = localStorage.getItem(LIVE_GUEST_TOKEN_KEY);
+            } catch {
+                token = null;
+            }
+        }
+
+        if (token) {
+            void startLiveSupport(token);
+            return;
+        }
+
+        // No token → collect email + OTP.
         setMode('guest-login');
         setGuestStep('info');
         setGuestError('');
@@ -465,20 +542,8 @@ export function FloatingAIChat() {
             const token = data.data.token;
             setGuestToken(token);
 
-            // create chat session
-            const sessionRes = await fetch(`${API_URL}/api/support/chats/session`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`,
-                },
-            });
-            const sessionData = await sessionRes.json();
-            if (!sessionData.success) throw new Error(sessionData.message);
-
-            const sid = sessionData.data.sessionId;
-            setSessionId(sid);
-            connectToLiveChat(token, sid);
+            // Single path: turn the fresh token into a live session.
+            await startLiveSupport(token);
         } catch (err: any) {
             setGuestError(err.message || 'Verification failed. Please try again.');
         } finally {
@@ -500,6 +565,8 @@ export function FloatingAIChat() {
         });
 
         socket.on('chat:joined', ({ messages: history }: { messages: LiveMessage[] }) => {
+            // Genuine connection — a later network blip shouldn't be read as a dead token.
+            silentReconnectRef.current = false;
             if (history?.length) setLiveMessages(history);
             setMode('live-chat');
         });
@@ -546,6 +613,16 @@ export function FloatingAIChat() {
         });
 
         socket.on('connect_error', () => {
+            // Token-based silent attempt failed → the stored token is bad/expired.
+            // Fall back to OTP cleanly instead of looping a dead-token reconnect.
+            if (silentReconnectRef.current) {
+                silentReconnectRef.current = false;
+                clearGuestTokenAndShowOtp(
+                    'Your session has expired. Please verify your email to continue.',
+                );
+                return;
+            }
+
             setGuestError('Failed to connect to live chat. Please try again.');
             setMode('guest-login');
             // Drop a permanently-dead session so reload doesn't keep retrying it.

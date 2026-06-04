@@ -45,18 +45,19 @@ function escapeHtml(str: string): string {
         .replace(/'/g, '&#39;');
 }
 
-/** Email-facing sender label: "You" for the visitor, agent name for staff. */
-function emailSenderLabel(senderModel: string, agentName: string): string {
-    if (senderModel === 'Staff') return agentName || 'Support';
+/**
+ * Sender label for transcripts (used in both the AI summary input and the email).
+ * For an accurate record, Staff lines keep the message's OWN sender name (falling
+ * back to the closing agent, then "Support"); the visitor is shown as "You".
+ */
+function senderLabel(
+    senderModel: string,
+    senderName: string | undefined,
+    agentName: string,
+): string {
+    if (senderModel === 'Staff') return senderName || agentName || 'Support';
     if (senderModel === 'System') return 'System';
     return 'You';
-}
-
-/** AI-facing sender label (clearer than "You" for the model). */
-function aiSenderLabel(senderModel: string, agentName: string): string {
-    if (senderModel === 'Staff') return agentName || 'Support';
-    if (senderModel === 'System') return 'System';
-    return 'Customer';
 }
 
 interface TranscriptMessage {
@@ -118,7 +119,7 @@ export function buildResolutionEmailHtml(args: {
     const transcriptRows = messages
         .map((m) => {
             const ts = formatTimestamp(new Date(m.createdAt));
-            const who = escapeHtml(emailSenderLabel(m.senderModel, agentName));
+            const who = escapeHtml(senderLabel(m.senderModel, m.senderName, agentName));
             const body = escapeHtml(m.content);
             const isSystem = m.senderModel === 'System';
             return (
@@ -215,8 +216,9 @@ export async function sendResolutionEmail(
         const aiTranscript = messages
             .map(
                 (m) =>
-                    `[${formatTimestamp(new Date(m.createdAt))}] ${aiSenderLabel(
+                    `[${formatTimestamp(new Date(m.createdAt))}] ${senderLabel(
                         m.senderModel,
+                        m.senderName,
                         agentName,
                     )}: ${m.content}`,
             )
