@@ -289,8 +289,12 @@ export class QuotationService {
     ): Promise<IQuotation> {
         const quotation = await QuotationModel.findById(id);
         if (!quotation) throw new AppError('Quotation not found', 404);
-        if (quotation.status !== 'draft') {
-            throw new AppError('Only draft quotations can be updated directly.', 409);
+        const editableStatuses = ['draft', 'sent', 'viewed'];
+        if (!editableStatuses.includes(quotation.status)) {
+            throw new AppError(
+                `Cannot edit a ${quotation.status} quotation directly. Please create a new version instead.`,
+                409,
+            );
         }
 
         const totals = calculateTotals({ ...quotation.toObject(), ...data });

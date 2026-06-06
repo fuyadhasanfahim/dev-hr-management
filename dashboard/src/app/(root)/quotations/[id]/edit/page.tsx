@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useGetQuotationByIdQuery } from "@/redux/features/quotation/quotationApi";
 import { useQuotationStore } from "@/store/useQuotationStore";
 import QuotationBuilder from "../../components/forms/QuotationBuilder";
-import { ArrowLeft, Loader2, ReceiptText } from "lucide-react";
+import { ArrowLeft, Loader2, ReceiptText, AlertTriangle } from "lucide-react";
 
 export default function EditQuotationPage() {
   const { id } = useParams();
@@ -94,6 +94,20 @@ export default function EditQuotationPage() {
           </div>
         </div>
       </div>
+
+      {data.status !== "draft" && (
+        <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50/60 dark:border-amber-800/50 dark:bg-amber-950/20 p-4">
+          <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
+          <div>
+            <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">
+              This quotation has already been sent
+            </p>
+            <p className="text-xs text-amber-700 dark:text-amber-300 mt-0.5">
+              Changes will update the existing quotation. The client&apos;s link will reflect the updated content.
+            </p>
+          </div>
+        </div>
+      )}
 
       <div className="rounded-xl border bg-card p-6">
         <QuotationBuilder hideHeader />

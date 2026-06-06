@@ -19,6 +19,7 @@ export const auth = betterAuth({
             httpOnly: true,
             sameSite: 'lax',
             secure: process.env.NODE_ENV === 'production',
+            ...(process.env.NODE_ENV === 'production' && { domain: '.webbriks.com' }),
         },
     },
     user: {

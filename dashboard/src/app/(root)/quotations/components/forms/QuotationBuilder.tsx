@@ -375,8 +375,9 @@ export default function QuotationBuilder({
     const saveQuotation = async (status: 'draft' | 'sent') => {
         if (!data.clientId) return toast.error('Please select a client first');
         try {
-            const payload = { ...data, status };
             if (data._id) {
+                // Editing: preserve the existing status, never downgrade back to draft
+                const payload = { ...data };
                 const updated = await updateQuotation({
                     id: data._id,
                     ...payload,
@@ -385,6 +386,7 @@ export default function QuotationBuilder({
                 toast.success('Quotation updated successfully');
                 return updated._id;
             } else {
+                const payload = { ...data, status };
                 const created = await createQuotation(payload).unwrap();
                 setData(created);
                 toast.success('Quotation created successfully');
@@ -1866,7 +1868,10 @@ export default function QuotationBuilder({
                                 onClick={() => saveQuotation('draft')}
                                 disabled={isCreating || isUpdating || isSending}
                             >
-                                <Save className="w-4 h-4" /> Save Internal Draft
+                                <Save className="w-4 h-4" />
+                                {data._id && data.status !== 'draft'
+                                    ? 'Save Changes'
+                                    : 'Save Internal Draft'}
                             </PrimaryButton>
                         </div>
                     </div>
