@@ -9,6 +9,15 @@ export type TicketStatus =
 
 export type TicketPriority = 'low' | 'medium' | 'high' | 'urgent';
 
+export type TicketCategory =
+    | 'support'
+    | 'service'
+    | 'development'
+    | 'billing'
+    | 'bug';
+
+export type TicketSource = 'direct' | 'ai_chat' | 'live_chat';
+
 export interface TicketUser {
     _id: string;
     name: string;
@@ -21,6 +30,8 @@ export interface Ticket {
     subject: string;
     status: TicketStatus;
     priority: TicketPriority;
+    category?: TicketCategory;
+    source?: TicketSource;
     clientId?: TicketUser | null;
     guestId?: TicketUser | null;
     assignedTo?: TicketUser | null;
@@ -51,6 +62,7 @@ export interface TicketDetail extends Ticket {
 interface ListTicketsArgs {
     status?: TicketStatus;
     priority?: TicketPriority;
+    category?: TicketCategory;
 }
 
 export const ticketApi = baseApi.injectEndpoints({
@@ -60,6 +72,7 @@ export const ticketApi = baseApi.injectEndpoints({
                 const params = new URLSearchParams();
                 if (args?.status) params.set('status', args.status);
                 if (args?.priority) params.set('priority', args.priority);
+                if (args?.category) params.set('category', args.category);
                 const qs = params.toString();
                 return `/support/tickets/admin${qs ? `?${qs}` : ''}`;
             },
@@ -106,6 +119,7 @@ export const ticketApi = baseApi.injectEndpoints({
                 id: string;
                 priority?: TicketPriority;
                 status?: TicketStatus;
+                category?: TicketCategory;
                 assignedTo?: string;
                 tags?: string[];
             }

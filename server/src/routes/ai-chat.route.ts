@@ -1,6 +1,8 @@
 import express from 'express';
 import AIChatController from '../controllers/ai-chat.controller.js';
 import { requireUnifiedAuth } from './support.route.js';
+import { validateRequest } from '../middlewares/validateRequest.js';
+import { CreateTicketFromAIValidation } from '../validators/ticket.validator.js';
 import { aiChatLimiter, generalPublicLimiter } from '../middlewares/rate-limit.middleware.js';
 
 const router = express.Router();
@@ -12,7 +14,7 @@ router.post('/chat', aiChatLimiter, AIChatController.chat);
 router.get('/info', generalPublicLimiter, AIChatController.getInfo);
 
 // Auth required — create a ticket from AI chat conversation
-router.post('/ticket', requireUnifiedAuth, AIChatController.createTicketFromAI);
+router.post('/ticket', requireUnifiedAuth, validateRequest(CreateTicketFromAIValidation), AIChatController.createTicketFromAI);
 
 // Auth required — connect to live human support
 router.post('/live-support', requireUnifiedAuth, AIChatController.connectLiveSupport);

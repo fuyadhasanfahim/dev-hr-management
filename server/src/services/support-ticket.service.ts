@@ -1,4 +1,4 @@
-import TicketModel from '../models/ticket.model.js';
+import TicketModel, { TicketCategory } from '../models/ticket.model.js';
 import TicketMessageModel, { MessageSenderModel } from '../models/ticket-message.model.js';
 import { AppError } from '../utils/AppError.js';
 import { Types } from 'mongoose';
@@ -8,8 +8,11 @@ interface CreateTicketData {
     text: string;
     attachments?: string[];
     priority?: any;
+    category?: string;
+    source: string;        // Required — every flow must set this explicitly
     clientId?: string;
     guestId?: string;
+    assignedTo?: string;   // Pre-assign (e.g. carry over from live-chat)
 }
 
 /**
@@ -26,6 +29,8 @@ export async function createTicket(data: CreateTicketData): Promise<any> {
         ticketId,
         subject: data.subject,
         priority: data.priority || 'medium',
+        category: data.category || TicketCategory.SUPPORT,
+        source: data.source,
         status: 'open',
         attachments: data.attachments || [],
         tags: [],
@@ -36,6 +41,9 @@ export async function createTicket(data: CreateTicketData): Promise<any> {
     }
     if (data.guestId) {
         ticketFields.guestId = new Types.ObjectId(data.guestId);
+    }
+    if (data.assignedTo) {
+        ticketFields.assignedTo = new Types.ObjectId(data.assignedTo);
     }
 
     const ticket = await TicketModel.create(ticketFields) as any;
@@ -67,12 +75,14 @@ export async function listTickets(filters: {
     guestId?: string;
     status?: any;
     priority?: any;
+    category?: any;
 }) {
     const query: any = {};
     if (filters.clientId) query.clientId = new Types.ObjectId(filters.clientId);
     if (filters.guestId) query.guestId = new Types.ObjectId(filters.guestId);
     if (filters.status) query.status = filters.status;
     if (filters.priority) query.priority = filters.priority;
+    if (filters.category) query.category = filters.category;
 
     return await TicketModel.find(query)
         .populate('clientId', 'name email')
@@ -126,6 +136,7 @@ export async function updateTicket(
     updates: {
         status?: any;
         priority?: any;
+        category?: any;
         assignedTo?: string;
         tags?: string[];
     }
@@ -137,6 +148,7 @@ export async function updateTicket(
 
     if (updates.status) ticket.status = updates.status;
     if (updates.priority) ticket.priority = updates.priority;
+    if (updates.category) ticket.category = updates.category;
     if (updates.assignedTo) ticket.assignedTo = new Types.ObjectId(updates.assignedTo);
     if (updates.tags) ticket.tags = updates.tags;
 

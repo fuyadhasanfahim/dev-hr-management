@@ -70,7 +70,11 @@ async function getPresignedViewUrl(req: Request, res: Response) {
             return res.status(400).json({ success: false, message: 'fileKey query parameter is required.' });
         }
 
-        const ALLOWED_PREFIXES = ['chats/', 'tickets/'];
+        const ALLOWED_PREFIXES = [
+            'chats/', 'tickets/',
+            // Keys produced by the Cloudinary → S3 migration service
+            'migrated-tickets/', 'migrated-ticket-messages/', 'migrated-chat-messages/',
+        ];
         if (!ALLOWED_PREFIXES.some((p) => fileKey.startsWith(p))) {
             return res.status(403).json({ success: false, message: 'Access denied: invalid file key.' });
         }
@@ -87,13 +91,15 @@ async function getPresignedViewUrl(req: Request, res: Response) {
  */
 async function createSupportTicket(req: Request, res: Response) {
     try {
-        const { subject, text, attachments, priority } = req.body;
-        
+        const { subject, text, attachments, priority, category } = req.body;
+
         const args: any = {
             subject,
             text,
             attachments,
             priority,
+            category,
+            source: 'direct',
         };
 
         if (req.user?.role === 'Guest') {
@@ -161,6 +167,7 @@ async function listSupportTickets(req: Request, res: Response) {
 
         if (req.query.status) args.status = req.query.status;
         if (req.query.priority) args.priority = req.query.priority;
+        if (req.query.category) args.category = req.query.category;
 
         const result = await supportTicketService.listTickets(args);
         return res.status(200).json({ success: true, data: result });
@@ -174,11 +181,12 @@ async function listSupportTickets(req: Request, res: Response) {
  */
 async function updateTicket(req: Request, res: Response) {
     try {
-        const { status, priority, assignedTo, tags } = req.body;
+        const { status, priority, category, assignedTo, tags } = req.body;
         
         const updates: any = {};
         if (status) updates.status = status;
         if (priority) updates.priority = priority;
+        if (category) updates.category = category;
         if (assignedTo) updates.assignedTo = assignedTo;
         if (tags) updates.tags = tags;
 
@@ -227,8 +235,8 @@ async function claimChatSession(req: Request, res: Response) {
  */
 async function convertChatToTicket(req: Request, res: Response) {
     try {
-        const { sessionId, reason } = req.body;
-        const result = await liveChatService.convertChatToTicket(sessionId, reason);
+        const { sessionId, reason, subject, category } = req.body;
+        const result = await liveChatService.convertChatToTicket(sessionId, { reason, subject, category });
         return res.status(200).json({ success: true, data: result });
     } catch (err: any) {
         return res.status(err.statusCode || 400).json({ success: false, message: err.message });
@@ -578,8 +586,8 @@ async function convertChatToTicketParam(req: Request, res: Response) {
             return res.status(400).json({ success: false, message: 'Session ID is required' });
         }
 
-        const { reason } = req.body;
-        const result = await liveChatService.convertChatToTicket(sessionId, reason);
+        const { reason, subject, category } = req.body;
+        const result = await liveChatService.convertChatToTicket(sessionId, { reason, subject, category });
         emitSessionStateChange('converted', sessionId);
         return res.status(200).json({ success: true, data: result });
     } catch (err: any) {

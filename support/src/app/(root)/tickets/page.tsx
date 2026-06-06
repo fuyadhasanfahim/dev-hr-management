@@ -26,6 +26,10 @@ import {
     Mail,
     Tag,
     CornerUpLeft,
+    Bot,
+    MessageSquare,
+    Globe,
+    Layers,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -56,6 +60,8 @@ import {
     type TicketReply,
     type TicketStatus,
     type TicketPriority,
+    type TicketCategory,
+    type TicketSource,
 } from '@/store/api/ticketApi';
 import {
     useGetAvailableAgentsQuery,
@@ -125,12 +131,61 @@ const PRIORITY_CONFIG: Record<
     },
 };
 
+const CATEGORY_CONFIG: Record<
+    TicketCategory,
+    { label: string; className: string }
+> = {
+    support: {
+        label: 'Support',
+        className:
+            'bg-sky-500/15 text-sky-600 dark:text-sky-400 border-sky-500/20',
+    },
+    service: {
+        label: 'Service',
+        className:
+            'bg-teal-500/15 text-teal-600 dark:text-teal-400 border-teal-500/20',
+    },
+    development: {
+        label: 'Development',
+        className:
+            'bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 border-indigo-500/20',
+    },
+    billing: {
+        label: 'Billing',
+        className:
+            'bg-yellow-500/15 text-yellow-600 dark:text-yellow-400 border-yellow-500/20',
+    },
+    bug: {
+        label: 'Bug Report',
+        className:
+            'bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/20',
+    },
+};
+
+const SOURCE_CONFIG: Record<
+    TicketSource,
+    { label: string; icon: React.ElementType }
+> = {
+    direct: { label: 'Direct', icon: Globe },
+    ai_chat: { label: 'AI Chat', icon: Bot },
+    live_chat: { label: 'Live Chat', icon: MessageSquare },
+};
+
 const STATUS_FILTERS: { value: TicketStatus | 'all'; label: string }[] = [
     { value: 'all', label: 'All' },
     { value: 'open', label: 'Open' },
     { value: 'in_progress', label: 'Active' },
     { value: 'pending_client', label: 'Pending' },
     { value: 'resolved', label: 'Resolved' },
+];
+
+const CATEGORY_FILTERS: { value: TicketCategory | 'all'; label: string }[] = [
+    { value: 'all', label: 'All' },
+    { value: 'support', label: 'Support' },
+    { value: 'service', label: 'Service' },
+    { value: 'development', label: 'Dev' },
+    { value: 'billing', label: 'Billing' },
+    { value: 'bug', label: 'Bug' },
 ];
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
@@ -197,6 +252,36 @@ function PriorityBadge({ priority }: { priority: TicketPriority }) {
     );
 }
 
+function CategoryBadge({ category }: { category?: TicketCategory }) {
+    if (!category) return null;
+    const cfg = CATEGORY_CONFIG[category];
+    if (!cfg) return null;
+    return (
+        <span
+            className={cn(
+                'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium',
+                cfg.className,
+            )}
+        >
+            <Layers className="size-2.5" />
+            {cfg.label}
+        </span>
+    );
+}
+
+function SourceLabel({ source }: { source?: TicketSource }) {
+    if (!source) return null;
+    const cfg = SOURCE_CONFIG[source];
+    if (!cfg) return null;
+    const Icon = cfg.icon;
+    return (
+        <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground">
+            <Icon className="size-3" />
+            {cfg.label}
+        </span>
+    );
+}
+
 function TicketSkeleton() {
     return (
         <div className="flex flex-col gap-2 px-4 py-3.5">
@@ -250,6 +335,7 @@ function TicketListItem({
             <div className="flex items-center gap-1.5 flex-wrap">
                 <StatusBadge status={ticket.status} />
                 <PriorityBadge priority={ticket.priority} />
+                <CategoryBadge category={ticket.category} />
             </div>
         </button>
     );
@@ -368,14 +454,23 @@ export default function TicketsPage() {
     const [statusFilter, setStatusFilter] = useState<TicketStatus | 'all'>(
         'all',
     );
+    const [categoryFilter, setCategoryFilter] = useState<TicketCategory | 'all'>(
+        'all',
+    );
     const [searchQuery, setSearchQuery] = useState('');
     const [replyValue, setReplyValue] = useState('');
     const [uploading, setUploading] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const threadEndRef = useRef<HTMLDivElement>(null);
 
+    const ticketQueryArgs = (() => {
+        const args: { status?: TicketStatus; category?: TicketCategory } = {};
+        if (statusFilter !== 'all') args.status = statusFilter;
+        if (categoryFilter !== 'all') args.category = categoryFilter;
+        return Object.keys(args).length > 0 ? args : undefined;
+    })();
     const { data: tickets = [], isLoading: ticketsLoading } = useGetTicketsQuery(
-        statusFilter === 'all' ? undefined : { status: statusFilter },
+        ticketQueryArgs,
         { pollingInterval: 30_000 },
     );
     const { data: ticket, isFetching: detailLoading } = useGetTicketDetailQuery(
@@ -503,7 +598,7 @@ export default function TicketsPage() {
                     </div>
                 </div>
 
-                <div className="px-4 pb-2">
+                <div className="px-4 pb-1.5">
                     <Tabs
                         value={statusFilter}
                         onValueChange={(v) =>
@@ -516,6 +611,27 @@ export default function TicketsPage() {
                                     key={f.value}
                                     value={f.value}
                                     className="flex-1 text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground border rounded-md"
+                                >
+                                    {f.label}
+                                </TabsTrigger>
+                            ))}
+                        </TabsList>
+                    </Tabs>
+                </div>
+
+                <div className="px-4 pb-2">
+                    <Tabs
+                        value={categoryFilter}
+                        onValueChange={(v) =>
+                            setCategoryFilter(v as TicketCategory | 'all')
+                        }
+                    >
+                        <TabsList className="w-full h-auto flex-wrap gap-1 bg-transparent p-0">
+                            {CATEGORY_FILTERS.map((f) => (
+                                <TabsTrigger
+                                    key={f.value}
+                                    value={f.value}
+                                    className="flex-1 text-xs data-[state=active]:bg-primary/80 data-[state=active]:text-primary-foreground border rounded-md"
                                 >
                                     {f.label}
                                 </TabsTrigger>
@@ -583,13 +699,19 @@ export default function TicketsPage() {
                         <div className="shrink-0 border-b bg-background">
                             <div className="flex items-start justify-between px-5 py-3 gap-3">
                                 <div className="min-w-0 space-y-1">
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex items-center gap-2 flex-wrap">
                                         <span className="font-mono text-[11px] bg-muted px-1.5 py-0.5 rounded text-muted-foreground">
                                             {ticket.ticketId}
                                         </span>
                                         <StatusBadge status={ticket.status} />
                                         <PriorityBadge
                                             priority={ticket.priority}
+                                        />
+                                        <CategoryBadge
+                                            category={ticket.category}
+                                        />
+                                        <SourceLabel
+                                            source={ticket.source}
                                         />
                                     </div>
                                     <h2 className="text-base font-semibold truncate">
@@ -678,6 +800,37 @@ export default function TicketsPage() {
                                             ).map((p) => (
                                                 <SelectItem key={p} value={p}>
                                                     {PRIORITY_CONFIG[p].label}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
+                                <div className="flex items-center gap-1.5">
+                                    <Label className="text-xs text-muted-foreground">
+                                        Category
+                                    </Label>
+                                    <Select
+                                        value={ticket.category || 'support'}
+                                        onValueChange={(v) =>
+                                            updateTicket({
+                                                id: ticket._id,
+                                                category: v as TicketCategory,
+                                            })
+                                        }
+                                        disabled={isUpdating}
+                                    >
+                                        <SelectTrigger className="h-8 w-[130px] text-xs">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {(
+                                                Object.keys(
+                                                    CATEGORY_CONFIG,
+                                                ) as TicketCategory[]
+                                            ).map((c) => (
+                                                <SelectItem key={c} value={c}>
+                                                    {CATEGORY_CONFIG[c].label}
                                                 </SelectItem>
                                             ))}
                                         </SelectContent>

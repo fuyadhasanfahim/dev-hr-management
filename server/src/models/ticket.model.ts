@@ -15,6 +15,20 @@ export enum TicketPriority {
     URGENT = 'urgent',
 }
 
+export enum TicketCategory {
+    SUPPORT     = 'support',
+    SERVICE     = 'service',
+    DEVELOPMENT = 'development',
+    BILLING     = 'billing',
+    BUG         = 'bug',
+}
+
+export enum TicketSource {
+    DIRECT    = 'direct',
+    AI_CHAT   = 'ai_chat',
+    LIVE_CHAT = 'live_chat',
+}
+
 export interface ITicket extends Document {
     ticketId: string;
     clientId?: Types.ObjectId; // Ref: Client
@@ -22,6 +36,8 @@ export interface ITicket extends Document {
     subject: string;
     status: TicketStatus;
     priority: TicketPriority;
+    category: TicketCategory;
+    source: TicketSource;
     assignedTo?: Types.ObjectId; // Ref: Staff
     attachments: string[]; // Cloudinary/S3 URLs
     tags: string[];
@@ -62,6 +78,20 @@ const ticketSchema = new Schema<ITicket>(
             type: String,
             enum: Object.values(TicketPriority),
             default: TicketPriority.MEDIUM,
+        },
+        category: {
+            type: String,
+            enum: Object.values(TicketCategory),
+            default: TicketCategory.SUPPORT,
+            index: true,
+        },
+        source: {
+            type: String,
+            enum: Object.values(TicketSource),
+            // No default — set explicitly by each creation flow.
+            // Existing tickets without this field will read as undefined;
+            // queries handle that gracefully.
+            index: true,
         },
         assignedTo: {
             type: Schema.Types.ObjectId,

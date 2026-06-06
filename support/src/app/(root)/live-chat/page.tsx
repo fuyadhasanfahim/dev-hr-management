@@ -243,16 +243,50 @@ function SessionItem({
     );
 }
 
+/** Known S3 folder prefixes that need a presigned view-URL. */
+const S3_PREFIXES = [
+    'chats/', 'tickets/',
+    // Cloudinary → S3 migration folders
+    'migrated-tickets/', 'migrated-ticket-messages/', 'migrated-chat-messages/',
+];
+
+function isS3Key(key: string): boolean {
+    return S3_PREFIXES.some((p) => key.startsWith(p));
+}
+
+/**
+ * Extract the S3 object key from an attachment string.
+ * Handles:
+ *  - Full virtual-hosted URLs  https://bucket.s3.region.amazonaws.com/chats/…
+ *  - Full path-style URLs      https://s3.region.amazonaws.com/bucket/chats/…
+ *  - Presigned URLs (strips query params automatically via URL.pathname)
+ *  - Bare keys                 chats/ref/uuid.png
+ * Returns null (and logs) for Cloudinary / external URLs that don't need presigning.
+ */
 function extractS3Key(url: string): string | null {
+    // Fast path: already a bare key (no protocol)
+    if (isS3Key(url)) return url;
+
     try {
         const u = new URL(url);
-        // Strip leading slash from pathname: "/chats/xxx/file.png" → "chats/xxx/file.png"
-        const key = u.pathname.replace(/^\//, '');
-        if (key.startsWith('chats/') || key.startsWith('tickets/')) return key;
+
+        // Skip non-S3 URLs (e.g. Cloudinary, data URIs) — these are directly loadable
+        if (!u.hostname.endsWith('.amazonaws.com')) return null;
+
+        // Virtual-hosted style: pathname IS the key (after stripping leading /)
+        const pathKey = decodeURIComponent(u.pathname.replace(/^\//, ''));
+        if (isS3Key(pathKey)) return pathKey;
+
+        // Path-style: pathname = /bucket-name/key — strip the first segment
+        const withoutBucket = pathKey.replace(/^[^/]+\//, '');
+        if (isS3Key(withoutBucket)) return withoutBucket;
+
+        console.error('[extractS3Key] S3 URL matched amazonaws.com but key not recognised:', url, '→ extracted:', pathKey);
+        return null;
     } catch {
-        if (url.startsWith('chats/') || url.startsWith('tickets/')) return url;
+        console.error('[extractS3Key] Unparseable attachment URL:', url);
+        return null;
     }
-    return null;
 }
 
 function AttachmentPreview({ url }: { url: string }) {
