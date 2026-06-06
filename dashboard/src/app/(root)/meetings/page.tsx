@@ -1136,7 +1136,6 @@ function ScheduleMeetingDialog({
     clients: {
         _id: string;
         name: string;
-        clientId: string;
         emails: string[];
     }[];
 }) {
@@ -1333,7 +1332,7 @@ function ScheduleMeetingDialog({
                                                 key={c._id}
                                                 value={c._id}
                                             >
-                                                {c.name} ({c.clientId})
+                                                {c.name}
                                             </SelectItem>
                                         ))}
                                     </SelectContent>

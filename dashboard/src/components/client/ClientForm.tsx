@@ -1,6 +1,5 @@
 'use client';
 
-import { useEffect, useRef, useMemo } from 'react';
 import { useForm, useFieldArray, useWatch, UseFormReturn } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -25,7 +24,6 @@ import {
     FileText,
     UsersRound
 } from 'lucide-react';
-import { useLazyCheckClientIdQuery } from '@/redux/features/client/clientApi';
 import { useGetServicesQuery } from '@/redux/features/service/serviceApi';
 import { cn } from '@/lib/utils';
 import { MultiSelect } from '@/components/ui/multi-select';
@@ -41,7 +39,6 @@ const teamMemberSchema = z.object({
 });
 
 export const clientFormSchema = z.object({
-    clientId: z.string().optional(),
     name: z
         .string()
         .min(1, 'Name is required')
@@ -62,7 +59,6 @@ export const clientFormSchema = z.object({
 export type FormValues = z.infer<typeof clientFormSchema>;
 
 export interface ClientFormData {
-    clientId: string;
     name: string;
     emails: string[];
     phone?: string;
@@ -116,16 +112,11 @@ export function ClientForm({
     serverErrors,
     isEditMode = false,
 }: ClientFormProps) {
-    const [checkClientId, { isFetching: isCheckingId, data: checkResult, originalArgs: lastCheckedClientId }] =
-        useLazyCheckClientIdQuery();
     const { data: servicesData } = useGetServicesQuery({ isActive: true });
-    
-    const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const form = useForm<FormValues>({
         resolver: zodResolver(clientFormSchema),
         defaultValues: {
-            clientId: defaultValues?.clientId || '',
             name: defaultValues?.name || '',
             emails: defaultValues?.emails?.map(email => ({ value: email })) || [{ value: '' }],
             phone: defaultValues?.phone || '',
@@ -141,43 +132,10 @@ export function ClientForm({
 
     const {
         handleSubmit,
-        control,
     } = form;
 
-    const clientIdValue = useWatch({ control, name: 'clientId' });
-
-    // Derived client ID error from API result
-    const clientIdError = useMemo(() => {
-        if (isEditMode || !clientIdValue || clientIdValue.length < 2) return null;
-        if (lastCheckedClientId === clientIdValue && checkResult && !checkResult.available) {
-            const suggestions = checkResult.suggestions?.join(', ') || '';
-            return `Client ID "${clientIdValue}" already exists.${suggestions ? ` Try: ${suggestions}` : ''}`;
-        }
-        return null;
-    }, [isEditMode, clientIdValue, lastCheckedClientId, checkResult]);
-
-    // Debounced client ID check
-    useEffect(() => {
-        if (isEditMode || !clientIdValue || clientIdValue.length < 2) return;
-        if (debounceRef.current) clearTimeout(debounceRef.current);
-
-        debounceRef.current = setTimeout(async () => {
-            try {
-                await checkClientId(clientIdValue).unwrap();
-            } catch {
-                // Ignore API error
-            }
-        }, 500);
-
-        return () => {
-            if (debounceRef.current) clearTimeout(debounceRef.current);
-        };
-    }, [clientIdValue, isEditMode, checkClientId]);
-
     const handleFormSubmit = async (data: FormValues) => {
-        if (clientIdError && !isEditMode) return;
         const formattedData: ClientFormData = {
-            clientId: data.clientId || '',
             name: data.name,
             emails: data.emails.map(e => e.value),
             phone: data.phone,
@@ -193,8 +151,6 @@ export function ClientForm({
     };
 
     const getFieldError = (fieldName: string) => {
-        if (fieldName === 'clientId' && clientIdError) return clientIdError;
-
         const errors = form.formState.errors;
         
         if (fieldName.startsWith('emails')) {
@@ -242,10 +198,8 @@ export function ClientForm({
                         <User className="h-5 w-5 text-teal-600" />
                         <h3 className="font-semibold text-slate-900 dark:text-slate-100 text-lg">Basic Information</h3>
                     </div>
-                    <ClientBasicInfo 
-                        form={form} 
-                        isEditMode={isEditMode} 
-                        isCheckingId={isCheckingId}
+                    <ClientBasicInfo
+                        form={form}
                         getFieldError={getFieldError}
                     />
                 </section>
@@ -294,7 +248,7 @@ export function ClientForm({
                 </Button>
                 <Button
                     type="submit"
-                    disabled={isSubmitting || (!!clientIdError && !isEditMode)}
+                    disabled={isSubmitting}
                     className="min-w-[120px] bg-teal-600 hover:bg-teal-700 text-white shadow-sm"
                 >
                     {isSubmitting && <Loader className="h-4 w-4 animate-spin shrink-0" />}
@@ -308,16 +262,12 @@ export function ClientForm({
 
 // --- SUB COMPONENTS ---
 
-function ClientBasicInfo({ 
-    form, 
-    isEditMode, 
-    isCheckingId, 
-    getFieldError 
-}: { 
-    form: UseFormReturn<FormValues>, 
-    isEditMode: boolean,
-    isCheckingId: boolean,
-    getFieldError: (f: string) => string | null 
+function ClientBasicInfo({
+    form,
+    getFieldError,
+}: {
+    form: UseFormReturn<FormValues>,
+    getFieldError: (f: string) => string | null,
 }) {
     const { register, control, setValue } = form;
     const { fields: emailFields, append: appendEmail, remove: removeEmail } = useFieldArray({ control, name: "emails" });

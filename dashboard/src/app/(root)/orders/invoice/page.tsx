@@ -125,7 +125,6 @@ export default function InvoicePage() {
             {
                 _id: string;
                 name: string;
-                clientId: string;
                 currency?: string;
                 address?: string;
                 officeAddress?: string;
@@ -138,7 +137,6 @@ export default function InvoicePage() {
                 clientMap.set(client._id, {
                     _id: client._id,
                     name: client.name,
-                    clientId: client.clientId,
                     currency: client.currency,
                     address: client.address,
                     officeAddress: client.officeAddress,
@@ -212,7 +210,7 @@ export default function InvoicePage() {
                 const recordResult = await recordInvoice({
                     invoiceNumber: generatedNumber,
                     clientName: selectedClient.name,
-                    clientId: selectedClient.clientId,
+                    clientId: selectedClient._id,
                     clientAddress: selectedClient.address || selectedClient.officeAddress || "N/A",
                     companyName: selectedClient.officeAddress || "N/A",
                     totalAmount: totals.totalAmount,
@@ -272,7 +270,7 @@ export default function InvoicePage() {
                     const recordResult = await recordInvoice({
                         invoiceNumber: currentInvoiceNumber,
                         clientName: selectedClient.name,
-                        clientId: selectedClient.clientId,
+                        clientId: selectedClient._id,
                         clientAddress: selectedClient.address || selectedClient.officeAddress || "N/A",
                         companyName: selectedClient.officeAddress || "N/A",
                         totalAmount: totals.totalAmount,
@@ -302,7 +300,7 @@ export default function InvoicePage() {
                 }
             }
 
-            const fileName = `Invoice_${selectedClient.clientId}_${selectedMonth}_${selectedYear}.pdf`;
+            const fileName = `Invoice_${selectedClient._id}_${selectedMonth}_${selectedYear}.pdf`;
             const blob = await pdf(
                 <InvoiceDocument
                     client={selectedClient}
@@ -400,7 +398,7 @@ export default function InvoicePage() {
                             {isLoadingAllOrders ? <Skeleton className="h-10 w-full" /> : (
                                 <Select value={selectedClientId} onValueChange={(val) => { setSelectedClientId(val); setSelectedOrders(new Set()); setShowPDF(false); }}>
                                     <SelectTrigger><SelectValue placeholder={availableClients.length === 0 ? "No clients found" : "Select a client"} /></SelectTrigger>
-                                    <SelectContent>{availableClients.map(c => <SelectItem key={c._id} value={c._id}>{c.name} ({c.clientId})</SelectItem>)}</SelectContent>
+                                    <SelectContent>{availableClients.map(c => <SelectItem key={c._id} value={c._id}>{c.name}</SelectItem>)}</SelectContent>
                                 </Select>
                             )}
                         </div>

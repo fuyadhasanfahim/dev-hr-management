@@ -32,7 +32,6 @@ export function ClientInfoCard({ client }: ClientInfoCardProps) {
                         <div>
                             <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider leading-none mb-1">Name</p>
                             <p className="font-semibold text-slate-700 dark:text-slate-200">{client.name}</p>
-                            <p className="text-xs text-slate-400 font-mono mt-0.5">{client.clientId}</p>
                         </div>
                     </div>
                 </div>

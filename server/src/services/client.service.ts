@@ -18,7 +18,6 @@ const buildMatchStage = (
         match.$or = [
             { name: { $regex: escaped, $options: 'i' } },
             { emails: { $regex: escaped, $options: 'i' } },
-            { clientId: { $regex: escaped, $options: 'i' } },
         ];
     }
 
@@ -32,76 +31,6 @@ const buildMatchStage = (
     }
 
     return match;
-};
-
-// Generate suggested client IDs based on the attempted ID
-const generateSuggestedIds = async (baseId: string): Promise<string[]> => {
-    const suggestions: string[] = [];
-
-    // Try to detect if the ID has a numeric suffix pattern like "CLT-0001" or "ABC-123"
-    const numericMatch = baseId.match(/^(.+?)(\d+)$/);
-
-    if (numericMatch && numericMatch[1] && numericMatch[2]) {
-        // ID has a numeric suffix, increment it
-        const prefix = numericMatch[1];
-        const numPart = numericMatch[2];
-        const numLength = numPart.length;
-        let currentNum = parseInt(numPart, 10);
-        const baseNum = currentNum;
-
-        // Generate suggestions by incrementing the number
-        while (suggestions.length < 3) {
-            currentNum++;
-            const suggestedId = `${prefix}${String(currentNum).padStart(
-                numLength,
-                '0',
-            )}`;
-            const exists = await ClientModel.findOne({ clientId: suggestedId });
-            if (!exists) {
-                suggestions.push(suggestedId);
-            }
-            // Prevent infinite loop
-            if (currentNum > baseNum + 100) break;
-        }
-    }
-
-    // If still not enough suggestions, try appending numbers
-    let counter = 1;
-    while (suggestions.length < 3 && counter <= 20) {
-        const suggestedId = `${baseId}${counter}`;
-        const exists = await ClientModel.findOne({ clientId: suggestedId });
-        if (!exists && !suggestions.includes(suggestedId)) {
-            suggestions.push(suggestedId);
-        }
-        counter++;
-    }
-
-    return suggestions;
-};
-
-// Check if client ID exists
-const checkClientIdExists = async (
-    clientId: string,
-    excludeId?: string,
-): Promise<boolean> => {
-    const query: Record<string, unknown> = { clientId };
-    if (excludeId) {
-        query._id = { $ne: new Types.ObjectId(excludeId) };
-    }
-    const existing = await ClientModel.findOne(query);
-    return !!existing;
-};
-
-// Check client ID availability and return suggestions if taken
-const checkClientIdAvailability = async (
-    clientId: string,
-): Promise<{ available: boolean; suggestions?: string[] }> => {
-    const exists = await checkClientIdExists(clientId);
-    if (exists) {
-        const suggestions = await generateSuggestedIds(clientId);
-        return { available: false, suggestions };
-    }
-    return { available: true };
 };
 
 // Get all clients with pagination and filtering
@@ -195,44 +124,10 @@ const getClientByIdFromDB = async (id: string) => {
     return result[0] || null;
 };
 
-// Custom error class for client ID conflicts
-class ClientIdExistsError extends Error {
-    suggestions: string[];
-
-    constructor(message: string, suggestions: string[]) {
-        super(message);
-        this.name = 'ClientIdExistsError';
-        this.suggestions = suggestions;
-    }
-}
-
 // Create client
 const createClientInDB = async (
     payload: CreateClientInput & { createdBy: string },
 ) => {
-    let finalClientId = payload.clientId;
-    if (!finalClientId) {
-        const count = await ClientModel.countDocuments();
-        finalClientId = `CLT-${String(count + 1).padStart(4, '0')}`;
-        let exists = await checkClientIdExists(finalClientId);
-        let suffix = 1;
-        while (exists) {
-            finalClientId = `CLT-${String(count + 1 + suffix).padStart(4, '0')}`;
-            exists = await checkClientIdExists(finalClientId);
-            suffix++;
-        }
-    } else {
-        // Check if client ID already exists
-        const clientIdExists = await checkClientIdExists(finalClientId);
-        if (clientIdExists) {
-            const suggestions = await generateSuggestedIds(finalClientId);
-            throw new ClientIdExistsError(
-                `Client ID "${finalClientId}" already exists`,
-                suggestions,
-            );
-        }
-    }
-
     // Check if any of the emails already exist
     const emailsToMatch = payload.emails ? payload.emails.map((e) => e.toLowerCase()) : [];
     if (emailsToMatch.length > 0) {
@@ -248,7 +143,6 @@ const createClientInDB = async (
 
     // Prepare data for creation
     const clientData = {
-        clientId: finalClientId,
         name: payload.name,
         emails: emailsToMatch,
         status: payload.status,
@@ -271,18 +165,6 @@ const createClientInDB = async (
 
 // Update client
 const updateClientInDB = async (id: string, payload: UpdateClientInput) => {
-    // If updating client ID, check if it's unique
-    if (payload.clientId) {
-        const clientIdExists = await checkClientIdExists(payload.clientId, id);
-        if (clientIdExists) {
-            const suggestions = await generateSuggestedIds(payload.clientId);
-            throw new ClientIdExistsError(
-                `Client ID "${payload.clientId}" already exists`,
-                suggestions,
-            );
-        }
-    }
-
     // Convert assignedServices string IDs to ObjectIds if provided
     const updateData: Record<string, unknown> = { ...payload };
     
@@ -449,8 +331,5 @@ export default {
     createClientInDB,
     updateClientInDB,
     deleteClientFromDB,
-    checkClientIdAvailability,
     getClientStatsFromDB,
 };
-
-export { ClientIdExistsError };

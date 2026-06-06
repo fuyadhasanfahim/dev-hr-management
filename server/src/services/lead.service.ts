@@ -23,6 +23,9 @@ const getAllLeads = async (params: LeadQueryParams) => {
         source,
         isConverted,
         assignedTo,
+        nextActionType,
+        nextActionDateFrom,
+        nextActionDateTo,
     } = params;
 
     const query: Record<string, any> = {};
@@ -40,6 +43,21 @@ const getAllLeads = async (params: LeadQueryParams) => {
     if (source) query.source = source;
     if (assignedTo) query.assignedTo = assignedTo;
     if (isConverted !== undefined) query.isConverted = isConverted;
+    if (nextActionType) query.nextActionType = nextActionType;
+
+    // Date range filtering for nextActionDate
+    if (nextActionDateFrom || nextActionDateTo) {
+        query.nextActionDate = {};
+        if (nextActionDateFrom) {
+            query.nextActionDate.$gte = new Date(nextActionDateFrom as string);
+        }
+        if (nextActionDateTo) {
+            // Set to end of day for inclusive filtering
+            const toDate = new Date(nextActionDateTo as string);
+            toDate.setHours(23, 59, 59, 999);
+            query.nextActionDate.$lte = toDate;
+        }
+    }
 
     const skip = (page - 1) * limit;
 

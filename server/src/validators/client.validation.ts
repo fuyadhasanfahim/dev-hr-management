@@ -8,7 +8,6 @@ const teamMemberSchema = z.object({
 });
 
 export const createClientSchema = z.object({
-    clientId: z.string().optional(),
     name: z
         .string({ message: 'Name is required' })
         .min(1, 'Name is required')
@@ -28,7 +27,6 @@ export const createClientSchema = z.object({
 });
 
 export const updateClientSchema = z.object({
-    clientId: z.string().optional(),
     name: z
         .string()
         .min(2, 'Name must be at least 2 characters')

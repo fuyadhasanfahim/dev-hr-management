@@ -14,7 +14,6 @@ export interface ClientEmail {
 
 export interface Client {
     _id: string;
-    clientId: string;
     name: string;
     emails: string[];
     phone?: string;

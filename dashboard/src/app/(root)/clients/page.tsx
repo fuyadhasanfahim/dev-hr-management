@@ -149,7 +149,6 @@ export default function ClientsPage() {
     setSelectedClient(client);
     setUpdateServerErrors(undefined);
     setEditDefaultValues({
-      clientId: client.clientId,
       name: client.name,
       emails: client.emails,
       phone: client.phone || "",

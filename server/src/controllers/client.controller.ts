@@ -1,7 +1,5 @@
 import type { Request, Response } from 'express';
-import ClientServices, {
-    ClientIdExistsError,
-} from '../services/client.service.js';
+import ClientServices from '../services/client.service.js';
 import type { ClientQueryParams } from '../types/client.type.js';
 import {
     createClientSchema,
@@ -120,23 +118,6 @@ const createClient = async (req: Request, res: Response) => {
             data: result,
         });
     } catch (error: unknown) {
-        // Handle ClientIdExistsError specifically - return as field error with suggestions
-        if (error instanceof ClientIdExistsError) {
-            res.status(400).json({
-                success: false,
-                message: 'Validation failed',
-                errors: {
-                    clientId: [
-                        `${error.message}. Try: ${error.suggestions.join(
-                            ', ',
-                        )}`,
-                    ],
-                },
-                suggestions: error.suggestions,
-            });
-            return;
-        }
-
         const err = error as Error;
         res.status(500).json({
             success: false,
@@ -199,52 +180,10 @@ const updateClient = async (req: Request, res: Response) => {
             data: result,
         });
     } catch (error: unknown) {
-        // Handle ClientIdExistsError specifically - return as field error with suggestions
-        if (error instanceof ClientIdExistsError) {
-            res.status(400).json({
-                success: false,
-                message: 'Validation failed',
-                errors: {
-                    clientId: [
-                        `${error.message}. Try: ${error.suggestions.join(
-                            ', ',
-                        )}`,
-                    ],
-                },
-                suggestions: error.suggestions,
-            });
-            return;
-        }
-
         const err = error as Error;
         res.status(500).json({
             success: false,
             message: err.message || 'Failed to update client',
-        });
-    }
-};
-
-const checkClientId = async (req: Request, res: Response) => {
-    try {
-        const { clientId } = req.params;
-        if (!clientId) {
-            res.status(400).json({
-                success: false,
-                message: 'Client ID is required',
-            });
-            return;
-        }
-
-        const result = await ClientServices.checkClientIdAvailability(clientId);
-        res.status(200).json({
-            success: true,
-            data: result,
-        });
-    } catch (error: unknown) {
-        const err = error as Error;
-        res.status(500).json({
-            success: false,
-            message: err.message || 'Failed to check client ID',
         });
     }
 };
@@ -417,7 +356,6 @@ export default {
     getClientById,
     createClient,
     updateClient,
-    checkClientId,
     getClientStats,
     getAssignedServices,
     getClientEmails,

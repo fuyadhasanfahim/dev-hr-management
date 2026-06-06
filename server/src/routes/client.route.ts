@@ -7,13 +7,6 @@ const router: Router = Router();
 // Get all clients
 router.get('/', authorizeTelemarketer, ClientController.getAllClients);
 
-// Check client ID availability (must be before :id route)
-router.get(
-    '/check-id/:clientId',
-    authorizeTelemarketer,
-    ClientController.checkClientId,
-);
-
 // Get client stats (must be before :id route)
 router.get(
     '/:id/stats',
