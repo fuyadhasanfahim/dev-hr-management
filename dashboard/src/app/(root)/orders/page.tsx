@@ -1248,8 +1248,8 @@ export default function OrdersPage() {
                             </span>
                             <span className="text-[10px] text-muted-foreground uppercase tracking-tight">
                               {typeof order.clientId === "object"
-                                ? order.clientId.clientId
-                                : "ID N/A"}
+                                ? (order.clientId.emails?.[0] || "")
+                                : ""}
                             </span>
                           </div>
                         </TableCell>

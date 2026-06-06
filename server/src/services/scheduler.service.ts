@@ -508,7 +508,7 @@ async function processChatAutoTicketConversion() {
         for (const session of queuedSessions) {
             try {
                 console.log(`[Scheduler] Auto-converting queued chat session ${session.sessionId} to ticket due to no agent claim.`);
-                await convertChatToTicket(session.sessionId, 'Auto-converted due to no support agent claiming within 10 minutes.');
+                await convertChatToTicket(session.sessionId, { reason: 'Auto-converted due to no support agent claiming within 10 minutes.' });
             } catch (err: any) {
                 console.error(`[Scheduler] Failed to auto-convert chat session ${session.sessionId}:`, err);
             }

@@ -2,6 +2,14 @@ import express from 'express';
 import SupportController from '../controllers/support.controller.js';
 import MeetingController from '../controllers/meeting.controller.js';
 import { requireAuth, restrictTo } from '../middlewares/auth.middleware.js';
+import { validateRequest } from '../middlewares/validateRequest.js';
+import {
+    CreateTicketValidation,
+    UpdateTicketValidation,
+    UpdateTicketStatusValidation,
+    ConvertChatToTicketValidation,
+    ConvertChatToTicketBodyValidation,
+} from '../validators/ticket.validator.js';
 import jwt from 'jsonwebtoken';
 import envConfig from '../config/env.config.js';
 import GuestModel from '../models/guest.model.js';
@@ -72,7 +80,7 @@ router.post('/guest/verify', generalPublicLimiter, SupportController.verifyGuest
 
 router.post('/attachments/presigned-url', requireUnifiedAuth, SupportController.requestPresignedUrl);
 router.get('/attachments/view-url', requireUnifiedAuth, SupportController.getPresignedViewUrl);
-router.post('/tickets', requireUnifiedAuth, SupportController.createSupportTicket);
+router.post('/tickets', requireUnifiedAuth, validateRequest(CreateTicketValidation), SupportController.createSupportTicket);
 router.get('/tickets', requireUnifiedAuth, SupportController.listSupportTickets);
 // Must be registered before /tickets/:id to avoid 'admin' being captured as :id
 router.get('/tickets/admin', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), SupportController.listSupportTickets);
@@ -95,14 +103,14 @@ router.post('/meetings', requireUnifiedAuth, restrictTo('admin', 'super_admin', 
 router.get('/chat/sessions/:sessionId/messages', requireUnifiedAuth, SupportController.getChatSessionMessages);
 router.post('/chat/sessions/:sessionId/claim', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), SupportController.claimChatSessionParam);
 router.post('/chat/sessions/:sessionId/close', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), SupportController.closeChatSessionParam);
-router.post('/chat/sessions/:sessionId/convert', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), SupportController.convertChatToTicketParam);
+router.post('/chat/sessions/:sessionId/convert', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), validateRequest(ConvertChatToTicketValidation), SupportController.convertChatToTicketParam);
 router.post('/chat/sessions/:sessionId/reassign', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), SupportController.reassignChatSession);
 
-router.patch('/tickets/:id', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), SupportController.updateTicket);
-router.patch('/tickets/:id/status', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), SupportController.updateTicketStatus);
+router.patch('/tickets/:id', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), validateRequest(UpdateTicketValidation), SupportController.updateTicket);
+router.patch('/tickets/:id/status', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), validateRequest(UpdateTicketStatusValidation), SupportController.updateTicketStatus);
 router.post('/tickets/:id/assign', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), SupportController.assignTicketToSelf);
 router.post('/chats/claim', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), SupportController.claimChatSession);
-router.post('/chats/convert', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), SupportController.convertChatToTicket);
+router.post('/chats/convert', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), validateRequest(ConvertChatToTicketBodyValidation), SupportController.convertChatToTicket);
 
 router.post('/admin/migrate-cloudinary', requireUnifiedAuth, restrictTo('admin', 'super_admin'), SupportController.triggerCloudinaryMigration);
 

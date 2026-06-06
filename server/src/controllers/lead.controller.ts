@@ -11,6 +11,9 @@ const getAllLeads = async (req: Request, res: Response) => {
             priority: req.query.priority as string,
             source: req.query.source as string,
             assignedTo: req.query.assignedTo as string,
+            nextActionType: req.query.nextActionType as string,
+            nextActionDateFrom: req.query.nextActionDateFrom as string,
+            nextActionDateTo: req.query.nextActionDateTo as string,
         };
 
         if (req.query.isConverted !== undefined) {

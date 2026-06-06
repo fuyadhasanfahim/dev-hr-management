@@ -62,13 +62,22 @@ export async function assignAgentToSession(sessionId: string, agentId: string): 
 
 /**
  * Converts an active or queued chat session into a support ticket.
+ *
+ * @param sessionId  - UUID of the chat session
+ * @param options.reason   - Optional conversion reason (shown in transcript)
+ * @param options.subject  - Agent-provided subject. Falls back to first visitor message.
+ * @param options.category - Ticket category enum value (default 'support')
  */
-export async function convertChatToTicket(sessionId: string, reason?: string): Promise<{ ticketId: string }> {
+export async function convertChatToTicket(
+    sessionId: string,
+    options?: { reason?: string; subject?: string; category?: string },
+): Promise<{ ticketId: string }> {
     const session = await ChatSessionModel.findOne({ sessionId }) as any;
     if (!session) {
         throw new AppError('Chat session not found', 404);
     }
 
+    // Idempotent: if already converted, return the existing ticket
     if (session.status === 'converted_to_ticket' && session.linkedTicketId) {
         const ticket = await TicketModel.findById(session.linkedTicketId);
         if (ticket) {
@@ -77,26 +86,53 @@ export async function convertChatToTicket(sessionId: string, reason?: string): P
     }
 
     const messages = await ChatMessageModel.find({ sessionId: session._id }).sort({ createdAt: 1 });
-    
+
+    // ── Build readable transcript ────────────────────────────────────────
     let descriptionText = `[System: Converted from Support Live Chat]\n`;
-    if (reason) {
-        descriptionText += `Reason: ${reason}\n\n`;
+    if (options?.reason) {
+        descriptionText += `Reason: ${options.reason}\n\n`;
     }
-    
+
     descriptionText += `Chat Transcript:\n`;
     for (const msg of messages) {
         const sender = msg.senderModel === 'Client' ? 'Client' : (msg.senderModel === 'Guest' ? 'Guest' : 'Agent');
         descriptionText += `[${msg.createdAt.toISOString()}] ${sender} (${msg.senderName}): ${msg.content}\n`;
     }
 
+    // ── Collect ALL attachment URLs/keys from chat messages ───────────────
+    // Reference existing S3 keys — no file duplication.
+    const allChatAttachments: string[] = [];
+    for (const msg of messages) {
+        if (Array.isArray(msg.attachments) && msg.attachments.length > 0) {
+            allChatAttachments.push(...msg.attachments);
+        }
+    }
+
+    // ── Derive subject ───────────────────────────────────────────────────
+    let ticketSubject = options?.subject?.trim();
+    if (!ticketSubject) {
+        // Smart fallback: first ~6 words of the visitor's first message
+        const firstVisitorMsg = messages.find(
+            (m) => m.senderModel === 'Client' || m.senderModel === 'Guest',
+        );
+        if (firstVisitorMsg?.content) {
+            const words = firstVisitorMsg.content.split(/\s+/).slice(0, 6).join(' ');
+            ticketSubject = `Live Chat: ${words}${firstVisitorMsg.content.split(/\s+/).length > 6 ? '...' : ''}`;
+        } else {
+            ticketSubject = `Live Chat Support - ${new Date().toLocaleDateString()}`;
+        }
+    }
+
     const ticketId = `TKT-${Math.floor(100000 + Math.random() * 900000)}`;
 
     const ticketFields: any = {
         ticketId,
-        subject: `Live Chat Support - ${new Date().toLocaleDateString()}`,
+        subject: ticketSubject,
         status: 'open',
         priority: 'medium',
-        attachments: [],
+        category: options?.category || 'support',
+        source: 'live_chat',
+        attachments: allChatAttachments,
         tags: ['Live Chat Converted'],
     };
 
@@ -105,6 +141,10 @@ export async function convertChatToTicket(sessionId: string, reason?: string): P
     }
     if (session.guestId) {
         ticketFields.guestId = session.guestId;
+    }
+    // Carry over the handling agent as the ticket assignee
+    if (session.assignedAgent) {
+        ticketFields.assignedTo = session.assignedAgent;
     }
 
     const ticket = await TicketModel.create(ticketFields) as any;
@@ -116,7 +156,7 @@ export async function convertChatToTicket(sessionId: string, reason?: string): P
         ticketId: ticket._id,
         senderModel,
         content: descriptionText,
-        attachments: [],
+        attachments: allChatAttachments,
     };
 
     if (senderId) {

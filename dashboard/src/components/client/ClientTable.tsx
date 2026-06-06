@@ -86,7 +86,6 @@ export function ClientTable({
       <Table>
         <TableHeader>
           <TableRow className="hover:bg-transparent">
-            <TableHead className="font-medium text-slate-500 dark:text-slate-400">Client ID</TableHead>
             <TableHead className="font-medium text-slate-500 dark:text-slate-400">Name</TableHead>
             <TableHead className="font-medium text-slate-500 dark:text-slate-400">Email</TableHead>
             <TableHead className="font-medium text-slate-500 dark:text-slate-400">Phone</TableHead>
@@ -99,7 +98,7 @@ export function ClientTable({
           {clients.length === 0 ? (
             <TableRow className="hover:bg-transparent">
               <TableCell
-                colSpan={7}
+                colSpan={6}
                 className="text-center py-16 text-muted-foreground"
               >
                 <div className="flex flex-col items-center justify-center space-y-3">
@@ -118,9 +117,6 @@ export function ClientTable({
               const isActive = client.status === "active";
               return (
                 <TableRow key={client._id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/30 transition-colors">
-                  <TableCell className="font-mono text-slate-500 dark:text-slate-400 text-sm">
-                    {client.clientId}
-                  </TableCell>
                   <TableCell className="font-medium text-slate-900 dark:text-slate-100">
                     {client.name}
                   </TableCell>

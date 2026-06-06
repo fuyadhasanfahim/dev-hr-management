@@ -52,18 +52,6 @@ export const clientApi = apiSlice.injectEndpoints({
             }),
             invalidatesTags: ['Client'],
         }),
-        checkClientId: builder.query<
-            { available: boolean; suggestions?: string[] },
-            string
-        >({
-            query: (clientId) => ({
-                url: `/clients/check-id/${clientId}`,
-                method: 'GET',
-            }),
-            transformResponse: (response: {
-                data: { available: boolean; suggestions?: string[] };
-            }) => response.data,
-        }),
         getClientStats: builder.query<
             {
                 totalOrders: number;
@@ -124,7 +112,6 @@ export const {
     useCreateClientMutation,
     useUpdateClientMutation,
     useDeleteClientMutation,
-    useLazyCheckClientIdQuery,
     useGetClientStatsQuery,
     useGetAssignedServicesQuery,
     useGetClientEmailsQuery,

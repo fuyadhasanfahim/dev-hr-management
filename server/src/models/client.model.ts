@@ -28,11 +28,6 @@ const teamMemberSchema = new Schema(
 
 const ClientSchema = new Schema<IClient>(
     {
-        clientId: {
-            type: String,
-            required: false,
-            index: true,
-        },
         name: {
             type: String,
             required: true,

@@ -365,8 +365,8 @@ export function OrderForm({
                                             value={client.name}
                                             keywords={[
                                                 client.name,
-                                                client.clientId,
-                                            ]} // Search by name and ID
+                                                ...(client.emails || []),
+                                            ]}
                                             onSelect={() => {
                                                 setValue(
                                                     'clientId',
@@ -389,9 +389,11 @@ export function OrderForm({
                                             />
                                             <span className="flex flex-col">
                                                 <span>{client.name}</span>
-                                                <span className="text-xs text-muted-foreground">
-                                                    {client.clientId}
-                                                </span>
+                                                {client.emails?.[0] && (
+                                                    <span className="text-xs text-muted-foreground">
+                                                        {client.emails[0]}
+                                                    </span>
+                                                )}
                                             </span>
                                         </CommandItem>
                                     ))}

@@ -54,6 +54,7 @@ export interface LeadQueryParams {
     priority?: string;
     source?: string;
     isConverted?: boolean;
+    nextActionType?: string;
     nextActionDateFrom?: Date | string;
     nextActionDateTo?: Date | string;
     assignedTo?: string;

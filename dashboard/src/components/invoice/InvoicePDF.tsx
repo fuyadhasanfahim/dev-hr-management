@@ -332,7 +332,6 @@ export interface InvoicePDFProps {
     client: Pick<
         Client,
         | '_id'
-        | 'clientId'
         | 'name'
         | 'emails'
         | 'currency'
@@ -563,7 +562,7 @@ export const InvoiceDocument = ({
 };
 
 export default function InvoicePDF(props: InvoicePDFProps) {
-    const fileName = `Invoice_${props.client.clientId}_${props.month}_${props.year}.pdf`;
+    const fileName = `Invoice_${props.client.name.replace(/\s+/g, '_')}_${props.month}_${props.year}.pdf`;
     const [sendInvoiceEmail, { isLoading: isSending }] =
         useSendInvoiceEmailMutation();
     const [recordInvoice] = useRecordInvoiceMutation();
@@ -583,7 +582,7 @@ export default function InvoicePDF(props: InvoicePDFProps) {
             const recordResult = await recordInvoice({
                 invoiceNumber: props.invoiceNumber,
                 clientName: props.client.name,
-                clientId: props.client.clientId,
+                clientId: props.client._id,
                 clientAddress:
                     props.client.address || props.client.officeAddress || 'N/A',
                 totalAmount: props.totals.totalAmount,

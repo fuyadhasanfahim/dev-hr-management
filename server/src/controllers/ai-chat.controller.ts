@@ -87,7 +87,7 @@ async function chat(req: Request, res: Response) {
 
 async function createTicketFromAI(req: Request, res: Response) {
     try {
-        const { subject, description, chatHistory } = req.body;
+        const { subject, description, chatHistory, category } = req.body;
 
         if (!subject || !description) {
             return res.status(400).json({ success: false, message: 'Subject and description are required' });
@@ -103,10 +103,23 @@ async function createTicketFromAI(req: Request, res: Response) {
             }
         }
 
+        // Collect any attachment URLs from chat history messages
+        const chatAttachments: string[] = [];
+        if (Array.isArray(chatHistory)) {
+            for (const msg of chatHistory) {
+                if (Array.isArray(msg.attachments)) {
+                    chatAttachments.push(...msg.attachments);
+                }
+            }
+        }
+
         const ticketArgs: any = {
             subject,
             text: description + transcript,
+            attachments: chatAttachments.length > 0 ? chatAttachments : undefined,
             priority: 'medium',
+            category: category || 'support',
+            source: 'ai_chat',
         };
 
         if (req.user?.role === 'Guest') {

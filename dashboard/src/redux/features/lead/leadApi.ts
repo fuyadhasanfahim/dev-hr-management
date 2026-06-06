@@ -11,8 +11,11 @@ export const leadApi = apiSlice.injectEndpoints({
                 if (params?.status) queryParams.append('status', params.status);
                 if (params?.priority) queryParams.append('priority', params.priority);
                 if (params?.source) queryParams.append('source', params.source);
+                if (params?.nextActionType) queryParams.append('nextActionType', params.nextActionType);
+                if (params?.nextActionDateFrom) queryParams.append('nextActionDateFrom', params.nextActionDateFrom);
+                if (params?.nextActionDateTo) queryParams.append('nextActionDateTo', params.nextActionDateTo);
                 if (params?.isConverted !== undefined) queryParams.append('isConverted', params.isConverted.toString());
-                
+
                 return {
                     url: `/leads?${queryParams.toString()}`,
                     method: 'GET',
