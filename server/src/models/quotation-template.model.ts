@@ -37,6 +37,12 @@ const paymentMilestoneSchema = new Schema(
 const quotationTemplateSchema = new Schema(
     {
         name: { type: String, required: true },
+        category: {
+            type: String,
+            enum: ['web-development', 'photo-editing', 'marketing', 'video-editing'],
+            required: true,
+            default: 'web-development',
+        },
         serviceType: {
             type: String,
             enum: ['web-development'],

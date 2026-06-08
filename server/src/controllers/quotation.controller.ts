@@ -10,6 +10,8 @@ const createQuotation = async (req: Request, res: Response, next: NextFunction) 
     try {
         const userId = req.user?.id;
         if (!userId) return next(new Error('Unauthorized'));
+        // `category` is part of req.body and is persisted by the service
+        // (enforced by the schema enum on save).
         const result = await QuotationService.createQuotation(req.body, userId);
         const sanitized = maskQuotation(result, req.user?.role);
         res.status(201).json({ success: true, message: 'Quotation created successfully', data: sanitized });
@@ -24,6 +26,8 @@ const updateQuotation = async (req: Request, res: Response, next: NextFunction) 
         if (!userId) return next(new Error('Unauthorized'));
         const { id } = req.params;
         if (!id) return next(new Error('Quotation ID is required'));
+        // `category` (when present in req.body) is persisted by the service
+        // (enforced by the schema enum on save).
         const result = await QuotationService.updateQuotation(id, req.body, userId);
         const sanitized = maskQuotation(result, req.user?.role);
 

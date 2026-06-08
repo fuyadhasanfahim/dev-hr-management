@@ -46,6 +46,7 @@ interface QuotationStore {
 }
 
 const initialState: QuotationData = {
+  category: "web-development",
   serviceType: "web-development",
   clientId: "",
   currency: "৳",

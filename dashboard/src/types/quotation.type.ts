@@ -1,5 +1,11 @@
 export type ServiceType = "web-development";
 
+export type QuotationCategory =
+  | "web-development"
+  | "photo-editing"
+  | "marketing"
+  | "video-editing";
+
 export type QuotationStatus =
   | "draft"
   | "sent"
@@ -38,6 +44,7 @@ export interface QuotationData {
   version?: number;
   isLatestVersion?: boolean;
 
+  category: QuotationCategory;
   serviceType: ServiceType;
   clientId: string;
 

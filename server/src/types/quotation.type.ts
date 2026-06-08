@@ -31,13 +31,20 @@ export interface IPaymentMilestone {
     note?: string;
 }
 
+export type QuotationCategory =
+    | 'web-development'
+    | 'photo-editing'
+    | 'marketing'
+    | 'video-editing';
+
 export interface IQuotation extends Document {
     _id: Types.ObjectId;
     quotationNumber: string;
     quotationGroupId: string;
     version: number;
     isLatestVersion: boolean;
-    
+
+    category: QuotationCategory;
     serviceType: 'web-development';
     clientId: Types.ObjectId;
     

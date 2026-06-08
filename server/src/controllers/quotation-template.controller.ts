@@ -5,7 +5,7 @@ const createTemplate = async (req: Request, res: Response, next: NextFunction) =
     try {
         const userId = req.user?.id;
         if (!userId) return next(new Error('Unauthorized'));
-        const { name, ...templateData } = req.body;
+        const { name, category, ...templateData } = req.body;
         if (!name) return next(new Error('Template name is required'));
 
         const details = templateData.details || {};
@@ -16,6 +16,8 @@ const createTemplate = async (req: Request, res: Response, next: NextFunction) =
         const newTemplate = await QuotationTemplateModel.create({
             name,
             ...templateData,
+            // Persist category explicitly; schema enum + default guards invalid/missing values.
+            category: category || 'web-development',
             details,
             createdBy: userId,
         });
@@ -64,6 +66,8 @@ const updateTemplate = async (req: Request, res: Response, next: NextFunction) =
         const { id } = req.params;
         if (!id) return next(new Error('ID is required'));
 
+        // `category` (when present) flows through here and is enforced by the
+        // schema enum via runValidators below.
         const updateData = { ...req.body };
         if (updateData.name && (!updateData.details || !updateData.details.title)) {
             updateData.details = updateData.details || {};
