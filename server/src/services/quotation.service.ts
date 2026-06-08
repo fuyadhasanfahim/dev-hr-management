@@ -47,7 +47,13 @@ if (!QUOTATION_TOKEN_SECRET) {
 
 function calculateTotals(data: Partial<IQuotation>) {
     const basePrice = data.pricing?.basePrice || 0;
-    const additionalServicesTotal = data.additionalServices?.reduce((acc, s) => acc + (s.price || 0), 0) || 0;
+    // Per-line amount = price × (quantity ?? 1). Web-development line items carry
+    // no quantity ⇒ ×1 ⇒ byte-identical to the previous price-only sum.
+    const additionalServicesTotal =
+        data.additionalServices?.reduce(
+            (acc, s) => acc + (s.price || 0) * (s.quantity ?? 1),
+            0,
+        ) || 0;
     const discountRate = data.pricing?.discount || 0;
     const taxRate = data.pricing?.taxRate || 0;
 

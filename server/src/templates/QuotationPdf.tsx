@@ -317,6 +317,7 @@ interface IAdditionalService {
     title: string;
     price: number;
     billingCycle?: string;
+    quantity?: number;
     description?: string;
 }
 
@@ -560,9 +561,12 @@ export function QuotationPdf({
                                               {s.billingCycle
                                                   ? ` (${safeText(s.billingCycle)})`
                                                   : ''}
+                                              {s.quantity != null
+                                                  ? ` × ${s.quantity}`
+                                                  : ''}
                                           </Text>
                                           <Text style={styles.pricingValue}>
-                                              {fmtMoney(s.price, currency)}
+                                              {fmtMoney((s.price || 0) * (s.quantity ?? 1), currency)}
                                           </Text>
                                       </View>
                                   ))

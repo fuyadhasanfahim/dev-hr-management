@@ -116,12 +116,15 @@ export const QuotationPDF = ({ data }: QuotationPDFProps) => {
         total: 0,
     }));
 
-    const addOnRows: LineItem[] = (additionalServices || []).map((s) => ({
-        name: `${s.title} (${s.billingCycle})`,
-        qty: 1,
-        rate: s.price ?? 0,
-        total: s.price ?? 0,
-    }));
+    const addOnRows: LineItem[] = (additionalServices || []).map((s) => {
+        const qty = s.quantity ?? 1;
+        return {
+            name: `${s.title} (${s.billingCycle})`,
+            qty,
+            rate: s.price ?? 0,
+            total: (s.price ?? 0) * qty,
+        };
+    });
 
     // web-development leads with a base-price row (unchanged). Other categories
     // are driven by their line items, so the empty base row is omitted.

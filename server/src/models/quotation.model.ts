@@ -12,7 +12,14 @@ const phaseSchema = new Schema({
 const serviceSchema = new Schema({
     title: { type: String, required: true },
     price: { type: Number, required: true },
-    billingCycle: { type: String, enum: ['one-time', 'monthly', 'yearly'], default: 'one-time' },
+    billingCycle: {
+        type: String,
+        enum: ['one-time', 'monthly', 'yearly', 'per-image', 'per-video'],
+        default: 'one-time',
+    },
+    // Units for unit-based categories (per-image / per-video). Absent ⇒ treated
+    // as 1 by totals, so web-development line items stay byte-identical.
+    quantity: { type: Number },
     description: { type: String },
 }, { _id: false });
 

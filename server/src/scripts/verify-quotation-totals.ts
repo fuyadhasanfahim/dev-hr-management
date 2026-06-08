@@ -30,8 +30,12 @@ const EPS = 1e-6;
 /** Identical to the NEW calculateTotals() in quotation.service.ts (Option B). */
 function recomputeTotals(q: any) {
     const basePrice = q.pricing?.basePrice || 0;
+    // Mirrors calculateTotals: per-line amount = price × (quantity ?? 1).
     const additionalServicesTotal =
-        q.additionalServices?.reduce((acc: number, s: any) => acc + (s.price || 0), 0) || 0;
+        q.additionalServices?.reduce(
+            (acc: number, s: any) => acc + (s.price || 0) * (s.quantity ?? 1),
+            0,
+        ) || 0;
     const discountRate = q.pricing?.discount || 0;
     const taxRate = q.pricing?.taxRate || 0;
 

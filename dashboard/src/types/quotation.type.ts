@@ -24,10 +24,19 @@ export interface IQuotationPhase {
   endDate?: string;
 }
 
+export type BillingCycle =
+  | "one-time"
+  | "monthly"
+  | "yearly"
+  | "per-image"
+  | "per-video";
+
 export interface IAdditionalService {
   title: string;
-  price: number;
-  billingCycle: "one-time" | "monthly" | "yearly";
+  price: number; // for unit-based categories this is the UNIT price
+  billingCycle: BillingCycle;
+  /** Units for unit-based pricing (per-image / per-video). Absent ⇒ treated as 1. */
+  quantity?: number;
   description?: string;
 }
 

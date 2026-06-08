@@ -34,7 +34,16 @@ import { useRouter } from 'next/navigation';
 import { format } from 'date-fns';
 import { formatMoney } from '@/lib/money';
 import { QuotationCategory } from '@/types/quotation.type';
-import { CATEGORY_OPTIONS, getCategorySections } from '@/constants/quotation-templates';
+import {
+    CATEGORY_OPTIONS,
+    getCategorySections,
+    isPhasesEnabled,
+    isUnitBased,
+    getBillingOptions,
+    getDefaultBillingCycle,
+    lineItemAmount,
+    BILLING_CYCLE_LABELS,
+} from '@/constants/quotation-templates';
 import { QuotationEmailDialog } from '../QuotationEmailDialog';
 import { Calendar } from '@/components/ui/calendar';
 import {
@@ -374,8 +383,9 @@ export default function QuotationBuilder({
     // basePrice + services (unchanged); other categories use services only.
     const computedTotals = useMemo(() => {
         const basePrice = data.pricing.basePrice || 0;
+        // Per-line amount = price × (quantity ?? 1); web-dev has no quantity ⇒ ×1.
         const additionalServicesTotal = data.additionalServices.reduce(
-            (acc, s) => acc + s.price,
+            (acc, s) => acc + lineItemAmount(s),
             0,
         );
 
@@ -837,7 +847,7 @@ export default function QuotationBuilder({
                     </div>
 
                     {/* Phases */}
-                    {has('phases') && (
+                    {isPhasesEnabled(data.category) && (
                     <div className="overflow-hidden rounded-xl border bg-card">
                         <div className="flex flex-row items-start justify-between gap-4 border-b bg-muted/20 p-6">
                             <div className="flex-1 min-w-0">
@@ -1125,7 +1135,19 @@ export default function QuotationBuilder({
                             <PrimaryButton
                                 variant="outline"
                                 className="h-10 px-3 shrink-0 shadow-sm"
-                                onClick={() => addService()}
+                                onClick={() =>
+                                    addService({
+                                        title: '',
+                                        price: 0,
+                                        billingCycle: getDefaultBillingCycle(
+                                            data.category,
+                                        ),
+                                        ...(isUnitBased(data.category)
+                                            ? { quantity: 1 }
+                                            : {}),
+                                        description: '',
+                                    })
+                                }
                             >
                                 <Plus className="w-4 h-4" /> New Service
                             </PrimaryButton>
@@ -1148,9 +1170,11 @@ export default function QuotationBuilder({
                                                 className="group relative border rounded-xl bg-card p-4 transition-all hover:border-teal-500/30"
                                             >
                                                 <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
-                                                    <div className="md:col-span-5 space-y-1">
+                                                    <div className={`${isUnitBased(data.category) ? 'md:col-span-4' : 'md:col-span-5'} space-y-1`}>
                                                         <FieldLabel>
-                                                            Service Title
+                                                            {isUnitBased(data.category)
+                                                                ? 'Package / Item'
+                                                                : 'Service Title'}
                                                         </FieldLabel>
                                                         <TextInput
                                                             value={
@@ -1169,14 +1193,16 @@ export default function QuotationBuilder({
                                                             placeholder="e.g. Annual Hosting"
                                                         />
                                                     </div>
-                                                    <div className="md:col-span-3 space-y-1">
+                                                    <div className={`${isUnitBased(data.category) ? 'md:col-span-2' : 'md:col-span-3'} space-y-1`}>
                                                         <FieldLabel>
                                                             Cycle
                                                         </FieldLabel>
                                                         <SelectInput
                                                             value={
                                                                 service.billingCycle ||
-                                                                'one-time'
+                                                                getDefaultBillingCycle(
+                                                                    data.category,
+                                                                )
                                                             }
                                                             onChange={(e) =>
                                                                 updateService(
@@ -1190,20 +1216,61 @@ export default function QuotationBuilder({
                                                                 )
                                                             }
                                                         >
-                                                            <option value="one-time">
-                                                                One-time
-                                                            </option>
-                                                            <option value="monthly">
-                                                                Monthly
-                                                            </option>
-                                                            <option value="yearly">
-                                                                Yearly
-                                                            </option>
+                                                            {getBillingOptions(
+                                                                data.category,
+                                                            ).map((opt) => (
+                                                                <option
+                                                                    key={opt}
+                                                                    value={opt}
+                                                                >
+                                                                    {
+                                                                        BILLING_CYCLE_LABELS[
+                                                                            opt
+                                                                        ]
+                                                                    }
+                                                                </option>
+                                                            ))}
                                                         </SelectInput>
                                                     </div>
+                                                    {isUnitBased(data.category) && (
+                                                        <div className="md:col-span-2 space-y-1">
+                                                            <FieldLabel>
+                                                                Qty
+                                                            </FieldLabel>
+                                                            <TextInput
+                                                                type="number"
+                                                                min={1}
+                                                                value={
+                                                                    service.quantity ??
+                                                                    1
+                                                                }
+                                                                onChange={(e) =>
+                                                                    updateService(
+                                                                        sIdx,
+                                                                        {
+                                                                            quantity:
+                                                                                e
+                                                                                    .target
+                                                                                    .value ===
+                                                                                ''
+                                                                                    ? 1
+                                                                                    : Number(
+                                                                                          e
+                                                                                              .target
+                                                                                              .value,
+                                                                                      ),
+                                                                        },
+                                                                    )
+                                                                }
+                                                                placeholder="1"
+                                                            />
+                                                        </div>
+                                                    )}
                                                     <div className="md:col-span-3 space-y-1">
                                                         <FieldLabel>
-                                                            Price
+                                                            {isUnitBased(data.category)
+                                                                ? 'Unit price'
+                                                                : 'Price'}
                                                         </FieldLabel>
                                                         <TextInput
                                                             type="number"
@@ -1848,7 +1915,7 @@ export default function QuotationBuilder({
                                             +{' '}
                                             {formatMoney(
                                                 data.additionalServices.reduce(
-                                                    (a, s) => a + s.price,
+                                                    (a, s) => a + lineItemAmount(s),
                                                     0,
                                                 ),
                                                 data.currency,
@@ -1896,7 +1963,7 @@ export default function QuotationBuilder({
                                                 ((data.pricing.basePrice +
                                                     data.additionalServices.reduce(
                                                         (acc, s) =>
-                                                            acc + s.price,
+                                                            acc + lineItemAmount(s),
                                                         0,
                                                     )) *
                                                     data.pricing.discount) /
@@ -1937,7 +2004,7 @@ export default function QuotationBuilder({
                                 <Save className="w-4 h-4" />
                                 {data._id && data.status !== 'draft'
                                     ? 'Save Changes'
-                                    : 'Save Internal Draft'}
+                                    : 'Save'}
                             </PrimaryButton>
                         </div>
                     </div>

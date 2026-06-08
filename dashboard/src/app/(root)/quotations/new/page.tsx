@@ -3,12 +3,7 @@
 import { useEffect } from 'react';
 import { useQuotationStore } from '@/store/useQuotationStore';
 import QuotationBuilder from '../components/forms/QuotationBuilder';
-import {
-    Card,
-    CardHeader,
-    CardTitle,
-    CardDescription,
-} from '@/components/ui/card';
+import { ReceiptText } from 'lucide-react';
 
 export default function NewQuotationPage() {
     const { reset } = useQuotationStore();
@@ -18,20 +13,22 @@ export default function NewQuotationPage() {
     }, [reset]);
 
     return (
-        <div className="w-full space-y-6 animate-in fade-in duration-300">
-            <Card>
-                <CardHeader>
-                    <CardTitle className="text-2xl font-bold">
+        <div className="container mx-auto p-6 space-y-6 animate-in fade-in duration-300">
+            {/* Header (consistent with edit / view pages) */}
+            <div className="flex items-center gap-3">
+                <ReceiptText className="h-5 w-5 text-muted-foreground" />
+                <div>
+                    <h1 className="text-3xl font-bold tracking-tight">
                         New Quotation
-                    </CardTitle>
-                    <CardDescription>
+                    </h1>
+                    <p className="text-muted-foreground mt-1 text-sm">
                         Build secure, version-controlled quotations with custom
-                        tech stacks, scope, and pricing.
-                    </CardDescription>
-                </CardHeader>
-            </Card>
+                        scope and pricing.
+                    </p>
+                </div>
+            </div>
 
-            <div className="rounded-xl border bg-card p-6 shadow-sm">
+            <div className="rounded-xl border bg-card p-6">
                 <QuotationBuilder hideHeader />
             </div>
         </div>

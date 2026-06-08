@@ -54,6 +54,13 @@ import { toast } from 'sonner';
 import { useSession } from '@/lib/auth-client';
 import { Role } from '@/constants/role';
 import { cn } from '@/lib/utils';
+import {
+    getCategoryConfig,
+    isPhasesEnabled,
+    isUnitBased,
+    lineItemAmount,
+    BILLING_CYCLE_LABELS,
+} from '@/constants/quotation-templates';
 
 export default function ViewQuotationPage() {
     const router = useRouter();
@@ -245,9 +252,18 @@ export default function ViewQuotationPage() {
     const grandTotal = totals.grandTotal ?? 0;
     const subtotal = totals.subtotal ?? 0;
     const taxAmount = totals.taxAmount ?? 0;
+    // Display-only aggregate; uses price × quantity to reconcile with grandTotal.
     const additionalTotal =
-        data.additionalServices?.reduce((sum, s) => sum + (s.price || 0), 0) ??
+        data.additionalServices?.reduce((sum, s) => sum + lineItemAmount(s), 0) ??
         0;
+
+    // ── Category-aware presentation (mirrors CATEGORY_CONFIG used by the builder) ──
+    const catConfig = getCategoryConfig(data.category);
+    const isWebDev = (data.category ?? 'web-development') === 'web-development';
+    const showPhases = isPhasesEnabled(data.category);
+    const showTech = catConfig.sections.includes('techStack');
+    const showWorkflow = catConfig.sections.includes('workflow');
+    const showUnitQty = isUnitBased(data.category);
 
     const money = (amount: number | undefined | null) =>
         `${currency}${(amount ?? 0).toLocaleString()}`;
@@ -484,8 +500,8 @@ export default function ViewQuotationPage() {
                                     <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                                         Proposal
                                     </div>
-                                    <div className="font-bold capitalize">
-                                        {data.serviceType.replace('-', ' ')}
+                                    <div className="font-bold">
+                                        {catConfig.label}
                                     </div>
                                     <div className="text-xs text-muted-foreground">
                                         Issued{' '}
@@ -524,7 +540,8 @@ export default function ViewQuotationPage() {
                         </CardContent>
                     </Card>
 
-                    {/* Phases */}
+                    {/* Phases — only for categories that use phases */}
+                    {showPhases && (
                     <Card>
                         <CardHeader className="border-b bg-muted/10">
                             <CardTitle className="text-lg flex items-center gap-2">
@@ -597,9 +614,12 @@ export default function ViewQuotationPage() {
                             )}
                         </CardContent>
                     </Card>
+                    )}
 
-                    {/* Tech stack + Workflow */}
+                    {/* Tech stack + Workflow — category-gated */}
+                    {(showTech || showWorkflow) && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {showTech && (
                         <Card>
                             <CardHeader className="border-b bg-muted/10">
                                 <CardTitle className="text-base flex items-center gap-2">
@@ -644,7 +664,9 @@ export default function ViewQuotationPage() {
                                     )}
                             </CardContent>
                         </Card>
+                        )}
 
+                        {showWorkflow && (
                         <Card>
                             <CardHeader className="border-b bg-muted/10">
                                 <CardTitle className="text-base flex items-center gap-2">
@@ -676,14 +698,18 @@ export default function ViewQuotationPage() {
                                 )}
                             </CardContent>
                         </Card>
+                        )}
                     </div>
+                    )}
 
                     {/* Additional services */}
                     <Card>
                         <CardHeader className="border-b bg-muted/10">
                             <CardTitle className="text-lg flex items-center gap-2">
                                 <ReceiptText className="h-4 w-4 text-primary" />
-                                Additional Services
+                                {isWebDev
+                                    ? 'Additional Services'
+                                    : 'Packages / Line Items'}
                             </CardTitle>
                         </CardHeader>
                         <CardContent className="pt-6">
@@ -694,8 +720,13 @@ export default function ViewQuotationPage() {
                                             <TableRow>
                                                 <TableHead>Service</TableHead>
                                                 <TableHead>Billing</TableHead>
+                                                {showUnitQty && (
+                                                    <TableHead className="text-right">
+                                                        Qty
+                                                    </TableHead>
+                                                )}
                                                 <TableHead className="text-right">
-                                                    Price
+                                                    Amount
                                                 </TableHead>
                                             </TableRow>
                                         </TableHeader>
@@ -711,7 +742,7 @@ export default function ViewQuotationPage() {
                                                                     {s.title}
                                                                 </span>
                                                                 {s.description && (
-                                                                    <span className="text-xs text-muted-foreground">
+                                                                    <span className="text-xs text-muted-foreground w-80 truncate">
                                                                         {
                                                                             s.description
                                                                         }
@@ -722,11 +753,20 @@ export default function ViewQuotationPage() {
                                                         <TableCell>
                                                             <Badge
                                                                 variant="outline"
-                                                                className="capitalize text-[10px]"
+                                                                className="text-[10px]"
                                                             >
-                                                                {s.billingCycle}
+                                                                {BILLING_CYCLE_LABELS[
+                                                                    s
+                                                                        .billingCycle
+                                                                ] ??
+                                                                    s.billingCycle}
                                                             </Badge>
                                                         </TableCell>
+                                                        {showUnitQty && (
+                                                            <TableCell className="text-right tabular-nums">
+                                                                {s.quantity ?? 1}
+                                                            </TableCell>
+                                                        )}
                                                         <TableCell
                                                             className={cn(
                                                                 'text-right font-bold',
@@ -735,7 +775,11 @@ export default function ViewQuotationPage() {
                                                             )}
                                                         >
                                                             {canSeeFinancials
-                                                                ? money(s.price)
+                                                                ? money(
+                                                                      lineItemAmount(
+                                                                          s,
+                                                                      ),
+                                                                  )
                                                                 : '******'}
                                                         </TableCell>
                                                     </TableRow>
@@ -743,7 +787,7 @@ export default function ViewQuotationPage() {
                                             )}
                                             <TableRow>
                                                 <TableCell
-                                                    colSpan={2}
+                                                    colSpan={showUnitQty ? 3 : 2}
                                                     className="text-right font-semibold"
                                                 >
                                                     Total
@@ -805,6 +849,7 @@ export default function ViewQuotationPage() {
                                 </h2>
                             </div>
                             <div className="space-y-2 text-sm">
+                                {isWebDev && (
                                 <div className="flex items-center justify-between">
                                     <span className="text-muted-foreground">
                                         Base price
@@ -821,9 +866,10 @@ export default function ViewQuotationPage() {
                                             : '******'}
                                     </span>
                                 </div>
+                                )}
                                 <div className="flex items-center justify-between">
                                     <span className="text-muted-foreground">
-                                        Add-ons
+                                        {isWebDev ? 'Add-ons' : 'Line items'}
                                     </span>
                                     <span
                                         className={cn(

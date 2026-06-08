@@ -111,7 +111,8 @@ export interface IQuotationSnapshot {
     additionalServices?: Array<{
         title: string;
         price: number;
-        billingCycle: 'one-time' | 'monthly' | 'yearly';
+        billingCycle: 'one-time' | 'monthly' | 'yearly' | 'per-image' | 'per-video';
+        quantity?: number;
         description?: string | undefined;
     }>;
     taxAmount: number;
@@ -206,7 +207,8 @@ const snapshotSchema = new Schema<IQuotationSnapshot>(
             {
                 title: String,
                 price: Number,
-                billingCycle: { type: String, enum: ['one-time', 'monthly', 'yearly'] },
+                billingCycle: { type: String, enum: ['one-time', 'monthly', 'yearly', 'per-image', 'per-video'] },
+                quantity: { type: Number },
                 description: String,
                 _id: false,
             },

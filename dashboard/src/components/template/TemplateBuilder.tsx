@@ -24,9 +24,20 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { formatMoney } from "@/lib/money";
+import { cn } from "@/lib/utils";
 
 const PREDEFINED_TOOLS = [
   "Figma", "Adobe XD", "Tailwind CSS", "shadcn/ui", "Firebase",
@@ -40,7 +51,16 @@ import {
   IPaymentMilestone,
   QuotationCategory,
 } from "@/types/quotation.type";
-import { CATEGORY_OPTIONS, getCategorySections } from "@/constants/quotation-templates";
+import {
+  CATEGORY_OPTIONS,
+  getCategorySections,
+  isPhasesEnabled,
+  isUnitBased,
+  getBillingOptions,
+  getDefaultBillingCycle,
+  lineItemAmount,
+  BILLING_CYCLE_LABELS,
+} from "@/constants/quotation-templates";
 
 const FRONTEND_OPTIONS = ["Next.js", "React", "Vue", "Angular"];
 const BACKEND_OPTIONS = ["Node.js", "NestJS", "Laravel", "Django"];
@@ -100,7 +120,8 @@ export default function TemplateBuilder({
     : "Define each package or line item with a title, price, and optional billing cycle.";
 
   const computedTotals = useMemo(() => {
-    const servicesTotal = data.additionalServices.reduce((acc, s) => acc + s.price, 0);
+    // Per-line amount = price × (quantity ?? 1); web-dev has no quantity ⇒ ×1.
+    const servicesTotal = data.additionalServices.reduce((acc, s) => acc + lineItemAmount(s), 0);
     // Category-aware (Option B): web-development = basePrice + services (UNCHANGED);
     // other categories = services only. No tax at the template layer (as before).
     const isWebDev = (data.category ?? "web-development") === "web-development";
@@ -140,7 +161,13 @@ export default function TemplateBuilder({
     updateData({
       additionalServices: [
         ...data.additionalServices,
-        { title: "", price: 0, billingCycle: "one-time", description: "" },
+        {
+          title: "",
+          price: 0,
+          billingCycle: getDefaultBillingCycle(data.category),
+          ...(isUnitBased(data.category) ? { quantity: 1 } : {}),
+          description: "",
+        },
       ],
     });
   };
@@ -248,19 +275,23 @@ export default function TemplateBuilder({
                   </div>
                   <div className="space-y-1">
                     <FieldLabel>Category</FieldLabel>
-                    <SelectInput
+                    <Select
                       value={data.category}
-                      onChange={(e) =>
-                        updateData({ category: e.target.value as QuotationCategory })
+                      onValueChange={(v) =>
+                        updateData({ category: v as QuotationCategory })
                       }
-                      className="focus:ring-teal-500 focus:border-teal-500"
                     >
-                      {CATEGORY_OPTIONS.map((opt) => (
-                        <option key={opt.value} value={opt.value}>
-                          {opt.label}
-                        </option>
-                      ))}
-                    </SelectInput>
+                      <SelectTrigger className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {CATEGORY_OPTIONS.map((opt) => (
+                          <SelectItem key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
                 {has("overview") && (
@@ -279,7 +310,7 @@ export default function TemplateBuilder({
           </Card>
 
           {/* Project Phases Section */}
-          {has("phases") && (
+          {isPhasesEnabled(data.category) && (
           <div className="overflow-hidden rounded-xl border border-border bg-card">
             <div className="flex flex-row items-start justify-between gap-4 border-b border-border bg-muted/30 p-6">
               <div className="flex-1 min-w-0">
@@ -464,27 +495,50 @@ export default function TemplateBuilder({
                   {data.additionalServices.map((service, sIdx) => (
                     <div key={sIdx} className="group relative border border-border rounded-xl bg-card p-4 transition-all hover:border-teal-500/30">
                       <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
-                        <div className="md:col-span-5 space-y-1">
-                          <FieldLabel>Service Title</FieldLabel>
+                        <div className={`${isUnitBased(data.category) ? "md:col-span-4" : "md:col-span-5"} space-y-1`}>
+                          <FieldLabel>{isUnitBased(data.category) ? "Package / Item" : "Service Title"}</FieldLabel>
                           <TextInput
                             value={service.title}
                             onChange={(e) => updateService(sIdx, { title: e.target.value })}
                             placeholder="e.g. Cloud Hosting (1 Year)"
                           />
                         </div>
-                        <div className="md:col-span-3 space-y-1">
+                        <div className={`${isUnitBased(data.category) ? "md:col-span-2" : "md:col-span-3"} space-y-1`}>
                           <FieldLabel>Billing Cycle</FieldLabel>
-                          <SelectInput
-                            value={service.billingCycle || "one-time"}
-                            onChange={(e) => updateService(sIdx, { billingCycle: e.target.value as any })}
+                          <Select
+                            value={service.billingCycle || getDefaultBillingCycle(data.category)}
+                            onValueChange={(v) => updateService(sIdx, { billingCycle: v as any })}
                           >
-                            <option value="one-time">One-time</option>
-                            <option value="monthly">Monthly</option>
-                            <option value="yearly">Yearly</option>
-                          </SelectInput>
+                            <SelectTrigger className="w-full">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {getBillingOptions(data.category).map((opt) => (
+                                <SelectItem key={opt} value={opt}>
+                                  {BILLING_CYCLE_LABELS[opt]}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                         </div>
+                        {isUnitBased(data.category) && (
+                          <div className="md:col-span-2 space-y-1">
+                            <FieldLabel>Qty</FieldLabel>
+                            <TextInput
+                              type="number"
+                              min={1}
+                              value={service.quantity ?? 1}
+                              onChange={(e) =>
+                                updateService(sIdx, {
+                                  quantity: e.target.value === "" ? 1 : Number(e.target.value),
+                                })
+                              }
+                              placeholder="1"
+                            />
+                          </div>
+                        )}
                         <div className="md:col-span-3 space-y-1">
-                          <FieldLabel>Price</FieldLabel>
+                          <FieldLabel>{isUnitBased(data.category) ? "Unit price" : "Price"}</FieldLabel>
                           <TextInput
                             type="number"
                             value={service.price || ""}
@@ -543,45 +597,57 @@ export default function TemplateBuilder({
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="space-y-1">
                       <FieldLabel>Frontend</FieldLabel>
-                      <SelectInput
-                        value={data.techStack.frontend || ""}
-                        onChange={(e) => updateTechStack({ frontend: e.target.value })}
-                        placeholder="Select"
+                      <Select
+                        value={data.techStack.frontend || undefined}
+                        onValueChange={(v) => updateTechStack({ frontend: v })}
                       >
-                        {FRONTEND_OPTIONS.map((opt) => (
-                          <option key={opt} value={opt}>
-                            {opt}
-                          </option>
-                        ))}
-                      </SelectInput>
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="Select" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {FRONTEND_OPTIONS.map((opt) => (
+                            <SelectItem key={opt} value={opt}>
+                              {opt}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                     <div className="space-y-1">
                       <FieldLabel>Backend</FieldLabel>
-                      <SelectInput
-                        value={data.techStack.backend || ""}
-                        onChange={(e) => updateTechStack({ backend: e.target.value })}
-                        placeholder="Select"
+                      <Select
+                        value={data.techStack.backend || undefined}
+                        onValueChange={(v) => updateTechStack({ backend: v })}
                       >
-                        {BACKEND_OPTIONS.map((opt) => (
-                          <option key={opt} value={opt}>
-                            {opt}
-                          </option>
-                        ))}
-                      </SelectInput>
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="Select" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {BACKEND_OPTIONS.map((opt) => (
+                            <SelectItem key={opt} value={opt}>
+                              {opt}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                     <div className="space-y-1">
                       <FieldLabel>Database</FieldLabel>
-                      <SelectInput
-                        value={data.techStack.database || ""}
-                        onChange={(e) => updateTechStack({ database: e.target.value })}
-                        placeholder="Select"
+                      <Select
+                        value={data.techStack.database || undefined}
+                        onValueChange={(v) => updateTechStack({ database: v })}
                       >
-                        {DB_OPTIONS.map((opt) => (
-                          <option key={opt} value={opt}>
-                            {opt}
-                          </option>
-                        ))}
-                      </SelectInput>
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="Select" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {DB_OPTIONS.map((opt) => (
+                            <SelectItem key={opt} value={opt}>
+                              {opt}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
                 </div>
@@ -625,18 +691,15 @@ export default function TemplateBuilder({
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-y-3 gap-x-6">
                     {PREDEFINED_TOOLS.map((tool) => (
                       <div key={tool} className="flex items-center space-x-2">
-                        <input
+                        <Checkbox
                           id={`tool-${tool}`}
-                          type="checkbox"
                           checked={data.techStack.tools.includes(tool)}
-                          onChange={(e) => {
-                            const checked = e.target.checked;
-                            const newTools = checked
+                          onCheckedChange={(checked) => {
+                            const newTools = checked === true
                               ? [...data.techStack.tools, tool]
                               : data.techStack.tools.filter((t) => t !== tool);
                             updateTechStack({ tools: newTools });
                           }}
-                          className="h-4 w-4 rounded border border-border text-teal-600 focus:ring-teal-500 bg-background transition duration-150"
                         />
                         <label htmlFor={`tool-${tool}`} className="text-sm cursor-pointer text-foreground/75">
                           {tool}
@@ -790,14 +853,16 @@ export default function TemplateBuilder({
                     <p className="text-xs text-muted-foreground font-medium">
                       Define sequence of steps.
                     </p>
-                    <button
+                    <Button
                       type="button"
+                      variant="ghost"
+                      size="sm"
                       onClick={syncWorkflowFromPhases}
-                      className="text-xs font-bold text-teal-600 hover:text-teal-700 flex items-center gap-1 px-2 py-1 rounded-md hover:bg-teal-500/10 transition-colors"
+                      className="h-7 gap-1 px-2 text-xs font-bold text-teal-600 hover:text-teal-700 hover:bg-teal-500/10"
                       title="Automatically pull titles from project phases"
                     >
                       <Sparkles className="w-3 h-3" /> Auto-fill from Phases
-                    </button>
+                    </Button>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {data.workflow.map((step, idx) => (
@@ -883,17 +948,19 @@ export default function TemplateBuilder({
               <div className="space-y-3 pt-4 border-t border-border/60">
                 <div className="flex items-center justify-between">
                   <FieldLabel>Optional / Additional Scope</FieldLabel>
-                  <button
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
                     onClick={() =>
                       updateData({
-                        additionalServices: [...data.additionalServices, { title: "", price: 0, billingCycle: "one-time" }],
+                        additionalServices: [...data.additionalServices, { title: "", price: 0, billingCycle: getDefaultBillingCycle(data.category), ...(isUnitBased(data.category) ? { quantity: 1 } : {}) }],
                       })
                     }
-                    className="text-xs font-semibold text-teal-600 hover:text-teal-700 flex items-center gap-1 transition-colors"
-                    type="button"
+                    className="h-7 gap-1 px-2 text-xs font-semibold text-teal-600 hover:text-teal-700 hover:bg-teal-500/10"
                   >
-                    <Plus className="w-3 w-3" /> Add Service
-                  </button>
+                    <Plus className="w-3 h-3" /> Add Service
+                  </Button>
                 </div>
 
                 {data.additionalServices.length === 0 ? (
@@ -1031,36 +1098,14 @@ function FieldLabel({ children, className = "" }: { children: React.ReactNode; c
   );
 }
 
-function TextInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
-  const { className = "", ...rest } = props;
-  return (
-    <input
-      {...rest}
-      className={[
-        "h-10 w-full rounded-md border border-border bg-background px-3 text-sm transition duration-150",
-        "placeholder:text-muted-foreground/50",
-        "focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500",
-        "disabled:opacity-60 disabled:cursor-not-allowed",
-        className,
-      ].join(" ")}
-    />
-  );
+// Thin wrappers over shadcn primitives so the whole form is shadcn-consistent
+// while keeping the existing call-site prop interface.
+function TextInput({ className, ...props }: React.ComponentProps<typeof Input>) {
+  return <Input {...props} className={cn("h-10", className)} />;
 }
 
-function TextArea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
-  const { className = "", ...rest } = props;
-  return (
-    <textarea
-      {...rest}
-      className={[
-        "w-full rounded-md border border-border bg-background px-3 py-2 text-sm transition duration-150",
-        "placeholder:text-muted-foreground/50",
-        "focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500",
-        "disabled:opacity-60 disabled:cursor-not-allowed",
-        className,
-      ].join(" ")}
-    />
-  );
+function TextArea({ className, ...props }: React.ComponentProps<typeof Textarea>) {
+  return <Textarea {...props} className={cn(className)} />;
 }
 
 function DatePickerInput({
@@ -1102,38 +1147,28 @@ function DatePickerInput({
   );
 }
 
-function SelectInput(props: React.SelectHTMLAttributes<HTMLSelectElement> & { placeholder?: string }) {
-  const { className = "", placeholder, children, ...rest } = props;
+function PrimaryButton({
+  className,
+  variant = "primary",
+  type,
+  ...props
+}: React.ButtonHTMLAttributes<HTMLButtonElement> & {
+  variant?: "primary" | "outline" | "secondary" | "ghost";
+}) {
+  const variantMap = {
+    primary: "default",
+    outline: "outline",
+    secondary: "secondary",
+    ghost: "ghost",
+  } as const;
   return (
-    <select
-      {...rest}
-      className={[
-        "h-10 w-full rounded-md border border-border bg-background text-foreground px-3 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition duration-150",
-        "disabled:opacity-60 disabled:cursor-not-allowed",
-        className,
-      ].join(" ")}
-    >
-      {placeholder ? (
-        <option value="" disabled className="bg-background text-muted-foreground">
-          {placeholder}
-        </option>
-      ) : null}
-      {children}
-    </select>
+    <Button
+      type={type ?? "button"}
+      variant={variantMap[variant]}
+      className={cn(className)}
+      {...props}
+    />
   );
-}
-
-function PrimaryButton(props: React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: "primary" | "outline" | "secondary" | "ghost" }) {
-  const { className = "", variant = "primary", ...rest } = props;
-  const base =
-    "inline-flex items-center justify-center gap-2 rounded-md text-sm font-semibold transition-colors disabled:opacity-60 disabled:cursor-not-allowed transition duration-150";
-  const variants: Record<string, string> = {
-    primary: "bg-teal-600 text-white hover:bg-teal-700 h-11 px-4 shadow-sm",
-    outline: "border border-border bg-background text-foreground hover:bg-muted/30 h-11 px-4",
-    secondary: "bg-muted text-foreground hover:bg-muted/80 h-10 px-3",
-    ghost: "bg-transparent hover:bg-muted/30 text-muted-foreground hover:text-foreground h-9 px-3",
-  };
-  return <button {...rest} className={`${base} ${variants[variant]} ${className}`} />;
 }
 
 function SoftBadge({ children }: { children: React.ReactNode }) {

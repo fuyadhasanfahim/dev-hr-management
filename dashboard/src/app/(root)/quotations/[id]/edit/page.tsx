@@ -6,6 +6,7 @@ import { useGetQuotationByIdQuery } from "@/redux/features/quotation/quotationAp
 import { useQuotationStore } from "@/store/useQuotationStore";
 import QuotationBuilder from "../../components/forms/QuotationBuilder";
 import { ArrowLeft, Loader2, ReceiptText, AlertTriangle } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 export default function EditQuotationPage() {
   const { id } = useParams();
@@ -55,13 +56,9 @@ export default function EditQuotationPage() {
             We couldn&apos;t load this quotation. It may have been deleted or the
             link is incorrect.
           </p>
-          <button
-            type="button"
-            onClick={() => router.push("/quotations")}
-            className="inline-flex h-11 items-center justify-center rounded-md border bg-background px-4 text-sm font-semibold hover:bg-muted/40"
-          >
+          <Button variant="outline" onClick={() => router.push("/quotations")}>
             Back to Quotations
-          </button>
+          </Button>
         </div>
       </div>
     );
@@ -72,13 +69,14 @@ export default function EditQuotationPage() {
       {/* Header (Orders-like) */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
-          <button
-            type="button"
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-10 w-10 rounded-full shadow-sm"
             onClick={() => router.push(`/quotations/${id}`)}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-full border bg-background shadow-sm hover:bg-muted/40"
           >
             <ArrowLeft className="h-5 w-5" />
-          </button>
+          </Button>
 
           <div>
             <div className="flex items-center gap-2">

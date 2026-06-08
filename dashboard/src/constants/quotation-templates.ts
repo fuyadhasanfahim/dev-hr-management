@@ -1,6 +1,15 @@
-import { QuotationData, QuotationCategory } from "@/types/quotation.type";
+import { QuotationData, QuotationCategory, BillingCycle } from "@/types/quotation.type";
 
 export const QUOTATION_TEMPLATES: Record<string, Partial<QuotationData>> = {};
+
+/** Display labels for each billing cycle. */
+export const BILLING_CYCLE_LABELS: Record<BillingCycle, string> = {
+  "one-time": "One-time",
+  monthly: "Monthly",
+  yearly: "Yearly",
+  "per-image": "Per image",
+  "per-video": "Per video",
+};
 
 /**
  * The set of form sections a category can expose. These keys are the single
@@ -21,29 +30,52 @@ export interface CategoryDefinition {
   label: string;
   /** Sections visible for this category. */
   sections: TemplateSection[];
+  /** Whether project phases are enabled (web-development only). */
+  phasesEnabled: boolean;
+  /** Allowed billing cycles for line items in this category. */
+  billingOptions: BillingCycle[];
+  /** Whether line items are priced as unitPrice × quantity. */
+  unitBased: boolean;
+  /** Noun for a single unit when unitBased (e.g. "image", "video"). */
+  unitLabel?: string;
 }
 
 /**
- * CATEGORY_CONFIG — the single config source for category-aware forms.
+ * CATEGORY_CONFIG — the single config source for category-aware forms AND
+ * business logic (phases on/off, allowed billing cycles, unit pricing).
  * Add a new category here (plus to the QuotationCategory union) and both
- * builders pick it up automatically.
+ * builders + totals logic pick it up automatically.
  */
 export const CATEGORY_CONFIG: Record<QuotationCategory, CategoryDefinition> = {
   "web-development": {
     label: "Web Design & Development",
     sections: ["overview", "phases", "techStack", "pricing", "milestones", "workflow"],
+    phasesEnabled: true,
+    billingOptions: ["one-time", "monthly", "yearly"],
+    unitBased: false,
   },
   "photo-editing": {
     label: "Photo Editing",
     sections: ["overview", "services", "pricing"],
+    phasesEnabled: false,
+    billingOptions: ["per-image"],
+    unitBased: true,
+    unitLabel: "image",
   },
   marketing: {
     label: "Marketing",
     sections: ["overview", "services", "workflow", "pricing"],
+    phasesEnabled: false,
+    billingOptions: ["monthly", "one-time"],
+    unitBased: false,
   },
   "video-editing": {
     label: "Video Editing",
     sections: ["overview", "services", "pricing"],
+    phasesEnabled: false,
+    billingOptions: ["per-video"],
+    unitBased: true,
+    unitLabel: "video",
   },
 };
 
@@ -53,14 +85,61 @@ export const CATEGORY_OPTIONS: { value: QuotationCategory; label: string }[] = (
 ).map((value) => ({ value, label: CATEGORY_CONFIG[value].label }));
 
 /**
- * Resolve the visible sections for a category, falling back to web-development
- * if an unknown/legacy category is encountered.
+ * Resolve a category's full config, falling back to web-development for any
+ * unknown/legacy/absent category. Single accessor that all behavior derives from.
  */
+export function getCategoryConfig(
+  category: QuotationCategory | undefined,
+): CategoryDefinition {
+  return (
+    CATEGORY_CONFIG[category as QuotationCategory] ??
+    CATEGORY_CONFIG["web-development"]
+  );
+}
+
+/** Resolve the visible sections for a category (legacy/back-compat accessor). */
 export function getCategorySections(
   category: QuotationCategory | undefined,
 ): TemplateSection[] {
-  return (
-    CATEGORY_CONFIG[category as QuotationCategory]?.sections ??
-    CATEGORY_CONFIG["web-development"].sections
-  );
+  return getCategoryConfig(category).sections;
+}
+
+export function isPhasesEnabled(category: QuotationCategory | undefined): boolean {
+  return getCategoryConfig(category).phasesEnabled;
+}
+
+export function getBillingOptions(
+  category: QuotationCategory | undefined,
+): BillingCycle[] {
+  return getCategoryConfig(category).billingOptions;
+}
+
+export function isUnitBased(category: QuotationCategory | undefined): boolean {
+  return getCategoryConfig(category).unitBased;
+}
+
+export function getUnitLabel(
+  category: QuotationCategory | undefined,
+): string | undefined {
+  return getCategoryConfig(category).unitLabel;
+}
+
+/** Default billing cycle for a new line item in this category. */
+export function getDefaultBillingCycle(
+  category: QuotationCategory | undefined,
+): BillingCycle {
+  return getCategoryConfig(category).billingOptions[0] ?? "one-time";
+}
+
+/**
+ * Canonical per-line amount used by ALL totals computations:
+ *   amount = price × (quantity ?? 1)
+ * For non-unit categories quantity is absent ⇒ ×1, so web-development is
+ * byte-identical to the previous `price`-only behavior.
+ */
+export function lineItemAmount(item: {
+  price?: number;
+  quantity?: number;
+}): number {
+  return (item.price || 0) * (item.quantity ?? 1);
 }

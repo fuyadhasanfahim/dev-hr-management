@@ -137,7 +137,9 @@ function buildQuotationSnapshot(
                       500,
                   );
               }
-              return sum + svc.price;
+              // Per-line amount = price × (quantity ?? 1); web-dev has no
+              // quantity ⇒ ×1, so existing orders are byte-identical.
+              return sum + svc.price * (svc.quantity ?? 1);
           }, 0)
         : 0;
 
@@ -182,6 +184,7 @@ function buildQuotationSnapshot(
                   title: String(s.title || ''),
                   price: Number(s.price) || 0,
                   billingCycle: s.billingCycle || 'one-time',
+                  ...(typeof s.quantity === 'number' ? { quantity: s.quantity } : {}),
                   ...(s.description ? { description: String(s.description) } : {}),
               }))
             : [],

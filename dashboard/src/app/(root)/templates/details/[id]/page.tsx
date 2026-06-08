@@ -2,11 +2,43 @@
 
 import { useParams, useRouter } from "next/navigation";
 import { useGetQuotationTemplateByIdQuery } from "@/redux/features/quotation/quotationApi";
-import { format } from "date-fns";
+import {
+  getCategoryConfig,
+  isPhasesEnabled,
+  isUnitBased,
+  lineItemAmount,
+  BILLING_CYCLE_LABELS,
+} from "@/constants/quotation-templates";
 import { formatMoney } from "@/lib/money";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, Edit, Layout, FileText, Layers, Cpu, HandCoins, Activity, Receipt } from "lucide-react";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  ArrowLeft,
+  Pencil,
+  FileText,
+  Layers,
+  Cpu,
+  HandCoins,
+  Activity,
+  Receipt,
+  Loader2,
+  Package,
+} from "lucide-react";
 import Link from "next/link";
 
 export default function TemplateDetailsPage() {
@@ -14,11 +46,14 @@ export default function TemplateDetailsPage() {
   const router = useRouter();
   const id = params.id as string;
 
-  const { data: template, isLoading } = useGetQuotationTemplateByIdQuery(id, { skip: !id });
+  const { data: template, isLoading } = useGetQuotationTemplateByIdQuery(id, {
+    skip: !id,
+  });
 
   if (isLoading) {
     return (
-      <div className="w-full h-screen flex items-center justify-center text-muted-foreground/60">
+      <div className="flex h-[60vh] items-center justify-center gap-2 text-sm text-muted-foreground">
+        <Loader2 className="h-4 w-4 animate-spin" />
         Loading template details...
       </div>
     );
@@ -26,19 +61,23 @@ export default function TemplateDetailsPage() {
 
   if (!template) {
     return (
-      <div className="w-full h-screen flex flex-col items-center justify-center gap-4 text-muted-foreground">
+      <div className="flex h-[60vh] flex-col items-center justify-center gap-4 text-muted-foreground">
         <p>Template not found or has been removed.</p>
-        <Button onClick={() => router.push("/templates")}>Back to Templates</Button>
+        <Button onClick={() => router.push("/templates")}>
+          <ArrowLeft className="h-4 w-4" />
+          Back to Templates
+        </Button>
       </div>
     );
   }
 
+  // ── Pricing (UNCHANGED logic — presentation only) ──────────────────────────
   const basePrice = template.pricing?.basePrice || 0;
   const servicesTotal =
-    template.additionalServices?.reduce((a: number, s: any) => a + (s.price || 0), 0) || 0;
-  // Category-aware (Option B). web-development path is UNCHANGED (discount on
-  // basePrice only, services added after, no tax). Other categories are driven
-  // by their line items (services), with discount applied to the services total.
+    template.additionalServices?.reduce(
+      (a: number, s: any) => a + lineItemAmount(s),
+      0,
+    ) || 0;
   const isWebDev = (template.category ?? "web-development") === "web-development";
   const discountAmount = isWebDev
     ? (basePrice * (template.pricing?.discount || 0)) / 100
@@ -47,261 +86,357 @@ export default function TemplateDetailsPage() {
     ? basePrice - discountAmount + servicesTotal
     : servicesTotal - discountAmount;
 
+  // ── Category-aware presentation flags ──────────────────────────────────────
+  const catConfig = getCategoryConfig(template.category);
+  const showPhases = isPhasesEnabled(template.category);
+  const showTech = catConfig.sections.includes("techStack");
+  const showWorkflow =
+    catConfig.sections.includes("workflow") &&
+    !!template.workflow &&
+    template.workflow.length > 0;
+  const showMilestones =
+    !!template.paymentMilestones && template.paymentMilestones.length > 0;
+  const showUnitQty = isUnitBased(template.category);
+  const services = template.additionalServices || [];
+  const money = (n: number) => formatMoney(n || 0, "৳");
+
   return (
-    <div className="w-full space-y-8 bg-background/40 min-h-screen">
-      {/* Header section */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight text-foreground flex items-center gap-2">
-            <Layout className="w-8 h-8 text-teal-600" />
-            <span>{template.name || "Unnamed Template"}</span>
-          </h1>
-          <p className="text-muted-foreground mt-1">Full breakdown of quotation scope, phases, and pricing</p>
-        </div>
-        <div>
+    <div className="container mx-auto p-6 space-y-6 animate-in fade-in duration-300">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
           <Button
-            asChild
-            className="bg-teal-600 hover:bg-teal-700 text-white font-semibold flex items-center gap-2 shadow-sm hover:shadow-lg rounded-lg h-11 px-6 transition duration-200"
+            variant="outline"
+            size="icon"
+            className="h-10 w-10 rounded-full shadow-sm"
+            onClick={() => router.push("/templates")}
           >
-            <Link href={`/templates/edit/${template._id}`}>
-              <Edit className="w-4 h-4" />
-              <span>Edit Template</span>
-            </Link>
+            <ArrowLeft className="h-5 w-5" />
           </Button>
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-3xl font-bold tracking-tight">
+                {template.name || "Unnamed Template"}
+              </h1>
+              <Badge variant="secondary">{catConfig.label}</Badge>
+            </div>
+            <p className="text-muted-foreground text-sm mt-1">
+              Read-only breakdown of this template&apos;s scope and pricing.
+            </p>
+          </div>
         </div>
+        <Button asChild>
+          <Link href={`/templates/edit/${template._id}`}>
+            <Pencil className="h-4 w-4" />
+            Edit Template
+          </Link>
+        </Button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Main section */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Main */}
         <div className="lg:col-span-2 space-y-6">
-          {/* Identity & Overview */}
-          <Card className="border-border bg-card p-6 shadow-sm rounded-xl">
-            <div className="flex items-center gap-2 pb-4 border-b border-border/60">
-              <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-teal-500/10 text-teal-600 ring-1 ring-teal-500/20">
-                <FileText className="w-4 h-4" />
-              </span>
-              <h2 className="text-lg font-bold text-foreground">Template Overview</h2>
-            </div>
-            <div className="mt-4 text-foreground/80 leading-relaxed text-sm whitespace-pre-line">
-              {template.overview || "No overview specified for this template."}
-            </div>
+          {/* Overview */}
+          <Card>
+            <CardHeader className="border-b bg-muted/10">
+              <CardTitle className="text-lg flex items-center gap-2">
+                <FileText className="h-4 w-4 text-primary" />
+                Template Overview
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-6">
+              <p className="text-sm leading-relaxed text-foreground/90 whitespace-pre-line">
+                {template.overview?.trim()
+                  ? template.overview
+                  : "No overview specified for this template."}
+              </p>
+            </CardContent>
           </Card>
 
-          {/* Phases Details */}
-          <Card className="border-border bg-card p-6 shadow-sm rounded-xl">
-            <div className="flex items-center gap-2 pb-4 border-b border-border/60 mb-4">
-              <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-teal-500/10 text-teal-600 ring-1 ring-teal-500/20">
-                <Layers className="w-4 h-4" />
-              </span>
-              <h2 className="text-lg font-bold text-foreground">Project Phases</h2>
-            </div>
-            {!template.phases || template.phases.length === 0 ? (
-              <p className="text-sm text-muted-foreground/60">No specific phases defined for this template.</p>
-            ) : (
-              <div className="space-y-4">
-                {template.phases.map((phase: any, index: number) => (
-                  <div
-                    key={index}
-                    className="border border-border/60 rounded-xl bg-muted/10 p-4 space-y-3"
-                  >
-                    <div className="flex justify-between items-start gap-4">
-                      <div>
-                        <span className="bg-teal-500/10 text-teal-600 px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wide uppercase">
-                          Phase {index + 1}
-                        </span>
-                        <h3 className="font-bold text-foreground text-base mt-1">
-                          {phase.title || "Untitled phase"}
-                        </h3>
-                      </div>
-                      <span className="text-xs font-mono text-muted-foreground bg-background px-2.5 py-1 border border-border rounded-md">
-                        {phase.startDate ? phase.startDate : "TBD"} —{" "}
-                        {phase.endDate ? phase.endDate : "TBD"}
-                      </span>
-                    </div>
-                    {phase.description && (
-                      <p className="text-sm text-foreground/80 leading-relaxed whitespace-pre-line">
-                        {phase.description}
-                      </p>
-                    )}
-                    {phase.items && phase.items.length > 0 && (
-                      <div className="pt-3 border-t border-border/60">
-                        <div className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">
-                          Key Checkpoints
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                          {phase.items.map((item: string, iIdx: number) => (
-                            <span
-                              key={iIdx}
-                              className="bg-background border border-border text-foreground/80 text-xs px-2.5 py-1 rounded-lg font-medium shadow-sm"
-                            >
-                              {item}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </Card>
-
-          {/* Additional details: Tech Stack, Payment Milestones, Workflow */}
-          <Card className="border-border bg-card p-6 shadow-sm rounded-xl space-y-6">
-            {/* Tech stack blueprint */}
-            <div>
-              <div className="flex items-center gap-2 pb-3 border-b border-border/60 mb-3">
-                <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-teal-500/10 text-teal-600 ring-1 ring-teal-500/20">
-                  <Cpu className="w-4 h-4" />
-                </span>
-                <h3 className="text-base font-bold text-foreground">Technical Blueprint</h3>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm mt-3">
-                <div className="bg-muted/10 p-3 rounded-lg border border-border/60">
-                  <span className="text-[10px] uppercase font-bold text-muted-foreground block mb-0.5">
-                    Frontend
-                  </span>
-                  <span className="font-bold text-foreground/85">
-                    {template.techStack?.frontend || "Not Specified"}
-                  </span>
-                </div>
-                <div className="bg-muted/10 p-3 rounded-lg border border-border/60">
-                  <span className="text-[10px] uppercase font-bold text-muted-foreground block mb-0.5">
-                    Backend
-                  </span>
-                  <span className="font-bold text-foreground/85">
-                    {template.techStack?.backend || "Not Specified"}
-                  </span>
-                </div>
-                <div className="bg-muted/10 p-3 rounded-lg border border-border/60">
-                  <span className="text-[10px] uppercase font-bold text-muted-foreground block mb-0.5">
-                    Database
-                  </span>
-                  <span className="font-bold text-foreground/85">
-                    {template.techStack?.database || "Not Specified"}
-                  </span>
-                </div>
-              </div>
-              {template.techStack?.tools && template.techStack.tools.length > 0 && (
-                <div className="mt-3 bg-muted/10 border border-border/60 rounded-lg p-3">
-                  <span className="text-[10px] uppercase font-bold text-muted-foreground block mb-2">
-                    Preconfigured Tools
-                  </span>
-                  <div className="flex flex-wrap gap-1.5">
-                    {template.techStack.tools.map((t: string, idx: number) => (
-                      <span
-                        key={idx}
-                        className="bg-background border border-border px-2.5 py-1 text-xs text-foreground/75 rounded-lg font-medium shadow-sm"
+          {/* Phases — only for phase-based categories */}
+          {showPhases && (
+            <Card>
+              <CardHeader className="border-b bg-muted/10">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Layers className="h-4 w-4 text-primary" />
+                  Project Phases
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-6">
+                {!template.phases || template.phases.length === 0 ? (
+                  <p className="text-sm text-muted-foreground italic">
+                    No phases defined for this template.
+                  </p>
+                ) : (
+                  <div className="space-y-4">
+                    {template.phases.map((phase: any, index: number) => (
+                      <div
+                        key={index}
+                        className="rounded-xl border bg-card p-5 space-y-3"
                       >
-                        {t}
-                      </span>
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="space-y-1">
+                            <Badge variant="outline" className="text-[10px]">
+                              Phase {index + 1}
+                            </Badge>
+                            <h3 className="font-bold text-base">
+                              {phase.title || "Untitled phase"}
+                            </h3>
+                          </div>
+                          {(phase.startDate || phase.endDate) && (
+                            <span className="text-xs font-mono text-muted-foreground bg-muted px-2 py-0.5 rounded border">
+                              {phase.startDate || "TBD"} —{" "}
+                              {phase.endDate || "TBD"}
+                            </span>
+                          )}
+                        </div>
+                        {phase.description && (
+                          <p className="text-sm text-muted-foreground whitespace-pre-line">
+                            {phase.description}
+                          </p>
+                        )}
+                        {phase.items && phase.items.length > 0 && (
+                          <div className="flex flex-wrap gap-2 pt-1">
+                            {phase.items.map((item: string, iIdx: number) => (
+                              <Badge
+                                key={iIdx}
+                                variant="secondary"
+                                className="font-normal"
+                              >
+                                {item}
+                              </Badge>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     ))}
                   </div>
-                </div>
-              )}
-            </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
 
-            {/* Workflow steps */}
-            {template.workflow && template.workflow.length > 0 && (
-              <div>
-                <div className="flex items-center gap-2 pb-3 border-b border-border/60 mb-3">
-                  <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-teal-500/10 text-teal-600 ring-1 ring-teal-500/20">
-                    <Activity className="w-4 h-4" />
-                  </span>
-                  <h3 className="text-base font-bold text-foreground">Workflow Pipeline</h3>
+          {/* Packages / Line items */}
+          {services.length > 0 && (
+            <Card>
+              <CardHeader className="border-b bg-muted/10">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Package className="h-4 w-4 text-primary" />
+                  {isWebDev ? "Additional Services" : "Packages / Line Items"}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-6">
+                <div className="rounded-xl border overflow-hidden">
+                  <Table>
+                    <TableHeader className="bg-muted/30">
+                      <TableRow>
+                        <TableHead>Item</TableHead>
+                        <TableHead>Billing</TableHead>
+                        {showUnitQty && (
+                          <TableHead className="text-right">Qty</TableHead>
+                        )}
+                        <TableHead className="text-right">Amount</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {services.map((s: any, idx: number) => (
+                        <TableRow key={idx}>
+                          <TableCell className="font-medium">
+                            <div className="flex flex-col">
+                              <span>{s.title}</span>
+                              {s.description && (
+                                <span className="text-xs text-muted-foreground w-80 truncate">
+                                  {s.description}
+                                </span>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className="text-[10px]">
+                              {BILLING_CYCLE_LABELS[
+                                s.billingCycle as keyof typeof BILLING_CYCLE_LABELS
+                              ] ?? s.billingCycle}
+                            </Badge>
+                          </TableCell>
+                          {showUnitQty && (
+                            <TableCell className="text-right tabular-nums">
+                              {s.quantity ?? 1}
+                            </TableCell>
+                          )}
+                          <TableCell className="text-right font-bold">
+                            {money(lineItemAmount(s))}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                      <TableRow>
+                        <TableCell
+                          colSpan={showUnitQty ? 3 : 2}
+                          className="text-right font-semibold"
+                        >
+                          Total
+                        </TableCell>
+                        <TableCell className="text-right font-black">
+                          {money(servicesTotal)}
+                        </TableCell>
+                      </TableRow>
+                    </TableBody>
+                  </Table>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  {template.workflow.map((step: string, idx: number) => (
-                    <span
-                      key={idx}
-                      className="bg-muted/10 border border-border/60 px-3 py-1.5 text-xs text-foreground/80 font-semibold rounded-lg shadow-sm"
-                    >
-                      <span className="text-teal-600 font-bold mr-1">{idx + 1}.</span>
-                      {step}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
+              </CardContent>
+            </Card>
+          )}
 
-            {/* Payment Milestones */}
-            {template.paymentMilestones && template.paymentMilestones.length > 0 && (
-              <div>
-                <div className="flex items-center gap-2 pb-3 border-b border-border/60 mb-3">
-                  <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-teal-500/10 text-teal-600 ring-1 ring-teal-500/20">
-                    <HandCoins className="w-4 h-4" />
-                  </span>
-                  <h3 className="text-base font-bold text-foreground">Payment Milestones</h3>
-                </div>
-                <div className="space-y-2">
-                  {template.paymentMilestones.map((m: any, idx: number) => (
-                    <div
-                      key={idx}
-                      className="flex items-center justify-between bg-muted/10 border border-border/60 rounded-xl p-3 text-sm"
-                    >
-                      <span className="font-semibold text-foreground/85">{m.label}</span>
-                      <span className="bg-teal-500/10 text-teal-600 px-2.5 py-1 rounded-full text-xs font-extrabold tracking-wide">
-                        {m.percentage}%
+          {/* Technical Blueprint — only for web-development */}
+          {showTech && (
+            <Card>
+              <CardHeader className="border-b bg-muted/10">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Cpu className="h-4 w-4 text-primary" />
+                  Technical Blueprint
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-6 space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+                  {(
+                    [
+                      ["Frontend", template.techStack?.frontend],
+                      ["Backend", template.techStack?.backend],
+                      ["Database", template.techStack?.database],
+                    ] as const
+                  ).map(([label, value]) => (
+                    <div key={label} className="rounded-lg border bg-muted/10 p-3">
+                      <span className="text-[10px] uppercase font-bold text-muted-foreground block mb-0.5">
+                        {label}
+                      </span>
+                      <span className="font-semibold text-foreground/90">
+                        {value || "Not specified"}
                       </span>
                     </div>
                   ))}
                 </div>
-              </div>
-            )}
-          </Card>
+                {template.techStack?.tools &&
+                  template.techStack.tools.length > 0 && (
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-muted-foreground block mb-2">
+                        Preconfigured Tools
+                      </span>
+                      <div className="flex flex-wrap gap-1.5">
+                        {template.techStack.tools.map(
+                          (t: string, idx: number) => (
+                            <Badge
+                              key={idx}
+                              variant="secondary"
+                              className="font-normal"
+                            >
+                              {t}
+                            </Badge>
+                          ),
+                        )}
+                      </div>
+                    </div>
+                  )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Workflow — categories that use workflow */}
+          {showWorkflow && (
+            <Card>
+              <CardHeader className="border-b bg-muted/10">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Activity className="h-4 w-4 text-primary" />
+                  Workflow Pipeline
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-6">
+                <ol className="space-y-2">
+                  {template.workflow!.map((step: string, idx: number) => (
+                    <li key={idx} className="flex items-start gap-3 text-sm">
+                      <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-bold text-primary">
+                        {idx + 1}
+                      </span>
+                      <span className="text-foreground/90">{step}</span>
+                    </li>
+                  ))}
+                </ol>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Payment Milestones */}
+          {showMilestones && (
+            <Card>
+              <CardHeader className="border-b bg-muted/10">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <HandCoins className="h-4 w-4 text-primary" />
+                  Payment Milestones
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-6 space-y-2">
+                {template.paymentMilestones!.map((m: any, idx: number) => (
+                  <div
+                    key={idx}
+                    className="flex items-center justify-between rounded-lg border bg-muted/10 p-3 text-sm"
+                  >
+                    <span className="font-medium text-foreground/90">
+                      {m.label}
+                    </span>
+                    <Badge variant="secondary" className="font-bold">
+                      {m.percentage}%
+                    </Badge>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
         </div>
 
-        {/* Sidebar calculations */}
+        {/* Sidebar — financial projection */}
         <div className="space-y-6">
-          <Card className="border-border bg-card overflow-hidden rounded-xl shadow-md flex flex-col h-fit">
-            <div className="bg-muted/30 border-b border-border p-6">
-              <div className="text-lg font-bold flex items-center gap-2">
-                <span className="inline-flex w-9 h-9 items-center justify-center rounded-lg bg-teal-500/10 text-teal-600 ring-1 ring-teal-500/20">
-                  <Receipt className="w-4 h-4" />
-                </span>
-                <span className="text-foreground/90">Financial Projection</span>
-              </div>
-            </div>
-            <div className="p-6 space-y-4">
-              <div className="flex justify-between items-center text-sm border-b border-border/60 pb-3">
-                <span className="text-muted-foreground font-medium">Base Price</span>
-                <span className="font-bold text-foreground/85">
-                  {formatMoney(basePrice, "৳")}
-                </span>
-              </div>
-              {template.pricing?.discount !== undefined && template.pricing.discount > 0 && (
-                <div className="flex justify-between items-center text-sm border-b border-border/60 pb-3">
-                  <span className="text-orange-500 font-medium">Discount ({template.pricing.discount}%)</span>
-                  <span className="font-bold text-orange-500">
-                    - {formatMoney(discountAmount, "৳")}
-                  </span>
+          <Card className="overflow-hidden">
+            <CardHeader className="border-b bg-muted/20">
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Receipt className="h-4 w-4 text-primary" />
+                Financial Projection
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-6 space-y-3 text-sm">
+              {isWebDev && (
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Base Price</span>
+                  <span className="font-semibold">{money(basePrice)}</span>
                 </div>
               )}
-              {template.additionalServices && template.additionalServices.length > 0 && (
-                <div className="space-y-2 border-b border-border/60 pb-3">
-                  <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground block">
-                    Additional Options Added
+              {servicesTotal > 0 && (
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">
+                    {isWebDev ? "Add-ons" : "Line items"}
                   </span>
-                  {template.additionalServices.map((s: any, idx: number) => (
-                    <div key={idx} className="flex justify-between items-center text-sm">
-                      <span className="text-foreground/80 font-medium">{s.label}</span>
-                      <span className="font-semibold text-foreground/85">
-                        {formatMoney(s.price || 0, "৳")}
-                      </span>
-                    </div>
-                  ))}
+                  <span className="font-semibold">{money(servicesTotal)}</span>
                 </div>
               )}
+              {template.pricing?.discount ? (
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">
+                    Discount ({template.pricing.discount}%)
+                  </span>
+                  <span className="font-semibold text-destructive">
+                    − {money(discountAmount)}
+                  </span>
+                </div>
+              ) : null}
 
-              <div className="pt-2">
-                <span className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-muted-foreground">
+              <Separator />
+
+              <div className="rounded-xl border border-primary/20 bg-primary/5 p-4">
+                <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
                   Grand Template Value
                 </span>
-                <div className="text-3xl font-extrabold tracking-tight text-teal-600 mt-1">
-                  {formatMoney(grandTotal, "৳")}
+                <div className="text-3xl font-black tracking-tight text-primary mt-1">
+                  {money(grandTotal)}
                 </div>
               </div>
-            </div>
+            </CardContent>
           </Card>
         </div>
       </div>
