@@ -34,8 +34,18 @@ export default function TemplateDetailsPage() {
   }
 
   const basePrice = template.pricing?.basePrice || 0;
-  const discountAmount = (basePrice * (template.pricing?.discount || 0)) / 100;
-  const grandTotal = basePrice - discountAmount + (template.additionalServices?.reduce((a: number, s: any) => a + (s.price || 0), 0) || 0);
+  const servicesTotal =
+    template.additionalServices?.reduce((a: number, s: any) => a + (s.price || 0), 0) || 0;
+  // Category-aware (Option B). web-development path is UNCHANGED (discount on
+  // basePrice only, services added after, no tax). Other categories are driven
+  // by their line items (services), with discount applied to the services total.
+  const isWebDev = (template.category ?? "web-development") === "web-development";
+  const discountAmount = isWebDev
+    ? (basePrice * (template.pricing?.discount || 0)) / 100
+    : (servicesTotal * (template.pricing?.discount || 0)) / 100;
+  const grandTotal = isWebDev
+    ? basePrice - discountAmount + servicesTotal
+    : servicesTotal - discountAmount;
 
   return (
     <div className="w-full space-y-8 bg-background/40 min-h-screen">

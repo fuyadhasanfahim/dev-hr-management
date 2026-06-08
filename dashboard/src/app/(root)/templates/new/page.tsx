@@ -12,6 +12,7 @@ export default function NewTemplatePage() {
 
   const [data, setData] = useState<TemplateData>({
     name: "",
+    category: "web-development",
     overview: "",
     phases: [],
     techStack: {

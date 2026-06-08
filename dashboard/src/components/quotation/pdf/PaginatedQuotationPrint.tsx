@@ -32,11 +32,21 @@ const PRICING_GRADIENT: React.CSSProperties = {
   background: "linear-gradient(90deg, #A855F7, #4F46E5)",
 };
 
+const CATEGORY_LABELS: Record<string, string> = {
+  "web-development": "Web Design & Development",
+  "photo-editing": "Photo Editing",
+  marketing: "Marketing",
+  "video-editing": "Video Editing",
+};
+
+function isWebDevCategory(data: QuotationData): boolean {
+  return (data.category ?? "web-development") === "web-development";
+}
+
 function buildServiceLineItems(data: QuotationData): ServiceLineItem[] {
-  const baseTitle =
-    data.serviceType === "web-development"
-      ? "Web Design & Development"
-      : "Service";
+  const cat = String(data.category ?? "web-development");
+  const isWebDev = cat === "web-development";
+  const baseTitle = CATEGORY_LABELS[cat] || "Service";
   const phases = data.phases || [];
   const additionalServices = data.additionalServices || [];
   const pricing = data.pricing ?? { basePrice: 0, taxRate: 0, discount: 0 };
@@ -58,16 +68,20 @@ function buildServiceLineItems(data: QuotationData): ServiceLineItem[] {
     total: s.price ?? 0,
   }));
 
-  return [
-    {
-      name: details.title ? `${baseTitle} — ${details.title}` : baseTitle,
-      qty: 1,
-      rate: pricing.basePrice ?? 0,
-      total: pricing.basePrice ?? 0,
-    },
-    ...phaseRows,
-    ...addOnRows,
-  ];
+  // web-development leads with a base-price row (unchanged). Other categories
+  // are driven by their line items, so the empty base row is omitted.
+  const baseRows: ServiceLineItem[] = isWebDev
+    ? [
+        {
+          name: details.title ? `${baseTitle} — ${details.title}` : baseTitle,
+          qty: 1,
+          rate: pricing.basePrice ?? 0,
+          total: pricing.basePrice ?? 0,
+        },
+      ]
+    : [];
+
+  return [...baseRows, ...phaseRows, ...addOnRows];
 }
 
 function clientPayLink(data: QuotationData): string | null {
@@ -168,7 +182,9 @@ function buildUnitDefs(data: QuotationData): UnitDef[] {
         </div>
         <div className="mt-2 flex flex-wrap gap-2">
           <span className="rounded border bg-slate-50 px-2 py-0.5 text-[9.5px] font-bold uppercase text-slate-500">
-            {data.serviceType === "web-development" ? "WEB" : "SERVICE"}
+            {isWebDevCategory(data)
+              ? "WEB"
+              : CATEGORY_LABELS[String(data.category ?? "web-development")] || "SERVICE"}
           </span>
         </div>
       </div>

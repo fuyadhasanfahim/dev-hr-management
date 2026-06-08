@@ -19,6 +19,7 @@ export default function EditTemplatePage() {
 
   const [data, setData] = useState<TemplateData>({
     name: "",
+    category: "web-development",
     overview: "",
     phases: [],
     techStack: {
@@ -40,6 +41,7 @@ export default function EditTemplatePage() {
     if (fetchedTemplate) {
       setData({
         name: fetchedTemplate.name || "",
+        category: fetchedTemplate.category || "web-development",
         overview: fetchedTemplate.overview || "",
         phases: fetchedTemplate.phases || [],
         techStack: {

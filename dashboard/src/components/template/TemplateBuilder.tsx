@@ -38,7 +38,9 @@ import {
   IQuotationPhase,
   IAdditionalService,
   IPaymentMilestone,
+  QuotationCategory,
 } from "@/types/quotation.type";
+import { CATEGORY_OPTIONS, getCategorySections } from "@/constants/quotation-templates";
 
 const FRONTEND_OPTIONS = ["Next.js", "React", "Vue", "Angular"];
 const BACKEND_OPTIONS = ["Node.js", "NestJS", "Laravel", "Django"];
@@ -46,6 +48,7 @@ const DB_OPTIONS = ["MongoDB", "PostgreSQL", "MySQL", "Firebase"];
 
 export interface TemplateData {
   name: string;
+  category: QuotationCategory;
   overview: string;
   phases: IQuotationPhase[];
   techStack: {
@@ -80,12 +83,32 @@ export default function TemplateBuilder({
     onChange({ ...data, ...updates });
   };
 
+  // ── Category-aware section visibility ──
+  // Driven entirely by CATEGORY_CONFIG. Switching category only changes which
+  // sections render — it never wipes data already entered in shared sections.
+  const sections = getCategorySections(data.category);
+  const has = (section: string) => sections.includes(section as never);
+  // Additional Services is shown for service-based categories ("services") and
+  // also wherever "pricing" is present, so web-development keeps it exactly as before.
+  const showServices = has("services") || has("pricing");
+  const showOptional = has("techStack") || has("milestones") || has("workflow");
+  const isWebDev = (data.category ?? "web-development") === "web-development";
+  // Non-web-dev categories use additionalServices as the primary line-item list.
+  const servicesSectionTitle = isWebDev ? "Additional Services" : "Packages / Line Items";
+  const servicesSectionDesc = isWebDev
+    ? "Add individual items like hosting, domains, SSL, or manual tasks."
+    : "Define each package or line item with a title, price, and optional billing cycle.";
+
   const computedTotals = useMemo(() => {
-    const subtotal = data.pricing.basePrice + data.additionalServices.reduce((acc, s) => acc + s.price, 0);
+    const servicesTotal = data.additionalServices.reduce((acc, s) => acc + s.price, 0);
+    // Category-aware (Option B): web-development = basePrice + services (UNCHANGED);
+    // other categories = services only. No tax at the template layer (as before).
+    const isWebDev = (data.category ?? "web-development") === "web-development";
+    const subtotal = isWebDev ? data.pricing.basePrice + servicesTotal : servicesTotal;
     const discountAmount = (subtotal * data.pricing.discount) / 100;
     const grandTotal = subtotal - discountAmount;
     return { subtotal, discountAmount, grandTotal };
-  }, [data.pricing, data.additionalServices]);
+  }, [data.pricing, data.additionalServices, data.category]);
 
   // Phase operations
   const addPhase = () => {
@@ -213,29 +236,50 @@ export default function TemplateBuilder({
                 description="General name and high-level description for this reusable template"
               />
               <div className="space-y-4">
-                <div className="space-y-1">
-                  <FieldLabel>Template Name</FieldLabel>
-                  <TextInput
-                    value={data.name}
-                    onChange={(e) => updateData({ name: e.target.value })}
-                    placeholder="e.g. E-Commerce Development Package"
-                    className="focus:ring-teal-500 focus:border-teal-500"
-                  />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <FieldLabel>Template Name</FieldLabel>
+                    <TextInput
+                      value={data.name}
+                      onChange={(e) => updateData({ name: e.target.value })}
+                      placeholder="e.g. E-Commerce Development Package"
+                      className="focus:ring-teal-500 focus:border-teal-500"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <FieldLabel>Category</FieldLabel>
+                    <SelectInput
+                      value={data.category}
+                      onChange={(e) =>
+                        updateData({ category: e.target.value as QuotationCategory })
+                      }
+                      className="focus:ring-teal-500 focus:border-teal-500"
+                    >
+                      {CATEGORY_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </SelectInput>
+                  </div>
                 </div>
-                <div className="space-y-1">
-                  <FieldLabel>Scope Overview</FieldLabel>
-                  <TextArea
-                    value={data.overview || ""}
-                    onChange={(e) => updateData({ overview: e.target.value })}
-                    placeholder="Project overview and primary objectives…"
-                    className="min-h-[80px] focus:ring-teal-500 focus:border-teal-500"
-                  />
-                </div>
+                {has("overview") && (
+                  <div className="space-y-1">
+                    <FieldLabel>Scope Overview</FieldLabel>
+                    <TextArea
+                      value={data.overview || ""}
+                      onChange={(e) => updateData({ overview: e.target.value })}
+                      placeholder="Project overview and primary objectives…"
+                      className="min-h-[80px] focus:ring-teal-500 focus:border-teal-500"
+                    />
+                  </div>
+                )}
               </div>
             </div>
           </Card>
 
           {/* Project Phases Section */}
+          {has("phases") && (
           <div className="overflow-hidden rounded-xl border border-border bg-card">
             <div className="flex flex-row items-start justify-between gap-4 border-b border-border bg-muted/30 p-6">
               <div className="flex-1 min-w-0">
@@ -389,14 +433,17 @@ export default function TemplateBuilder({
             </div>
           </div>
 
+          )}
+
           {/* Additional Services */}
+          {showServices && (
           <div className="overflow-hidden rounded-xl border border-border bg-card">
             <div className="flex flex-row items-start justify-between gap-4 border-b border-border bg-muted/30 p-6">
               <div className="flex-1 min-w-0">
                 <SectionHeader
-                  title="Additional Services"
+                  title={servicesSectionTitle}
                   icon={<Briefcase className="w-5 h-5 text-teal-600" />}
-                  description="Add individual items like hosting, domains, SSL, or manual tasks."
+                  description={servicesSectionDesc}
                 />
               </div>
               <PrimaryButton
@@ -470,8 +517,10 @@ export default function TemplateBuilder({
               )}
             </div>
           </div>
+          )}
 
           {/* Optional sections */}
+          {showOptional && (
           <div className="overflow-hidden rounded-xl border border-border bg-card">
             <div className="border-b border-border bg-muted/30 p-6">
               <SectionHeader
@@ -481,6 +530,8 @@ export default function TemplateBuilder({
               />
             </div>
             <div className="p-6 space-y-4">
+              {has("techStack") && (
+              <>
               {/* Technical Blueprint */}
               <details className="group border border-border/60 rounded-xl bg-muted/10 px-4 py-3">
                 <summary className="flex cursor-pointer list-none items-center gap-2 py-2 [&::-webkit-details-marker]:hidden">
@@ -613,8 +664,11 @@ export default function TemplateBuilder({
                   </div>
                 </div>
               </details>
+              </>
+              )}
 
               {/* Payment Milestones */}
+              {has("milestones") && (
               <details className="group border border-border/60 rounded-xl bg-muted/10 px-4 py-3">
                 <summary className="flex cursor-pointer list-none items-center gap-2 py-2 [&::-webkit-details-marker]:hidden">
                   <HandCoins className="w-4 h-4 text-teal-600" />
@@ -721,8 +775,10 @@ export default function TemplateBuilder({
                   </div>
                 </div>
               </details>
+              )}
 
               {/* Workflow Steps */}
+              {has("workflow") && (
               <details className="group border border-border/60 rounded-xl bg-muted/10 px-4 py-3">
                 <summary className="flex cursor-pointer list-none items-center gap-2 py-2 [&::-webkit-details-marker]:hidden">
                   <Activity className="w-4 h-4 text-teal-600" />
@@ -773,11 +829,14 @@ export default function TemplateBuilder({
                   />
                 </div>
               </details>
+              )}
             </div>
           </div>
+          )}
         </div>
 
         {/* Sidebar: Cost Calculations */}
+        {has("pricing") && (
         <div className="space-y-6">
           <div className="border border-border overflow-hidden rounded-xl bg-card shadow-sm flex flex-col">
             <div className="bg-muted/30 border-b border-border p-6">
@@ -790,6 +849,7 @@ export default function TemplateBuilder({
             </div>
             <div className="p-6 space-y-5">
               <div className="grid grid-cols-1 gap-4">
+                {isWebDev && (
                 <div className="space-y-1">
                   <FieldLabel>Base Projection (Base Price)</FieldLabel>
                   <TextInput
@@ -803,6 +863,7 @@ export default function TemplateBuilder({
                     className="h-10 text-sm focus:ring-teal-500 bg-background font-medium"
                   />
                 </div>
+                )}
                 <div className="space-y-1">
                   <FieldLabel>Standard Discount (%)</FieldLabel>
                   <TextInput
@@ -935,6 +996,7 @@ export default function TemplateBuilder({
             </div>
           </div>
         </div>
+        )}
       </div>
     </div>
   );

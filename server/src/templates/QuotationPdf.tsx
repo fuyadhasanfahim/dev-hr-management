@@ -362,6 +362,8 @@ export function QuotationPdf({
 
     const pricing = quotation?.pricing || {};
     const basePrice = Number(pricing.basePrice || 0);
+    // web-development shows the base-price row; other categories are line-item driven.
+    const isWebDev = (quotation?.category ?? 'web-development') === 'web-development';
     const additionalServicesTotal = additionalServices.reduce(
         (s, x) => s + Number(x.price || 0),
         0,
@@ -541,12 +543,14 @@ export function QuotationPdf({
                             </Text>
                         </View>
                         <View style={styles.pricingBody}>
-                            <View style={styles.pricingRow}>
-                                <Text style={styles.pricingLabel}>Base price</Text>
-                                <Text style={styles.pricingValue}>
-                                    {fmtMoney(basePrice, currency)}
-                                </Text>
-                            </View>
+                            {isWebDev ? (
+                                <View style={styles.pricingRow}>
+                                    <Text style={styles.pricingLabel}>Base price</Text>
+                                    <Text style={styles.pricingValue}>
+                                        {fmtMoney(basePrice, currency)}
+                                    </Text>
+                                </View>
+                            ) : null}
 
                             {additionalServices.length
                                 ? additionalServices.map((s, i) => (

@@ -33,6 +33,8 @@ import {
 import { useRouter } from 'next/navigation';
 import { format } from 'date-fns';
 import { formatMoney } from '@/lib/money';
+import { QuotationCategory } from '@/types/quotation.type';
+import { CATEGORY_OPTIONS, getCategorySections } from '@/constants/quotation-templates';
 import { QuotationEmailDialog } from '../QuotationEmailDialog';
 import { Calendar } from '@/components/ui/calendar';
 import {
@@ -318,6 +320,25 @@ export default function QuotationBuilder({
         updateWorkflow(steps);
     };
 
+    // ── Category-aware section visibility ──
+    // Reads the same CATEGORY_CONFIG source as TemplateBuilder. Changing the
+    // category only toggles visibility; entered data (overview, pricing, …) is kept.
+    const sections = getCategorySections(data.category);
+    const has = (section: string) => sections.includes(section as never);
+    const showServices = has('services') || has('pricing');
+    const showOptional = has('techStack') || has('milestones') || has('workflow');
+    const isWebDev = (data.category ?? 'web-development') === 'web-development';
+    // Non-web-dev categories use additionalServices as the primary line-item list.
+    const servicesSectionTitle = isWebDev
+        ? 'Additional Services'
+        : 'Packages / Line Items';
+    const servicesSectionDesc = isWebDev
+        ? 'Add standalone items like hosting, domains, SSL, or manual tasks.'
+        : 'Define each package or line item with a title, price, and optional billing cycle.';
+
+    const updateCategory = (category: QuotationCategory) =>
+        useQuotationStore.setState((s) => ({ data: { ...s.data, category } }));
+
     const { data: clientsData, isLoading: clientsLoading } = useGetClientsQuery(
         {},
     );
@@ -348,6 +369,9 @@ export default function QuotationBuilder({
     };
 
     // ── Pricing Logic ──
+    // Mirrors the authoritative server calculateTotals() so the preview matches
+    // what gets persisted. Category-aware (Option B): web-development uses
+    // basePrice + services (unchanged); other categories use services only.
     const computedTotals = useMemo(() => {
         const basePrice = data.pricing.basePrice || 0;
         const additionalServicesTotal = data.additionalServices.reduce(
@@ -355,7 +379,11 @@ export default function QuotationBuilder({
             0,
         );
 
-        const subtotalBeforeDiscount = basePrice + additionalServicesTotal;
+        const isWebDev =
+            (data.category ?? 'web-development') === 'web-development';
+        const subtotalBeforeDiscount = isWebDev
+            ? basePrice + additionalServicesTotal
+            : additionalServicesTotal;
         const discountAmount =
             (subtotalBeforeDiscount * (data.pricing.discount || 0)) / 100;
         const subtotal = subtotalBeforeDiscount - discountAmount;
@@ -364,7 +392,7 @@ export default function QuotationBuilder({
         const grandTotal = subtotal + taxAmount;
 
         return { subtotal, taxAmount, grandTotal };
-    }, [data.pricing, data.additionalServices]);
+    }, [data.pricing, data.additionalServices, data.category]);
 
     useEffect(() => {
         useQuotationStore.setState((state) => ({
@@ -583,6 +611,23 @@ export default function QuotationBuilder({
                                         </SelectContent>
                                     </ShadcnSelect>
                                 </div>
+                                <div className="space-y-2 md:col-span-2">
+                                    <FieldLabel>Category</FieldLabel>
+                                    <SelectInput
+                                        value={data.category}
+                                        onChange={(e) =>
+                                            updateCategory(
+                                                e.target.value as QuotationCategory,
+                                            )
+                                        }
+                                    >
+                                        {CATEGORY_OPTIONS.map((opt) => (
+                                            <option key={opt.value} value={opt.value}>
+                                                {opt.label}
+                                            </option>
+                                        ))}
+                                    </SelectInput>
+                                </div>
                                 <div className="space-y-2">
                                     <FieldLabel>Proposal Name</FieldLabel>
                                     <TextInput
@@ -756,6 +801,7 @@ export default function QuotationBuilder({
                                 </div>
                             </div>
 
+                            {has('overview') && (
                             <div className="space-y-2">
                                 <FieldLabel>Project Overview</FieldLabel>
                                 <TextArea
@@ -772,6 +818,7 @@ export default function QuotationBuilder({
                                     className="min-h-[90px]"
                                 />
                             </div>
+                            )}
 
                             <div className="space-y-2">
                                 <FieldLabel>Address</FieldLabel>
@@ -790,6 +837,7 @@ export default function QuotationBuilder({
                     </div>
 
                     {/* Phases */}
+                    {has('phases') && (
                     <div className="overflow-hidden rounded-xl border bg-card">
                         <div className="flex flex-row items-start justify-between gap-4 border-b bg-muted/20 p-6">
                             <div className="flex-1 min-w-0">
@@ -1061,14 +1109,17 @@ export default function QuotationBuilder({
                         </div>
                     </div>
 
+                    )}
+
                     {/* Additional Services */}
+                    {showServices && (
                     <div className="overflow-hidden rounded-xl border bg-card">
                         <div className="flex flex-row items-start justify-between gap-4 border-b bg-muted/20 p-6">
                             <div className="flex-1 min-w-0">
                                 <SectionHeader
-                                    title="Additional Services"
+                                    title={servicesSectionTitle}
                                     icon={<Briefcase className="w-5 h-5" />}
-                                    description="Add standalone items like hosting, domains, SSL, or manual tasks."
+                                    description={servicesSectionDesc}
                                 />
                             </div>
                             <PrimaryButton
@@ -1220,7 +1271,10 @@ export default function QuotationBuilder({
                         </div>
                     </div>
 
+                    )}
+
                     {/* Optional sections */}
+                    {showOptional && (
                     <div className="overflow-hidden rounded-xl border bg-card">
                         <div className="border-b bg-muted/20 p-6">
                             <SectionHeader
@@ -1230,6 +1284,8 @@ export default function QuotationBuilder({
                             />
                         </div>
                         <div className="p-6 space-y-3">
+                            {has('techStack') && (
+                            <>
                             <details className="group border rounded-xl bg-card px-4 py-3">
                                 <summary className="flex cursor-pointer list-none items-center gap-2 py-2 [&::-webkit-details-marker]:hidden">
                                     <Cpu className="w-4 h-4 text-muted-foreground" />
@@ -1445,7 +1501,10 @@ export default function QuotationBuilder({
                                     </div>
                                 </div>
                             </details>
+                            </>
+                            )}
 
+                            {has('milestones') && (
                             <details className="group border rounded-xl bg-card px-4 py-3">
                                 <summary className="flex cursor-pointer list-none items-center gap-2 py-2 [&::-webkit-details-marker]:hidden">
                                     <HandCoins className="w-4 h-4 text-muted-foreground" />
@@ -1608,7 +1667,9 @@ export default function QuotationBuilder({
                                     </div>
                                 </div>
                             </details>
+                            )}
 
+                            {has('workflow') && (
                             <details className="group border rounded-xl bg-card px-4 py-3">
                                 <summary className="flex cursor-pointer list-none items-center gap-2 py-2 [&::-webkit-details-marker]:hidden">
                                     <Activity className="w-4 h-4 text-muted-foreground" />
@@ -1673,11 +1734,14 @@ export default function QuotationBuilder({
                                     />
                                 </div>
                             </details>
+                            )}
                         </div>
                     </div>
+                    )}
                 </div>
 
                 {/* Sidebar: Financials */}
+                {has('pricing') && (
                 <div className="space-y-6">
                     <div className="border overflow-hidden rounded-xl bg-card">
                         <div className="bg-muted/20 border-b p-6">
@@ -1690,6 +1754,7 @@ export default function QuotationBuilder({
                         </div>
                         <div className="p-6 space-y-6">
                             <div className="space-y-4">
+                                {isWebDev && (
                                 <div className="space-y-2">
                                     <FieldLabel className="tracking-widest">
                                         Base Investment
@@ -1714,6 +1779,7 @@ export default function QuotationBuilder({
                                         className="font-semibold text-lg h-11"
                                     />
                                 </div>
+                                )}
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="space-y-2">
                                         <label className="text-[10px] font-bold uppercase text-muted-foreground">
@@ -1876,6 +1942,7 @@ export default function QuotationBuilder({
                         </div>
                     </div>
                 </div>
+                )}
             </div>
 
             <QuotationEmailDialog

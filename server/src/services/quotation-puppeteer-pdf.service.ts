@@ -143,10 +143,17 @@ function buildPrintHtml(
         ? format(new Date(details.validUntil), 'PPP')
         : '—';
 
-    const baseTitle =
-        q.serviceType === 'web-development'
-            ? 'Web Design & Development'
-            : 'Service';
+    // Category-aware labels. Existing web-development quotes (category absent or
+    // 'web-development') keep the exact prior label/badge/base-row behaviour.
+    const CATEGORY_LABELS: Record<string, string> = {
+        'web-development': 'Web Design & Development',
+        'photo-editing': 'Photo Editing',
+        marketing: 'Marketing',
+        'video-editing': 'Video Editing',
+    };
+    const cat = String(q.category ?? 'web-development');
+    const isWebDev = cat === 'web-development';
+    const baseTitle = CATEGORY_LABELS[cat] || 'Service';
 
     const phaseRows: LineItem[] = phases.map((p: any, idx: number) => ({
         name: `Phase ${idx + 1}: ${p.title}${p.items?.length ? ` (${p.items.length} deliverables)` : ''}`,
@@ -163,18 +170,22 @@ function buildPrintHtml(
         total: s.price ?? 0,
     }));
 
-    const items: LineItem[] = [
-        {
-            name: details?.title
-                ? `${baseTitle} — ${details.title}`
-                : baseTitle,
-            qty: 1,
-            rate: pricing?.basePrice ?? 0,
-            total: pricing?.basePrice ?? 0,
-        },
-        ...phaseRows,
-        ...addOnRows,
-    ];
+    // web-development leads with a base-price row (unchanged). Other categories
+    // are driven purely by their line items, so the empty base row is omitted.
+    const baseRows: LineItem[] = isWebDev
+        ? [
+              {
+                  name: details?.title
+                      ? `${baseTitle} — ${details.title}`
+                      : baseTitle,
+                  qty: 1,
+                  rate: pricing?.basePrice ?? 0,
+                  total: pricing?.basePrice ?? 0,
+              },
+          ]
+        : [];
+
+    const items: LineItem[] = [...baseRows, ...phaseRows, ...addOnRows];
 
     const techTags = compactList([
         techStack?.frontend,
@@ -213,8 +224,7 @@ function buildPrintHtml(
 
     const firstMilestone = milestones[0];
 
-    const serviceBadge =
-        q.serviceType === 'web-development' ? 'WEB' : 'SERVICE';
+    const serviceBadge = isWebDev ? 'WEB' : baseTitle.toUpperCase();
     const statusUpper = q.status
         ? String(q.status).replace(/_/g, ' ').toUpperCase()
         : '';

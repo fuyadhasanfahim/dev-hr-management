@@ -51,7 +51,15 @@ function calculateTotals(data: Partial<IQuotation>) {
     const discountRate = data.pricing?.discount || 0;
     const taxRate = data.pricing?.taxRate || 0;
 
-    const subtotalBeforeDiscount = basePrice + additionalServicesTotal;
+    // Category-aware subtotal.
+    // - web-development: basePrice + additionalServices (UNCHANGED — byte-identical to before).
+    // - other categories: driven purely by additionalServices line items; basePrice
+    //   is treated as 0 (ignored even if present).
+    const isWebDev = (data.category ?? 'web-development') === 'web-development';
+    const subtotalBeforeDiscount = isWebDev
+        ? basePrice + additionalServicesTotal
+        : additionalServicesTotal;
+
     const discountAmount = (subtotalBeforeDiscount * discountRate) / 100;
     const subtotal = subtotalBeforeDiscount - discountAmount;
     const taxAmount = (subtotal * taxRate) / 100;

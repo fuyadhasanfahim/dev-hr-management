@@ -96,10 +96,15 @@ export const QuotationPDF = ({ data }: QuotationPDFProps) => {
         ? format(new Date(details.date), 'PPP')
         : format(new Date(), 'PPP');
 
-    const baseTitle =
-        data.serviceType === 'web-development'
-            ? 'Web Design & Development'
-            : 'Service';
+    const CATEGORY_LABELS: Record<string, string> = {
+        'web-development': 'Web Design & Development',
+        'photo-editing': 'Photo Editing',
+        marketing: 'Marketing',
+        'video-editing': 'Video Editing',
+    };
+    const cat = String(data.category ?? 'web-development');
+    const isWebDev = cat === 'web-development';
+    const baseTitle = CATEGORY_LABELS[cat] || 'Service';
 
     // ── Build line items ──────────────────────────────────────────────────────
     const phaseRows: LineItem[] = (phases || []).map((p, idx) => ({
@@ -118,18 +123,22 @@ export const QuotationPDF = ({ data }: QuotationPDFProps) => {
         total: s.price ?? 0,
     }));
 
-    const items: LineItem[] = [
-        {
-            name: details?.title
-                ? `${baseTitle} — ${details.title}`
-                : baseTitle,
-            qty: 1,
-            rate: pricing?.basePrice ?? 0,
-            total: pricing?.basePrice ?? 0,
-        },
-        ...phaseRows,
-        ...addOnRows,
-    ];
+    // web-development leads with a base-price row (unchanged). Other categories
+    // are driven by their line items, so the empty base row is omitted.
+    const baseRows: LineItem[] = isWebDev
+        ? [
+              {
+                  name: details?.title
+                      ? `${baseTitle} — ${details.title}`
+                      : baseTitle,
+                  qty: 1,
+                  rate: pricing?.basePrice ?? 0,
+                  total: pricing?.basePrice ?? 0,
+              },
+          ]
+        : [];
+
+    const items: LineItem[] = [...baseRows, ...phaseRows, ...addOnRows];
 
     const techTags = compactList([
         techStack?.frontend,
@@ -272,9 +281,7 @@ export const QuotationPDF = ({ data }: QuotationPDFProps) => {
                     <View style={styles.badgeRow}>
                         <View style={styles.badge}>
                             <Text style={styles.badgeText}>
-                                {data.serviceType === 'web-development'
-                                    ? 'WEB'
-                                    : 'SERVICE'}
+                                {isWebDev ? 'WEB' : baseTitle.toUpperCase()}
                             </Text>
                         </View>
                         {client.companyName ? (
