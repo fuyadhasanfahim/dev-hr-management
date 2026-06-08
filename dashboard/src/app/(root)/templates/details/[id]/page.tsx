@@ -71,7 +71,10 @@ export default function TemplateDetailsPage() {
     );
   }
 
-  // ── Pricing (UNCHANGED logic — presentation only) ──────────────────────────
+  // ── Pricing (template-preview DISPLAY only) ────────────────────────────────
+  // Harmonized with the canonical calculateTotals (quotation.service.ts) and with
+  // TemplateBuilder's computedTotals: discount applies to the full category-aware
+  // subtotal. No tax at the template layer. Does NOT affect any persisted totals.
   const basePrice = template.pricing?.basePrice || 0;
   const servicesTotal =
     template.additionalServices?.reduce(
@@ -79,12 +82,9 @@ export default function TemplateDetailsPage() {
       0,
     ) || 0;
   const isWebDev = (template.category ?? "web-development") === "web-development";
-  const discountAmount = isWebDev
-    ? (basePrice * (template.pricing?.discount || 0)) / 100
-    : (servicesTotal * (template.pricing?.discount || 0)) / 100;
-  const grandTotal = isWebDev
-    ? basePrice - discountAmount + servicesTotal
-    : servicesTotal - discountAmount;
+  const subtotal = isWebDev ? basePrice + servicesTotal : servicesTotal;
+  const discountAmount = (subtotal * (template.pricing?.discount || 0)) / 100;
+  const grandTotal = subtotal - discountAmount;
 
   // ── Category-aware presentation flags ──────────────────────────────────────
   const catConfig = getCategoryConfig(template.category);
