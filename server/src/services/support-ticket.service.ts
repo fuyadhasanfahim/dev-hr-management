@@ -104,14 +104,27 @@ export async function getTicketDetails(ticketId: string, user: { id: string; rol
         throw new AppError('Ticket not found', 404);
     }
 
-    if (user.role === 'Guest' && ticket.guestId?.toString() !== user.id) {
+    // guestId/clientId are populated above, so the field is a document, not an
+    // ObjectId — read its _id for the ownership check (falls back to the raw value
+    // when population is skipped, e.g. the referenced doc was deleted).
+    const guestOwnerId = (ticket.guestId?._id ?? ticket.guestId)?.toString();
+    const clientOwnerId = (ticket.clientId?._id ?? ticket.clientId)?.toString();
+
+    if (user.role === 'Guest' && guestOwnerId !== user.id) {
         throw new AppError('Access denied', 403);
     }
-    if (user.role === 'client' && ticket.clientId?.toString() !== user.id) {
+    if (user.role === 'client' && clientOwnerId !== user.id) {
         throw new AppError('Access denied', 403);
     }
 
-    const messages = await TicketMessageModel.find({ ticketId: ticket._id })
+    // Clients/guests must never see internal staff notes — scope them out at the
+    // query level so they never leave the server. Staff/admin keep full visibility.
+    const messageQuery: any = { ticketId: ticket._id };
+    if (user.role === 'client' || user.role === 'Guest') {
+        messageQuery.isInternalNote = { $ne: true };
+    }
+
+    const messages = await TicketMessageModel.find(messageQuery)
         .populate('senderId', 'name email')
         .sort({ createdAt: 1 });
 
