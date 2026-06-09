@@ -21,6 +21,15 @@ export function notifyNewSession(sessionId: string): void {
     supportNamespaceRef?.to('agents_presence').emit('session:created', { sessionId });
 }
 
+/**
+ * Broadcasts a ticket event (new ticket / new client reply) to all online agents
+ * so the support console can alert and refresh its ticket views in real time —
+ * the REST ticket endpoints have no socket of their own.
+ */
+export function notifyAgents(event: string, payload: Record<string, unknown>): void {
+    supportNamespaceRef?.to('agents_presence').emit(event, payload);
+}
+
 export function registerSupportNamespace(io: Server) {
     const supportNamespace = io.of('/support');
     supportNamespaceRef = supportNamespace;

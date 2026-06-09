@@ -4,7 +4,8 @@ import consultationService from '../services/consultation.service.js';
 import liveChatService from '../services/live-chat.service.js';
 import supportTicketService from '../services/support-ticket.service.js';
 import aiConversationService from '../services/ai-conversation.service.js';
-import { notifyNewSession } from '../socket/support.namespace.js';
+import guestAuthService from '../services/guest-auth.service.js';
+import { notifyNewSession, notifyAgents } from '../socket/support.namespace.js';
 import { logger } from '../lib/logger.js';
 
 async function chat(req: Request, res: Response) {
@@ -87,7 +88,7 @@ async function chat(req: Request, res: Response) {
 
 async function createTicketFromAI(req: Request, res: Response) {
     try {
-        const { subject, description, chatHistory, category } = req.body;
+        const { subject, description, chatHistory, category, name, email } = req.body;
 
         if (!subject || !description) {
             return res.status(400).json({ success: false, message: 'Subject and description are required' });
@@ -122,13 +123,28 @@ async function createTicketFromAI(req: Request, res: Response) {
             source: 'ai_chat',
         };
 
+        // Identity: a verified session/guest wins; otherwise an unverified visitor
+        // must supply name + email, which we attach to a (created-if-needed) guest.
         if (req.user?.role === 'Guest') {
             ticketArgs.guestId = req.user.id;
         } else if (req.user?.id) {
             ticketArgs.clientId = req.user.id;
+        } else if (email && name) {
+            const guest = await guestAuthService.getOrCreateGuest(email, name);
+            ticketArgs.guestId = guest._id.toString();
+        } else {
+            return res.status(400).json({ success: false, message: 'Please provide your name and email to create a ticket.' });
         }
 
         const result = await supportTicketService.createTicket(ticketArgs);
+
+        // Alert the support console (REST ticket creation has no socket of its own).
+        notifyAgents('ticket:created', {
+            ticketId: (result as any)?._id?.toString?.() ?? '',
+            ticketRef: (result as any)?.ticketId ?? '',
+            subject: (result as any)?.subject ?? subject ?? '',
+        });
+
         return res.status(201).json({ success: true, data: result });
     } catch (err: any) {
         logger.error(`AI ticket creation error: ${err.message}`);

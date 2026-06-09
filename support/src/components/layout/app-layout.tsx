@@ -43,6 +43,7 @@ import { useGetQueuedSessionsQuery } from '@/store/api/chatApi';
 import { baseApi } from '@/store/api/baseApi';
 import { connectSocket, disconnectSocket } from '@/lib/socket';
 import { NotificationDropdown } from '@/components/layout/notification-dropdown';
+import { useNotificationSound } from '@/hooks/use-notification-sound';
 import type { AppDispatch } from '@/store';
 import type { Socket } from 'socket.io-client';
 
@@ -71,7 +72,7 @@ const NAV_GROUPS: NavGroup[] = [
     {
         label: 'SUPPORT',
         items: [
-            { label: 'Tickets', href: '/tickets', icon: Ticket, badgeVariant: 'secondary' },
+            { label: 'Tickets', href: '/tickets', icon: Ticket, badgeVariant: 'destructive' },
             { label: 'Clients', href: '/clients', icon: Users },
         ],
     },
@@ -101,12 +102,14 @@ function getPageTitle(pathname: string): string {
 interface NavContentProps {
     pathname: string;
     liveChatCount: number;
+    ticketCount: number;
     onNavigate?: () => void;
 }
 
-function NavContent({ pathname, liveChatCount, onNavigate }: NavContentProps) {
+function NavContent({ pathname, liveChatCount, ticketCount, onNavigate }: NavContentProps) {
     const dynamicBadge: Record<string, number> = {
         '/live-chat': liveChatCount,
+        '/tickets': ticketCount,
     };
 
     return (
@@ -194,6 +197,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     const [mobileOpen, setMobileOpen] = useState(false);
     const [mounted, setMounted] = useState(false);
     const [signingOut, setSigningOut] = useState(false);
+    const [ticketCount, setTicketCount] = useState(0);
+    const { playSound } = useNotificationSound();
+
+    // Read the latest path inside socket handlers without re-subscribing.
+    const pathnameRef = useRef(pathname);
 
     // ── real-time data ────────────────────────────────────────────────────────
     const { data: queuedSessions = [] } = useGetQueuedSessionsQuery(undefined, {
@@ -201,6 +209,16 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     });
 
     const liveChatCount = queuedSessions.length;
+
+    // Track the current path for socket handlers, and clear the unread-ticket
+    // badge once the agent is looking at the tickets view.
+    useEffect(() => {
+        pathnameRef.current = pathname;
+        if (pathname.startsWith('/tickets')) {
+            const id = setTimeout(() => setTicketCount(0), 0);
+            return () => clearTimeout(id);
+        }
+    }, [pathname]);
 
     // ── socket: live queue updates ─────────────────────────────��──────────────
     useEffect(() => {
@@ -214,10 +232,21 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         const onSessionStateChange = () => {
             dispatch(baseApi.util.invalidateTags(['QueuedSessions', 'ActiveSessions', 'UnreadCounts']));
         };
+        // New ticket / new client reply — refresh ticket views live, and alert the
+        // agent (sound + badge) unless they're already on the tickets page.
+        const onTicketActivity = () => {
+            dispatch(baseApi.util.invalidateTags(['Tickets', 'TicketDetail', 'DashboardStats']));
+            if (!pathnameRef.current.startsWith('/tickets')) {
+                setTicketCount((c) => c + 1);
+                playSound();
+            }
+        };
 
         socket.on('connect', onConnect);
         socket.on('queue:new_message', onQueueUpdate);
         socket.on('session:state_change', onSessionStateChange);
+        socket.on('ticket:new_reply', onTicketActivity);
+        socket.on('ticket:created', onTicketActivity);
 
         if (socket.connected) onConnect();
 
@@ -225,9 +254,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             socket.off('connect', onConnect);
             socket.off('queue:new_message', onQueueUpdate);
             socket.off('session:state_change', onSessionStateChange);
+            socket.off('ticket:new_reply', onTicketActivity);
+            socket.off('ticket:created', onTicketActivity);
             disconnectSocket();
         };
-    }, [dispatch]);
+    }, [dispatch, playSound]);
 
     useEffect(() => {
         setMounted(true);
@@ -272,6 +303,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     <NavContent
                         pathname={pathname}
                         liveChatCount={liveChatCount}
+                        ticketCount={ticketCount}
                     />
                 </div>
             </aside>
@@ -283,6 +315,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     <NavContent
                         pathname={pathname}
                         liveChatCount={liveChatCount}
+                        ticketCount={ticketCount}
                         onNavigate={() => setMobileOpen(false)}
                     />
                 </SheetContent>

@@ -33,6 +33,11 @@ export interface ITicket extends Document {
     ticketId: string;
     clientId?: Types.ObjectId; // Ref: Client
     guestId?: Types.ObjectId; // Ref: Guest
+    // Snapshot of who submitted the ticket. Denormalized so the submitter's
+    // name/email always display even if the guest/client record is unpopulated
+    // or later removed.
+    visitorName?: string;
+    visitorEmail?: string;
     subject: string;
     status: TicketStatus;
     priority: TicketPriority;

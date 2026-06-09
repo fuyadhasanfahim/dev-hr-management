@@ -30,6 +30,8 @@ import {
     MessageSquare,
     Globe,
     Layers,
+    ChevronDown,
+    User as UserIcon,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -190,9 +192,47 @@ const CATEGORY_FILTERS: { value: TicketCategory | 'all'; label: string }[] = [
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
-function getTicketUser(t: Ticket): { name: string; email: string } {
-    const u = t.clientId ?? t.guestId;
-    return { name: u?.name ?? 'Unknown', email: u?.email ?? '' };
+function getTicketUser(t: Ticket): { name: string; email: string; isGuest: boolean } {
+    const client = t.clientId;
+    const guest = t.guestId;
+    const u = client ?? guest;
+    return {
+        name: u?.name?.trim() || 'Guest',
+        email: u?.email?.trim() || '',
+        isGuest: !client && !!guest,
+    };
+}
+
+// Deterministic accent per person so avatars are distinguishable at a glance.
+const AVATAR_COLORS = [
+    'bg-blue-500/15 text-blue-600 dark:text-blue-400',
+    'bg-violet-500/15 text-violet-600 dark:text-violet-400',
+    'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400',
+    'bg-amber-500/15 text-amber-600 dark:text-amber-400',
+    'bg-rose-500/15 text-rose-600 dark:text-rose-400',
+    'bg-cyan-500/15 text-cyan-600 dark:text-cyan-400',
+];
+function avatarColor(name: string): string {
+    let hash = 0;
+    for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
+    return AVATAR_COLORS[hash % AVATAR_COLORS.length];
+}
+
+// The ticket body may have an appended chat transcript (from the AI-chat flow).
+// Split it out so the customer's actual message reads cleanly and the transcript
+// can be tucked into a collapsible block.
+function splitTicketBody(text: string): { description: string; transcript: string | null } {
+    const markers = ['--- Chat Transcript ---', '--- Prior AI Chat ---'];
+    let idx = -1;
+    for (const m of markers) {
+        const i = text.indexOf(m);
+        if (i !== -1 && (idx === -1 || i < idx)) idx = i;
+    }
+    if (idx === -1) return { description: text, transcript: null };
+    return {
+        description: text.slice(0, idx).trim(),
+        transcript: text.slice(idx).trim(),
+    };
 }
 
 function formatRelative(iso: string): string {
@@ -373,6 +413,61 @@ function AttachmentChip({ url }: { url: string }) {
     );
 }
 
+function ChatTranscript({ raw }: { raw: string }) {
+    const [open, setOpen] = useState(false);
+    const lines = raw
+        .split('\n')
+        .map((l) => l.trim())
+        .filter((l) => l && !l.startsWith('---'));
+    return (
+        <div className="rounded-xl border border-border/60 bg-muted/20 overflow-hidden">
+            <button
+                onClick={() => setOpen((o) => !o)}
+                className="w-full flex items-center gap-2 px-3.5 py-2.5 text-xs font-medium text-muted-foreground hover:bg-muted/40 transition-colors"
+            >
+                <MessageSquare className="size-3.5 shrink-0" />
+                Chat transcript
+                <span className="text-[10px] text-muted-foreground/60">
+                    {lines.length} message{lines.length === 1 ? '' : 's'}
+                </span>
+                <ChevronDown
+                    className={cn(
+                        'size-3.5 ml-auto transition-transform',
+                        open && 'rotate-180',
+                    )}
+                />
+            </button>
+            {open && (
+                <div className="px-3.5 pb-3 pt-2 space-y-2 border-t border-border/40">
+                    {lines.map((line, i) => {
+                        const m = line.match(/^\[([^\]]+)\]:\s*(.*)$/);
+                        const role = m ? m[1] : '';
+                        const text = m ? m[2] : line;
+                        const isCustomer = /customer|client/i.test(role);
+                        return (
+                            <div key={i} className="text-xs leading-relaxed">
+                                {role && (
+                                    <span
+                                        className={cn(
+                                            'font-semibold mr-1.5',
+                                            isCustomer
+                                                ? 'text-foreground'
+                                                : 'text-primary',
+                                        )}
+                                    >
+                                        {role}:
+                                    </span>
+                                )}
+                                <span className="text-muted-foreground">{text}</span>
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
+        </div>
+    );
+}
+
 function MessageBubble({
     senderName,
     content,
@@ -395,7 +490,9 @@ function MessageBubble({
         >
             {!isStaff && (
                 <Avatar className="size-7 shrink-0 mb-5">
-                    <AvatarFallback className="text-[10px] bg-muted text-muted-foreground font-medium">
+                    <AvatarFallback
+                        className={cn('text-[10px] font-semibold', avatarColor(senderName))}
+                    >
                         {senderName.charAt(0).toUpperCase()}
                     </AvatarFallback>
                 </Avatar>
@@ -640,7 +737,7 @@ export default function TicketsPage() {
                     </Tabs>
                 </div>
 
-                <ScrollArea className="flex-1">
+                <ScrollArea className="flex-1 min-h-0">
                     {ticketsLoading ? (
                         Array.from({ length: 5 }).map((_, i) => (
                             <TicketSkeleton key={i} />
@@ -717,27 +814,53 @@ export default function TicketsPage() {
                                     <h2 className="text-base font-semibold truncate">
                                         {ticket.subject}
                                     </h2>
-                                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                                        <span className="flex items-center gap-1">
-                                            <Avatar className="size-4">
-                                                <AvatarFallback className="text-[8px] bg-primary/10 text-primary">
-                                                    {ticketUser?.name
-                                                        .charAt(0)
-                                                        .toUpperCase()}
-                                                </AvatarFallback>
-                                            </Avatar>
-                                            {ticketUser?.name}
-                                        </span>
-                                        {ticketUser?.email && (
-                                            <span className="flex items-center gap-1">
-                                                <Mail className="size-3" />
-                                                {ticketUser.email}
-                                            </span>
-                                        )}
-                                        <span className="flex items-center gap-1">
-                                            <Clock className="size-3" />
-                                            {formatRelative(ticket.createdAt)}
-                                        </span>
+                                    {/* Customer identity */}
+                                    <div className="flex items-center gap-2.5 pt-0.5">
+                                        <Avatar className="size-8 shrink-0">
+                                            <AvatarFallback
+                                                className={cn(
+                                                    'text-xs font-semibold',
+                                                    avatarColor(ticketUser?.name ?? 'Guest'),
+                                                )}
+                                            >
+                                                {(ticketUser?.name ?? 'G')
+                                                    .charAt(0)
+                                                    .toUpperCase()}
+                                            </AvatarFallback>
+                                        </Avatar>
+                                        <div className="min-w-0">
+                                            <div className="flex items-center gap-1.5">
+                                                <span className="text-sm font-medium text-foreground truncate">
+                                                    {ticketUser?.name ?? 'Guest'}
+                                                </span>
+                                                {ticketUser?.isGuest && (
+                                                    <span className="inline-flex items-center gap-0.5 rounded-full bg-muted px-1.5 py-0.5 text-[9px] font-medium text-muted-foreground">
+                                                        <UserIcon className="size-2.5" />
+                                                        Guest
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <div className="flex items-center gap-2.5 text-xs text-muted-foreground">
+                                                {ticketUser?.email ? (
+                                                    <a
+                                                        href={`mailto:${ticketUser.email}`}
+                                                        className="flex items-center gap-1 hover:text-foreground transition-colors truncate"
+                                                    >
+                                                        <Mail className="size-3 shrink-0" />
+                                                        {ticketUser.email}
+                                                    </a>
+                                                ) : (
+                                                    <span className="flex items-center gap-1 italic">
+                                                        <Mail className="size-3 shrink-0" />
+                                                        no email on file
+                                                    </span>
+                                                )}
+                                                <span className="flex items-center gap-1 shrink-0">
+                                                    <Clock className="size-3" />
+                                                    {formatRelative(ticket.createdAt)}
+                                                </span>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -904,16 +1027,31 @@ export default function TicketsPage() {
                         </div>
 
                         {/* Conversation thread */}
-                        <div className="flex-1 min-h-0 overflow-y-auto">
-                            <div className="px-5 py-5 space-y-4">
-                                {/* Original ticket body */}
-                                <MessageBubble
-                                    senderName={ticketUser?.name ?? 'Client'}
-                                    content={ticket.text || ticket.subject}
-                                    attachments={ticket.attachments ?? []}
-                                    createdAt={ticket.createdAt}
-                                    isStaff={false}
-                                />
+                        <div className="flex-1 min-h-0 overflow-y-auto bg-gradient-to-b from-muted/20 to-transparent">
+                            <div className="px-5 py-5 space-y-4 max-w-3xl mx-auto">
+                                {/* Original ticket body — description first, then an
+                                    optional collapsible chat transcript. */}
+                                {(() => {
+                                    const { description, transcript } = splitTicketBody(
+                                        ticket.text || ticket.subject,
+                                    );
+                                    return (
+                                        <>
+                                            <MessageBubble
+                                                senderName={ticketUser?.name ?? 'Guest'}
+                                                content={description || ticket.subject}
+                                                attachments={ticket.attachments ?? []}
+                                                createdAt={ticket.createdAt}
+                                                isStaff={false}
+                                            />
+                                            {transcript && (
+                                                <div className="pl-[38px] pr-2">
+                                                    <ChatTranscript raw={transcript} />
+                                                </div>
+                                            )}
+                                        </>
+                                    );
+                                })()}
 
                                 {ticket.replies.map((reply: TicketReply) => {
                                     const isStaff =

@@ -74,9 +74,66 @@ export async function requireUnifiedAuth(req: Request, res: Response, next: Next
     return res.status(401).json({ success: false, message: 'Authentication required. Please login or verify guest OTP.' });
 }
 
+/**
+ * Like requireUnifiedAuth, but never rejects: it attaches req.user when a valid
+ * session or guest token is present and otherwise continues anonymously. Used by
+ * endpoints (e.g. ticket creation) that also accept an explicit name/email for
+ * unverified visitors.
+ */
+export async function optionalUnifiedAuth(req: Request, res: Response, next: NextFunction) {
+    const sessionToken = req.headers.authorization?.split(' ')[1];
+    if (sessionToken && !req.headers.cookie?.includes('better-auth.session_token')) {
+        const sessionCookie = `better-auth.session_token=${sessionToken}`;
+        req.headers.cookie = req.headers.cookie
+            ? `${req.headers.cookie}; ${sessionCookie}`
+            : sessionCookie;
+    }
+
+    let authenticated = false;
+    try {
+        await requireAuth(req, res, () => {
+            if (req.user) authenticated = true;
+        });
+    } catch (err) {
+        // Ignore and try the guest JWT.
+    }
+    if (authenticated) return next();
+
+    const authHeader = req.headers.authorization;
+    const token = authHeader && authHeader.startsWith('Bearer ') ? authHeader.split(' ')[1] : undefined;
+    if (token) {
+        try {
+            const decoded = jwt.verify(token, envConfig.better_auth_secret) as {
+                id: string;
+                email: string;
+                name: string;
+                role: string;
+            };
+            if (decoded.role === 'Guest') {
+                const guest = await GuestModel.findById(decoded.id);
+                if (guest) {
+                    req.user = {
+                        id: guest._id.toString(),
+                        name: guest.name,
+                        email: guest.email,
+                        role: 'Guest',
+                    };
+                }
+            }
+        } catch (err) {
+            // Ignore — continue anonymously.
+        }
+    }
+
+    return next();
+}
+
 // Public + abuse-prone: OTP sends a real email → strict per-IP+email throttle.
 router.post('/guest/otp', otpLimiter, SupportController.requestGuestOtp);
 router.post('/guest/verify', generalPublicLimiter, SupportController.verifyGuestOtp);
+// Silent session renewal via the httpOnly refresh cookie (no re-OTP).
+router.post('/guest/refresh', generalPublicLimiter, SupportController.refreshGuestSession);
+router.post('/guest/logout', requireUnifiedAuth, SupportController.logoutGuest);
 
 router.post('/attachments/presigned-url', requireUnifiedAuth, SupportController.requestPresignedUrl);
 router.get('/attachments/view-url', requireUnifiedAuth, SupportController.getPresignedViewUrl);

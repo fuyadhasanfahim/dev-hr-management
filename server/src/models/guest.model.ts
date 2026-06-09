@@ -6,6 +6,9 @@ export interface IGuest extends Document {
     emailVerified: boolean;
     otp?: string;
     otpExpiresAt?: Date;
+    otpAttempts: number;
+    otpLockedUntil?: Date;
+    tokenVersion: number;
     lastSeenAt: Date;
     ipAddress?: string;
     createdAt: Date;
@@ -36,6 +39,19 @@ const guestSchema = new Schema<IGuest>(
         },
         otpExpiresAt: {
             type: Date,
+        },
+        // Failed-OTP throttling: lock the account briefly after repeated wrong codes.
+        otpAttempts: {
+            type: Number,
+            default: 0,
+        },
+        otpLockedUntil: {
+            type: Date,
+        },
+        // Bumped to invalidate every outstanding refresh token (logout-everywhere).
+        tokenVersion: {
+            type: Number,
+            default: 0,
         },
         lastSeenAt: {
             type: Date,

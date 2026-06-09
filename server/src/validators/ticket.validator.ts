@@ -77,5 +77,8 @@ export const CreateTicketFromAIValidation = z.object({
         description: z.string().min(1, 'Description is required').trim(),
         chatHistory: z.array(z.any()).optional(),
         category: categoryEnum.optional(),
+        // Supplied by unverified visitors who aren't signed in.
+        name: z.string().trim().optional(),
+        email: z.string().email('Invalid email').trim().optional(),
     }),
 });

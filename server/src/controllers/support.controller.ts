@@ -8,7 +8,7 @@ import chatSummaryService from '../services/chat-summary.service.js';
 import cloudinaryMigrationService from '../services/cloudinary-migration.service.js';
 import ClientModel from '../models/client.model.js';
 import StaffModel from '../models/staff.model.js';
-import { getSupportNamespace, notifyNewSession } from '../socket/support.namespace.js';
+import { getSupportNamespace, notifyNewSession, notifyAgents } from '../socket/support.namespace.js';
 
 function emitSessionStateChange(type: string, sessionId: string) {
     const ns = getSupportNamespace();
@@ -28,14 +28,82 @@ async function requestGuestOtp(req: Request, res: Response) {
     }
 }
 
+// ── Guest refresh-token cookie helpers ──────────────────────────────────────
+const GUEST_REFRESH_COOKIE = 'guest_refresh_token';
+const REFRESH_COOKIE_MAX_AGE = 90 * 24 * 60 * 60 * 1000; // 90 days
+
+function refreshCookieOptions() {
+    const isProd = process.env.NODE_ENV === 'production';
+    return {
+        httpOnly: true,
+        secure: isProd,
+        sameSite: 'lax' as const,
+        // Subdomains (webbriks.com ↔ admin.webbriks.com) share the cookie in prod.
+        ...(isProd && { domain: '.webbriks.com' }),
+        path: '/api/support',
+    };
+}
+
+/** Reads a named cookie from the raw Cookie header (no cookie-parser dependency). */
+function readCookie(req: Request, name: string): string | undefined {
+    const raw = req.headers.cookie;
+    if (!raw) return undefined;
+    for (const part of raw.split(';')) {
+        const [k, ...v] = part.trim().split('=');
+        if (k === name) return decodeURIComponent(v.join('='));
+    }
+    return undefined;
+}
+
 /**
- * Public: Verify Guest OTP and return access token.
+ * Public: Verify Guest OTP. Returns a short-lived access token in the body and
+ * sets a long-lived, rotating refresh token as an httpOnly cookie.
  */
 async function verifyGuestOtp(req: Request, res: Response) {
     try {
         const { email, otp } = req.body;
-        const result = await guestAuthService.verifyGuestOtp(email, otp);
-        return res.status(200).json({ success: true, data: result });
+        const { accessToken, refreshToken, guest } = await guestAuthService.verifyGuestOtp(email, otp);
+        res.cookie(GUEST_REFRESH_COOKIE, refreshToken, {
+            ...refreshCookieOptions(),
+            maxAge: REFRESH_COOKIE_MAX_AGE,
+        });
+        // `token` key kept for backwards compatibility with existing clients.
+        return res.status(200).json({ success: true, data: { token: accessToken, guest } });
+    } catch (err: any) {
+        return res.status(err.statusCode || 400).json({ success: false, message: err.message });
+    }
+}
+
+/**
+ * Public: Exchange the refresh cookie for a fresh access token, rotating the
+ * refresh cookie. Drives silent, re-OTP-free session renewal.
+ */
+async function refreshGuestSession(req: Request, res: Response) {
+    try {
+        const refreshToken = readCookie(req, GUEST_REFRESH_COOKIE);
+        const result = await guestAuthService.refreshGuestSession(refreshToken || '');
+        res.cookie(GUEST_REFRESH_COOKIE, result.refreshToken, {
+            ...refreshCookieOptions(),
+            maxAge: REFRESH_COOKIE_MAX_AGE,
+        });
+        return res.status(200).json({ success: true, data: { token: result.accessToken } });
+    } catch (err: any) {
+        // Clear a dead cookie so the browser stops sending it.
+        res.clearCookie(GUEST_REFRESH_COOKIE, refreshCookieOptions());
+        return res.status(err.statusCode || 401).json({ success: false, message: err.message });
+    }
+}
+
+/**
+ * Guest: Revoke all refresh tokens and clear the cookie.
+ */
+async function logoutGuest(req: Request, res: Response) {
+    try {
+        if (req.user?.id) {
+            await guestAuthService.revokeGuestSessions(req.user.id);
+        }
+        res.clearCookie(GUEST_REFRESH_COOKIE, refreshCookieOptions());
+        return res.status(200).json({ success: true });
     } catch (err: any) {
         return res.status(err.statusCode || 400).json({ success: false, message: err.message });
     }
@@ -109,6 +177,17 @@ async function createSupportTicket(req: Request, res: Response) {
         }
 
         const result = await supportTicketService.createTicket(args);
+
+        // Alert the support console about the brand-new ticket (REST has no socket).
+        const isVisitor = req.user?.role === 'Guest' || req.user?.role === 'client';
+        if (isVisitor) {
+            notifyAgents('ticket:created', {
+                ticketId: (result as any)?._id?.toString?.() ?? '',
+                ticketRef: (result as any)?.ticketId ?? '',
+                subject: (result as any)?.subject ?? subject ?? '',
+            });
+        }
+
         return res.status(201).json({ success: true, data: result });
     } catch (err: any) {
         return res.status(err.statusCode || 400).json({ success: false, message: err.message });
@@ -146,6 +225,15 @@ async function replyToTicket(req: Request, res: Response) {
             text,
             attachments,
         });
+
+        // A client/guest reply needs the support team's attention — alert the
+        // console so it can play a sound, badge, and refresh the ticket live.
+        if (senderType === 'guest' || senderType === 'client') {
+            notifyAgents('ticket:new_reply', {
+                ticketId: req.params.id || '',
+                preview: typeof text === 'string' ? text.slice(0, 120) : '',
+            });
+        }
 
         return res.status(201).json({ success: true, data: result });
     } catch (err: any) {
@@ -720,6 +808,8 @@ async function lookupClientByEmail(req: Request, res: Response) {
 export default {
     requestGuestOtp,
     verifyGuestOtp,
+    refreshGuestSession,
+    logoutGuest,
     requestPresignedUrl,
     getPresignedViewUrl,
     createSupportTicket,
