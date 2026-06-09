@@ -2,6 +2,7 @@ import { Server, Socket, Namespace } from 'socket.io';
 import { socketAuthMiddleware } from './socket-auth.middleware.js';
 import ChatSessionModel, { ChatSessionStatus } from '../models/chat-session.model.js';
 import ChatMessageModel, { ChatSenderModel } from '../models/chat-message.model.js';
+import TicketModel from '../models/ticket.model.js';
 import { addToChatQueue, removeFromChatQueue } from '../services/redis-queue.service.js';
 import { logger } from '../lib/logger.js';
 import { Types } from 'mongoose';
@@ -28,6 +29,15 @@ export function notifyNewSession(sessionId: string): void {
  */
 export function notifyAgents(event: string, payload: Record<string, unknown>): void {
     supportNamespaceRef?.to('agents_presence').emit(event, payload);
+}
+
+/**
+ * Notifies everyone watching a specific ticket (the customer's track page and any
+ * staff with the ticket open) that the thread changed, so they refresh live.
+ */
+export function notifyTicketReply(ticketId: string, payload: Record<string, unknown> = {}): void {
+    if (!ticketId) return;
+    supportNamespaceRef?.to(`ticket:${ticketId}`).emit('ticket:reply', { ticketId, ...payload });
 }
 
 export function registerSupportNamespace(io: Server) {
@@ -82,6 +92,27 @@ export function registerSupportNamespace(io: Server) {
                 logger.error(`[Support Socket] Error in chat:join: ${err.message}`);
                 socket.emit('error', { message: 'Failed to join support session' });
             }
+        });
+
+        // ── Ticket live updates ─────────────────────────────────────────────
+        // A viewer (customer on the track page, or staff with the ticket open)
+        // joins the ticket's room to receive `ticket:reply` events in real time.
+        socket.on('ticket:join', async ({ ticketId }: { ticketId: string }) => {
+            try {
+                if (!ticketId) return;
+                const ticket = await TicketModel.findById(ticketId).select('guestId clientId');
+                if (!ticket) return;
+                // Customers may only watch their own ticket; staff may watch any.
+                if (user.role === 'Guest' && ticket.guestId?.toString() !== user.id) return;
+                if (user.role === 'client' && ticket.clientId?.toString() !== user.id) return;
+                socket.join(`ticket:${ticketId}`);
+            } catch (err: any) {
+                logger.error(`[Support Socket] Error in ticket:join: ${err.message}`);
+            }
+        });
+
+        socket.on('ticket:leave', ({ ticketId }: { ticketId: string }) => {
+            if (ticketId) socket.leave(`ticket:${ticketId}`);
         });
 
         socket.on('chat:visitor_away', ({ sessionId }: { sessionId: string }) => {

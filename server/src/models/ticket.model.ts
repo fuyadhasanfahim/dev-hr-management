@@ -68,6 +68,15 @@ const ticketSchema = new Schema<ITicket>(
             ref: 'Guest',
             index: true,
         },
+        visitorName: {
+            type: String,
+            trim: true,
+        },
+        visitorEmail: {
+            type: String,
+            trim: true,
+            lowercase: true,
+        },
         subject: {
             type: String,
             required: true,

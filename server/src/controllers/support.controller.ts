@@ -8,7 +8,7 @@ import chatSummaryService from '../services/chat-summary.service.js';
 import cloudinaryMigrationService from '../services/cloudinary-migration.service.js';
 import ClientModel from '../models/client.model.js';
 import StaffModel from '../models/staff.model.js';
-import { getSupportNamespace, notifyNewSession, notifyAgents } from '../socket/support.namespace.js';
+import { getSupportNamespace, notifyNewSession, notifyAgents, notifyTicketReply } from '../socket/support.namespace.js';
 
 function emitSessionStateChange(type: string, sessionId: string) {
     const ns = getSupportNamespace();
@@ -175,6 +175,9 @@ async function createSupportTicket(req: Request, res: Response) {
         } else if (req.user?.id) {
             args.clientId = req.user.id;
         }
+        // Snapshot submitter identity so it always shows on the ticket.
+        if (req.user?.name) args.visitorName = req.user.name;
+        if (req.user?.email) args.visitorEmail = req.user.email;
 
         const result = await supportTicketService.createTicket(args);
 
@@ -234,6 +237,10 @@ async function replyToTicket(req: Request, res: Response) {
                 preview: typeof text === 'string' ? text.slice(0, 120) : '',
             });
         }
+
+        // Live-update anyone watching this ticket (customer track page + staff
+        // with it open) regardless of who replied.
+        notifyTicketReply(req.params.id || '', { senderType });
 
         return res.status(201).json({ success: true, data: result });
     } catch (err: any) {

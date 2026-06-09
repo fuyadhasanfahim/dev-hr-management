@@ -196,10 +196,13 @@ function getTicketUser(t: Ticket): { name: string; email: string; isGuest: boole
     const client = t.clientId;
     const guest = t.guestId;
     const u = client ?? guest;
+    // Prefer the populated client/guest record, but fall back to the denormalized
+    // snapshot captured at creation so name/email always show even when the
+    // reference isn't populated.
     return {
-        name: u?.name?.trim() || 'Guest',
-        email: u?.email?.trim() || '',
-        isGuest: !client && !!guest,
+        name: u?.name?.trim() || t.visitorName?.trim() || 'Guest',
+        email: u?.email?.trim() || t.visitorEmail?.trim() || '',
+        isGuest: !client,
     };
 }
 

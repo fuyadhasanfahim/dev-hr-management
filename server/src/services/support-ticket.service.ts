@@ -12,6 +12,8 @@ interface CreateTicketData {
     source: string;        // Required — every flow must set this explicitly
     clientId?: string;
     guestId?: string;
+    visitorName?: string;  // Snapshot of submitter identity
+    visitorEmail?: string;
     assignedTo?: string;   // Pre-assign (e.g. carry over from live-chat)
 }
 
@@ -41,6 +43,12 @@ export async function createTicket(data: CreateTicketData): Promise<any> {
     }
     if (data.guestId) {
         ticketFields.guestId = new Types.ObjectId(data.guestId);
+    }
+    if (data.visitorName) {
+        ticketFields.visitorName = data.visitorName;
+    }
+    if (data.visitorEmail) {
+        ticketFields.visitorEmail = data.visitorEmail;
     }
     if (data.assignedTo) {
         ticketFields.assignedTo = new Types.ObjectId(data.assignedTo);

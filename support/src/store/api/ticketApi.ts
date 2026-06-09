@@ -34,6 +34,8 @@ export interface Ticket {
     source?: TicketSource;
     clientId?: TicketUser | null;
     guestId?: TicketUser | null;
+    visitorName?: string;
+    visitorEmail?: string;
     assignedTo?: TicketUser | null;
     tags: string[];
     attachments: string[];

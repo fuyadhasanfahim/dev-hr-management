@@ -127,11 +127,17 @@ async function createTicketFromAI(req: Request, res: Response) {
         // must supply name + email, which we attach to a (created-if-needed) guest.
         if (req.user?.role === 'Guest') {
             ticketArgs.guestId = req.user.id;
+            ticketArgs.visitorName = (req.user as any).name || name;
+            ticketArgs.visitorEmail = (req.user as any).email || email;
         } else if (req.user?.id) {
             ticketArgs.clientId = req.user.id;
+            ticketArgs.visitorName = (req.user as any).name || name;
+            ticketArgs.visitorEmail = (req.user as any).email || email;
         } else if (email && name) {
             const guest = await guestAuthService.getOrCreateGuest(email, name);
             ticketArgs.guestId = guest._id.toString();
+            ticketArgs.visitorName = name;
+            ticketArgs.visitorEmail = email;
         } else {
             return res.status(400).json({ success: false, message: 'Please provide your name and email to create a ticket.' });
         }
