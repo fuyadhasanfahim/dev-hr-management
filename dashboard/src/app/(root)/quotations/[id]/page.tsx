@@ -31,7 +31,6 @@ import {
     Copy,
     History,
     AlertCircle,
-    ExternalLink,
     Trash2,
     CheckCircle2,
     Clock,
@@ -1041,61 +1040,6 @@ export default function ViewQuotationPage() {
                                     </Badge>
                                 </Link>
                             ))}
-                        </CardContent>
-                    </Card>
-
-                    {/* Client Portal Status */}
-                    <Card className="overflow-hidden">
-                        <CardHeader className="bg-muted/20 border-b py-4">
-                            <CardTitle className="text-sm flex items-center gap-2">
-                                <ExternalLink className="h-4 w-4" />
-                                Client Access
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="p-6">
-                            {data.status === 'draft' ? (
-                                <div className="text-center space-y-3">
-                                    <div className="p-3 bg-muted rounded-full inline-block">
-                                        <Clock className="w-6 h-6 text-muted-foreground" />
-                                    </div>
-                                    <p className="text-xs text-muted-foreground">
-                                        Link hasn&apos;t been shared with the
-                                        client yet.
-                                    </p>
-                                    <Button
-                                        size="sm"
-                                        variant="outline"
-                                        className="w-full text-[11px]"
-                                        onClick={openSendPicker}
-                                    >
-                                        Generate & Share Link
-                                    </Button>
-                                </div>
-                            ) : (
-                                <div className="space-y-4">
-                                    <div className="p-3 bg-emerald-50 rounded-lg border border-emerald-100 dark:bg-emerald-950/20 dark:border-emerald-900/50 flex items-start gap-3">
-                                        <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 mt-0.5" />
-                                        <div>
-                                            <h5 className="text-xs font-bold text-emerald-900 dark:text-emerald-200">
-                                                Link Active
-                                            </h5>
-                                            <p className="text-[10px] text-emerald-700 dark:text-emerald-300">
-                                                Client can now view and accept
-                                                this quotation.
-                                            </p>
-                                        </div>
-                                    </div>
-                                    <Button
-                                        size="sm"
-                                        variant="outline"
-                                        className="w-full gap-2 text-[11px]"
-                                        onClick={openSendPicker}
-                                    >
-                                        <Copy className="w-3.5 h-3.5" />
-                                        Copy Link Again
-                                    </Button>
-                                </div>
-                            )}
                         </CardContent>
                     </Card>
                 </div>
