@@ -13,7 +13,6 @@ import { requireAuth } from "./middlewares/auth.middleware.js";
 import { requestContextMiddleware } from "./middlewares/requestContext.middleware.js";
 import router from "./routes/index.js";
 import "./models/user.model.js";
-import { stripeWebhook, paypalWebhook } from "./controllers/webhook.controller.js";
 import { globalErrorHandler } from "./middlewares/globalErrorHandler.js";
 
 const { trusted_origins, client_url } = envConfig;
@@ -87,12 +86,6 @@ const globalLimiter = rateLimit({
 });
 app.use(globalLimiter);
 
-// ⚠️ WEBHOOKS MUST BE BEFORE express.json()
-app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), stripeWebhook);
-app.post('/api/webhooks/paypal', express.json(), paypalWebhook);
-
-
-
 app.use(express.json());
 
 app.use(
@@ -127,11 +120,6 @@ app.use(
             (req.method === "POST" && /^\/quotations\/client\/[^/]+\/accept$/.test(req.path)) ||
             (req.method === "POST" && /^\/quotations\/client\/[^/]+\/changes$/.test(req.path));
 
-        // Allow public access to quotation payment token routes (payment portal)
-        const isPublicQuotationPaymentTokenRoute =
-            (req.method === "GET" && /^\/quotation-payments\/client\/[^/]+\/status$/.test(req.path)) ||
-            (req.method === "POST" && /^\/quotation-payments\/client\/[^/]+\/(intent|capture|confirm)$/.test(req.path));
-
         // Public: Puppeteer PDF by quotation id (no session required)
         const isPublicQuotationPdfPuppeteerRoute =
             req.method === "GET" && /^\/quotations\/[^/]+\/pdf\/puppeteer$/.test(req.path);
@@ -150,7 +138,6 @@ app.use(
             isPublicCareerRoute ||
             isPublicInvoiceRoute ||
             isPublicQuotationTokenRoute ||
-            isPublicQuotationPaymentTokenRoute ||
             isPublicQuotationPdfPuppeteerRoute ||
             isSupportRoute ||
             isPublicAIChatRoute

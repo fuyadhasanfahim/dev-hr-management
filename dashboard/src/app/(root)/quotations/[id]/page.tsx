@@ -111,7 +111,7 @@ export default function ViewQuotationPage() {
 
     const handleConfirmSend = async (
         selected: string[],
-        includePaymentLink: boolean,
+        _includePaymentLink?: boolean,
     ) => {
         if (!id) return [];
         if (selected.length === 0) {
@@ -123,7 +123,7 @@ export default function ViewQuotationPage() {
             const result = await sendQuotation({
                 id: id as string,
                 emails: selected,
-                includePaymentLink,
+                includePaymentLink: false,
             }).unwrap();
             if (result.data.clientLink) {
                 try {

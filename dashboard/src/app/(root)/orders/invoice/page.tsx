@@ -66,7 +66,6 @@ export default function InvoicePage() {
         new Set(),
     );
     const [invoiceNumber, setInvoiceNumber] = useState<string>("");
-    const [paymentToken, setPaymentToken] = useState<string>("");
     const [showPDF, setShowPDF] = useState(false);
     const [isEmailDialogOpen, setIsEmailDialogOpen] = useState(false);
     const [initialRecipients, setInitialRecipients] = useState<string[]>([]);
@@ -232,9 +231,7 @@ export default function InvoicePage() {
                 }).unwrap();
 
                 if (recordResult.success && recordResult.invoice) {
-                    const invoiceData = recordResult.invoice as { paymentToken: string };
                     setInvoiceNumber(generatedNumber);
-                    setPaymentToken(invoiceData.paymentToken);
                     setShowPDF(true);
 
                     setTimeout(() => {
@@ -256,9 +253,8 @@ export default function InvoicePage() {
 
         try {
             let currentInvoiceNumber = invoiceNumber;
-            let currentToken = paymentToken;
 
-            if (!currentInvoiceNumber || !currentToken) {
+            if (!currentInvoiceNumber) {
                 const result = await getNextInvoiceNumber().unwrap();
                 if (result.success) {
                     currentInvoiceNumber = result.formattedInvoiceNumber;
@@ -290,11 +286,7 @@ export default function InvoicePage() {
                         })),
                     }).unwrap();
 
-                    const invoiceData = recordResult.invoice as { paymentToken: string };
-                    currentToken = invoiceData.paymentToken;
-
                     setInvoiceNumber(currentInvoiceNumber);
-                    setPaymentToken(currentToken);
                 } else {
                     throw new Error("Failed to generate invoice number");
                 }
@@ -308,7 +300,6 @@ export default function InvoicePage() {
                     month={months.find((m) => m.value === selectedMonth)?.label || ""}
                     year={selectedYear}
                     invoiceNumber={currentInvoiceNumber}
-                    paymentToken={currentToken}
                     totals={totals}
                 />,
             ).toBlob();
@@ -491,7 +482,6 @@ export default function InvoicePage() {
                                 client={selectedClient}
                                 orders={selectedOrdersList}
                                 invoiceNumber={invoiceNumber}
-                                paymentToken={paymentToken}
                                 totals={totals}
                                 month={
                                     months.find((m) => m.value === selectedMonth)

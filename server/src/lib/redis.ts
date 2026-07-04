@@ -8,6 +8,10 @@ export function getRedisClient(): Redis {
     if (!redisClient) {
         redisClient = new Redis(envConfig.redis_url, {
             maxRetriesPerRequest: null,
+            retryStrategy(times) {
+                const delay = Math.min(times * 200, 3000);
+                return delay;
+            },
         });
 
         redisClient.on('connect', () => {
@@ -15,7 +19,8 @@ export function getRedisClient(): Redis {
         });
 
         redisClient.on('error', (err) => {
-            logger.error(`[Redis] Error: ${err.message}`);
+            const msg = err.message || (err as any).code || String(err);
+            logger.error(`[Redis] Error: ${msg}`);
         });
     }
 

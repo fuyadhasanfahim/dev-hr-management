@@ -279,53 +279,6 @@ const styles = StyleSheet.create({
         fontSize: 8,
         color: colors.gray,
     },
-
-    // Pay Now Section
-    payNowSection: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginHorizontal: 40,
-        marginTop: 30,
-        paddingTop: 15,
-        borderTopWidth: 1,
-        borderTopColor: colors.border,
-        borderBottomWidth: 1,
-        borderBottomColor: colors.border,
-        paddingBottom: 15,
-        backgroundColor: '#fdfdfd',
-        paddingHorizontal: 15,
-        borderRadius: 4,
-    },
-    payNowTextContainer: {
-        flex: 1,
-        paddingRight: 20,
-    },
-    payNowHeading: {
-        fontSize: 10,
-        fontWeight: 'bold',
-        color: colors.teal,
-        marginBottom: 4,
-    },
-    payNowDescription: {
-        fontSize: 8,
-        color: colors.gray,
-        lineHeight: 1.4,
-    },
-    payNowButtonContainer: {
-        width: 140,
-    },
-    payNowButton: {
-        backgroundColor: colors.teal,
-        paddingVertical: 10,
-        borderRadius: 4,
-    },
-    payNowText: {
-        color: colors.white,
-        fontSize: 10,
-        fontWeight: 'bold',
-        textAlign: 'center',
-    },
 });
 
 export interface InvoicePDFProps {
@@ -342,7 +295,6 @@ export interface InvoicePDFProps {
     month: string;
     year: string;
     invoiceNumber: string;
-    paymentToken?: string;
     totals: {
         totalImages: number;
         totalAmount: number;
@@ -399,7 +351,6 @@ export const InvoiceDocument = ({
     orders,
     totals,
     invoiceNumber,
-    paymentToken,
 }: InvoicePDFProps) => {
     const issueDate = format(new Date(), 'MMMM do, yyyy');
     const logoUrl =
@@ -512,34 +463,6 @@ export const InvoiceDocument = ({
                         </View>
                     </View>
                 </View>
-
-                {/* Pay Now Section */}
-                <View style={styles.payNowSection} wrap={false}>
-                    <View style={styles.payNowTextContainer}>
-                        <Text style={styles.payNowHeading}>
-                            SECURE ONLINE PAYMENT
-                        </Text>
-                        <Text style={styles.payNowDescription}>
-                            We accept secure online payments via Credit Card,
-                            Debit Card, and PayPal. Click the button to view
-                            your invoice and pay instantly through our protected
-                            portal.
-                        </Text>
-                    </View>
-                    <View style={styles.payNowButtonContainer}>
-                        <Link
-                            src={`${process.env.NEXT_PUBLIC_PAYMENT_URL!}/payment/${invoiceNumber}?token=${paymentToken || ''}`}
-                            style={{ textDecoration: 'none' }}
-                        >
-                            <View style={styles.payNowButton}>
-                                <Text style={styles.payNowText}>
-                                    PAY INVOICE
-                                </Text>
-                            </View>
-                        </Link>
-                    </View>
-                </View>
-
                 {/* Footer */}
                 <View style={styles.footer} fixed>
                     <Text style={styles.footerText}>
@@ -578,8 +501,7 @@ export default function InvoicePDF(props: InvoicePDFProps) {
         }
 
         try {
-            // Record the invoice in the database first to get the paymentToken
-            const recordResult = await recordInvoice({
+            await recordInvoice({
                 invoiceNumber: props.invoiceNumber,
                 clientName: props.client.name,
                 clientId: props.client._id,
@@ -600,13 +522,9 @@ export default function InvoicePDF(props: InvoicePDFProps) {
                 })),
             }).unwrap();
 
-            const paymentToken = (
-                recordResult.invoice as { paymentToken: string }
-            ).paymentToken;
-
-            // Generate blob with the new token
+            // Generate blob
             const blob = await pdf(
-                <InvoiceDocument {...props} paymentToken={paymentToken} />,
+                <InvoiceDocument {...props} />,
             ).toBlob();
 
             const formData = new FormData();

@@ -18,7 +18,6 @@ interface OrderStatusUpdateEmailProps {
     orderName: string;
     status: string;
     message: string;
-    paymentLink?: string | undefined;
 }
 
 export const OrderStatusUpdateEmail = ({
@@ -26,7 +25,6 @@ export const OrderStatusUpdateEmail = ({
     orderName,
     status,
     message,
-    paymentLink,
 }: OrderStatusUpdateEmailProps) => {
     const previewText = `Order Update: ${orderName} (${status})`;
     const logoUrl =
@@ -76,17 +74,6 @@ export const OrderStatusUpdateEmail = ({
                             <Text style={messageHeading}>Update Details:</Text>
                             <Text style={messageBody}>{formattedMessage}</Text>
                         </Section>
-
-                        {paymentLink && (
-                            <Section style={buttonContainer}>
-                                <Link href={paymentLink} style={button}>
-                                    Pay Now & Continue
-                                </Link>
-                                <Text style={buttonHint}>
-                                    Secure payment via Stripe or PayPal
-                                </Text>
-                            </Section>
-                        )}
 
                         <Hr style={hr} />
 
@@ -238,26 +225,3 @@ const footerLink = {
     textDecoration: 'none',
 };
 
-const buttonContainer = {
-    textAlign: 'center' as const,
-    margin: '32px 0',
-};
-
-const button = {
-    backgroundColor: '#000000',
-    borderRadius: '12px',
-    color: '#ffffff',
-    fontSize: '16px',
-    fontWeight: '700',
-    textDecoration: 'none',
-    textAlign: 'center' as const,
-    display: 'inline-block',
-    padding: '16px 32px',
-    boxShadow: '0 8px 16px rgba(0, 0, 0, 0.12)',
-};
-
-const buttonHint = {
-    fontSize: '12px',
-    color: '#8e8e93',
-    marginTop: '12px',
-};

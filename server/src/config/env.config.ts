@@ -74,20 +74,9 @@ const envConfig = {
 
     // Advanced SaaS Integrations
     redis_url: process.env.REDIS_URL || 'redis://localhost:6379',
-    stripe_secret_key: process.env.STRIPE_SECRET_KEY,
-    stripe_webhook_secret: process.env.STRIPE_WEBHOOK_SECRET,
-    paypal_client_id: process.env.PAYPAL_CLIENT_ID,
-    paypal_client_secret: process.env.PAYPAL_CLIENT_SECRET,
-    paypal_webhook_id: process.env.PAYPAL_WEBHOOK_ID,
-    // Comma-separated list of admin recipients for payment receipts/notifications.
-    // Falls back to SMTP_USER when unset.
-    payment_admin_emails: process.env.PAYMENT_ADMIN_EMAILS,
 
     // Quotation pipeline
     quotation_token_secret: process.env.QUOTATION_TOKEN_SECRET!,
-    // Public payment app (Next.js) base URL
-    // Used for quotation secure links + payment provider callbacks.
-    payment_client_url: process.env.PAYMENT_CLIENT_URL || 'http://localhost:3001',
 
     // Google Calendar / Meet integration
     google_service_account_email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || '',

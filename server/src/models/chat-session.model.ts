@@ -58,7 +58,6 @@ const chatSessionSchema = new Schema<IChatSession>(
 );
 
 chatSessionSchema.index({ status: 1, createdAt: 1 });
-chatSessionSchema.index({ guestId: 1 });
 
 const ChatSessionModel = model<IChatSession>('ChatSession', chatSessionSchema);
 export default ChatSessionModel;

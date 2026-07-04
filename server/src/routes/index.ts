@@ -26,11 +26,9 @@ import { currencyRateRoute } from "./currency-rate.route.js";
 import { payrollRoute } from "./payroll.routes.js";
 import shiftOffDateRoute from "./shift-off-date.route.js";
 import payrollBankSettingsRoute from "./payroll-bank-settings.route.js";
-import { PaymentRoutes } from "./payment.route.js";
 import { policyRoute } from "./policy.route.js";
 import { quotationRoute } from "./quotation.route.js";
 import { quotationTemplateRoute } from "./quotation-template.route.js";
-import { quotationPaymentRoute } from "./quotation-payment.route.js";
 import { meetingRoute } from "./meeting.route.js";
 import { leadRoute } from "./lead.route.js";
 import { leadSettingRoute } from "./lead-setting.route.js";
@@ -148,10 +146,6 @@ const moduleRoutes = [
         route: payrollRoute,
     },
     {
-        path: "/payments",
-        route: PaymentRoutes,
-    },
-    {
         path: "/policies",
         route: policyRoute,
     },
@@ -162,10 +156,6 @@ const moduleRoutes = [
     {
         path: "/quotation-templates",
         route: quotationTemplateRoute,
-    },
-    {
-        path: "/quotation-payments",
-        route: quotationPaymentRoute,
     },
     {
         path: "/meetings",

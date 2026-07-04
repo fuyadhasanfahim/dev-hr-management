@@ -2,7 +2,7 @@
 
 /* eslint-disable jsx-a11y/alt-text */
 import React from 'react';
-import { Document, Page, Text, View, Image, Link } from '@react-pdf/renderer';
+import { Document, Page, Text, View, Image } from '@react-pdf/renderer';
 import { styles } from './styles';
 import { QuotationData, IPaymentMilestone } from '@/types/quotation.type';
 import { format } from 'date-fns';
@@ -10,11 +10,6 @@ import { formatMoney } from '@/lib/money';
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
-function buildPaymentLink(data: QuotationData) {
-    const base = process.env.NEXT_PUBLIC_PAYMENT_URL!;
-    if (!data.secureToken) return null;
-    return `${base.replace(/\/$/, '')}/quotation/${data.secureToken}`;
-}
 
 function compactList(parts: Array<string | undefined | null>) {
     return parts.map((x) => (x || '').trim()).filter(Boolean);
@@ -84,7 +79,6 @@ export const QuotationPDF = ({ data }: QuotationPDFProps) => {
     } = data;
 
     const currency = data.currency || 'BDT';
-    const payLink = buildPaymentLink(data);
     const logoUrl =
         company.logo ||
         'https://res.cloudinary.com/dny7zfbg9/image/upload/v1777996436/q83auvamwih8u8ftw5zu.png';
@@ -556,62 +550,6 @@ export const QuotationPDF = ({ data }: QuotationPDFProps) => {
                     </Text>
                 </View>
 
-                {/* ── CTA ─────────────────────────────────────────────────── */}
-                <View style={styles.ctaSection} wrap={false}>
-                    <View style={styles.ctaLeft}>
-                        <Text style={styles.ctaHeading}>
-                            SECURE ONLINE PAYMENT
-                        </Text>
-                        <Text style={styles.ctaDesc}>
-                            Use the secure online portal to review and accept
-                            this quotation, then proceed to the first milestone
-                            payment.
-                        </Text>
-                        {firstMilestone ? (
-                            <Text style={styles.ctaDesc}>
-                                On acceptance: {firstMilestone.percentage}% (
-                                {formatMoney(
-                                    (pricingTotal * firstMilestone.percentage) /
-                                        100,
-                                    currency,
-                                )}
-                                ) — {firstMilestone.label}.
-                            </Text>
-                        ) : null}
-                    </View>
-                    <View style={styles.ctaRight}>
-                        {payLink ? (
-                            <>
-                                <Link
-                                    src={payLink}
-                                    style={{ textDecoration: 'none' }}
-                                >
-                                    <View style={styles.ctaButton}>
-                                        <Text style={styles.ctaButtonText}>
-                                            {ctaPrimary}
-                                        </Text>
-                                    </View>
-                                </Link>
-                                <Link
-                                    src={payLink}
-                                    style={{ textDecoration: 'none' }}
-                                >
-                                    <View style={styles.ctaSecondary}>
-                                        <Text style={styles.ctaSecondaryText}>
-                                            VIEW FULL QUOTATION
-                                        </Text>
-                                    </View>
-                                </Link>
-                            </>
-                        ) : (
-                            <View style={styles.ctaButton}>
-                                <Text style={styles.ctaButtonText}>
-                                    LINK PENDING
-                                </Text>
-                            </View>
-                        )}
-                    </View>
-                </View>
 
                 {/* ── Signature ────────────────────────────────────────────── */}
                 <View style={styles.signatureSection} wrap={false}>

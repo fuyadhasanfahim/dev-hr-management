@@ -206,28 +206,6 @@ export const orderApi = apiSlice.injectEndpoints({
                 { type: 'Quotation', id: 'LIST' },
             ],
         }),
-
-        recordManualPayment: builder.mutation<
-            { success: boolean; message: string },
-            {
-                quotationGroupId: string;
-                orderId?: string; // to invalidate local cache
-                phase: 'upfront' | 'delivery' | 'final';
-                amount: number;
-                notes?: string;
-            }
-        >({
-            query: ({ ...data }) => ({
-                url: '/quotation-payments/record-manual',
-                method: 'POST',
-                body: data,
-            }),
-            invalidatesTags: (_result, _error, { orderId }) => [
-                ...(orderId ? [{ type: 'Order' as const, id: orderId }] : []),
-                { type: 'Order', id: 'LIST' },
-                { type: 'Order', id: 'STATS' },
-            ],
-        }),
     }),
 });
 
@@ -247,5 +225,4 @@ export const {
     useDeleteOrderMutation,
     useMarkDeliveredMutation,
     useConvertQuotationToOrderMutation,
-    useRecordManualPaymentMutation,
 } = orderApi;

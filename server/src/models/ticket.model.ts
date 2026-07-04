@@ -125,7 +125,6 @@ const ticketSchema = new Schema<ITicket>(
 );
 
 ticketSchema.index({ status: 1, assignedTo: 1 });
-ticketSchema.index({ guestId: 1 });
 
 const TicketModel = model<ITicket>('Ticket', ticketSchema);
 export default TicketModel;

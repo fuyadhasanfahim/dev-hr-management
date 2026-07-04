@@ -7,16 +7,13 @@ import type { IQuotation } from '../types/quotation.type.js';
 import type { QuotationStatus } from '../types/quotation.type.js';
 import { AppError } from '../utils/AppError.js';
 import { OutboxService } from './outbox.service.js';
-import { quotationPaymentEventQueue } from './queue.service.js';
 import { getCorrelationId } from '../lib/requestContext.js';
 import { logger } from '../lib/logger.js';
 import ClientModel from '../models/client.model.js';
-import envConfig from '../config/env.config.js';
 import emailService from './email.service.js';
-import QuotationPaymentModel from '../models/quotation-payment.model.js';
 import { sendClientSmsIfBDT } from './sms-notification.service.js';
 
-import type { PaymentPhaseEmailInfo, QuotationMilestoneEmailInfo } from '../templates/QuotationEmail.js';
+import type { QuotationMilestoneEmailInfo } from '../templates/QuotationEmail.js';
 import * as React from 'react';
 import { renderToBuffer } from '@react-pdf/renderer';
 import { QuotationPdf } from '../templates/QuotationPdf.js';
@@ -204,31 +201,6 @@ async function generateQuotationNumber(): Promise<string> {
 // ─── QuotationService ─────────────────────────────────────────────────────────
 
 export class QuotationService {
-    static async getClientLink(quotationGroupId: string): Promise<string> {
-        const quotation = await QuotationModel.findOne({ 
-            quotationGroupId, 
-            isLatestVersion: true 
-        });
-        if (!quotation) throw new AppError('Quotation not found', 404);
-
-        const hasValidToken =
-            Boolean(quotation.secureToken) &&
-            (!quotation.tokenExpiresAt || quotation.tokenExpiresAt >= new Date());
-
-        if (!hasValidToken) {
-            quotation.secureToken = signQuotationToken({
-                quotationGroupId: quotation.quotationGroupId,
-                quotationId: quotation._id.toString(),
-                version: quotation.version,
-            });
-            const d = new Date();
-            d.setDate(d.getDate() + TOKEN_EXPIRY_DAYS);
-            quotation.tokenExpiresAt = d;
-            await quotation.save();
-        }
-
-        return `${envConfig.payment_client_url}/quotation/${quotation.secureToken}`;
-    }
 
     static async createQuotation(
         data: Partial<IQuotation>,
@@ -323,7 +295,7 @@ export class QuotationService {
         id: string,
         _userId: string,
         recipientEmails?: string[],
-        includePaymentLink = false,
+        _includePaymentLink = false,
     ): Promise<SendQuotationResult> {
         const quotation = await QuotationModel.findById(id);
         if (!quotation) throw new AppError('Quotation not found', 404);
@@ -366,8 +338,6 @@ export class QuotationService {
 
         const saved = await quotation.save();
 
-        const clientLink = `${envConfig.payment_client_url}/quotation/${saved.secureToken}`;
-
         let emailSent = false;
         let emailedTo: string[] | undefined;
         let emailError: string | undefined;
@@ -406,60 +376,6 @@ export class QuotationService {
                     );
                 }
 
-                // Build payment reminder context when the quotation is already accepted —
-                // this means the client is being re-sent the link to continue paying.
-                let paymentPhases: PaymentPhaseEmailInfo[] | undefined;
-                let remainingAmountFormatted: string | undefined;
-
-                if (saved.status === 'accepted') {
-                    const tracker = await QuotationPaymentModel.findOne({
-                        quotationGroupId: saved.quotationGroupId,
-                        isActive: true,
-                    }).lean();
-
-                    if (tracker) {
-                        const currency = tracker.currency || 'USD';
-                        const fmt = (cents: number) =>
-                            new Intl.NumberFormat('en-US', {
-                                style: 'currency',
-                                currency,
-                            }).format(cents / 100);
-
-                        const upfront  = tracker.phases.upfront;
-                        const delivery = tracker.phases.delivery;
-                        const final    = tracker.phases.final;
-
-                        const upfrontPaid   = upfront.status === 'paid';
-                        const deliveryPaid  = delivery.status === 'paid';
-
-                        paymentPhases = [
-                            {
-                                label: 'Upfront',
-                                percentageLabel: `${upfront.percentage}%`,
-                                amountFormatted: fmt(upfront.amountDue),
-                                state: upfrontPaid ? 'paid' : 'next',
-                            },
-                            {
-                                label: 'Delivery',
-                                percentageLabel: `${delivery.percentage}%`,
-                                amountFormatted: fmt(delivery.amountDue),
-                                state: deliveryPaid ? 'paid' : upfrontPaid ? 'next' : 'locked',
-                            },
-                            {
-                                label: 'Final',
-                                percentageLabel: `${final.percentage}%`,
-                                amountFormatted: fmt(final.amountDue),
-                                state: final.status === 'paid' ? 'paid' : deliveryPaid ? 'next' : 'locked',
-                            },
-                        ];
-
-                        const totalPaid = [upfront, delivery, final].reduce(
-                            (s, p) => s + (p.amountPaid ?? 0), 0,
-                        );
-                        remainingAmountFormatted = fmt(tracker.totalAmount - totalPaid);
-                    }
-                }
-
                 const clientName = saved.client?.contactName || client?.name || 'Client';
 
                 // Format the grand total in the quotation's currency for the email
@@ -480,15 +396,12 @@ export class QuotationService {
                     clientName,
                     quotationTitle: saved.details?.title || 'Quotation',
                     quotationNumber: saved.quotationNumber,
-                    ...(includePaymentLink ? { clientLink } : {}),
                     totalAmountFormatted,
                     ...(saved.details?.validUntil
                         ? { validUntil: new Date(saved.details.validUntil).toLocaleDateString('en-GB') }
                         : {}),
-                    ...(paymentPhases ? { paymentPhases } : {}),
-                    ...(remainingAmountFormatted ? { remainingAmountFormatted } : {}),
-                    // Initial email: show milestone breakdown (still shows reminder table when accepted).
-                    ...(!paymentPhases && Array.isArray(saved.paymentMilestones) && saved.paymentMilestones.length > 0
+                    // Initial email: show milestone breakdown.
+                    ...(Array.isArray(saved.paymentMilestones) && saved.paymentMilestones.length > 0
                         ? (() => {
                               const currency = (saved.currency || 'USD').toUpperCase();
                               const fmt = (amount: number) => {
@@ -586,7 +499,7 @@ export class QuotationService {
 
         return {
             quotation: saved,
-            clientLink,
+            clientLink: '',
             emailSent,
             recipients,
             ...(emailedTo ? { emailedTo } : {}),
@@ -737,19 +650,6 @@ export class QuotationService {
             throw new AppError('State changed concurrently', 409);
         }
 
-        await quotationPaymentEventQueue.add('quotation.accepted', {
-            quotationId: updated._id.toString(),
-            quotationGroupId: updated.quotationGroupId,
-            quotationVersion: updated.version,
-            clientId: updated.clientId.toString(),
-            grandTotal: updated.totals.grandTotal,
-            currency: updated.currency || '৳',
-            correlationId: getCorrelationId() || '',
-            aggregateType: 'quotationGroup',
-
-            aggregateId: updated.quotationGroupId,
-        });
-
         logger.info(
             {
                 quotationId: updated._id.toString(),
@@ -785,15 +685,6 @@ export class QuotationService {
             if (latest && latest.isLatestVersion && latest.status === 'change_requested') return latest;
             throw new AppError('State changed concurrently', 409);
         }
-
-        await quotationPaymentEventQueue.add('quotation.change_requested', {
-            quotationGroupId: updated.quotationGroupId,
-            quotationId: updated._id.toString(),
-            reason,
-            correlationId: getCorrelationId(),
-            aggregateType: 'quotationGroup',
-            aggregateId: updated.quotationGroupId,
-        });
 
         logger.info(
             {
@@ -844,17 +735,10 @@ export class QuotationService {
         try {
             const quotation = await QuotationModel.findById(id).session(session);
             if (!quotation) throw new AppError('Quotation not found', 404);
-
-            const quotationGroupId = quotation.quotationGroupId;
             if (quotation.orderId) {
                 const OrderModel = (await import('../models/order.model.js')).default;
                 await OrderModel.findByIdAndDelete(quotation.orderId).session(session);
             }
-            const QuotationPaymentModel = (await import('../models/quotation-payment.model.js')).default;
-            await QuotationPaymentModel.findOneAndDelete({ quotationGroupId }).session(session);
-
-            const PaymentEventLogModel = (await import('../models/payment-event-log.model.js')).default;
-            await PaymentEventLogModel.deleteMany({ quotationGroupId }).session(session);
 
             await quotation.deleteOne({ session });
             await session.commitTransaction();

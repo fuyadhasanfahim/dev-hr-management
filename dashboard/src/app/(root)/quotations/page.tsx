@@ -99,7 +99,7 @@ export default function QuotationsPage() {
     setPickerOpen(true);
   };
 
-  const handleConfirmSend = async (selected: string[], includePaymentLink: boolean) => {
+  const handleConfirmSend = async (selected: string[], _includePaymentLink?: boolean) => {
     if (!pickerQuotation?._id) return [];
     if (selected.length === 0) {
       toast.warning("Please select at least one recipient");
@@ -111,7 +111,7 @@ export default function QuotationsPage() {
       const result = await sendQuotation({
         id: pickerQuotation._id,
         emails: selected,
-        includePaymentLink,
+        includePaymentLink: false,
       }).unwrap();
 
       if (result.data.clientLink) {

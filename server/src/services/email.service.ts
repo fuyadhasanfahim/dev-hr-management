@@ -6,10 +6,7 @@ import { ResetPasswordEmail } from '../templates/ResetPasswordEmail.js';
 import { InvitationEmail } from '../templates/InvitationEmail.js';
 import { ApplicationStatusEmail } from '../templates/ApplicationStatusEmail.js';
 import { OrderStatusUpdateEmail } from '../templates/OrderStatusUpdateEmail.js';
-import { AdminPaymentEmail } from '../templates/AdminPaymentEmail.js';
-import { QuotationEmail, type PaymentPhaseEmailInfo, type QuotationMilestoneEmailInfo } from '../templates/QuotationEmail.js';
-import { QuotationPaymentReceiptEmail } from '../templates/QuotationPaymentReceiptEmail.js';
-import { QuotationPaymentAdminEmail } from '../templates/QuotationPaymentAdminEmail.js';
+import { QuotationEmail, type QuotationMilestoneEmailInfo } from '../templates/QuotationEmail.js';
 import * as React from 'react';
 import envConfig from '../config/env.config.js';
 
@@ -109,7 +106,6 @@ interface SendOrderStatusData {
     orderName: string;
     status: string;
     message: string;
-    paymentLink?: string | undefined;
 }
 
 const sendOrderStatusEmail = async (data: SendOrderStatusData) => {
@@ -120,7 +116,6 @@ const sendOrderStatusEmail = async (data: SendOrderStatusData) => {
                 orderName: data.orderName,
                 status: data.status,
                 message: data.message,
-                paymentLink: data.paymentLink,
             }),
         );
 
@@ -248,10 +243,6 @@ interface SendQuotationEmailData {
     totalAmountFormatted?: string;
     milestones?: QuotationMilestoneEmailInfo[];
     hasPdfAttachment?: boolean;
-    /** Present when resending to a client who has already accepted — triggers reminder mode. */
-    paymentPhases?: PaymentPhaseEmailInfo[];
-    /** Formatted remaining amount, e.g. "$500.00" */
-    remainingAmountFormatted?: string;
     attachment?: {
         filename: string;
         content: Buffer;
@@ -273,20 +264,13 @@ const sendQuotationEmail = async (data: SendQuotationEmailData) => {
                     : {}),
                 ...(data.milestones ? { milestones: data.milestones } : {}),
                 ...(data.hasPdfAttachment ? { hasPdfAttachment: true } : {}),
-                ...(data.paymentPhases ? { paymentPhases: data.paymentPhases } : {}),
-                ...(data.remainingAmountFormatted
-                    ? { remainingAmountFormatted: data.remainingAmountFormatted }
-                    : {}),
             }),
         );
 
-        const isReminder = Boolean(data.paymentPhases && data.paymentPhases.length > 0);
         const mailOptions = {
             from: 'Quotation | WebBriks',
             to: data.to,
-            subject: isReminder
-                ? `Payment reminder — Quotation ${data.quotationNumber} (${data.remainingAmountFormatted ?? 'balance'} remaining)`
-                : `Quotation ${data.quotationNumber} — ${data.quotationTitle}`,
+            subject: `Quotation ${data.quotationNumber} — ${data.quotationTitle}`,
             html: emailHtml,
             ...(data.attachment
                 ? {
@@ -350,114 +334,6 @@ const sendApplicationStatusEmail = async (data: SendApplicationStatusData) => {
     }
 };
 
-interface SendAdminPaymentData {
-    to: string;
-    clientName: string;
-    invoiceNumber: string;
-    amount: number;
-    currency: string;
-    earningsUrl: string;
-}
-
-const sendAdminPaymentEmail = async (data: SendAdminPaymentData) => {
-    try {
-        const emailHtml = await render(
-            React.createElement(AdminPaymentEmail, {
-                clientName: data.clientName,
-                invoiceNumber: data.invoiceNumber,
-                amount: data.amount,
-                currency: data.currency,
-                earningsUrl: data.earningsUrl,
-            }),
-        );
-
-        const mailOptions = {
-            from: 'Payment - HR Management | WebBriks',
-            to: data.to,
-            subject: `Payment Received from ${data.clientName}`,
-            html: emailHtml,
-        };
-
-        const info = await transporter.sendMail(mailOptions);
-        return info;
-    } catch (error) {
-        console.error('Error sending admin payment notification:', error);
-        throw error;
-    }
-};
-
-interface SendQuotationPaymentReceiptData {
-    to: string;
-    clientName: string;
-    quotationNumber: string;
-    phase: string;
-    amountCents: number;
-    currency: string;
-    referenceId: string;
-    provider: string;
-    paidAt: Date;
-}
-
-const sendQuotationPaymentReceiptEmail = async (data: SendQuotationPaymentReceiptData) => {
-    const emailHtml = await render(
-        React.createElement(QuotationPaymentReceiptEmail, {
-            clientName: data.clientName,
-            quotationNumber: data.quotationNumber,
-            phase: data.phase,
-            amountCents: data.amountCents,
-            currency: data.currency,
-            referenceId: data.referenceId,
-            provider: data.provider,
-            paidAt: data.paidAt,
-        }),
-    );
-
-    const mailOptions = {
-        from: 'Payment receipt | WebBriks',
-        to: data.to,
-        subject: `Payment receipt — ${data.quotationNumber} (${data.phase})`,
-        html: emailHtml,
-    };
-
-    return await transporter.sendMail(mailOptions);
-};
-
-interface SendQuotationPaymentAdminData {
-    to: string;
-    clientName: string;
-    quotationNumber: string;
-    phase: string;
-    amountCents: number;
-    currency: string;
-    referenceId: string;
-    provider: string;
-    paidAt: Date;
-}
-
-const sendQuotationPaymentAdminEmail = async (data: SendQuotationPaymentAdminData) => {
-    const emailHtml = await render(
-        React.createElement(QuotationPaymentAdminEmail, {
-            clientName: data.clientName,
-            quotationNumber: data.quotationNumber,
-            phase: data.phase,
-            amountCents: data.amountCents,
-            currency: data.currency,
-            referenceId: data.referenceId,
-            provider: data.provider,
-            paidAt: data.paidAt,
-            ordersUrl: `${envConfig.client_url}/orders`,
-        }),
-    );
-
-    const mailOptions = {
-        from: 'Payment received | WebBriks',
-        to: data.to,
-        subject: `Payment received — ${data.quotationNumber} (${data.phase})`,
-        html: emailHtml,
-    };
-
-    return await transporter.sendMail(mailOptions);
-};
 
 // ─── Meeting Emails ───────────────────────────────────────────────────────────
 
@@ -664,9 +540,6 @@ export default {
     sendInvitationEmail,
     sendQuotationEmail,
     sendApplicationStatusEmail,
-    sendAdminPaymentEmail,
-    sendQuotationPaymentReceiptEmail,
-    sendQuotationPaymentAdminEmail,
     sendMeetingInviteEmail,
     sendMeetingReminderEmail,
     sendMeetingCancellationEmail,

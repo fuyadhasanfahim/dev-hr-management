@@ -87,12 +87,6 @@ function buildServiceLineItems(data: QuotationData): ServiceLineItem[] {
   return [...baseRows, ...phaseRows, ...addOnRows];
 }
 
-function clientPayLink(data: QuotationData): string | null {
-  const base = process.env.NEXT_PUBLIC_PAYMENT_URL;
-  if (!base || !data.secureToken) return null;
-  return `${base.replace(/\/$/, "")}/quotation/${data.secureToken}`;
-}
-
 function buildUnitDefs(data: QuotationData): UnitDef[] {
   const u: UnitDef[] = [];
   const currency = data.currency || "BDT";
@@ -608,31 +602,6 @@ function buildUnitDefs(data: QuotationData): UnitDef[] {
       ),
     });
   });
-
-  const pay = clientPayLink(data);
-  u.push({
-    id: "unit-cta",
-    groupId: "grp-cta",
-    node: (
-      <div className="rounded-xl border border-slate-100 bg-gradient-to-b from-violet-50/80 to-white p-5">
-        <div className="text-[11px] font-extrabold tracking-wide text-indigo-800">
-          SECURE ONLINE PAYMENT
-        </div>
-        <p className="mt-2 max-w-xl text-[12px] text-slate-500">
-          Use the secure portal to review and accept this quotation.
-        </p>
-        {pay ? (
-          <a
-            href={pay}
-            className="mt-4 inline-block rounded-lg bg-gradient-to-br from-violet-500 to-indigo-600 px-5 py-3 text-[11px] font-extrabold tracking-wide text-white shadow-md"
-          >
-            View full quotation
-          </a>
-        ) : null}
-      </div>
-    ),
-  });
-
   u.push({
     id: "unit-signature",
     groupId: "grp-sig",

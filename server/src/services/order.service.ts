@@ -8,14 +8,11 @@ import OrderModel, {
     ALLOWED_STATUS_TRANSITIONS,
 } from '../models/order.model.js';
 import QuotationModel from '../models/quotation.model.js';
-import QuotationPaymentModel from '../models/quotation-payment.model.js';
 import { AppError } from '../utils/AppError.js';
 import { InvoiceCounter } from '../models/invoice-counter.model.js';
 import type { IQuotation } from '../types/quotation.type.js';
 import { logger } from '../lib/logger.js';
 import emailService from './email.service.js';
-import { QuotationService } from './quotation.service.js';
-import { QuotationPaymentService } from './quotation-payment.service.js';
 import { sendClientSmsIfBDT } from './sms-notification.service.js';
 
 
@@ -198,40 +195,7 @@ function buildQuotationSnapshot(
  */
 async function enrichOrdersWithPaymentInfo(orders: any[]): Promise<any[]> {
     if (!orders.length) return [];
-    
-    const groupIds = orders.map(o => o.quotationGroupId).filter(Boolean);
-    const trackers = await QuotationPaymentModel.find({
-        quotationGroupId: { $in: groupIds },
-        isActive: true
-    }).lean();
-
-    const trackerMap = new Map(trackers.map(t => [t.quotationGroupId, t]));
-
-    return orders.map(order => {
-        const orderObj = order.toObject ? order.toObject() : order;
-        const tracker = trackerMap.get(orderObj.quotationGroupId);
-        
-        return {
-            ...orderObj,
-            paymentPhases: tracker ? {
-                upfront: {
-                    status: tracker.phases.upfront.status,
-                    amountDue: tracker.phases.upfront.amountDue,
-                    amountPaid: tracker.phases.upfront.amountPaid,
-                },
-                delivery: {
-                    status: tracker.phases.delivery.status,
-                    amountDue: tracker.phases.delivery.amountDue,
-                    amountPaid: tracker.phases.delivery.amountPaid,
-                },
-                final: {
-                    status: tracker.phases.final.status,
-                    amountDue: tracker.phases.final.amountDue,
-                    amountPaid: tracker.phases.final.amountPaid,
-                }
-            } : null
-        };
-    });
+    return orders.map(order => (order.toObject ? order.toObject() : order));
 }
 
 // ─── OrderService ─────────────────────────────────────────────────────────────
@@ -291,16 +255,6 @@ async function createOrderFromQuotation(
             quotation.status = 'accepted';
             await quotation.save({ session });
         }
-
-        // Ensure the payment tracker exists for future installment tracking
-        await QuotationPaymentService.initializePaymentTracker(
-            quotationGroupId,
-            quotation._id.toString(),
-            quotation.version,
-            quotation.clientId.toString(),
-            quotation.totals.grandTotal,
-            quotation.currency || '৳',
-        );
 
         const orderNumber = await generateOrderNumber();
         const snapshot = buildQuotationSnapshot(quotation);
@@ -451,35 +405,12 @@ async function transitionStatus(
                 : updated.quotationSnapshot?.clientEmail;
 
             if (recipients) {
-                let paymentLink: string | undefined;
-                // Automatically include payment link for payment-gated statuses
-                if (['pending_delivery', 'pending_final'].includes(newStatus)) {
-                    try {
-                        paymentLink = await QuotationService.getClientLink(updated.quotationGroupId);
-                    } catch (err) {
-                        logger.warn({ orderId: updated._id, err }, 'failed to generate payment link for email');
-                    }
-                }
-
-                // Check if already paid to send a more encouraging message
-                const tracker = await QuotationPaymentModel.findOne({ 
-                    quotationGroupId: updated.quotationGroupId, 
-                    isActive: true 
-                });
-                const isAlreadyPaid = tracker && (
-                    (newStatus === OrderStatus.PENDING_DELIVERY && tracker.phases.delivery.status === 'paid')
-                    || (newStatus === OrderStatus.PENDING_FINAL && tracker.phases.final.status === 'paid')
-                );
-
                 await emailService.sendOrderStatusEmail({
                     to: recipients,
                     clientName: updated.quotationSnapshot?.clientName || 'Client',
                     orderName: updated.quotationSnapshot?.templateName || updated.orderNumber,
                     status: newStatus.toUpperCase().replace('_', ' '),
-                    message: isAlreadyPaid 
-                        ? `Good news! Your deliverables are ready for review. Since you've already completed the payment for this milestone, you can access and approve them immediately in the portal.`
-                        : emailOptions.customEmailMessage || `Your order status has been updated to ${newStatus.toUpperCase().replace('_', ' ')}.`,
-                    paymentLink,
+                    message: emailOptions.customEmailMessage || `Your order status has been updated to ${newStatus.toUpperCase().replace('_', ' ')}.`,
                 });
                 logger.info({ orderId, recipients, newStatus }, 'order.transition.email_sent');
 
@@ -536,7 +467,7 @@ async function markDelivered(orderId: string, userId: string): Promise<IOrder> {
                     status: OrderStatus.PENDING_DELIVERY,
                     changedBy: new Types.ObjectId(userId),
                     updatedAt: new Date(),
-                    note: 'Delivery initiated by team. Awaiting delivery phase payment.',
+                    note: 'Delivery initiated by team.',
                 },
             },
         },
@@ -561,7 +492,7 @@ async function markDelivered(orderId: string, userId: string): Promise<IOrder> {
                     updated.orderNumber,
                 status: OrderStatus.DELIVERED,
                 message:
-                    'Your order has been marked as delivered. If any payment is still pending, please complete it to unlock deliverables.',
+                    'Your order has been marked as delivered. You can now access and review your deliverables.',
             });
         } else {
             logger.warn(
@@ -613,7 +544,7 @@ async function unlockAssets(orderId: string): Promise<IOrder> {
                     status: OrderStatus.DELIVERED,
                     changedBy: new Types.ObjectId('000000000000000000000000'), // system actor
                     updatedAt: new Date(),
-                    note: 'Assets unlocked after delivery payment confirmation. Order moved to delivered status.',
+                    note: 'Assets unlocked. Order moved to delivered status.',
                 },
             },
         },
@@ -651,7 +582,7 @@ async function completeOrder(orderId: string): Promise<IOrder> {
                     status: OrderStatus.COMPLETED,
                     changedBy: new Types.ObjectId('000000000000000000000000'),
                     updatedAt: new Date(),
-                    note: 'Order completed after final payment confirmation',
+                    note: 'Order completed',
                 },
             },
         },

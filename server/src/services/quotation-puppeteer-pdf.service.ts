@@ -1,8 +1,6 @@
 import { format } from 'date-fns';
 import puppeteer from 'puppeteer';
-import envConfig from '../config/env.config.js';
 import QuotationModel from '../models/quotation.model.js';
-import { QuotationService } from './quotation.service.js';
 import { AppError } from '../utils/AppError.js';
 import { logger } from '../lib/logger.js';
 
@@ -65,14 +63,6 @@ function formatDatePdf(raw: unknown): string {
     }
 }
 
-function buildPaymentLink(
-    secureToken: unknown,
-    paymentBase: string,
-): string | null {
-    if (!secureToken || typeof secureToken !== 'string') return null;
-    return `${paymentBase.replace(/\/$/, '')}/quotation/${secureToken}`;
-}
-
 type LineItem = { name: string; desc?: string; qty: number; rate: number; total: number };
 
 type Milestone = { label: string; percentage: number; note?: string };
@@ -112,8 +102,6 @@ async function fetchImageAsDataUrl(url: string): Promise<string | null> {
 function buildPrintHtml(
     q: Record<string, any>,
     ctx: {
-        paymentClientBase: string;
-        paymentPageUrl: string;
         logoSrc: string;
         signatureSrc: string;
     },
@@ -131,10 +119,6 @@ function buildPrintHtml(
     const workflow = Array.isArray(q.workflow) ? q.workflow : [];
 
     const currency = q.currency || 'BDT';
-    const payLink =
-        (ctx.paymentPageUrl && String(ctx.paymentPageUrl).trim()) ||
-        buildPaymentLink(q.secureToken, ctx.paymentClientBase) ||
-        '';
 
     const issueDate = details?.date
         ? format(new Date(details.date), 'PPP')
@@ -340,9 +324,6 @@ function buildPrintHtml(
           )}) — ${esc(firstMilestone.label)}.`
         : '';
 
-    const payButtons = payLink
-        ? `<a class="btn btn-primary" href="${esc(payLink)}">View full quotation</a>`
-        : '';
 
     const signatureBlock = ctx.signatureSrc
         ? `<img class="sig-img" src="${esc(ctx.signatureSrc)}" alt="" width="200" height="48" />`
@@ -867,12 +848,9 @@ function buildPrintHtml(
 
   <div class="cta">
     <div class="cta-l">
-      <div class="cta-h">SECURE ONLINE PAYMENT</div>
-      <div class="cta-d">Use the secure online portal to review and accept this quotation, then proceed to the first milestone payment.</div>
+      <div class="cta-h">NEXT STEPS</div>
+      <div class="cta-d">Please review this quotation and confirm acceptance to proceed with project initiation and milestone scheduling.</div>
       ${ctaMilestoneText ? `<div class="cta-d">${ctaMilestoneText}</div>` : ''}
-    </div>
-    <div class="cta-r">
-      ${payButtons}
     </div>
   </div>
 
@@ -916,29 +894,7 @@ export class QuotationPuppeteerPdfService {
 
         let signatureSrc = (await fetchImageAsDataUrl(signatureUrl)) || '';
 
-        const groupId = String((q as any).quotationGroupId ?? '');
-        let paymentPageUrl = '';
-        if (groupId) {
-            try {
-                paymentPageUrl = await QuotationService.getClientLink(groupId);
-            } catch (err) {
-                logger.warn(
-                    { err, quotationId, groupId },
-                    'quotation.puppeteer_pdf.payment_link',
-                );
-            }
-        }
-        if (!paymentPageUrl?.trim()) {
-            const fallback = buildPaymentLink(
-                (q as any).secureToken,
-                envConfig.payment_client_url,
-            );
-            if (fallback) paymentPageUrl = fallback;
-        }
-
         const html = buildPrintHtml(q as Record<string, any>, {
-            paymentClientBase: envConfig.payment_client_url,
-            paymentPageUrl,
             logoSrc,
             signatureSrc,
         });

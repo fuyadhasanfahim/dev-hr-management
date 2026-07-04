@@ -1,7 +1,5 @@
 import type { Request, Response } from 'express';
 import QuotationModel from '../models/quotation.model.js';
-import QuotationPaymentModel from '../models/quotation-payment.model.js';
-import PaymentEventLogModel from '../models/payment-event-log.model.js';
 import OutboxEventModel from '../models/outbox-event.model.js';
 import OrderModel from '../models/order.model.js';
 import { OutboxService } from '../services/outbox.service.js';
@@ -9,7 +7,6 @@ import { logger } from '../lib/logger.js';
 
 type TimelineItem =
     | { kind: 'quotation'; at: string; data: any }
-    | { kind: 'payment_event'; at: string; data: any }
     | { kind: 'outbox'; at: string; data: any }
     | { kind: 'order'; at: string; data: any };
 
@@ -24,10 +21,8 @@ async function getTimeline(req: Request, res: Response) {
         return res.status(400).json({ success: false, message: 'quotationGroupId is required' });
     }
 
-    const [quotations, paymentTracker, paymentEvents, outboxEvents, order] = await Promise.all([
+    const [quotations, outboxEvents, order] = await Promise.all([
         QuotationModel.find({ quotationGroupId }).sort({ version: -1 }).lean(),
-        QuotationPaymentModel.find({ quotationGroupId }).sort({ createdAt: -1 }).lean(),
-        PaymentEventLogModel.find({ quotationGroupId }).sort({ createdAt: -1 }).lean(),
         OutboxEventModel.find({ aggregateId: quotationGroupId }).sort({ createdAt: -1 }).lean(),
         OrderModel.findOne({ quotationGroupId }).lean(),
     ]);
@@ -60,42 +55,6 @@ async function getTimeline(req: Request, res: Response) {
                 },
             });
         }
-    }
-
-    for (const p of paymentTracker) {
-        items.push({
-            kind: 'quotation',
-            at: toAt(p.createdAt),
-            data: {
-                note: 'payment.tracker.created',
-                quotationPaymentId: p._id?.toString?.() ?? p._id,
-                quotationId: p.quotationId?.toString?.() ?? p.quotationId,
-                quotationVersion: p.quotationVersion,
-                isActive: p.isActive,
-                orderId: p.orderId?.toString?.() ?? p.orderId,
-                phases: p.phases,
-                totalAmount: p.totalAmount,
-                currency: p.currency,
-            },
-        });
-    }
-
-    for (const e of paymentEvents) {
-        items.push({
-            kind: 'payment_event',
-            at: toAt(e.createdAt),
-            data: {
-                eventLogId: e._id?.toString?.() ?? e._id,
-                provider: e.provider,
-                providerId: e.providerId,
-                eventType: e.eventType,
-                phase: e.phase,
-                status: e.status,
-                failureReason: e.failureReason,
-                processedAt: e.processedAt,
-                correlationId: e.correlationId,
-            },
-        });
     }
 
     for (const o of outboxEvents) {
