@@ -39,10 +39,6 @@ const CATEGORY_LABELS: Record<string, string> = {
   "video-editing": "Video Editing",
 };
 
-function isWebDevCategory(data: QuotationData): boolean {
-  return (data.category ?? "web-development") === "web-development";
-}
-
 function buildServiceLineItems(data: QuotationData): ServiceLineItem[] {
   const cat = String(data.category ?? "web-development");
   const isWebDev = cat === "web-development";
@@ -92,6 +88,7 @@ function buildUnitDefs(data: QuotationData): UnitDef[] {
   const currency = data.currency || "BDT";
   const totals = data.totals ?? {
     subtotal: 0,
+    discountAmount: 0,
     taxAmount: 0,
     grandTotal: 0,
   };
@@ -164,25 +161,6 @@ function buildUnitDefs(data: QuotationData): UnitDef[] {
             {data.client?.contactName}
           </div>
           {data.client?.companyName && <div>{data.client.companyName}</div>}
-        </div>
-      </div>
-    ),
-  });
-
-  u.push({
-    id: "unit-project",
-    groupId: "grp-project",
-    node: (
-      <div className="rounded-lg border border-slate-100 p-4">
-        <div className="text-[17px] font-extrabold text-slate-900">
-          {data.details?.title || "Project"}
-        </div>
-        <div className="mt-2 flex flex-wrap gap-2">
-          <span className="rounded border bg-slate-50 px-2 py-0.5 text-[9.5px] font-bold uppercase text-slate-500">
-            {isWebDevCategory(data)
-              ? "WEB"
-              : CATEGORY_LABELS[String(data.category ?? "web-development")] || "SERVICE"}
-          </span>
         </div>
       </div>
     ),
@@ -364,10 +342,10 @@ function buildUnitDefs(data: QuotationData): UnitDef[] {
   }
 
   const pricing = data.pricing ?? { taxRate: 0, discount: 0, basePrice: 0 };
-  const discountAmount =
-    pricing.discount && totals.subtotal
-      ? (totals.subtotal * pricing.discount) / 100
-      : 0;
+  // Authoritative — computed once by calculateTotals() on save (category- and
+  // quantity-aware). totals.subtotal is already NET of discount, so re-deriving
+  // discount as a % of it here would double-apply the discount rate.
+  const discountAmount = totals.discountAmount ?? 0;
 
   type SumRow = {
     key: string;
@@ -554,54 +532,6 @@ function buildUnitDefs(data: QuotationData): UnitDef[] {
     });
   }
 
-  const trustCopy = [
-    {
-      t: "Strategic Product Thinking",
-      d: "We align scope, milestones, and outcomes with your goals—so you invest in impact, not busywork.",
-    },
-    {
-      t: "Modern Scalable Tech Stack",
-      d: "Future-ready tooling and architecture that grow with you and keep maintenance predictable.",
-    },
-    {
-      t: "Transparent & Phased Delivery",
-      d: "Clear phases, visible progress, and pricing tied to accountable checkpoints you can trust.",
-    },
-    {
-      t: "Reliable Communication & Support",
-      d: "Proactive updates, responsive collaboration, and partnership that continues after go-live.",
-    },
-  ];
-
-  u.push({
-    id: "unit-trust-title",
-    groupId: "grp-trust",
-    node: (
-      <div className="mt-12 border-b border-violet-200/40 pb-4">
-        <h2 className="text-[16.5px] font-extrabold text-slate-900">
-          Why Choose{" "}
-          <span className="bg-gradient-to-r from-violet-500 to-indigo-600 bg-clip-text text-transparent">
-            WebBriks
-          </span>
-        </h2>
-      </div>
-    ),
-  });
-
-  trustCopy.forEach((row, ti) => {
-    u.push({
-      id: `unit-trust-${ti}`,
-      groupId: "grp-trust",
-      node: (
-        <div>
-          <div className="text-[12.5px] font-bold text-slate-900">{row.t}</div>
-          <p className="mt-1 text-[11.5px] leading-relaxed text-slate-500">
-            {row.d}
-          </p>
-        </div>
-      ),
-    });
-  });
   u.push({
     id: "unit-signature",
     groupId: "grp-sig",

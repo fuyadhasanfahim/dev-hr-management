@@ -188,10 +188,10 @@ function buildPrintHtml(
     const pricingSubtotal = totals?.subtotal ?? 0;
     const pricingTax = totals?.taxAmount ?? 0;
     const pricingTotal = totals?.grandTotal ?? 0;
-    const discountAmount =
-        pricing?.discount && pricingSubtotal
-            ? (pricingSubtotal * pricing.discount) / 100
-            : 0;
+    // Authoritative — computed once by calculateTotals() on save (category- and
+    // quantity-aware). totals.subtotal is already NET of discount, so re-deriving
+    // discount as a % of it here would double-apply the discount rate.
+    const discountAmount = totals?.discountAmount ?? 0;
 
     let milestones: Milestone[] = Array.isArray(q.paymentMilestones)
         ? q.paymentMilestones.map((m: any) => ({
@@ -210,11 +210,6 @@ function buildPrintHtml(
     }
 
     const firstMilestone = milestones[0];
-
-    const serviceBadge = isWebDev ? 'WEB' : baseTitle.toUpperCase();
-    const statusUpper = q.status
-        ? String(q.status).replace(/_/g, ' ').toUpperCase()
-        : '';
 
     const rowsHtml = items
         .map(
@@ -424,13 +419,6 @@ function buildPrintHtml(
       background: #fff; margin-bottom: 8px;
     }
     .card-soft { background: var(--slate50); }
-    .proj-title { font-size: 17px; font-weight: 800; color: var(--slate900); margin-bottom: 9px; line-height: 1.3; }
-    .badges { display: flex; flex-wrap: wrap; gap: 6px; }
-    .badge {
-      border: 1px solid var(--slate100); border-radius: 4px; padding: 3px 8px;
-      background: var(--slate50); font-size: 9.5px; font-weight: 700;
-      color: var(--slate500); text-transform: uppercase; letter-spacing: 0.04em;
-    }
     .scope-stack {
       display: flex;
       flex-direction: column;
@@ -589,58 +577,10 @@ function buildPrintHtml(
       white-space: nowrap;
       color: var(--slate900);
     }
-    /* Tail: trust + CTA + signature + footer in normal flow (no min-height / flex stretch — those forced extra pages). */
+    /* Tail: CTA + signature + footer in normal flow (no min-height / flex stretch — those forced extra pages). */
     .pdf-tail {
       margin-top: 28px;
       padding-top: 28px;
-    }
-    .trust {
-      margin-top: 0;
-      padding: 20px 22px;
-      border-radius: 10px;
-      background: rgba(168, 85, 247, 0.08); border: 1px solid rgba(139, 92, 246, 0.25);
-      page-break-inside: auto;
-    }
-    .trust-title {
-      font-size: 16.5px;
-      font-weight: 800;
-      color: var(--slate900);
-      letter-spacing: 0.02em;
-      margin: 0 0 16px;
-      line-height: 1.25;
-      padding-bottom: 12px;
-      border-bottom: 1px solid rgba(139, 92, 246, 0.22);
-    }
-    .trust-title .brand {
-      background: linear-gradient(90deg, var(--violet-light), var(--violet-deep));
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-      color: var(--violet-deep);
-    }
-    .trust-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 16px 28px;
-      align-items: start;
-    }
-    .trust-point {
-      page-break-inside: avoid;
-      min-width: 0;
-    }
-    .trust-pt-title {
-      font-size: 12.5px;
-      font-weight: 700;
-      color: var(--slate900);
-      margin-bottom: 5px;
-      line-height: 1.3;
-    }
-    .trust-pt-desc {
-      font-size: 11.5px;
-      font-weight: 400;
-      color: var(--slate500);
-      line-height: 1.55;
-      margin: 0;
     }
     .cta {
       display: flex;
@@ -757,16 +697,6 @@ function buildPrintHtml(
     </div>
   </div>
 
-  <div class="sec">Project</div>
-  <div class="card">
-    <div class="proj-title">${esc(details?.title || 'Project')}</div>
-    <div class="badges">
-      <span class="badge">${esc(serviceBadge)}</span>
-      ${client.companyName ? `<span class="badge">${esc(client.companyName)}</span>` : ''}
-      ${statusUpper ? `<span class="badge">${esc(statusUpper)}</span>` : ''}
-    </div>
-  </div>
-
   ${
       q.overview
           ? `<div class="sec">Overview</div><div class="card card-soft"><div class="bill-txt">${esc(q.overview).replace(/\n/g, '<br/>')}</div></div>`
@@ -824,28 +754,6 @@ function buildPrintHtml(
   </div>
 
   <div class="pdf-tail">
-  <div class="trust">
-    <h2 class="trust-title">Why Choose <span class="brand">WebBriks</span></h2>
-    <div class="trust-grid">
-      <div class="trust-point">
-        <div class="trust-pt-title">Strategic Product Thinking</div>
-        <p class="trust-pt-desc">We align scope, milestones, and outcomes with your goals—so you invest in impact, not busywork.</p>
-      </div>
-      <div class="trust-point">
-        <div class="trust-pt-title">Modern Scalable Tech Stack</div>
-        <p class="trust-pt-desc">Future-ready tooling and architecture that grow with you and keep maintenance predictable.</p>
-      </div>
-      <div class="trust-point">
-        <div class="trust-pt-title">Transparent &amp; Phased Delivery</div>
-        <p class="trust-pt-desc">Clear phases, visible progress, and pricing tied to accountable checkpoints you can trust.</p>
-      </div>
-      <div class="trust-point">
-        <div class="trust-pt-title">Reliable Communication &amp; Support</div>
-        <p class="trust-pt-desc">Proactive updates, responsive collaboration, and partnership that continues after go-live.</p>
-      </div>
-    </div>
-  </div>
-
   <div class="cta">
     <div class="cta-l">
       <div class="cta-h">NEXT STEPS</div>

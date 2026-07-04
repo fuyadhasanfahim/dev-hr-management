@@ -7,6 +7,7 @@ import { InvitationEmail } from '../templates/InvitationEmail.js';
 import { ApplicationStatusEmail } from '../templates/ApplicationStatusEmail.js';
 import { OrderStatusUpdateEmail } from '../templates/OrderStatusUpdateEmail.js';
 import { QuotationEmail, type QuotationMilestoneEmailInfo } from '../templates/QuotationEmail.js';
+import { ReceiptEmail } from '../templates/ReceiptEmail.js';
 import * as React from 'react';
 import envConfig from '../config/env.config.js';
 
@@ -302,6 +303,72 @@ const sendQuotationEmail = async (data: SendQuotationEmailData) => {
     }
 };
 
+interface SendReceiptEmailData {
+    to: string;
+    clientName: string;
+    receiptNumber: string;
+    projectTitle: string;
+    /** Formatted amount received in THIS receipt, e.g. "$500.00". */
+    amountFormatted: string;
+    /** Formatted remaining balance, e.g. "$500.00". */
+    remainingFormatted: string;
+    paymentDateFormatted?: string;
+    milestoneLabel?: string;
+    attachment?: {
+        filename: string;
+        content: Buffer;
+        contentType: string;
+    };
+}
+
+const sendReceiptEmail = async (data: SendReceiptEmailData) => {
+    try {
+        const emailHtml = await render(
+            React.createElement(ReceiptEmail, {
+                clientName: data.clientName,
+                receiptNumber: data.receiptNumber,
+                projectTitle: data.projectTitle,
+                amountFormatted: data.amountFormatted,
+                remainingFormatted: data.remainingFormatted,
+                ...(data.paymentDateFormatted ? { paymentDateFormatted: data.paymentDateFormatted } : {}),
+                ...(data.milestoneLabel ? { milestoneLabel: data.milestoneLabel } : {}),
+                ...(data.attachment ? { hasPdfAttachment: true } : {}),
+            }),
+        );
+
+        const mailOptions = {
+            from: 'Receipt | WebBriks',
+            to: data.to,
+            subject: `Payment Receipt ${data.receiptNumber} — ${data.projectTitle}`,
+            html: emailHtml,
+            ...(data.attachment
+                ? {
+                      attachments: [
+                          {
+                              filename: data.attachment.filename,
+                              content: data.attachment.content,
+                              contentType: data.attachment.contentType,
+                          },
+                      ],
+                  }
+                : {}),
+        };
+
+        const info = await transporter.sendMail(mailOptions);
+        console.log('[email] receipt sent', {
+            to: data.to,
+            messageId: (info as any)?.messageId,
+            accepted: (info as any)?.accepted,
+            hasAttachment: Boolean(data.attachment),
+            attachmentBytes: data.attachment?.content?.length,
+        });
+        return info;
+    } catch (error) {
+        console.error('Error sending receipt email:', error);
+        throw error;
+    }
+};
+
 interface SendApplicationStatusData {
     to: string;
     applicantName: string;
@@ -539,6 +606,7 @@ export default {
     sendResetPasswordEmail,
     sendInvitationEmail,
     sendQuotationEmail,
+    sendReceiptEmail,
     sendApplicationStatusEmail,
     sendMeetingInviteEmail,
     sendMeetingReminderEmail,

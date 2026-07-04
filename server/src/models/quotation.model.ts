@@ -89,6 +89,7 @@ const quotationSchema = new Schema<IQuotation>(
 
         totals: {
             subtotal: { type: Number, default: 0 },
+            discountAmount: { type: Number, default: 0 },
             taxAmount: { type: Number, default: 0 },
             grandTotal: { type: Number, default: 0 },
         },

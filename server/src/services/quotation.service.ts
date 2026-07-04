@@ -70,6 +70,7 @@ function calculateTotals(data: Partial<IQuotation>) {
 
     return {
         subtotal,
+        discountAmount,
         taxAmount,
         grandTotal,
     };

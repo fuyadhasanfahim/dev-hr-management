@@ -29,6 +29,7 @@ import payrollBankSettingsRoute from "./payroll-bank-settings.route.js";
 import { policyRoute } from "./policy.route.js";
 import { quotationRoute } from "./quotation.route.js";
 import { quotationTemplateRoute } from "./quotation-template.route.js";
+import { receiptRoute } from "./receipt.route.js";
 import { meetingRoute } from "./meeting.route.js";
 import { leadRoute } from "./lead.route.js";
 import { leadSettingRoute } from "./lead-setting.route.js";
@@ -156,6 +157,10 @@ const moduleRoutes = [
     {
         path: "/quotation-templates",
         route: quotationTemplateRoute,
+    },
+    {
+        path: "/receipts",
+        route: receiptRoute,
     },
     {
         path: "/meetings",

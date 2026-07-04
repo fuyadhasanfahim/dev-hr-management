@@ -104,6 +104,7 @@ export interface QuotationData {
 
   totals: {
     subtotal: number;
+    discountAmount: number;
     taxAmount: number;
     grandTotal: number;
   };

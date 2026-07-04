@@ -103,6 +103,7 @@ export interface IQuotation extends Document {
 
     totals: {
         subtotal: number;
+        discountAmount: number;
         taxAmount: number;
         grandTotal: number;
     };

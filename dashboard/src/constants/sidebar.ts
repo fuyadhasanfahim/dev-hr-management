@@ -21,6 +21,7 @@ import {
     IconTarget,
     IconClipboardList,
     IconMessageChatbot,
+    IconFileInvoice,
 } from "@tabler/icons-react";
 
 
@@ -141,6 +142,12 @@ export const sidebarGroups: SidebarGroup[] = [
                 title: "Quotations",
                 url: "/quotations",
                 icon: IconReceipt,
+                access: [Role.SUPER_ADMIN, Role.ADMIN, Role.TEAM_LEADER],
+            },
+            {
+                title: "Receipts",
+                url: "/receipts",
+                icon: IconFileInvoice,
                 access: [Role.SUPER_ADMIN, Role.ADMIN, Role.TEAM_LEADER],
             },
             {

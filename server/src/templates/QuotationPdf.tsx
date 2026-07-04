@@ -1,6 +1,6 @@
 import { Document, Page, StyleSheet, Text, View } from '@react-pdf/renderer';
 
-type Money = { subtotal?: number; taxAmount?: number; grandTotal?: number };
+type Money = { subtotal?: number; discountAmount?: number; taxAmount?: number; grandTotal?: number };
 
 function safeText(v: unknown) {
     return String(v ?? '').trim();
@@ -365,14 +365,11 @@ export function QuotationPdf({
     const basePrice = Number(pricing.basePrice || 0);
     // web-development shows the base-price row; other categories are line-item driven.
     const isWebDev = (quotation?.category ?? 'web-development') === 'web-development';
-    const additionalServicesTotal = additionalServices.reduce(
-        (s, x) => s + Number(x.price || 0),
-        0,
-    );
-    const subtotalBeforeDiscount = basePrice + additionalServicesTotal;
     const discountRate = Number(pricing.discount || 0);
     const taxRate = Number(pricing.taxRate || 0);
-    const discountAmount = (subtotalBeforeDiscount * discountRate) / 100;
+    // Authoritative — computed once by calculateTotals() on save (category- and
+    // quantity-aware). Never re-derive this locally.
+    const discountAmount = Number(totals.discountAmount ?? 0);
     const grandTotal = Number(totals.grandTotal ?? 0);
 
     const formatDate = (raw: string) => {

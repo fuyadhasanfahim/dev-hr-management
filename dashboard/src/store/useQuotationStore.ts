@@ -92,6 +92,7 @@ const initialState: QuotationData = {
   ],
   totals: {
     subtotal: 0,
+    discountAmount: 0,
     taxAmount: 0,
     grandTotal: 0,
   }

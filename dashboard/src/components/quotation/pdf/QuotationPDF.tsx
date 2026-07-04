@@ -151,10 +151,10 @@ export const QuotationPDF = ({ data }: QuotationPDFProps) => {
     const pricingSubtotal = totals?.subtotal ?? 0;
     const pricingTax = totals?.taxAmount ?? 0;
     const pricingTotal = totals?.grandTotal ?? 0;
-    const discountAmount =
-        pricing?.discount && pricingSubtotal
-            ? (pricingSubtotal * pricing.discount) / 100
-            : 0;
+    // Authoritative — computed once by calculateTotals() on save (category- and
+    // quantity-aware). totals.subtotal is already NET of discount, so re-deriving
+    // discount as a % of it here would double-apply the discount rate.
+    const discountAmount = totals?.discountAmount ?? 0;
 
     const milestones: IPaymentMilestone[] =
         data.paymentMilestones && data.paymentMilestones.length

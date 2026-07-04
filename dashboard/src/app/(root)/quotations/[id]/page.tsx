@@ -248,10 +248,18 @@ export default function ViewQuotationPage() {
     };
 
     const currency = data.currency || '৳';
-    const totals = data.totals ?? { subtotal: 0, taxAmount: 0, grandTotal: 0 };
+    const totals = data.totals ?? {
+        subtotal: 0,
+        discountAmount: 0,
+        taxAmount: 0,
+        grandTotal: 0,
+    };
     const grandTotal = totals.grandTotal ?? 0;
     const subtotal = totals.subtotal ?? 0;
     const taxAmount = totals.taxAmount ?? 0;
+    // Authoritative — computed once by calculateTotals() on save (category- and
+    // quantity-aware). Never re-derive this from basePrice/additionalTotal locally.
+    const discountAmount = totals.discountAmount ?? 0;
     // Display-only aggregate; uses price × quantity to reconcile with grandTotal.
     const additionalTotal =
         data.additionalServices?.reduce((sum, s) => sum + lineItemAmount(s), 0) ??
@@ -896,7 +904,7 @@ export default function ViewQuotationPage() {
                                         )}
                                     >
                                         {canSeeFinancials
-                                            ? `− ${money(((data.pricing?.basePrice ?? 0) + additionalTotal) * ((data.pricing?.discount ?? 0) / 100))}`
+                                            ? `− ${money(discountAmount)}`
                                             : '******'}
                                     </span>
                                 </div>

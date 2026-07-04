@@ -401,7 +401,7 @@ export default function QuotationBuilder({
         const taxAmount = (subtotal * (data.pricing.taxRate || 0)) / 100;
         const grandTotal = subtotal + taxAmount;
 
-        return { subtotal, taxAmount, grandTotal };
+        return { subtotal, discountAmount, taxAmount, grandTotal };
     }, [data.pricing, data.additionalServices, data.category]);
 
     useEffect(() => {
@@ -1960,14 +1960,7 @@ export default function QuotationBuilder({
                                         <span className="font-bold">
                                             -{' '}
                                             {formatMoney(
-                                                ((data.pricing.basePrice +
-                                                    data.additionalServices.reduce(
-                                                        (acc, s) =>
-                                                            acc + lineItemAmount(s),
-                                                        0,
-                                                    )) *
-                                                    data.pricing.discount) /
-                                                    100,
+                                                computedTotals.discountAmount,
                                                 data.currency,
                                             )}
                                         </span>
