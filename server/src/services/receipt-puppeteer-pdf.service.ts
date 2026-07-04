@@ -74,13 +74,6 @@ const DEFAULT_COMPANY = {
     phone: '+8801977201923',
 };
 
-const CATEGORY_LABELS: Record<string, string> = {
-    'web-development': 'Web Design & Development',
-    'photo-editing': 'Photo Editing',
-    marketing: 'Marketing',
-    'video-editing': 'Video Editing',
-};
-
 const PAYMENT_TYPE_LABELS: Record<string, string> = {
     full: 'Full Payment',
     partial: 'Partial Payment',
@@ -121,14 +114,13 @@ interface ReceiptPdfContext {
 
 function buildPrintHtml(r: Record<string, any>, ctx: ReceiptPdfContext): string {
     const currency = r.currency || 'BDT';
-    const cat = String(r.category ?? 'web-development');
-    const catLabel = CATEGORY_LABELS[cat] || 'Service';
     const isVoid = r.status === 'void';
 
     const grandTotal = ctx.totalPaidBefore + (isVoid ? 0 : r.amount) + ctx.remaining;
     const paymentDate = formatDatePdf(r.paymentDate);
     const paymentTypeLabel = PAYMENT_TYPE_LABELS[r.paymentType] || 'Payment';
 
+    const typeRow = `<tr class="pr-tr"><td>Payment Type</td><td class="pr-num">${esc(paymentTypeLabel)}</td></tr>`;
     const stageRow = r.milestoneLabel
         ? `<tr class="pr-tr"><td>Payment Stage</td><td class="pr-num">${esc(r.milestoneLabel)}</td></tr>`
         : '';
@@ -178,9 +170,7 @@ function buildPrintHtml(r: Record<string, any>, ctx: ReceiptPdfContext): string 
       background: #fff;
     }
     .page-pad {
-      padding: 0 3mm 40px 3mm;
-      position: relative;
-      min-height: 1122px;
+      padding: 0 3mm;
     }
     .header-row { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
     .logo-box { width: 152px; height: 52px; display: flex; align-items: center; justify-content: flex-start; flex-shrink: 0; }
@@ -208,11 +198,6 @@ function buildPrintHtml(r: Record<string, any>, ctx: ReceiptPdfContext): string 
       page-break-after: avoid; break-after: avoid-page;
     }
     .card { border: 1px solid var(--slate100); border-radius: 8px; padding: 14px 16px; background: #fff; margin-bottom: 8px; }
-    .badge {
-      display: inline-block; border: 1px solid var(--slate100); border-radius: 4px; padding: 3px 8px;
-      background: var(--slate50); font-size: 9.5px; font-weight: 700; color: var(--slate500);
-      text-transform: uppercase; letter-spacing: 0.04em;
-    }
     table.price-table { width: 100%; border-collapse: collapse; font-size: 12px; }
     table.price-table thead th.pricing-h {
       text-align: left; padding: 13px 17px;
@@ -240,8 +225,9 @@ function buildPrintHtml(r: Record<string, any>, ctx: ReceiptPdfContext): string 
     .sig-name { font-size: 13px; font-weight: 800; color: var(--slate900); line-height: 1.35; }
     .sig-role { font-size: 11.5px; color: var(--slate500); margin-top: 5px; line-height: 1.5; }
     .doc-footer {
-      position: absolute; bottom: 0; left: 3mm; right: 3mm; padding-top: 14px;
+      margin-top: 32px; padding-top: 14px;
       border-top: 1px solid var(--slate300); text-align: center;
+      page-break-inside: avoid;
       font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     }
     .doc-footer-main { font-size: 10.5px; font-weight: 600; color: #334155; line-height: 1.5; }
@@ -286,13 +272,6 @@ function buildPrintHtml(r: Record<string, any>, ctx: ReceiptPdfContext): string 
     </div>
   </div>
 
-  <div class="sec">Project</div>
-  <div class="card">
-    <div class="bill-name" style="margin-bottom: 8px;">${esc(r.projectTitle)}</div>
-    <span class="badge">${esc(catLabel)}</span>
-    <span class="badge">${esc(paymentTypeLabel)}</span>
-  </div>
-
   <div class="sec">Payment Summary</div>
   <div class="card" style="padding:0;">
     <table class="price-table">
@@ -302,6 +281,7 @@ function buildPrintHtml(r: Record<string, any>, ctx: ReceiptPdfContext): string 
       <tbody>
         <tr class="pr-tr"><td>Total Contract Value</td><td class="pr-num">${formatMoneyPdf(grandTotal, currency)}</td></tr>
         <tr class="pr-tr"><td>Previously Paid</td><td class="pr-num">${formatMoneyPdf(ctx.totalPaidBefore, currency)}</td></tr>
+        ${typeRow}
         ${stageRow}
         ${methodRow}
         ${noteRow}

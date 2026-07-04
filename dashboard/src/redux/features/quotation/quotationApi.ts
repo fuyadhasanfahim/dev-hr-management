@@ -36,6 +36,7 @@ export interface QuotationQueryParams {
   status?: string;
   clientId?: string;
   search?: string;
+  isLatestVersion?: boolean;
 }
 
 export const quotationApi = apiSlice.injectEndpoints({
