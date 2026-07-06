@@ -328,8 +328,9 @@ function buildPrintHtml(
     .container {
       width: 100%;
       max-width: 100%;
-      padding: 4px 4px 45px 4px;
-      position: relative;
+      padding: 4px 4px 0 4px;
+      display: flex;
+      flex-direction: column;
     }
     .header-row {
       display: flex;
@@ -715,11 +716,10 @@ function buildPrintHtml(
       color: var(--slate500);
       margin-top: 1px;
     }
+    .footer-spacer {
+      flex-grow: 1;
+    }
     .doc-footer {
-      position: absolute;
-      bottom: 0;
-      left: 0;
-      right: 0;
       width: 100%;
       padding-top: 14px;
       padding-bottom: 8px;
@@ -731,7 +731,6 @@ function buildPrintHtml(
       color: var(--slate500);
       font-weight: 600;
       background: #fff;
-      z-index: 1000;
     }
     .doc-footer a {
       color: var(--accent);
@@ -833,6 +832,7 @@ function buildPrintHtml(
       </div>
     </div>
 
+    <div class="footer-spacer"></div>
     <footer class="doc-footer">
       <div>
         &copy; ${new Date().getFullYear()} <a href="https://webbriks.com">WebBriks</a>. All rights reserved.
@@ -920,16 +920,29 @@ export class QuotationPuppeteerPdfService {
             await page.emulateMediaType('print');
             await page.evaluate(() => {
                 const g = globalThis as any;
-                const container = g.document.querySelector('.container');
-                if (container) {
+                const doc = g.document;
+                const container = doc.querySelector('.container');
+                const spacer = doc.querySelector('.footer-spacer');
+                const footer = doc.querySelector('.doc-footer');
+                if (container && spacer && footer) {
+                    // A4 printable height = (297mm - 12mm top - 14mm bottom) = 271mm
                     const pageHeightPx = (271 / 25.4) * 96;
-                    const currentHeight = container.getBoundingClientRect().height;
-                    if (currentHeight > 0 && pageHeightPx > 0) {
-                        const totalPages = Math.ceil(currentHeight / pageHeightPx);
-                        const targetHeight = totalPages * pageHeightPx;
-                        if (targetHeight > currentHeight) {
-                            container.style.minHeight = `${targetHeight}px`;
-                        }
+
+                    // Temporarily collapse spacer to measure real content height
+                    spacer.style.height = '0px';
+
+                    const contentHeight = container.scrollHeight;
+                    const footerHeight = footer.getBoundingClientRect().height;
+                    const totalPages = Math.ceil(contentHeight / pageHeightPx);
+                    const lastPageBottom = totalPages * pageHeightPx;
+
+                    // Space remaining on last page minus footer height
+                    const remaining = lastPageBottom - contentHeight - footerHeight;
+
+                    if (remaining > 0) {
+                        spacer.style.height = `${remaining}px`;
+                    } else {
+                        spacer.style.height = '0px';
                     }
                 }
             });
