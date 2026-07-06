@@ -79,6 +79,10 @@ const quotationSchema = new Schema<IQuotation>(
             discount: { type: Number, default: 0 },
         },
 
+        notIncluded: [{ type: String }],
+        clientRequirements: [{ type: String }],
+        developmentScope: [{ type: String }],
+
         additionalServices: [serviceSchema],
         workflow: [{ type: String }],
 

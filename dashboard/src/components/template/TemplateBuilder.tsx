@@ -1,75 +1,101 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { format } from "date-fns";
+import React, { useState, useMemo, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import {
+  Sparkles,
+  ClipboardPaste,
   Plus,
   Trash2,
-  X,
-  ChevronDown,
+  XCircle,
+  ClipboardList,
+  Copy,
+  RotateCcw,
+  Save,
   Layers,
-  Settings2,
-  Cpu,
-  HandCoins,
-  Activity,
-  Receipt,
-  PieChart,
-  Briefcase,
-  Layout,
-  FileText,
-  DollarSign,
-  LucideIcon,
-  Sparkles,
+  Building2,
+  Check,
+  Code,
+  TrendingUp,
+  Video,
+  Camera,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Calendar } from "@/components/ui/calendar";
-import { formatMoney } from "@/lib/money";
-import { cn } from "@/lib/utils";
+import { PremiumCard } from "@/components/ui/shared/PremiumCard";
+import { PremiumButton } from "@/components/ui/shared/PremiumButton";
+import { PremiumInput } from "@/components/ui/shared/PremiumInput";
+import { PremiumTextarea } from "@/components/ui/shared/PremiumTextarea";
+import { PremiumBadge } from "@/components/ui/shared/PremiumBadge";
+import { IQuotationPhase, QuotationCategory } from "@/types/quotation.type";
 
-const PREDEFINED_TOOLS = [
-  "Figma", "Adobe XD", "Tailwind CSS", "shadcn/ui", "Firebase",
-  "AWS", "Vercel", "Docker", "Stripe", "Cloudinary",
-  "Sentry", "GitHub Actions", "CI/CD", "SEO Tools"
+type ServiceCategoryKey = "web-dev" | "marketing" | "video-editing" | "photo-editing";
+
+interface ServiceCategory {
+  id: ServiceCategoryKey;
+  label: string;
+  badgeText: string;
+  color: string;
+  borderColor: string;
+  bgColor: string;
+  iconChar: string;
+  iconBg: string;
+  icon: React.ComponentType<{ className?: string }>;
+}
+
+const SERVICE_CATEGORIES: ServiceCategory[] = [
+  {
+    id: "web-dev",
+    label: "Web Design & Development",
+    badgeText: "Web Dev",
+    color: "text-[#4E12D4] dark:text-[#C850FA]",
+    borderColor: "border-[#4E12D4]/40 hover:border-[#4E12D4]",
+    bgColor: "bg-[#4E12D4]/10 dark:bg-[#4E12D4]/20",
+    iconChar: "⚡",
+    iconBg: "bg-gradient-to-br from-[#4E12D4] to-[#1E0078] text-white shadow-md shadow-[#4E12D4]/30 border border-white/20",
+    icon: Code,
+  },
+  {
+    id: "marketing",
+    label: "Digital Marketing & SEO",
+    badgeText: "Marketing",
+    color: "text-[#C850FA] dark:text-purple-300",
+    borderColor: "border-[#C850FA]/40 hover:border-[#C850FA]",
+    bgColor: "bg-[#C850FA]/10 dark:bg-[#C850FA]/20",
+    iconChar: "📈",
+    iconBg: "bg-gradient-to-br from-[#C850FA] to-[#4E12D4] text-white shadow-md shadow-[#C850FA]/30 border border-white/20",
+    icon: TrendingUp,
+  },
+  {
+    id: "video-editing",
+    label: "Video & Motion Graphics",
+    badgeText: "Video Editing",
+    color: "text-[#1E0078] dark:text-indigo-300",
+    borderColor: "border-[#1E0078]/40 hover:border-[#1E0078]",
+    bgColor: "bg-[#1E0078]/10 dark:bg-[#1E0078]/20",
+    iconChar: "🎬",
+    iconBg: "bg-gradient-to-br from-[#1E0078] to-[#4E12D4] text-white shadow-md shadow-[#1E0078]/30 border border-white/20",
+    icon: Video,
+  },
+  {
+    id: "photo-editing",
+    label: "Photo Editing & Retouching",
+    badgeText: "Photo Editing",
+    color: "text-[#4E12D4] dark:text-blue-400",
+    borderColor: "border-blue-500/40 hover:border-blue-500",
+    bgColor: "bg-blue-500/10 dark:bg-blue-500/20",
+    iconChar: "📸",
+    iconBg: "bg-gradient-to-br from-blue-600 to-[#1E0078] text-white shadow-md shadow-blue-500/30 border border-white/20",
+    icon: Camera,
+  },
 ];
-
-import {
-  IQuotationPhase,
-  IAdditionalService,
-  IPaymentMilestone,
-  QuotationCategory,
-} from "@/types/quotation.type";
-import {
-  CATEGORY_OPTIONS,
-  getCategorySections,
-  isPhasesEnabled,
-  isUnitBased,
-  getBillingOptions,
-  getDefaultBillingCycle,
-  lineItemAmount,
-  BILLING_CYCLE_LABELS,
-} from "@/constants/quotation-templates";
-
-const FRONTEND_OPTIONS = ["Next.js", "React", "Vue", "Angular"];
-const BACKEND_OPTIONS = ["Node.js", "NestJS", "Laravel", "Django"];
-const DB_OPTIONS = ["MongoDB", "PostgreSQL", "MySQL", "Firebase"];
 
 export interface TemplateData {
   name: string;
   category: QuotationCategory;
   overview: string;
+  developmentScope?: string[];
+  notIncluded?: string[];
+  clientRequirements?: string[];
   phases: IQuotationPhase[];
   techStack: {
     frontend: string;
@@ -81,9 +107,9 @@ export interface TemplateData {
     basePrice: number;
     discount: number;
   };
-  additionalServices: IAdditionalService[];
+  additionalServices: any[];
   workflow: string[];
-  paymentMilestones: IPaymentMilestone[];
+  paymentMilestones: any[];
 }
 
 export default function TemplateBuilder({
@@ -91,1098 +117,852 @@ export default function TemplateBuilder({
   onChange,
   onSave,
   isSaving,
-  pageTitle,
+  pageTitle = "Template Builder",
 }: {
   data: TemplateData;
   onChange: (data: TemplateData) => void;
   onSave: () => void;
   isSaving: boolean;
-  pageTitle: string;
+  pageTitle?: string;
 }) {
-  const updateData = (updates: Partial<TemplateData>) => {
-    onChange({ ...data, ...updates });
+  // Active Services State (Default: Web Dev selected)
+  const [activeServices, setActiveServices] = useState<ServiceCategoryKey[]>(["web-dev"]);
+
+  // Scopes partitioned by Service Category
+  const [categoryScopes, setCategoryScopes] = useState<Record<ServiceCategoryKey, string[]>>({
+    "web-dev": [
+      "Modern, clean, and responsive e-commerce website design & UX architecture",
+      "Figma high-fidelity interactive wireframes & UI prototype screens",
+      "Fast-loading structure optimized for core web vitals",
+      "Mobile, tablet, and desktop responsive layout screens",
+      "Product listing & details page with category filtering",
+      "Cart and checkout flow with SSL payment gateway integration",
+      "Admin dashboard setup for order & inventory management",
+    ],
+    "marketing": [
+      "Comprehensive On-Page & Technical SEO audit and setup",
+      "Google Analytics 4 & Meta Pixel e-commerce conversion tracking",
+      "Social media ad campaign setup for Facebook and Instagram",
+    ],
+    "video-editing": [
+      "Promotional video editing (up to 60 seconds widescreen & vertical reel)",
+      "Professional color grading and cinematic sound design",
+      "Custom motion graphics intro logo & lower thirds",
+    ],
+    "photo-editing": [
+      "High-end product photo retouching and color correction (up to 50 photos)",
+      "Background removal and studio shadow enhancement",
+      "Promotional web banner & discount graphic creation",
+    ],
+  });
+
+  const [notIncludedItems, setNotIncludedItems] = useState<string[]>(
+    data.notIncluded && data.notIncluded.length > 0
+      ? data.notIncluded
+      : [
+          "Domain name & VPS hosting server cost",
+          "Paid third-party API or plugin subscription fees",
+          "Payment gateway processing charges & Courier API integration fees",
+          "Paid ad campaign budget (Facebook/Google Ads)",
+          "Monthly maintenance & ongoing off-page SEO",
+        ]
+  );
+
+  const [clientRequirements, setClientRequirements] = useState<string[]>(
+    data.clientRequirements && data.clientRequirements.length > 0
+      ? data.clientRequirements
+      : [
+          "Logo vector file (SVG/AI) & Brand color guidelines",
+          "Product details, pricing spreadsheet & high-resolution product images",
+          "Text content for static pages (About Us, Privacy Policy, Terms)",
+          "Domain register & web server hosting access credentials",
+          "Payment gateway merchant credentials & SMS/Email SMTP API keys",
+        ]
+  );
+
+  // Sync incoming fetched data (if editing an existing template)
+  useEffect(() => {
+    if (data.phases && data.phases.length > 0) {
+      const nextScopes: Record<ServiceCategoryKey, string[]> = {
+        "web-dev": [],
+        "marketing": [],
+        "video-editing": [],
+        "photo-editing": [],
+      };
+      const nextActive: ServiceCategoryKey[] = [];
+
+      data.phases.forEach((phase) => {
+        const titleLower = (phase.title || "").toLowerCase();
+        let matchedKey: ServiceCategoryKey = "web-dev";
+        if (titleLower.includes("marketing") || titleLower.includes("seo")) matchedKey = "marketing";
+        else if (titleLower.includes("video") || titleLower.includes("motion")) matchedKey = "video-editing";
+        else if (titleLower.includes("photo") || titleLower.includes("retouch")) matchedKey = "photo-editing";
+
+        if (phase.items && phase.items.length > 0) {
+          nextScopes[matchedKey] = phase.items;
+          if (!nextActive.includes(matchedKey)) nextActive.push(matchedKey);
+        }
+      });
+
+      if (nextActive.length > 0) {
+        setActiveServices(nextActive);
+        setCategoryScopes(nextScopes);
+      }
+    }
+    if (data.notIncluded && data.notIncluded.length > 0) setNotIncludedItems(data.notIncluded);
+    if (data.clientRequirements && data.clientRequirements.length > 0) setClientRequirements(data.clientRequirements);
+  }, [data.phases, data.notIncluded, data.clientRequirements]);
+
+  // Propagate state changes to parent's `onChange`
+  const syncToParent = (
+    newScopes = categoryScopes,
+    newNotIncluded = notIncludedItems,
+    newRequirements = clientRequirements,
+    newActive = activeServices
+  ) => {
+    const constructedPhases: IQuotationPhase[] = newActive.map((catId) => {
+      const cat = SERVICE_CATEGORIES.find((c) => c.id === catId)!;
+      return {
+        title: cat.label,
+        description: `Deliverables and feature scope for ${cat.label}`,
+        items: newScopes[catId] || [],
+      };
+    });
+
+    const flattenedScope: string[] = [];
+    newActive.forEach((catId) => {
+      const items = newScopes[catId] || [];
+      items.forEach((item) => flattenedScope.push(`[${SERVICE_CATEGORIES.find((c) => c.id === catId)?.badgeText}] ${item}`));
+    });
+
+    onChange({
+      ...data,
+      phases: constructedPhases,
+      developmentScope: flattenedScope,
+      notIncluded: newNotIncluded,
+      clientRequirements: newRequirements,
+    });
   };
 
-  // ── Category-aware section visibility ──
-  // Driven entirely by CATEGORY_CONFIG. Switching category only changes which
-  // sections render — it never wipes data already entered in shared sections.
-  const sections = getCategorySections(data.category);
-  const has = (section: string) => sections.includes(section as never);
-  // Additional Services is shown for service-based categories ("services") and
-  // also wherever "pricing" is present, so web-development keeps it exactly as before.
-  const showServices = has("services") || has("pricing");
-  const showOptional = has("techStack") || has("milestones") || has("workflow");
-  const isWebDev = (data.category ?? "web-development") === "web-development";
-  // Non-web-dev categories use additionalServices as the primary line-item list.
-  const servicesSectionTitle = isWebDev ? "Additional Services" : "Packages / Line Items";
-  const servicesSectionDesc = isWebDev
-    ? "Add individual items like hosting, domains, SSL, or manual tasks."
-    : "Define each package or line item with a title, price, and optional billing cycle.";
+  // AI Paste text & UI states
+  const [aiInputText, setAiInputText] = useState("");
+  const [newScopeInputs, setNewScopeInputs] = useState<Record<ServiceCategoryKey, string>>({
+    "web-dev": "",
+    "marketing": "",
+    "video-editing": "",
+    "photo-editing": "",
+  });
+  const [newNotIncludedInput, setNewNotIncludedInput] = useState("");
+  const [newRequirementInput, setNewRequirementInput] = useState("");
 
-  const computedTotals = useMemo(() => {
-    // Per-line amount = price × (quantity ?? 1); web-dev has no quantity ⇒ ×1.
-    const servicesTotal = data.additionalServices.reduce((acc, s) => acc + lineItemAmount(s), 0);
-    // Category-aware (Option B): web-development = basePrice + services (UNCHANGED);
-    // other categories = services only. No tax at the template layer (as before).
-    const isWebDev = (data.category ?? "web-development") === "web-development";
-    const subtotal = isWebDev ? data.pricing.basePrice + servicesTotal : servicesTotal;
-    const discountAmount = (subtotal * data.pricing.discount) / 100;
-    const grandTotal = subtotal - discountAmount;
-    return { subtotal, discountAmount, grandTotal };
-  }, [data.pricing, data.additionalServices, data.category]);
+  const finalAmount = useMemo(() => {
+    const validBase = isNaN(data.pricing?.basePrice) ? 0 : Number(data.pricing?.basePrice);
+    const validDiscount = isNaN(data.pricing?.discount) ? 0 : Number(data.pricing?.discount);
+    const discountVal = (validBase * validDiscount) / 100;
+    return Math.max(0, validBase - discountVal);
+  }, [data.pricing?.basePrice, data.pricing?.discount]);
 
-  // Phase operations
-  const addPhase = () => {
-    // Validation: if any existing phase doesn't have a title, warn and stop
-    const hasEmptyPhase = data.phases.some((p) => !p.title || !p.title.trim());
-    if (hasEmptyPhase) {
-      toast.warning("Please fill out existing phase titles before adding a new one.", {
-        description: "Each phase requires at least a title to maintain structure.",
-      });
+  const toggleService = (catId: ServiceCategoryKey) => {
+    if (isSaving) return;
+    let nextActive: ServiceCategoryKey[];
+    if (activeServices.includes(catId)) {
+      if (activeServices.length === 1) {
+        toast.error("At least one service category must remain active!");
+        return;
+      }
+      nextActive = activeServices.filter((id) => id !== catId);
+      toast.info(`Disabled ${SERVICE_CATEGORIES.find((c) => c.id === catId)?.label}`);
+    } else {
+      nextActive = [...activeServices, catId];
+      toast.success(`Enabled ${SERVICE_CATEGORIES.find((c) => c.id === catId)?.label}`);
+    }
+    setActiveServices(nextActive);
+    syncToParent(categoryScopes, notIncludedItems, clientRequirements, nextActive);
+  };
+
+  const handleParseAI = () => {
+    if (!aiInputText.trim()) {
+      toast.error("Please paste ChatGPT output first!");
       return;
     }
 
-    updateData({
-      phases: [...data.phases, { title: "", description: "", items: [] }],
-    });
+    const lines = aiInputText.split(/\r?\n/);
+    let currentSection: ServiceCategoryKey | "notIncluded" | "clientRequirements" | "none" = "none";
+
+    const parsedScopes: Record<ServiceCategoryKey, string[]> = {
+      "web-dev": [],
+      "marketing": [],
+      "video-editing": [],
+      "photo-editing": [],
+    };
+    const parsedNotIncluded: string[] = [];
+    const parsedRequirements: string[] = [];
+
+    for (const rawLine of lines) {
+      const line = rawLine.trim();
+      if (!line) continue;
+
+      const lower = line.toLowerCase();
+      if (lower.includes("web design") || lower.includes("web development") || lower.includes("website scope") || lower.includes("ui/ux") || lower.includes("product design")) {
+        currentSection = "web-dev";
+        if (!/^\d+[\.\)]/.test(line) && !/^[-\*•]/.test(line)) continue;
+      } else if (lower.includes("marketing") || lower.includes("seo") || lower.includes("campaign")) {
+        currentSection = "marketing";
+        if (!/^\d+[\.\)]/.test(line) && !/^[-\*•]/.test(line)) continue;
+      } else if (lower.includes("video") || lower.includes("motion")) {
+        currentSection = "video-editing";
+        if (!/^\d+[\.\)]/.test(line) && !/^[-\*•]/.test(line)) continue;
+      } else if (lower.includes("photo") || lower.includes("retouch") || lower.includes("graphic")) {
+        currentSection = "photo-editing";
+        if (!/^\d+[\.\)]/.test(line) && !/^[-\*•]/.test(line)) continue;
+      } else if (lower.includes("not included") || lower.includes("exclusions") || lower.includes("out of scope")) {
+        currentSection = "notIncluded";
+        if (!/^\d+[\.\)]/.test(line) && !/^[-\*•]/.test(line)) continue;
+      } else if (lower.includes("client needs to provide") || lower.includes("client provides") || lower.includes("client requirements")) {
+        currentSection = "clientRequirements";
+        if (!/^\d+[\.\)]/.test(line) && !/^[-\*•]/.test(line)) continue;
+      }
+
+      if (currentSection !== "none") {
+        const cleaned = line.replace(/^(\d+[\.\)]|[-\*•+])\s*/, "").trim();
+        if (cleaned && !cleaned.endsWith(":") && cleaned.length > 2) {
+          if (currentSection === "notIncluded") parsedNotIncluded.push(cleaned);
+          else if (currentSection === "clientRequirements") parsedRequirements.push(cleaned);
+          else parsedScopes[currentSection].push(cleaned);
+        }
+      }
+    }
+
+    let totalParsed =
+      Object.values(parsedScopes).reduce((acc, arr) => acc + arr.length, 0) +
+      parsedNotIncluded.length +
+      parsedRequirements.length;
+
+    if (totalParsed > 0) {
+      const nextScopes = { ...categoryScopes };
+      const nextActive = [...activeServices];
+      let addedCategories = 0;
+
+      for (const key of Object.keys(parsedScopes) as ServiceCategoryKey[]) {
+        if (parsedScopes[key].length > 0) {
+          nextScopes[key] = parsedScopes[key];
+          if (!nextActive.includes(key)) {
+            nextActive.push(key);
+            addedCategories++;
+          }
+        }
+      }
+
+      setCategoryScopes(nextScopes);
+      if (addedCategories > 0) setActiveServices(nextActive);
+      const nextNotIncluded = parsedNotIncluded.length > 0 ? parsedNotIncluded : notIncludedItems;
+      const nextReq = parsedRequirements.length > 0 ? parsedRequirements : clientRequirements;
+
+      if (parsedNotIncluded.length > 0) setNotIncludedItems(nextNotIncluded);
+      if (parsedRequirements.length > 0) setClientRequirements(nextReq);
+
+      syncToParent(nextScopes, nextNotIncluded, nextReq, nextActive);
+      toast.success(`🎉 Successfully auto-filled ${totalParsed} items across multi-service categories!`);
+    } else {
+      toast.error("Could not auto-detect sections! Ensure headings like 'Web Design Scope' or 'Not Included' are present.");
+    }
   };
 
-  const updatePhase = (index: number, updates: Partial<IQuotationPhase>) => {
-    const newPhases = data.phases.map((p, i) => (i === index ? { ...p, ...updates } : p));
-    updateData({ phases: newPhases });
+  const dynamicAiPrompt = useMemo(() => {
+    const activeHeaders = activeServices
+      .map((catId, idx) => {
+        const cat = SERVICE_CATEGORIES.find((c) => c.id === catId)!;
+        let desc = "(List feature deliverables as bullet points)";
+        if (catId === "web-dev") desc = "(List web structure, UI design, and development features as bullet points)";
+        else if (catId === "marketing") desc = "(List SEO audit, GA4 setup, and ad campaign features as bullet points)";
+        else if (catId === "video-editing") desc = "(List video editing, color grading, and reel features as bullet points)";
+        else if (catId === "photo-editing") desc = "(List photo retouching, background removal, and graphic features as bullet points)";
+
+        return `${idx + 1}. ${cat.label} Scope\n${desc}`;
+      })
+      .join("\n\n");
+
+    const exclusionsIdx = activeServices.length + 1;
+    const reqIdx = activeServices.length + 2;
+
+    return `Please create a Multi-Service Agency Proposal for the selected services with these exact section headings:\n\n${activeHeaders}\n\n${exclusionsIdx}. Not Included in This Price\n(List exclusions like domain, hosting, ad budget as bullet points)\n\n${reqIdx}. Client Needs to Provide\n(List required client assets like brand guidelines, credentials as bullet points)`;
+  }, [activeServices]);
+
+  const copyPrompt = () => {
+    navigator.clipboard.writeText(dynamicAiPrompt);
+    const names = activeServices
+      .map((id) => SERVICE_CATEGORIES.find((c) => c.id === id)?.badgeText)
+      .filter(Boolean)
+      .join(", ");
+    toast.success(`🎉 AI Prompt for [${names}] copied to clipboard!`);
   };
 
-  const removePhase = (index: number) => {
-    updateData({ phases: data.phases.filter((_, i) => i !== index) });
+  const updateScopeItem = (catId: ServiceCategoryKey, index: number, val: string) => {
+    if (isSaving) return;
+    const next = { ...categoryScopes };
+    next[catId] = [...next[catId]];
+    next[catId][index] = val;
+    setCategoryScopes(next);
+    syncToParent(next, notIncludedItems, clientRequirements, activeServices);
   };
 
-  // Additional Services
-  const addService = () => {
-    updateData({
-      additionalServices: [
-        ...data.additionalServices,
-        {
-          title: "",
-          price: 0,
-          billingCycle: getDefaultBillingCycle(data.category),
-          ...(isUnitBased(data.category) ? { quantity: 1 } : {}),
-          description: "",
-        },
-      ],
-    });
+  const deleteScopeItem = (catId: ServiceCategoryKey, index: number) => {
+    if (isSaving) return;
+    const next = { ...categoryScopes };
+    next[catId] = next[catId].filter((_, i) => i !== index);
+    setCategoryScopes(next);
+    syncToParent(next, notIncludedItems, clientRequirements, activeServices);
   };
 
-  const updateService = (index: number, updates: Partial<IAdditionalService>) => {
-    const newServices = data.additionalServices.map((s, i) =>
-      i === index ? { ...s, ...updates } : s
-    );
-    updateData({ additionalServices: newServices });
+  const addScopeItem = (catId: ServiceCategoryKey) => {
+    if (isSaving) return;
+    const val = newScopeInputs[catId].trim();
+    if (!val) return;
+    const next = { ...categoryScopes };
+    next[catId] = [...next[catId], val];
+    setCategoryScopes(next);
+    setNewScopeInputs({ ...newScopeInputs, [catId]: "" });
+    syncToParent(next, notIncludedItems, clientRequirements, activeServices);
   };
 
-  const removeService = (index: number) => {
-    updateData({
-      additionalServices: data.additionalServices.filter((_, i) => i !== index),
-    });
+  const updateItem = (listName: "notIncluded" | "req", index: number, val: string) => {
+    if (isSaving) return;
+    if (listName === "notIncluded") {
+      const next = [...notIncludedItems];
+      next[index] = val;
+      setNotIncludedItems(next);
+      syncToParent(categoryScopes, next, clientRequirements, activeServices);
+    } else {
+      const next = [...clientRequirements];
+      next[index] = val;
+      setClientRequirements(next);
+      syncToParent(categoryScopes, notIncludedItems, next, activeServices);
+    }
   };
 
-  // Tech stack
-  const updateTechStack = (updates: Partial<TemplateData["techStack"]>) => {
-    updateData({ techStack: { ...data.techStack, ...updates } });
+  const deleteItem = (listName: "notIncluded" | "req", index: number) => {
+    if (isSaving) return;
+    if (listName === "notIncluded") {
+      const next = notIncludedItems.filter((_, i) => i !== index);
+      setNotIncludedItems(next);
+      syncToParent(categoryScopes, next, clientRequirements, activeServices);
+    } else {
+      const next = clientRequirements.filter((_, i) => i !== index);
+      setClientRequirements(next);
+      syncToParent(categoryScopes, notIncludedItems, next, activeServices);
+    }
   };
 
-  // Payment Milestones
-  const addPaymentMilestone = () => {
-    updateData({
-      paymentMilestones: [...data.paymentMilestones, { label: "", percentage: 0 }],
-    });
-  };
-
-  const updatePaymentMilestone = (index: number, updates: Partial<IPaymentMilestone>) => {
-    const newMilestones = data.paymentMilestones.map((m, i) => (i === index ? { ...m, ...updates } : m));
-    updateData({ paymentMilestones: newMilestones });
-  };
-
-  const removePaymentMilestone = (index: number) => {
-    updateData({ paymentMilestones: data.paymentMilestones.filter((_, i) => i !== index) });
-  };
-
-  // Workflow
-  const updateWorkflow = (workflow: string[]) => {
-    updateData({ workflow });
-  };
-
-  const syncWorkflowFromPhases = () => {
-    const steps = data.phases
-      .map((p) => p.title.trim())
-      .filter(Boolean);
-    updateWorkflow(steps);
+  const addItem = (listName: "notIncluded" | "req") => {
+    if (isSaving) return;
+    if (listName === "notIncluded") {
+      if (!newNotIncludedInput.trim()) return;
+      const next = [...notIncludedItems, newNotIncludedInput.trim()];
+      setNotIncludedItems(next);
+      setNewNotIncludedInput("");
+      syncToParent(categoryScopes, next, clientRequirements, activeServices);
+    } else {
+      if (!newRequirementInput.trim()) return;
+      const next = [...clientRequirements, newRequirementInput.trim()];
+      setClientRequirements(next);
+      setNewRequirementInput("");
+      syncToParent(categoryScopes, notIncludedItems, next, activeServices);
+    }
   };
 
   return (
-    <div className="w-full space-y-8 p-6 bg-background/40 min-h-screen">
-      {/* Header section with Teal and Orange flavor */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight text-foreground flex items-center gap-2">
-            <Layout className="w-8 h-8 text-teal-600" />
-            <span>{pageTitle}</span>
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            Build dynamic template scope, pricing, phases, and workflows.
-          </p>
-        </div>
-        <div>
-          <Button
-            onClick={onSave}
-            disabled={isSaving}
-            className="bg-teal-600 hover:bg-teal-700 text-white font-semibold flex items-center gap-2 shadow-md hover:shadow-lg px-6 h-11 rounded-lg transition duration-200"
-          >
-            {isSaving ? (
-              <>
-                <span className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
-                <span>Saving...</span>
-              </>
-            ) : (
-              <>
-                <span>Save Template</span>
-              </>
-            )}
-          </Button>
-        </div>
-      </div>
+    <>
+      <style jsx global>{`
+        @import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;800&family=Outfit:wght@300;400;500;600;700;800&display=swap");
+        .font-editorial {
+          font-family: "Outfit", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+        .font-mono-numbers {
+          font-family: "JetBrains Mono", monospace;
+        }
+      `}</style>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Main Sections */}
-        <div className="lg:col-span-2 space-y-6">
-          <Card className="border-border bg-card p-6 shadow-sm flex flex-col space-y-6 rounded-xl">
-            {/* Template Header/Title */}
-            <div className="space-y-4">
-              <SectionHeader
-                title="Template Identity"
-                icon={<FileText className="w-5 h-5 text-teal-600" />}
-                description="General name and high-level description for this reusable template"
-              />
-              <div className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-1">
-                    <FieldLabel>Template Name</FieldLabel>
-                    <TextInput
-                      value={data.name}
-                      onChange={(e) => updateData({ name: e.target.value })}
-                      placeholder="e.g. E-Commerce Development Package"
-                      className="focus:ring-teal-500 focus:border-teal-500"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <FieldLabel>Category</FieldLabel>
-                    <Select
-                      value={data.category}
-                      onValueChange={(v) =>
-                        updateData({ category: v as QuotationCategory })
-                      }
-                    >
-                      <SelectTrigger className="w-full">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {CATEGORY_OPTIONS.map((opt) => (
-                          <SelectItem key={opt.value} value={opt.value}>
-                            {opt.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-                {has("overview") && (
-                  <div className="space-y-1">
-                    <FieldLabel>Scope Overview</FieldLabel>
-                    <TextArea
-                      value={data.overview || ""}
-                      onChange={(e) => updateData({ overview: e.target.value })}
-                      placeholder="Project overview and primary objectives…"
-                      className="min-h-[80px] focus:ring-teal-500 focus:border-teal-500"
-                    />
-                  </div>
-                )}
+      <div className="w-full max-w-6xl mx-auto space-y-8 font-editorial text-slate-800 dark:text-slate-100 py-6 px-2">
+        
+        {/* Step 1: Multi-Service Selection Bar with SAVE TEMPLATE BUTTON AT THE TOP! */}
+        <PremiumCard accent="purple">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 mb-5 border-b border-slate-200/60 dark:border-slate-800/60">
+            <div className="flex items-center gap-3.5">
+              <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-[#4E12D4] to-[#1E0078] text-white flex items-center justify-center shadow-md shadow-[#4E12D4]/20">
+                <Layers className="w-6 h-6 stroke-[2.5]" />
+              </div>
+              <div>
+                <h2 className="text-xl font-extrabold tracking-tight text-slate-900 dark:text-white">
+                  {pageTitle || "Active Quotation Services"}
+                </h2>
+                <p className="text-xs text-slate-500 dark:text-slate-400 font-normal mt-0.5">
+                  Select 1, 2, or multiple agency services to bundle into this reusable proposal template
+                </p>
               </div>
             </div>
-          </Card>
 
-          {/* Project Phases Section */}
-          {isPhasesEnabled(data.category) && (
-          <div className="overflow-hidden rounded-xl border border-border bg-card">
-            <div className="flex flex-row items-start justify-between gap-4 border-b border-border bg-muted/30 p-6">
-              <div className="flex-1 min-w-0">
-                <SectionHeader
-                  title="Project Phases"
-                  icon={<Layers className="w-5 h-5 text-teal-600" />}
-                  description="Define clear milestones, end goals, and milestones scope."
-                />
-              </div>
-              <PrimaryButton
-                variant="outline"
-                className="h-10 px-3 shrink-0 shadow-sm border-teal-500/20 text-teal-600 hover:bg-teal-500/10 hover:text-teal-700 transition duration-150"
-                onClick={addPhase}
+            {/* SAVE TEMPLATE BUTTON PLACED PROMINENTLY AT THE TOP! */}
+            <div className="flex items-center gap-3 self-end sm:self-center">
+              <PremiumBadge variant="purple" size="md">
+                {activeServices.length} Services Active
+              </PremiumBadge>
+              <PremiumButton
+                variant="purple"
+                size="lg"
+                onClick={onSave}
+                isLoading={isSaving}
+                disabled={isSaving}
+                leftIcon={<Save className="w-5 h-5 stroke-[2.5]" />}
+                className="px-6 py-3 shadow-lg shadow-[#1E0078]/25"
               >
-                <Plus className="w-4 h-4" /> New Phase
-              </PrimaryButton>
+                Save Template
+              </PremiumButton>
             </div>
-            <div className="p-6">
-              {data.phases.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-border bg-muted/20 p-6 text-center text-sm text-muted-foreground">
-                  No phases added yet. Click <span className="font-semibold text-teal-600">New Phase</span> to detail deliverables.
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {data.phases.map((phase, pIdx) => (
-                    <details
-                      key={pIdx}
-                      className="group border border-border/60 rounded-xl bg-muted/10 px-4 py-3"
-                    >
-                      <summary className="flex cursor-pointer list-none items-center gap-3 py-2 [&::-webkit-details-marker]:hidden">
-                        <div className="flex items-center gap-3 text-left w-full">
-                          <BadgePill>Phase {pIdx + 1}</BadgePill>
-                          <span className="font-bold text-foreground/90">
-                            {phase.title || "Untitled phase"}
-                          </span>
-                        </div>
-                        <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground/60 transition-transform duration-200 group-open:rotate-180" />
-                      </summary>
-                      <div className="pt-3 pb-4 space-y-6 border-t border-border/60 mt-2">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                          <div className="space-y-4">
-                            <div className="space-y-1">
-                              <FieldLabel>Title</FieldLabel>
-                              <TextInput
-                                value={phase.title}
-                                onChange={(e) => updatePhase(pIdx, { title: e.target.value })}
-                                placeholder="Phase title"
-                                className="focus:ring-teal-500 focus:border-teal-500 bg-background"
-                              />
-                            </div>
-                            <div className="space-y-1">
-                              <FieldLabel>Description</FieldLabel>
-                              <TextArea
-                                value={phase.description}
-                                onChange={(e) => updatePhase(pIdx, { description: e.target.value })}
-                                placeholder="Details / key deliverables of this phase..."
-                                className="min-h-[80px] focus:ring-teal-500 focus:border-teal-500 bg-background"
-                              />
-                            </div>
-                          </div>
+          </div>
 
-                          <div className="space-y-4">
-                            <FieldLabel>Dates (optional)</FieldLabel>
-                            <div className="grid grid-cols-2 gap-4">
-                              <div className="space-y-1">
-                                <label className="text-[10px] uppercase font-bold text-muted-foreground">Start</label>
-                                <DatePickerInput
-                                  value={phase.startDate || ""}
-                                  onChange={(date) => updatePhase(pIdx, { startDate: date })}
-                                  placeholder="dd-mm-yyyy"
-                                />
-                              </div>
-                              <div className="space-y-1">
-                                <label className="text-[10px] uppercase font-bold text-muted-foreground">End</label>
-                                <DatePickerInput
-                                  value={phase.endDate || ""}
-                                  onChange={(date) => updatePhase(pIdx, { endDate: date })}
-                                  placeholder="dd-mm-yyyy"
-                                />
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                        <hr className="border-border/60" />
-
-                        <div className="space-y-3">
-                          <FieldLabel>Checkpoints (optional)</FieldLabel>
-                          <div className="flex flex-wrap gap-2">
-                            {phase.items.map((item, iIdx) => (
-                              <SoftBadge key={iIdx}>
-                                {item}
-                                <button
-                                  onClick={() =>
-                                    updatePhase(pIdx, {
-                                      items: phase.items.filter((_, i) => i !== iIdx),
-                                    })
-                                  }
-                                  className="text-muted-foreground hover:text-red-500 transition-colors"
-                                >
-                                  <X className="w-3.5 h-3.5" />
-                                </button>
-                              </SoftBadge>
-                            ))}
-                            <TextInput
-                              placeholder="+ Add checkpoint (Press Enter)…"
-                              className="h-9 text-xs border-dashed focus:ring-teal-500 bg-background"
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter") {
-                                  e.preventDefault();
-                                  const val = e.currentTarget.value;
-                                  if (val) {
-                                    updatePhase(pIdx, {
-                                      items: [...phase.items, val],
-                                    });
-                                    e.currentTarget.value = "";
-                                  }
-                                }
-                              }}
-                            />
-                          </div>
-                        </div>
-
-                        <div className="pt-4 flex justify-end">
-                          <PrimaryButton
-                            variant="ghost"
-                            className="text-red-500 hover:text-red-600 hover:bg-red-500/10 h-9"
-                            onClick={() => removePhase(pIdx)}
-                          >
-                            <Trash2 className="w-4 h-4" /> Delete Phase
-                          </PrimaryButton>
-                        </div>
-                      </div>
-                    </details>
-                  ))}
-                </div>
-              )}
-
-              {data.phases.length > 0 && (
-                <div className="sticky bottom-2 pr-2 pt-4 flex justify-end pointer-events-none z-30">
-                  <button
-                    type="button"
-                    onClick={addPhase}
-                    className="pointer-events-auto bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-full shadow-[0_8px_25px_-8px_rgba(13,148,136,0.5)] hover:shadow-[0_12px_30px_-8px_rgba(13,148,136,0.6)] flex items-center justify-center gap-2 px-5 py-3 transform transition duration-200 hover:-translate-y-1 active:scale-95"
+          <div className="flex flex-wrap gap-3">
+            {SERVICE_CATEGORIES.map((cat) => {
+              const isActive = activeServices.includes(cat.id);
+              const IconComponent = cat.icon;
+              return (
+                <button
+                  key={cat.id}
+                  type="button"
+                  onClick={() => toggleService(cat.id)}
+                  disabled={isSaving}
+                  className={`flex items-center gap-3 px-4.5 py-3 rounded-2xl border transition-all duration-200 text-xs font-extrabold tracking-wide select-none ${
+                    isActive
+                      ? "bg-gradient-to-r from-[#1E0078] to-[#4E12D4] text-white border-[#4E12D4] shadow-md shadow-[#4E12D4]/25 scale-[1.02]"
+                      : "bg-white dark:bg-slate-900/60 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-800 hover:border-[#4E12D4]/50 hover:bg-slate-50/80 shadow-2xs"
+                  }`}
+                >
+                  <div className={`w-7 h-7 rounded-xl ${isActive ? 'bg-white/20' : cat.iconBg} flex items-center justify-center shrink-0`}>
+                    <IconComponent className="w-4 h-4 stroke-[2.2] text-white" />
+                  </div>
+                  <span>{cat.label}</span>
+                  <div
+                    className={`w-5 h-5 rounded-full flex items-center justify-center transition-all ${
+                      isActive ? "bg-white text-[#1E0078] shadow-sm scale-110" : "bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-transparent"
+                    }`}
                   >
-                    <Plus className="w-5 h-5" />
-                    <span className="text-sm">New Phase</span>
-                  </button>
-                </div>
-              )}
-            </div>
+                    <Check className="w-3 h-3 stroke-[3]" />
+                  </div>
+                </button>
+              );
+            })}
           </div>
+        </PremiumCard>
 
-          )}
-
-          {/* Additional Services */}
-          {showServices && (
-          <div className="overflow-hidden rounded-xl border border-border bg-card">
-            <div className="flex flex-row items-start justify-between gap-4 border-b border-border bg-muted/30 p-6">
-              <div className="flex-1 min-w-0">
-                <SectionHeader
-                  title={servicesSectionTitle}
-                  icon={<Briefcase className="w-5 h-5 text-teal-600" />}
-                  description={servicesSectionDesc}
-                />
+        {/* Step 2: Template Name & Investment Pricing (NO QUOTATION DATE/COMPANY/NUMBER FIELDS!) */}
+        <PremiumCard accent="violet">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 mb-6 border-b border-slate-200/60 dark:border-slate-800/60">
+            <div className="flex items-center gap-3.5">
+              <div className="w-11 h-11 rounded-2xl bg-[#1E0078] text-white flex items-center justify-center shadow-md shadow-[#1E0078]/20">
+                <Building2 className="w-6 h-6 stroke-[2.5]" />
               </div>
-              <PrimaryButton
-                variant="outline"
-                className="h-10 px-3 shrink-0 shadow-sm border-teal-500/20 text-teal-600 hover:bg-teal-500/10 hover:text-teal-700 transition duration-150"
-                onClick={addService}
-              >
-                <Plus className="w-4 h-4" /> New Service
-              </PrimaryButton>
+              <div>
+                <h2 className="text-xl font-extrabold tracking-tight text-slate-900 dark:text-white">
+                  Template Basic Information & Investment
+                </h2>
+                <p className="text-xs text-slate-500 dark:text-slate-400 font-normal mt-0.5">
+                  Set template package name, base commercial pricing, and default discount tier
+                </p>
+              </div>
             </div>
-            <div className="p-6">
-              {data.additionalServices.length === 0 ? (
-                <div className="rounded-xl border bg-muted/20 p-4 text-sm text-muted-foreground">
-                  No additional services added yet. Click <span className="font-medium text-foreground">New Service</span> to add direct services.
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {data.additionalServices.map((service, sIdx) => (
-                    <div key={sIdx} className="group relative border border-border rounded-xl bg-card p-4 transition-all hover:border-teal-500/30">
-                      <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
-                        <div className={`${isUnitBased(data.category) ? "md:col-span-4" : "md:col-span-5"} space-y-1`}>
-                          <FieldLabel>{isUnitBased(data.category) ? "Package / Item" : "Service Title"}</FieldLabel>
-                          <TextInput
-                            value={service.title}
-                            onChange={(e) => updateService(sIdx, { title: e.target.value })}
-                            placeholder="e.g. Cloud Hosting (1 Year)"
-                          />
-                        </div>
-                        <div className={`${isUnitBased(data.category) ? "md:col-span-2" : "md:col-span-3"} space-y-1`}>
-                          <FieldLabel>Billing Cycle</FieldLabel>
-                          <Select
-                            value={service.billingCycle || getDefaultBillingCycle(data.category)}
-                            onValueChange={(v) => updateService(sIdx, { billingCycle: v as any })}
-                          >
-                            <SelectTrigger className="w-full">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {getBillingOptions(data.category).map((opt) => (
-                                <SelectItem key={opt} value={opt}>
-                                  {BILLING_CYCLE_LABELS[opt]}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        {isUnitBased(data.category) && (
-                          <div className="md:col-span-2 space-y-1">
-                            <FieldLabel>Qty</FieldLabel>
-                            <TextInput
-                              type="number"
-                              min={1}
-                              value={service.quantity ?? 1}
-                              onChange={(e) =>
-                                updateService(sIdx, {
-                                  quantity: e.target.value === "" ? 1 : Number(e.target.value),
-                                })
-                              }
-                              placeholder="1"
-                            />
-                          </div>
-                        )}
-                        <div className="md:col-span-3 space-y-1">
-                          <FieldLabel>{isUnitBased(data.category) ? "Unit price" : "Price"}</FieldLabel>
-                          <TextInput
-                            type="number"
-                            value={service.price || ""}
-                            onChange={(e) => updateService(sIdx, { price: Number(e.target.value) })}
-                            placeholder="0.00"
-                          />
-                        </div>
-                        <div className="md:col-span-1 flex items-end justify-end pb-1">
-                          <PrimaryButton
-                            variant="ghost"
-                            className="h-9 w-9 p-0 text-red-500 hover:text-red-600 hover:bg-red-500/10"
-                            onClick={() => removeService(sIdx)}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </PrimaryButton>
-                        </div>
-                        <div className="md:col-span-12 space-y-1">
-                          <FieldLabel>Description (Optional)</FieldLabel>
-                          <TextArea
-                            value={service.description || ""}
-                            onChange={(e) => updateService(sIdx, { description: e.target.value })}
-                            placeholder="Brief breakdown of what this includes..."
-                            className="min-h-[50px]"
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+            <PremiumBadge variant="violet" size="md">
+              Reusable Agency Package
+            </PremiumBadge>
           </div>
-          )}
 
-          {/* Optional sections */}
-          {showOptional && (
-          <div className="overflow-hidden rounded-xl border border-border bg-card">
-            <div className="border-b border-border bg-muted/30 p-6">
-              <SectionHeader
-                title="Optional Blueprint & Execution Scope"
-                icon={<Settings2 className="w-5 h-5 text-teal-600" />}
-                description="Fill optional technical blueprint, workflow, and payment breakdowns"
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
+            <div className="lg:col-span-6">
+              <PremiumInput
+                label="Proposal Template Name"
+                placeholder="e.g. Corium Bangladesh E-Commerce & UX Package"
+                value={data.name || ""}
+                onChange={(e) => onChange({ ...data, name: e.target.value })}
+                disabled={isSaving}
               />
             </div>
-            <div className="p-6 space-y-4">
-              {has("techStack") && (
-              <>
-              {/* Technical Blueprint */}
-              <details className="group border border-border/60 rounded-xl bg-muted/10 px-4 py-3">
-                <summary className="flex cursor-pointer list-none items-center gap-2 py-2 [&::-webkit-details-marker]:hidden">
-                  <Cpu className="w-4 h-4 text-teal-600" />
-                  <span className="font-bold text-foreground/90">Technical Blueprint</span>
-                  <ChevronDown className="ml-auto h-4 w-4 shrink-0 text-muted-foreground/60 transition-transform duration-200 group-open:rotate-180" />
-                </summary>
-                <div className="pt-3 pb-4 space-y-4 border-t border-border/60 mt-2">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="space-y-1">
-                      <FieldLabel>Frontend</FieldLabel>
-                      <Select
-                        value={data.techStack.frontend || undefined}
-                        onValueChange={(v) => updateTechStack({ frontend: v })}
-                      >
-                        <SelectTrigger className="w-full">
-                          <SelectValue placeholder="Select" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {FRONTEND_OPTIONS.map((opt) => (
-                            <SelectItem key={opt} value={opt}>
-                              {opt}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+
+            <div className="lg:col-span-3">
+              <PremiumInput
+                label="Base Price (BDT)"
+                type="number"
+                value={data.pricing?.basePrice || ""}
+                onChange={(e) =>
+                  onChange({
+                    ...data,
+                    pricing: { ...data.pricing, basePrice: Number(e.target.value) },
+                  })
+                }
+                disabled={isSaving}
+                placeholder="120000"
+              />
+            </div>
+
+            <div className="lg:col-span-3">
+              <PremiumInput
+                label="Discount (%)"
+                type="number"
+                value={data.pricing?.discount || ""}
+                onChange={(e) =>
+                  onChange({
+                    ...data,
+                    pricing: { ...data.pricing, discount: Number(e.target.value) },
+                  })
+                }
+                disabled={isSaving}
+                rightIcon={<span className="text-xs font-bold text-[#4E12D4] font-mono-numbers">%</span>}
+              />
+            </div>
+          </div>
+
+          {/* Prominent Final Amount Banner */}
+          <div className="mt-6 pt-5 border-t border-slate-100 dark:border-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-[#4E12D4]/[0.03] dark:bg-[#4E12D4]/[0.05] p-5 rounded-2xl border border-[#4E12D4]/15">
+            <div>
+              <span className="text-[11px] font-extrabold text-[#4E12D4] dark:text-[#C850FA] uppercase tracking-[0.18em] block">
+                Calculated Investment Total
+              </span>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                Computed dynamically based on base price and discount percentage
+              </p>
+            </div>
+            <div className="text-right flex items-baseline gap-2 justify-end">
+              {(data.pricing?.discount || 0) > 0 && (
+                <span className="text-sm text-slate-400 line-through font-mono-numbers mr-2">
+                  Reg: ৳ {Number(data.pricing?.basePrice || 0).toLocaleString()}
+                </span>
+              )}
+              <span className="text-sm font-bold text-[#1E0078] dark:text-[#C850FA] font-mono-numbers">৳</span>
+              <span className="text-3xl font-black text-[#1E0078] dark:text-white font-mono-numbers tracking-tight">
+                {finalAmount.toLocaleString()}
+              </span>
+              <span className="text-xs font-bold text-[#4E12D4] dark:text-[#C850FA] font-mono-numbers uppercase ml-1">
+                BDT
+              </span>
+            </div>
+          </div>
+        </PremiumCard>
+
+        {/* AI Paste Box Card */}
+        <PremiumCard accent="magenta">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 mb-6 border-b border-slate-200/60 dark:border-slate-800/60">
+            <div className="flex items-center gap-3.5">
+              <div className="w-11 h-11 rounded-2xl bg-[#C850FA] text-white flex items-center justify-center shadow-md shadow-[#C850FA]/20">
+                <ClipboardPaste className="w-6 h-6 stroke-[2.5]" />
+              </div>
+              <div>
+                <h2 className="text-xl font-extrabold tracking-tight text-slate-900 dark:text-white">
+                  AI Smart Import & Multi-Service Parser
+                </h2>
+                <p className="text-xs text-slate-500 dark:text-slate-400 font-normal mt-0.5">
+                  Paste raw ChatGPT proposals to automatically partition deliverables across active services
+                </p>
+              </div>
+            </div>
+            <PremiumButton
+              variant="outline"
+              size="sm"
+              onClick={copyPrompt}
+              disabled={isSaving}
+              leftIcon={<Copy className="w-4 h-4 text-[#4E12D4] stroke-[2.5]" />}
+            >
+              Copy Multi-Service AI Prompt
+            </PremiumButton>
+          </div>
+
+          <div className="space-y-4">
+            <PremiumTextarea
+              placeholder={`Paste ChatGPT output here... (e.g. 1. ${SERVICE_CATEGORIES.find((c) => c.id === activeServices[0])?.label || "Web Design"} Scope: ... ${activeServices.length > 1 ? `2. ${SERVICE_CATEGORIES.find((c => c.id === activeServices[1]))?.label} Scope: ... ` : ""}${activeServices.length + 1}. Not Included: ...)`}
+              value={aiInputText}
+              onChange={(e) => setAiInputText(e.target.value)}
+              disabled={isSaving}
+              rows={4}
+            />
+            <div className="flex items-center justify-between pt-2">
+              <PremiumButton
+                variant="ghost"
+                size="sm"
+                onClick={() => setAiInputText("")}
+                disabled={isSaving || !aiInputText}
+                leftIcon={<RotateCcw className="w-4 h-4 stroke-[2.5]" />}
+              >
+                Clear Text
+              </PremiumButton>
+              <PremiumButton
+                variant="magenta"
+                size="md"
+                onClick={handleParseAI}
+                disabled={isSaving}
+                leftIcon={<Sparkles className="w-4 h-4 stroke-[2.5]" />}
+              >
+                Auto-Parse & Fill Active Categories
+              </PremiumButton>
+            </div>
+          </div>
+        </PremiumCard>
+
+        {/* Step 3: Multi-Service Deliverables Scopes (DIVIDED BY ACTIVE CATEGORIES WITH COLORED BORDERS WITHOUT SHADOWS!) */}
+        <div className="space-y-6">
+          <div className="flex items-center justify-between px-2">
+            <h2 className="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white flex items-center gap-3">
+              <span className="w-3 h-8 rounded-full bg-gradient-to-b from-[#4E12D4] to-[#C850FA]" />
+              1. Services & Deliverables Scope
+            </h2>
+            <span className="text-xs font-extrabold uppercase tracking-widest text-[#4E12D4] bg-[#4E12D4]/10 px-3.5 py-1.5 rounded-full border border-[#4E12D4]/20">
+              {activeServices.length} Active Modules
+            </span>
+          </div>
+
+          {activeServices.map((catId, catIdx) => {
+            const cat = SERVICE_CATEGORIES.find((c) => c.id === catId)!;
+            const items = categoryScopes[catId] || [];
+            const IconComponent = cat.icon;
+
+            return (
+              <PremiumCard key={catId} accent={catIdx % 2 === 0 ? "purple" : "violet"}>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 mb-5 border-b border-slate-200/60 dark:border-slate-800/60">
+                  <div className="flex items-center gap-3.5">
+                    <div className={`w-11 h-11 rounded-2xl ${cat.iconBg} flex items-center justify-center shrink-0`}>
+                      <IconComponent className="w-5 h-5 stroke-[2.2] text-white" />
                     </div>
-                    <div className="space-y-1">
-                      <FieldLabel>Backend</FieldLabel>
-                      <Select
-                        value={data.techStack.backend || undefined}
-                        onValueChange={(v) => updateTechStack({ backend: v })}
-                      >
-                        <SelectTrigger className="w-full">
-                          <SelectValue placeholder="Select" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {BACKEND_OPTIONS.map((opt) => (
-                            <SelectItem key={opt} value={opt}>
-                              {opt}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-1">
-                      <FieldLabel>Database</FieldLabel>
-                      <Select
-                        value={data.techStack.database || undefined}
-                        onValueChange={(v) => updateTechStack({ database: v })}
-                      >
-                        <SelectTrigger className="w-full">
-                          <SelectValue placeholder="Select" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {DB_OPTIONS.map((opt) => (
-                            <SelectItem key={opt} value={opt}>
-                              {opt}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                    <div>
+                      <h3 className="text-lg font-extrabold tracking-tight text-slate-900 dark:text-white">
+                        {String.fromCharCode(65 + catIdx)}. {cat.label}
+                      </h3>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        Itemized feature deliverables for {cat.badgeText} module
+                      </p>
                     </div>
                   </div>
+                  <PremiumBadge variant={catIdx % 2 === 0 ? "purple" : "violet"} size="sm">
+                    {items.length} Items Included
+                  </PremiumBadge>
                 </div>
-              </details>
 
-              {/* Tools Selection */}
-              <details className="group border border-border/60 rounded-xl bg-muted/10 px-4 py-3">
-                <summary className="flex cursor-pointer list-none items-center gap-2 py-2 [&::-webkit-details-marker]:hidden">
-                  <Settings2 className="w-4 h-4 text-teal-600" />
-                  <span className="font-bold text-foreground/90">Tools</span>
-                  <ChevronDown className="ml-auto h-4 w-4 shrink-0 text-muted-foreground/60 transition-transform duration-200 group-open:rotate-180" />
-                </summary>
-                <div className="pt-3 pb-4 space-y-4 border-t border-border/60 mt-2">
-                  <div className="space-y-1">
-                    <FieldLabel className="text-[10px]">Selected Tools</FieldLabel>
-                    {data.techStack.tools.length === 0 ? (
-                      <p className="text-sm text-muted-foreground/60">No tools selected yet.</p>
-                    ) : (
-                      <div className="flex flex-wrap gap-2">
-                        {data.techStack.tools.map((tool, idx) => (
-                          <SoftBadge key={`${tool}-${idx}`}>
-                            {tool}
-                            <button
-                               onClick={() =>
-                                updateTechStack({
-                                  tools: data.techStack.tools.filter((t) => t !== tool),
-                                })
-                              }
-                              className="text-muted-foreground/60 hover:text-red-500 transition-colors"
-                              aria-label={`Remove ${tool}`}
-                              type="button"
-                            >
-                              <X className="w-3.5 h-3.5" />
-                            </button>
-                          </SoftBadge>
-                        ))}
+                <div className="space-y-4">
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    <PremiumInput
+                      placeholder={`Add deliverable to ${cat.badgeText}... (Press Enter)`}
+                      value={newScopeInputs[catId]}
+                      onChange={(e) => setNewScopeInputs({ ...newScopeInputs, [catId]: e.target.value })}
+                      onKeyDown={(e) => e.key === "Enter" && addScopeItem(catId)}
+                      disabled={isSaving}
+                    />
+                    <PremiumButton
+                      variant={catIdx % 2 === 0 ? "purple" : "primary"}
+                      size="md"
+                      onClick={() => addScopeItem(catId)}
+                      disabled={isSaving || !newScopeInputs[catId].trim()}
+                      leftIcon={<Plus className="w-4 h-4 stroke-[3]" />}
+                      className="shrink-0 sm:w-auto w-full justify-center"
+                    >
+                      Add Item
+                    </PremiumButton>
+                  </div>
+
+                  {/* 2-Column Grid with GORGEOUS COLORED BORDERS AND NO BOX SHADOW! */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-[380px] overflow-y-auto pr-1">
+                    <AnimatePresence initial={false}>
+                      {items.map((item, index) => (
+                        <motion.div
+                          key={`${index}-${item.slice(0, 20)}`}
+                          layout
+                          initial={{ opacity: 0, scale: 0.96 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          exit={{ opacity: 0, scale: 0.96 }}
+                          transition={{ duration: 0.2 }}
+                          className={`flex items-center gap-3 p-3.5 rounded-2xl bg-white dark:bg-slate-900/80 border ${cat.borderColor} group transition-all shadow-xs hover:shadow-md`}
+                        >
+                          <span className="w-7 h-7 rounded-xl bg-gradient-to-br from-[#4E12D4] to-[#1E0078] text-white flex items-center justify-center text-xs font-bold shrink-0 select-none font-mono shadow-xs border border-white/20">
+                            {String(index + 1).padStart(2, "0")}
+                          </span>
+                          <input
+                            value={item}
+                            onChange={(e) => updateScopeItem(catId, index, e.target.value)}
+                            disabled={isSaving}
+                            className="border-0 bg-transparent shadow-none h-auto p-1 text-sm font-semibold text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-[#4E12D4] rounded-lg flex-1 disabled:opacity-70"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => deleteScopeItem(catId, index)}
+                            disabled={isSaving}
+                            className="p-1.5 rounded-xl text-[#C850FA] hover:text-white hover:bg-red-500 opacity-70 group-hover:opacity-100 transition-all disabled:pointer-events-none"
+                          >
+                            <Trash2 className="w-4 h-4 stroke-[2.5]" />
+                          </button>
+                        </motion.div>
+                      ))}
+                    </AnimatePresence>
+                    {items.length === 0 && (
+                      <div className="col-span-1 md:col-span-2 text-center py-8 text-sm text-slate-400 italic bg-slate-50/40 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800">
+                        No items in {cat.label}. Add above or auto-parse from AI.
                       </div>
                     )}
                   </div>
-                  <hr className="border-border/60" />
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-y-3 gap-x-6">
-                    {PREDEFINED_TOOLS.map((tool) => (
-                      <div key={tool} className="flex items-center space-x-2">
-                        <Checkbox
-                          id={`tool-${tool}`}
-                          checked={data.techStack.tools.includes(tool)}
-                          onCheckedChange={(checked) => {
-                            const newTools = checked === true
-                              ? [...data.techStack.tools, tool]
-                              : data.techStack.tools.filter((t) => t !== tool);
-                            updateTechStack({ tools: newTools });
-                          }}
-                        />
-                        <label htmlFor={`tool-${tool}`} className="text-sm cursor-pointer text-foreground/75">
-                          {tool}
-                        </label>
-                      </div>
-                    ))}
-                  </div>
-                  <hr className="border-border/60" />
-                  <div className="space-y-1">
-                    <FieldLabel className="text-[10px]">Custom Tool Name</FieldLabel>
-                    <TextInput
-                      placeholder="Type tool name and press Enter…"
-                      className="h-9 text-sm focus:ring-teal-500 bg-background"
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault();
-                          const val = e.currentTarget.value.trim();
-                          if (val && !data.techStack.tools.includes(val)) {
-                            updateTechStack({ tools: [...data.techStack.tools, val] });
-                            e.currentTarget.value = "";
-                          }
-                        }
-                      }}
-                    />
-                  </div>
                 </div>
-              </details>
-              </>
-              )}
-
-              {/* Payment Milestones */}
-              {has("milestones") && (
-              <details className="group border border-border/60 rounded-xl bg-muted/10 px-4 py-3">
-                <summary className="flex cursor-pointer list-none items-center gap-2 py-2 [&::-webkit-details-marker]:hidden">
-                  <HandCoins className="w-4 h-4 text-teal-600" />
-                  <span className="font-bold text-foreground/90">Payment Milestones</span>
-                  <ChevronDown className="ml-auto h-4 w-4 shrink-0 text-muted-foreground/60 transition-transform duration-200 group-open:rotate-180" />
-                </summary>
-                <div className="pt-3 pb-4 space-y-4 border-t border-border/60 mt-2">
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-sm text-muted-foreground font-medium">
-                      Define clear payment allocation percentages for milestones
-                    </p>
-                    <PrimaryButton
-                      variant="outline"
-                      className="h-9 px-3 border-teal-500/20 hover:bg-teal-500/10 text-teal-600 hover:text-teal-700 font-medium"
-                      onClick={addPaymentMilestone}
-                    >
-                      <Plus className="w-4 h-4" /> Add Milestone
-                    </PrimaryButton>
-                  </div>
-
-                  {data.paymentMilestones.length === 0 ? (
-                    <p className="text-sm text-muted-foreground/60">No payment milestones defined.</p>
-                  ) : null}
-
-                  {data.paymentMilestones.map((m, idx) => (
-                    <div key={idx} className="grid grid-cols-12 gap-2 items-center rounded-lg border border-border/60 bg-muted/10 p-2">
-                      <TextInput
-                        className="col-span-7 h-9 text-sm bg-background focus:ring-teal-500"
-                        value={m.label}
-                        onChange={(e) => updatePaymentMilestone(idx, { label: e.target.value })}
-                        placeholder="Milestone label (e.g. Upon Delivery)"
-                      />
-                      <div className="col-span-3 flex items-center gap-1">
-                        <TextInput
-                          className="h-9 text-sm bg-background focus:ring-teal-500"
-                          type="number"
-                          value={m.percentage}
-                          min={0}
-                          max={100}
-                          onChange={(e) =>
-                            updatePaymentMilestone(idx, {
-                              percentage: Number(e.target.value),
-                            })
-                          }
-                        />
-                        <span className="text-xs text-muted-foreground">%</span>
-                      </div>
-                      <PrimaryButton
-                        variant="ghost"
-                        className="col-span-2 text-red-500 hover:text-red-600 hover:bg-red-500/10 h-9"
-                        onClick={() => removePaymentMilestone(idx)}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </PrimaryButton>
-                    </div>
-                  ))}
-
-                  {(() => {
-                    const total = data.paymentMilestones.reduce((s, m) => s + (Number(m.percentage) || 0), 0);
-                    const ok = total === 100;
-                    return (
-                      <div className="flex items-center justify-between text-xs rounded-lg px-3 py-2 bg-muted text-foreground/80 border border-border font-medium">
-                        <span className="flex items-center gap-1 font-semibold">
-                          <PieChart className="w-3.5 h-3.5 text-teal-600" /> Allocation Summary
-                        </span>
-                        <span className={ok ? "text-teal-600 font-bold" : "text-orange-500 font-bold"}>
-                          {total}% {ok ? "✓ Valid Allocation" : "of 100% required"}
-                        </span>
-                      </div>
-                    );
-                  })()}
-
-                  <div className="flex flex-wrap gap-2 pt-1">
-                    <PrimaryButton
-                      variant="outline"
-                      className="h-10 px-3 text-sm border-border text-foreground hover:bg-muted/30 transition"
-                      onClick={() =>
-                        updateData({
-                          paymentMilestones: [
-                            { label: "Upfront on acceptance", percentage: 50 },
-                            { label: "After delivery handover", percentage: 30 },
-                            { label: "Final approval / clearance", percentage: 20 },
-                          ],
-                        })
-                      }
-                    >
-                      Use 50 / 30 / 20
-                    </PrimaryButton>
-                    <PrimaryButton
-                      variant="outline"
-                      className="h-10 px-3 text-sm border-border text-foreground hover:bg-muted/30 transition"
-                      onClick={() =>
-                        updateData({
-                          paymentMilestones: [
-                            { label: "Upfront on acceptance", percentage: 40 },
-                            { label: "Mid-project review", percentage: 30 },
-                            { label: "Final delivery", percentage: 30 },
-                          ],
-                        })
-                      }
-                    >
-                      Use 40 / 30 / 30
-                    </PrimaryButton>
-                  </div>
-                </div>
-              </details>
-              )}
-
-              {/* Workflow Steps */}
-              {has("workflow") && (
-              <details className="group border border-border/60 rounded-xl bg-muted/10 px-4 py-3">
-                <summary className="flex cursor-pointer list-none items-center gap-2 py-2 [&::-webkit-details-marker]:hidden">
-                  <Activity className="w-4 h-4 text-teal-600" />
-                  <span className="font-bold text-foreground/90">Lifecycle Workflow</span>
-                  <ChevronDown className="ml-auto h-4 w-4 shrink-0 text-muted-foreground/60 transition-transform duration-200 group-open:rotate-180" />
-                </summary>
-                <div className="pt-3 pb-4 space-y-4 border-t border-border/60 mt-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-xs text-muted-foreground font-medium">
-                      Define sequence of steps.
-                    </p>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={syncWorkflowFromPhases}
-                      className="h-7 gap-1 px-2 text-xs font-bold text-teal-600 hover:text-teal-700 hover:bg-teal-500/10"
-                      title="Automatically pull titles from project phases"
-                    >
-                      <Sparkles className="w-3 h-3" /> Auto-fill from Phases
-                    </Button>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {data.workflow.map((step, idx) => (
-                      <SoftBadge key={idx}>
-                        <span className="text-[8px] opacity-40 font-mono">{idx + 1}</span>
-                        {step}
-                        <button
-                          onClick={() => updateWorkflow(data.workflow.filter((_, i) => i !== idx))}
-                          className="text-muted-foreground hover:text-red-500 transition-colors"
-                        >
-                          <X className="w-3.5 h-3.5" />
-                        </button>
-                      </SoftBadge>
-                    ))}
-                  </div>
-                  <TextInput
-                    placeholder="Add workflow step (Press Enter)…"
-                    className="h-10 text-sm border-dashed focus:ring-teal-500 bg-background"
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        const val = e.currentTarget.value;
-                        if (val) {
-                          updateWorkflow([...data.workflow, val]);
-                          e.currentTarget.value = "";
-                        }
-                      }
-                    }}
-                  />
-                </div>
-              </details>
-              )}
-            </div>
-          </div>
-          )}
+              </PremiumCard>
+            );
+          })}
         </div>
 
-        {/* Sidebar: Cost Calculations */}
-        {has("pricing") && (
-        <div className="space-y-6">
-          <div className="border border-border overflow-hidden rounded-xl bg-card shadow-sm flex flex-col">
-            <div className="bg-muted/30 border-b border-border p-6">
-              <div className="text-lg font-bold flex items-center gap-2">
-                <span className="inline-flex w-9 h-9 items-center justify-center rounded-lg bg-teal-500/10 text-teal-600 ring-1 ring-teal-500/20">
-                  <Receipt className="w-4 h-4" />
-                </span>
-                <span className="text-foreground/90">Template Pricing</span>
+        {/* Section 2: Not Included in This Price */}
+        <PremiumCard accent="magenta">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 mb-6 border-b border-slate-200/60 dark:border-slate-800/60">
+            <div className="flex items-center gap-3.5">
+              <div className="w-11 h-11 rounded-2xl bg-[#C850FA]/10 text-[#C850FA] flex items-center justify-center border border-[#C850FA]/25">
+                <XCircle className="w-6 h-6 stroke-[2.5]" />
+              </div>
+              <div>
+                <h2 className="text-xl font-extrabold tracking-tight text-slate-900 dark:text-white">
+                  2. Not Included in This Price
+                </h2>
+                <p className="text-xs text-slate-500 dark:text-slate-400 font-normal mt-0.5">
+                  Commercial exclusions and out-of-scope items across all active services
+                </p>
               </div>
             </div>
-            <div className="p-6 space-y-5">
-              <div className="grid grid-cols-1 gap-4">
-                {isWebDev && (
-                <div className="space-y-1">
-                  <FieldLabel>Base Projection (Base Price)</FieldLabel>
-                  <TextInput
-                    type="number"
-                    value={data.pricing.basePrice}
-                    onChange={(e) =>
-                      updateData({
-                        pricing: { ...data.pricing, basePrice: Number(e.target.value) },
-                      })
-                    }
-                    className="h-10 text-sm focus:ring-teal-500 bg-background font-medium"
-                  />
-                </div>
-                )}
-                <div className="space-y-1">
-                  <FieldLabel>Standard Discount (%)</FieldLabel>
-                  <TextInput
-                    type="number"
-                    value={data.pricing.discount}
-                    onChange={(e) =>
-                      updateData({
-                        pricing: { ...data.pricing, discount: Number(e.target.value) },
-                      })
-                    }
-                    className="h-10 text-sm focus:ring-teal-500 bg-background font-medium"
-                  />
-                </div>
-              </div>
+            <PremiumBadge variant="magenta" size="md">
+              {notIncludedItems.length} Exclusions
+            </PremiumBadge>
+          </div>
 
-              {/* Additional Services */}
-              <div className="space-y-3 pt-4 border-t border-border/60">
-                <div className="flex items-center justify-between">
-                  <FieldLabel>Optional / Additional Scope</FieldLabel>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() =>
-                      updateData({
-                        additionalServices: [...data.additionalServices, { title: "", price: 0, billingCycle: getDefaultBillingCycle(data.category), ...(isUnitBased(data.category) ? { quantity: 1 } : {}) }],
-                      })
-                    }
-                    className="h-7 gap-1 px-2 text-xs font-semibold text-teal-600 hover:text-teal-700 hover:bg-teal-500/10"
-                  >
-                    <Plus className="w-3 h-3" /> Add Service
-                  </Button>
-                </div>
-
-                {data.additionalServices.length === 0 ? (
-                  <p className="text-xs text-muted-foreground/60 text-center py-2">
-                    No extra/add-on services configured.
-                  </p>
-                ) : (
-                  <div className="space-y-2">
-                    {data.additionalServices.map((service, idx) => (
-                      <div key={idx} className="flex gap-2 items-center">
-                        <TextInput
-                          placeholder="Scope title"
-                          className="h-9 text-xs flex-1 bg-background focus:ring-teal-500"
-                          value={service.title}
-                          onChange={(e) => {
-                            const updated = data.additionalServices.map((s, i) =>
-                              i === idx ? { ...s, title: e.target.value } : s
-                            );
-                            updateData({ additionalServices: updated });
-                          }}
-                        />
-                        <div className="relative w-[110px]">
-                          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-medium text-muted-foreground/60">
-                            ৳
-                          </span>
-                          <TextInput
-                            type="number"
-                            className="h-9 pl-6 pr-2 text-xs w-full bg-background focus:ring-teal-500 font-medium"
-                            value={service.price}
-                            onChange={(e) => {
-                              const updated = data.additionalServices.map((s, i) =>
-                                i === idx ? { ...s, price: Number(e.target.value) } : s
-                              );
-                              updateData({ additionalServices: updated });
-                            }}
-                          />
-                        </div>
-                        <PrimaryButton
-                          variant="ghost"
-                          className="w-8 h-8 rounded-lg p-0 text-red-500 hover:text-red-600 hover:bg-red-500/10 h-9 shrink-0 flex items-center justify-center"
-                          onClick={() => {
-                            const updated = data.additionalServices.filter((_, i) => i !== idx);
-                            updateData({ additionalServices: updated });
-                          }}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </PrimaryButton>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Grand Cost Calculations */}
-              <div className="pt-4 border-t border-border/60 space-y-3">
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-muted-foreground">Base / Subtotal</span>
-                  <span className="font-semibold text-foreground/80">
-                    {formatMoney(computedTotals.subtotal, "৳")}
-                  </span>
-                </div>
-                {data.pricing.discount > 0 && (
-                  <div className="flex justify-between items-center text-sm">
-                    <span className="text-orange-500">
-                      Standard Discount ({data.pricing.discount}%)
-                    </span>
-                    <span className="font-bold text-orange-600">
-                      - {formatMoney(computedTotals.discountAmount, "৳")}
-                    </span>
-                  </div>
-                )}
-
-                <div className="pt-4 border-t border-border space-y-1">
-                  <span className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-muted-foreground">
-                    Grand Project Total
-                  </span>
-                  <div className="text-3xl font-bold tracking-tight text-teal-600 leading-none">
-                    {formatMoney(computedTotals.grandTotal, "৳")}
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="flex flex-col gap-3 px-6 pb-6 bg-muted/10">
-              <Button
-                onClick={onSave}
+          <div className="space-y-5">
+            <div className="flex flex-col sm:flex-row gap-3">
+              <PremiumInput
+                placeholder="Type an exclusion item... (e.g. Domain cost, Monthly maintenance)"
+                value={newNotIncludedInput}
+                onChange={(e) => setNewNotIncludedInput(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && addItem("notIncluded")}
                 disabled={isSaving}
-                className="bg-teal-600 hover:bg-teal-700 text-white font-semibold flex items-center gap-2 shadow-md hover:shadow-lg w-full h-11 rounded-lg transition duration-200"
+              />
+              <PremiumButton
+                variant="magenta"
+                size="md"
+                onClick={() => addItem("notIncluded")}
+                disabled={isSaving || !newNotIncludedInput.trim()}
+                leftIcon={<Plus className="w-4 h-4 stroke-[3]" />}
+                className="shrink-0 sm:w-auto w-full justify-center"
               >
-                {isSaving ? (
-                  <>
-                    <span className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
-                    <span>Saving...</span>
-                  </>
-                ) : (
-                  <>
-                    <span>Direct Save Template</span>
-                  </>
-                )}
-              </Button>
+                Add Item
+              </PremiumButton>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-[320px] overflow-y-auto pr-1">
+              <AnimatePresence initial={false}>
+                {notIncludedItems.map((item, index) => (
+                  <motion.div
+                    key={`${index}-${item.slice(0, 20)}`}
+                    layout
+                    initial={{ opacity: 0, scale: 0.96 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.96 }}
+                    transition={{ duration: 0.2 }}
+                    className="flex items-center gap-3 p-3 rounded-2xl bg-[#C850FA]/[0.03] border border-[#C850FA]/20 group hover:border-[#C850FA]/40 hover:bg-[#C850FA]/[0.06] transition-all"
+                  >
+                    <span className="w-7 h-7 rounded-xl bg-[#C850FA]/15 text-[#1E0078] dark:text-[#C850FA] flex items-center justify-center text-xs font-bold shrink-0 select-none font-mono-numbers">
+                      {String(index + 1).padStart(2, "0")}
+                    </span>
+                    <input
+                      value={item}
+                      onChange={(e) => updateItem("notIncluded", index, e.target.value)}
+                      disabled={isSaving}
+                      className="border-0 bg-transparent shadow-none h-auto p-1 text-sm font-semibold text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-[#C850FA] rounded-lg flex-1 disabled:opacity-70"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => deleteItem("notIncluded", index)}
+                      disabled={isSaving}
+                      className="p-1.5 rounded-xl text-[#C850FA] hover:text-white hover:bg-red-500 opacity-70 group-hover:opacity-100 transition-all disabled:pointer-events-none"
+                    >
+                      <Trash2 className="w-4 h-4 stroke-[2.5]" />
+                    </button>
+                  </motion.div>
+                ))}
+              </AnimatePresence>
             </div>
           </div>
-        </div>
-        )}
+        </PremiumCard>
+
+        {/* Section 3: Client Requirements */}
+        <PremiumCard accent="violet">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 mb-6 border-b border-slate-200/60 dark:border-slate-800/60">
+            <div className="flex items-center gap-3.5">
+              <div className="w-11 h-11 rounded-2xl bg-[#1E0078]/10 text-[#1E0078] dark:text-indigo-300 flex items-center justify-center border border-[#1E0078]/25">
+                <ClipboardList className="w-6 h-6 stroke-[2.5]" />
+              </div>
+              <div>
+                <h2 className="text-xl font-extrabold tracking-tight text-slate-900 dark:text-white">
+                  3. Client Needs to Provide
+                </h2>
+                <p className="text-xs text-slate-500 dark:text-slate-400 font-normal mt-0.5">
+                  Required assets, logo, content, and access credentials from the client
+                </p>
+              </div>
+            </div>
+            <PremiumBadge variant="violet" size="md">
+              {clientRequirements.length} Prerequisites
+            </PremiumBadge>
+          </div>
+
+          <div className="space-y-5">
+            <div className="flex flex-col sm:flex-row gap-3">
+              <PremiumInput
+                placeholder="Type a prerequisite... (e.g. Logo, Brand guideline, Access)"
+                value={newRequirementInput}
+                onChange={(e) => setNewRequirementInput(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && addItem("req")}
+                disabled={isSaving}
+              />
+              <PremiumButton
+                variant="primary"
+                size="md"
+                onClick={() => addItem("req")}
+                disabled={isSaving || !newRequirementInput.trim()}
+                leftIcon={<Plus className="w-4 h-4 stroke-[3]" />}
+                className="shrink-0 sm:w-auto w-full justify-center"
+              >
+                Add Item
+              </PremiumButton>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-[320px] overflow-y-auto pr-1">
+              <AnimatePresence initial={false}>
+                {clientRequirements.map((item, index) => (
+                  <motion.div
+                    key={`${index}-${item.slice(0, 20)}`}
+                    layout
+                    initial={{ opacity: 0, scale: 0.96 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.96 }}
+                    transition={{ duration: 0.2 }}
+                    className="flex items-center gap-3 p-3 rounded-2xl bg-[#1E0078]/[0.03] border border-[#1E0078]/20 group hover:border-[#1E0078]/40 hover:bg-[#1E0078]/[0.06] transition-all"
+                  >
+                    <span className="w-7 h-7 rounded-xl bg-[#1E0078]/15 text-[#1E0078] dark:text-indigo-300 flex items-center justify-center text-xs font-bold shrink-0 select-none font-mono-numbers">
+                      {String(index + 1).padStart(2, "0")}
+                    </span>
+                    <input
+                      value={item}
+                      onChange={(e) => updateItem("req", index, e.target.value)}
+                      disabled={isSaving}
+                      className="border-0 bg-transparent shadow-none h-auto p-1 text-sm font-semibold text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-[#1E0078] rounded-lg flex-1 disabled:opacity-70"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => deleteItem("req", index)}
+                      disabled={isSaving}
+                      className="p-1.5 rounded-xl text-[#1E0078] hover:text-white hover:bg-red-500 opacity-70 group-hover:opacity-100 transition-all disabled:pointer-events-none"
+                    >
+                      <Trash2 className="w-4 h-4 stroke-[2.5]" />
+                    </button>
+                  </motion.div>
+                ))}
+              </AnimatePresence>
+            </div>
+          </div>
+        </PremiumCard>
       </div>
-    </div>
-  );
-}
-function SectionHeader({
-  title,
-  icon,
-  description,
-}: {
-  title: string;
-  icon: React.ReactNode;
-  description?: string;
-}) {
-  return (
-    <div className="space-y-1 mb-4">
-      <div className="flex items-center gap-2">
-        <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-teal-500/10 text-teal-600 ring-1 ring-teal-500/20">
-          {icon}
-        </span>
-        <h3 className="text-lg font-bold tracking-tight text-foreground">{title}</h3>
-      </div>
-      {description && <p className="text-sm text-muted-foreground font-medium">{description}</p>}
-    </div>
-  );
-}
-
-function FieldLabel({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-  return (
-    <label className={`text-xs font-bold uppercase tracking-wider text-muted-foreground block ${className}`}>
-      {children}
-    </label>
-  );
-}
-
-// Thin wrappers over shadcn primitives so the whole form is shadcn-consistent
-// while keeping the existing call-site prop interface.
-function TextInput({ className, ...props }: React.ComponentProps<typeof Input>) {
-  return <Input {...props} className={cn("h-10", className)} />;
-}
-
-function TextArea({ className, ...props }: React.ComponentProps<typeof Textarea>) {
-  return <Textarea {...props} className={cn(className)} />;
-}
-
-function DatePickerInput({
-  value,
-  onChange,
-  placeholder,
-}: {
-  value: string;
-  onChange: (dateStr: string) => void;
-  placeholder?: string;
-}) {
-  const [open, setOpen] = useState(false);
-  const dateObj = value ? new Date(value) : undefined;
-
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          variant="outline"
-          className="w-full h-10 justify-between text-left font-normal border-border focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 bg-background text-foreground"
-        >
-          {dateObj ? format(dateObj, "PPP") : <span className="text-muted-foreground/60">{placeholder}</span>}
-          <ChevronDown className="h-4 w-4 opacity-50" />
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent className="w-auto p-0 bg-background border border-border" align="start">
-        <Calendar
-          mode="single"
-          selected={dateObj}
-          onSelect={(date) => {
-            onChange(date ? format(date, "yyyy-MM-dd") : "");
-            setOpen(false);
-          }}
-          defaultMonth={dateObj}
-          initialFocus
-        />
-      </PopoverContent>
-    </Popover>
-  );
-}
-
-function PrimaryButton({
-  className,
-  variant = "primary",
-  type,
-  ...props
-}: React.ButtonHTMLAttributes<HTMLButtonElement> & {
-  variant?: "primary" | "outline" | "secondary" | "ghost";
-}) {
-  const variantMap = {
-    primary: "default",
-    outline: "outline",
-    secondary: "secondary",
-    ghost: "ghost",
-  } as const;
-  return (
-    <Button
-      type={type ?? "button"}
-      variant={variantMap[variant]}
-      className={cn(className)}
-      {...props}
-    />
-  );
-}
-
-function SoftBadge({ children }: { children: React.ReactNode }) {
-  return (
-    <span className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-muted/20 px-3 py-1.5 text-xs font-semibold text-foreground/85 shadow-sm transition duration-150">
-      {children}
-    </span>
-  );
-}
-
-function BadgePill({ children }: { children: React.ReactNode }) {
-  return (
-    <span className="bg-teal-500/10 text-teal-600 border border-teal-500/20 px-3 py-1 rounded-full text-xs font-bold tracking-wide uppercase">
-      {children}
-    </span>
+    </>
   );
 }

@@ -47,25 +47,7 @@ function esc(s: unknown): string {
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;');
 }
-
-function compactList(parts: Array<string | undefined | null>): string[] {
-    return parts.map((x) => String(x ?? '').trim()).filter(Boolean);
-}
-
-function formatDatePdf(raw: unknown): string {
-    if (!raw) return 'TBD';
-    try {
-        return format(new Date(String(raw)), 'PPP');
-    } catch {
-        return String(raw);
-    }
-}
-
-type LineItem = { name: string; desc?: string; qty: number; rate: number; total: number };
-
-type Milestone = { label: string; percentage: number; note?: string };
 
 const DEFAULT_LOGO =
     'https://res.cloudinary.com/dny7zfbg9/image/upload/v1777996436/q83auvamwih8u8ftw5zu.png';
@@ -106,677 +88,757 @@ function buildPrintHtml(
         signatureSrc: string;
     },
 ): string {
-    const company = q.company || {};
     const client = q.client || {};
     const details = q.details || {};
     const totals = q.totals || {};
     const pricing = q.pricing || {};
-    const techStack = q.techStack || {};
     const phases = Array.isArray(q.phases) ? q.phases : [];
     const additionalServices = Array.isArray(q.additionalServices)
         ? q.additionalServices
         : [];
-    const workflow = Array.isArray(q.workflow) ? q.workflow : [];
+    const notIncludedRaw = Array.isArray(q.notIncluded) ? q.notIncluded : [];
+    const clientReqRaw = Array.isArray(q.clientRequirements)
+        ? q.clientRequirements
+        : [];
 
     const currency = q.currency || 'BDT';
 
+    const quotationNo = String(q.quotationNumber || 'DRAFT-001').replace(/^#/, '').trim() || 'DRAFT-001';
     const issueDate = details?.date
-        ? format(new Date(details.date), 'PPP')
-        : format(new Date(), 'PPP');
+        ? format(new Date(details.date), 'yyyy-MM-dd')
+        : format(new Date(), 'yyyy-MM-dd');
     const validUntilStr = details?.validUntil
-        ? format(new Date(details.validUntil), 'PPP')
+        ? format(new Date(details.validUntil), 'yyyy-MM-dd')
         : '—';
+    const clientName = client.contactName || client.companyName || 'Valued Client';
+    const clientEmail = client.email || '';
+    const proposalTitle = details?.title || 'Multi-Service Agency Proposal';
+    const finalAmount = Number(totals?.grandTotal ?? pricing?.basePrice ?? 0);
 
-    // Category-aware labels. Existing web-development quotes (category absent or
-    // 'web-development') keep the exact prior label/badge/base-row behaviour.
-    const CATEGORY_LABELS: Record<string, string> = {
-        'web-development': 'Web Design & Development',
-        'photo-editing': 'Photo Editing',
-        marketing: 'Marketing',
-        'video-editing': 'Video Editing',
-    };
-    const cat = String(q.category ?? 'web-development');
-    const isWebDev = cat === 'web-development';
-    const baseTitle = CATEGORY_LABELS[cat] || 'Service';
+    const defaultNotIncluded = [
+        'Domain Registration & Premium Web Hosting (Billed Separately)',
+        'Third-party Paid API Licenses, Plugins, or Premium Fonts',
+        'Paid Ad Spend for Facebook, Google, or LinkedIn Campaigns',
+        'Raw Unedited Studio Footage or Source Design Files (Unless specified)',
+    ];
+    const defaultClientRequirements = [
+        'High-resolution Brand Logo, Color Palette & Typography Guidelines',
+        'Admin Access / Credentials to Hosting, Domain, or CMS Platform',
+        'Final Approved Text Content, Copywriting & Product Photography',
+        'Dedicated Point of Contact for Prompt Feedback and Approvals',
+    ];
 
-    const phaseRows: LineItem[] = phases.map((p: any, idx: number) => ({
-        name: `Phase ${idx + 1}: ${p.title}${p.items?.length ? ` (${p.items.length} deliverables)` : ''}`,
-        qty: 1,
-        rate: 0,
-        total: 0,
-    }));
+    const notIncludedItems =
+        notIncludedRaw.length > 0 ? notIncludedRaw : defaultNotIncluded;
+    const clientRequirements =
+        clientReqRaw.length > 0 ? clientReqRaw : defaultClientRequirements;
 
-    const addOnRows: LineItem[] = additionalServices.map((s: any) => {
-        const qty = s.quantity ?? 1;
-        return {
-            name: `${s.title} (${s.billingCycle})`,
-            desc: s.description,
-            qty,
-            rate: s.price ?? 0,
-            total: (s.price ?? 0) * qty,
-        };
-    });
+    interface ScopeModule {
+        label: string;
+        badgeText: string;
+        items: string[];
+    }
+    const scopes: ScopeModule[] = [];
 
-    // web-development leads with a base-price row (unchanged). Other categories
-    // are driven purely by their line items, so the empty base row is omitted.
-    const baseRows: LineItem[] = isWebDev
-        ? [
-              {
-                  name: details?.title
-                      ? `${baseTitle} — ${details.title}`
-                      : baseTitle,
-                  qty: 1,
-                  rate: pricing?.basePrice ?? 0,
-                  total: pricing?.basePrice ?? 0,
-              },
-          ]
-        : [];
+    if (phases.length > 0) {
+        phases.forEach((p: any) => {
+            const title = String(p.title || 'Service Module').trim();
+            const titleLower = title.toLowerCase();
+            let badgeText = 'WEB DEV';
+            if (titleLower.includes('market') || titleLower.includes('seo'))
+                badgeText = 'MARKETING';
+            else if (
+                titleLower.includes('video') ||
+                titleLower.includes('motion')
+            )
+                badgeText = 'VIDEO EDITING';
+            else if (
+                titleLower.includes('photo') ||
+                titleLower.includes('retouch')
+            )
+                badgeText = 'PHOTO EDITING';
+            else if (
+                titleLower.includes('web') ||
+                titleLower.includes('dev') ||
+                titleLower.includes('design')
+            )
+                badgeText = 'WEB DEV';
+            else badgeText = title.substring(0, 14).toUpperCase();
 
-    const items: LineItem[] = [...baseRows, ...phaseRows, ...addOnRows];
+            const items = Array.isArray(p.items)
+                ? p.items.map((x: any) => String(x || '').trim()).filter(Boolean)
+                : [];
+            if (items.length === 0 && p.description) {
+                items.push(String(p.description).trim());
+            }
 
-    const techTags = compactList([
-        techStack?.frontend,
-        techStack?.backend,
-        techStack?.database,
-        ...(Array.isArray(techStack?.tools) ? techStack.tools : []),
-    ]);
-
-    const workflowSteps = workflow
-        .map((s: string) => String(s || '').trim())
-        .filter(Boolean);
-
-    const pricingSubtotal = totals?.subtotal ?? 0;
-    const pricingTax = totals?.taxAmount ?? 0;
-    const pricingTotal = totals?.grandTotal ?? 0;
-    // Authoritative — computed once by calculateTotals() on save (category- and
-    // quantity-aware). totals.subtotal is already NET of discount, so re-deriving
-    // discount as a % of it here would double-apply the discount rate.
-    const discountAmount = totals?.discountAmount ?? 0;
-
-    let milestones: Milestone[] = Array.isArray(q.paymentMilestones)
-        ? q.paymentMilestones.map((m: any) => ({
-              label: String(m.label || ''),
-              percentage: Number(m.percentage) || 0,
-              note: m.note,
-          }))
-        : [];
-
-    if (!milestones.length) {
-        milestones = [
-            { label: 'Upfront on acceptance', percentage: 50 },
-            { label: 'After delivery handover', percentage: 30 },
-            { label: 'Final approval / clearance', percentage: 20 },
-        ];
+            scopes.push({
+                label: title,
+                badgeText,
+                items:
+                    items.length > 0
+                        ? items
+                        : ['Comprehensive deliverables and feature scope as agreed.'],
+            });
+        });
     }
 
-    const firstMilestone = milestones[0];
+    if (additionalServices.length > 0) {
+        scopes.push({
+            label: 'Additional Add-on Services & Enhancements',
+            badgeText: 'ADD-ONS',
+            items: additionalServices.map((s: any) => {
+                const qty = s.quantity ?? 1;
+                const cycle =
+                    s.billingCycle && s.billingCycle !== 'one-time'
+                        ? ` (${s.billingCycle})`
+                        : '';
+                const desc = s.description ? ` — ${s.description}` : '';
+                return `${s.title}${cycle}${desc} [Qty: ${qty} @ ${formatMoneyPdf(s.price, currency)}]`;
+            }),
+        });
+    }
 
-    const rowsHtml = items
+    if (scopes.length === 0) {
+        scopes.push({
+            label: 'Web Design & Development Scope',
+            badgeText: 'WEB DEV',
+            items: [
+                details?.title || 'Comprehensive Responsive Web Architecture & Design System',
+                'High-converting Landing Page with Modern UI/UX',
+                'Dynamic Backend API & Database Integration',
+                'Speed Optimization (90+ Google PageSpeed Score)',
+            ],
+        });
+    }
+
+    const uniqueBadges = Array.from(new Set(scopes.map((s) => s.badgeText)));
+
+    const badgesHtml = uniqueBadges
         .map(
-            (item, index) => `
-        <tr class="${index % 2 ? 'tr-even' : ''}">
-          <td class="td-no">${index + 1}</td>
-          <td class="td-name">
-            <div style="font-weight: 600; color: var(--slate900);">${esc(item.name)}</div>
-            ${item.desc ? `<div style="font-size: 11px; color: var(--slate500); margin-top: 2px; font-style: italic;">${esc(item.desc)}</div>` : ''}
-          </td>
-          <td class="td-num">${item.qty}</td>
-          <td class="td-num">${item.rate > 0 ? formatMoneyPdf(item.rate, currency) : '—'}</td>
-          <td class="td-num">${item.total > 0 ? formatMoneyPdf(item.total, currency) : '—'}</td>
-        </tr>`,
+            (badge) => `<span class="scope-badge">${esc(badge)}</span>`
         )
         .join('');
 
-    const phasesHtml = phases.length
-        ? phases
-              .map((p: any, idx: number) => {
-                  const descRow = p.description
-                      ? `<tr><td class="phase-td phase-desc">${esc(p.description)}</td></tr>`
-                      : '';
-                  const itemRows = (p.items || []).length
-                      ? (p.items as string[])
-                            .map(
-                                (item: string) =>
-                                    `<tr><td class="phase-td phase-item"><span class="dot">•</span> ${esc(item)}</td></tr>`,
-                            )
-                            .join('')
-                      : '';
-                  const emptyRow =
-                      !p.description && !(p.items || []).length
-                          ? `<tr><td class="phase-td phase-empty">No deliverables listed</td></tr>`
-                          : '';
-                  const body = `${descRow}${itemRows}${emptyRow}`;
-                  const datesSpan =
-                      p.startDate || p.endDate
-                          ? `<span class="phase-dates">(${p.startDate ? formatDatePdf(p.startDate) : 'TBD'} — ${p.endDate ? formatDatePdf(p.endDate) : 'TBD'})</span>`
-                          : '';
-                  return `
-    <table class="phase-table">
-      <thead>
-        <tr>
-          <th class="phase-th">
-            <div class="phase-th-inner">
-              <strong>Phase ${idx + 1}: ${esc(p.title)}${datesSpan}</strong>
-              <span class="scope-count">${(p.items || []).length} deliverables</span>
-            </div>
-          </th>
-        </tr>
-      </thead>
-      <tbody>${body}</tbody>
-    </table>`;
-              })
-              .join('')
-        : '';
-
-    const techHtml = techTags.length
-        ? `<div class="tags">${techTags.map((t) => `<span class="tag">${esc(t)}</span>`).join('')}</div>`
-        : '';
-
-    const workflowHtml = workflowSteps.length
-        ? `<div class="workflow">${workflowSteps
-              .map(
-                  (step, i) => `
-            <div class="wf-step">
-              <span class="wf-num">${i + 1}</span>
-              <span class="wf-txt">${esc(step)}</span>
-            </div>
-            ${i < workflowSteps.length - 1 ? '<span class="wf-arrow">→</span>' : ''}`,
-              )
-              .join('')}</div>`
-        : '';
-
-    const milestonesHtml = milestones
-        .map((m) => {
-            const amount = (pricingTotal * (m.percentage || 0)) / 100;
+    const modulesHtml = scopes
+        .map((scope, idx) => {
+            const letter = String.fromCharCode(65 + idx);
+            const itemsHtml = scope.items
+                .map(
+                    (item, itemIdx) => `
+              <div class="deliverable-item">
+                <span class="deliv-num">${String(itemIdx + 1).padStart(2, '0')}</span>
+                <span class="deliv-text">${esc(item)}</span>
+              </div>`
+                )
+                .join('');
             return `
-        <tr class="pay-row">
-          <td class="pay-badge-cell"><span class="ms-badge">${m.percentage}%</span></td>
-          <td class="pay-label">${esc(m.label)}</td>
-          <td class="pay-amt">${formatMoneyPdf(amount, currency)}</td>
-        </tr>`;
+        <div class="module-card">
+          <div class="module-header">
+            <span class="module-title">${letter}. ${esc(scope.label)}</span>
+            <span class="module-count">${scope.items.length} Deliverables</span>
+          </div>
+          <div class="module-body">
+            ${itemsHtml}
+          </div>
+        </div>`;
         })
         .join('');
 
-    const taxRow =
-        pricing?.taxRate != null && Number(pricing.taxRate) > 0
-            ? `<tr class="pr-tr"><td>Tax (${esc(pricing.taxRate)}%)</td><td class="pr-num">${formatMoneyPdf(pricingTax, currency)}</td></tr>`
-            : '';
+    const notIncludedHtml = notIncludedItems
+        .map(
+            (item) => `
+        <li class="info-item">
+          <span class="icon-pink">✕</span>
+          <span class="info-text">${esc(item)}</span>
+        </li>`
+        )
+        .join('');
 
-    const discountRow = pricing?.discount
-        ? `<tr class="pr-tr"><td>Discount (${esc(pricing.discount)}%)</td><td class="discount pr-num">−${formatMoneyPdf(discountAmount, currency)}</td></tr>`
-        : `<tr class="pr-tr"><td>Discount</td><td class="pr-num">${formatMoneyPdf(0, currency)}</td></tr>`;
+    const clientReqHtml = clientRequirements
+        .map(
+            (item) => `
+        <li class="info-item">
+          <span class="icon-indigo">●</span>
+          <span class="info-text">${esc(item)}</span>
+        </li>`
+        )
+        .join('');
 
-    const pricingTbodyRows = `
-      <tr class="pr-tr"><td>Subtotal</td><td class="pr-num">${formatMoneyPdf(pricingSubtotal, currency)}</td></tr>
-      ${taxRow}
-      ${discountRow}
-      <tr class="pr-tr pr-total"><td>Grand Total</td><td class="pr-num">${formatMoneyPdf(pricingTotal, currency)}</td></tr>`;
+    const paymentMilestonesRaw =
+        Array.isArray(q.paymentMilestones) && q.paymentMilestones.length > 0
+            ? q.paymentMilestones
+            : [
+                  { label: '30% Upfront Payment', percentage: 30 },
+                  { label: '40% Midway Progress Milestone', percentage: 40 },
+                  { label: '30% Final Delivery & Handover', percentage: 30 },
+              ];
 
-    const ctaMilestoneText = firstMilestone
-        ? `On acceptance: ${firstMilestone.percentage}% (${formatMoneyPdf(
-              (pricingTotal * firstMilestone.percentage) / 100,
-              currency,
-          )}) — ${esc(firstMilestone.label)}.`
+    const paymentMilestonesHtml = paymentMilestonesRaw
+        .map(
+            (m: any) => `
+        <li class="info-item" style="justify-content: space-between; align-items: center;">
+          <div style="display: flex; align-items: flex-start; gap: 8px;">
+            <span class="icon-purple">✔</span>
+            <span class="info-text">${esc(m.label)}</span>
+          </div>
+          ${Number(m.percentage) > 0 ? `<strong style="font-family: monospace, system-ui; color: var(--accent); font-size: 11.5px;">${Number(m.percentage)}%</strong>` : ''}
+        </li>`
+        )
+        .join('');
+
+    const overviewHtml = q.overview
+        ? `
+      <div class="sec-heading"><span class="sec-dot"></span> Executive Overview</div>
+      <div class="module-card" style="padding: 16px 20px; font-size: 12.5px; color: #334155; line-height: 1.6; margin-bottom: 24px;">
+        ${esc(q.overview).replace(/\n/g, '<br/>')}
+      </div>`
         : '';
-
-
-    const signatureBlock = ctx.signatureSrc
-        ? `<img class="sig-img" src="${esc(ctx.signatureSrc)}" alt="" width="200" height="48" />`
-        : `<div class="sig-img-spacer" aria-hidden="true"></div>`;
 
     return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>${esc(details.title)}</title>
+  <title>${esc(proposalTitle)}</title>
   <style>
     :root {
-      --violet-light: #A855F7;
-      --violet-deep: #4F46E5;
-      --accent-mid: #7c3aed;
+      --primary: #1E0078;
+      --accent: #4E12D4;
+      --pink: #C850FA;
       --slate900: #0f172a;
+      --slate800: #1e293b;
       --slate700: #334155;
+      --slate600: #475569;
       --slate500: #64748b;
+      --slate400: #94a3b8;
       --slate300: #cbd5e1;
+      --slate200: #e2e8f0;
       --slate100: #f1f5f9;
       --slate50: #f8fafc;
     }
-    * { box-sizing: border-box; margin: 0; }
-    html, body {
-      height: 100%;
-    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      font-size: 13.5px;
-      line-height: 1.62;
-      color: var(--slate700);
+      font-size: 13px;
+      line-height: 1.5;
+      color: var(--slate800);
       background: #fff;
+      -webkit-font-smoothing: antialiased;
     }
-    .page-pad {
-      padding: 0 3mm 40px 3mm;
+    .container {
+      width: 100%;
+      max-width: 100%;
+      padding: 4px 4px 45px 4px;
       position: relative;
-      min-height: 1122px;
     }
     .header-row {
       display: flex;
       justify-content: space-between;
       align-items: flex-start;
-      margin-bottom: 8px;
+      border-bottom: 1px solid var(--slate200);
+      padding-bottom: 24px;
+      margin-bottom: 24px;
     }
-    .logo-box {
-      width: 152px;
-      height: 52px;
+    .header-left {
       display: flex;
       align-items: center;
-      justify-content: flex-start;
-      flex-shrink: 0;
+      gap: 16px;
     }
-    .logo-box img {
-      display: block;
-      width: 148px;
+    .logo-img {
       height: 48px;
+      width: auto;
+      max-width: 160px;
       object-fit: contain;
       object-position: left center;
+      display: block;
     }
-    .header-right { text-align: right; }
-    .h-title {
-      font-size: 28px;
-      font-weight: 800;
-      letter-spacing: 0.08em;
-      background: linear-gradient(180deg, var(--violet-light), var(--violet-deep));
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-      color: var(--violet-deep);
-    }
-    .title-accent {
-      height: 3px;
-      width: 50px;
-      margin: 8px 0 10px auto;
-      border-radius: 2px;
-      background: linear-gradient(90deg, var(--violet-light), var(--violet-deep));
-    }
-    .meta { font-size: 11.5px; color: var(--slate500); margin-bottom: 4px; line-height: 1.5; }
-    .meta strong { color: var(--slate900); font-weight: 700; }
-    .divider { height: 1px; background: var(--slate100); margin: 18px 0 20px; }
-    .billing { display: flex; justify-content: space-between; margin-bottom: 20px; }
-    .bill-col { width: 48%; }
-    .bill-col.r { text-align: right; }
-    .lbl {
-      font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.12em;
-      color: var(--accent-mid); margin-bottom: 9px;
-    }
-    .bill-name { font-size: 13.5px; font-weight: 700; color: var(--slate900); margin-bottom: 5px; line-height: 1.35; }
-    .bill-txt { font-size: 12px; color: var(--slate500); line-height: 1.58; margin-bottom: 4px; }
-    .sec {
-      font-size: 14.5px; font-weight: 800; color: var(--slate900);
-      letter-spacing: 0.1em; text-transform: uppercase; margin-top: 24px; margin-bottom: 11px;
-      page-break-after: avoid;
-      break-after: avoid-page;
-    }
-    .card {
-      border: 1px solid var(--slate100); border-radius: 8px; padding: 14px 16px;
-      background: #fff; margin-bottom: 8px;
-    }
-    .card-soft { background: var(--slate50); }
-    .scope-stack {
-      display: flex;
-      flex-direction: column;
-      gap: 14px;
+    .company-title {
+      font-size: 20px;
+      font-weight: 900;
+      color: var(--primary);
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      line-height: 1.1;
       margin-bottom: 4px;
     }
-    table.phase-table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 12px;
-      border: 1px solid var(--slate100);
-      border-radius: 8px;
-      overflow: hidden;
-    }
-    table.phase-table thead { background: var(--slate50); }
-    .phase-th {
-      text-align: left;
-      font-weight: 400;
-      padding: 0;
-      border-bottom: 1px solid var(--slate100);
-    }
-    .phase-th-inner {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      gap: 12px;
-      padding: 14px 16px;
-      font-size: 13.5px;
-      line-height: 1.3;
-    }
-    .phase-th-inner strong { color: var(--slate900); font-weight: 700; }
-    .phase-dates {
-      font-size: 11.5px;
+    .company-sub {
+      font-size: 11px;
       color: var(--slate500);
-      font-weight: 400;
-      font-style: italic;
-      margin-left: 6px;
+      font-weight: 500;
     }
-    .phase-th-inner .scope-count {
-      font-size: 11.5px;
-      color: var(--slate500);
-      flex-shrink: 0;
-      font-weight: 400;
-    }
-    .phase-td {
-      padding: 11px 16px;
-      border-top: 1px solid var(--slate100);
-      vertical-align: top;
-      line-height: 1.52;
-      word-wrap: break-word;
-    }
-    .phase-desc { color: var(--slate500); font-size: 12px; }
-    .phase-item { color: var(--slate700); }
-    .phase-empty { color: var(--slate500); font-size: 11.5px; }
-    .dot { color: var(--accent-mid); font-weight: 700; margin-right: 6px; }
-    table.svc { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 0; table-layout: fixed; }
-    table.svc th {
-      text-align: left; font-size: 10.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em;
-      color: var(--slate500); background: var(--slate50); border-bottom: 1px solid var(--slate100);
-      padding: 11px 13px; line-height: 1.35;
-    }
-    table.svc td {
-      border-bottom: 1px solid var(--slate100); padding: 11px 13px; vertical-align: top;
-      line-height: 1.5;
-      word-wrap: break-word;
-      overflow-wrap: break-word;
-    }
-    .tr-even { background: #fafafa; }
-    .td-no { width: 40px; text-align: center; }
-    .td-name { width: auto; }
-    .td-num { width: 13%; text-align: right; white-space: nowrap; }
-    .tags { display: flex; flex-wrap: wrap; gap: 5px; }
-    .tag {
-      font-size: 11px; color: var(--slate700); background: var(--slate50);
-      border: 1px solid var(--slate100); border-radius: 4px; padding: 3px 7px;
-    }
-    .workflow { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
-    .wf-step { display: flex; align-items: flex-start; gap: 6px; margin-bottom: 6px; }
-    .wf-num {
-      width: 20px; height: 20px; border-radius: 50%; color: #fff; font-size: 9px; font-weight: 800;
-      display: inline-flex; align-items: center; justify-content: center;
-      background: linear-gradient(135deg, var(--violet-light), var(--violet-deep));
-    }
-    .wf-txt { font-size: 12px; color: var(--slate700); max-width: 220px; line-height: 1.52; }
-    .wf-arrow { color: var(--slate300); font-size: 9px; }
-    table.price-table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 12px;
-    }
-    table.price-table thead th.pricing-h {
-      text-align: left;
-      padding: 13px 17px;
-      background: linear-gradient(90deg, var(--violet-light), var(--violet-deep));
-      color: #fff;
-      font-size: 13px;
-      font-weight: 800;
-      letter-spacing: 0.07em;
-      line-height: 1.35;
-      border: none;
-    }
-    table.price-table .pr-tr td {
-      padding: 11px 16px;
-      border-top: 1px solid var(--slate100);
-      vertical-align: baseline;
-      line-height: 1.45;
-    }
-    table.price-table .pr-num {
+    .header-right {
       text-align: right;
-      font-variant-numeric: tabular-nums;
-      white-space: nowrap;
     }
-    table.price-table .pr-tr.pr-total td {
-      font-weight: 800;
-      font-size: 16px;
-      color: var(--slate900);
-      background: rgba(248, 250, 252, 0.95);
-      padding-top: 14px;
-      padding-bottom: 14px;
-    }
-    .discount { color: #dc2626; }
-    .payment-block {
-      margin-top: 4px;
-      margin-bottom: 12px;
-    }
-    table.pay-table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 12px;
-      table-layout: fixed;
-    }
-    table.pay-table .pay-row td {
-      padding: 12px 16px;
-      border-top: 1px solid var(--slate100);
-      vertical-align: top;
-      line-height: 1.5;
-    }
-    table.pay-table .pay-row:first-child td { border-top: none; }
-    .pay-badge-cell { width: 56px; }
-    table.pay-table .ms-badge {
-      min-width: 44px;
-      text-align: center;
-      font-weight: 800;
-      color: var(--accent-mid);
-      background: rgba(168, 85, 247, 0.12);
-      border-radius: 4px;
-      padding: 2px 6px;
+    .quote-badge {
       display: inline-block;
-    }
-    .pay-label { color: var(--slate700); }
-    .pay-amt {
-      width: 28%;
-      text-align: right;
+      padding: 4px 10px;
+      border-radius: 6px;
+      background-color: rgba(78, 18, 212, 0.08);
+      color: var(--accent);
+      border: 1px solid rgba(78, 18, 212, 0.2);
+      font-size: 11px;
       font-weight: 800;
-      font-variant-numeric: tabular-nums;
-      white-space: nowrap;
-      color: var(--slate900);
-    }
-    /* Tail: CTA + signature + footer in normal flow (no min-height / flex stretch — those forced extra pages). */
-    .pdf-tail {
-      margin-top: 28px;
-      padding-top: 28px;
-    }
-    .cta {
-      display: flex;
-      flex-direction: row;
-      flex-wrap: wrap;
-      gap: 20px;
-      margin-top: 22px;
-      align-items: stretch;
-      border: 1px solid var(--slate100); border-radius: 10px; padding: 18px 20px;
-      background: linear-gradient(180deg, #faf5ff 0%, #fff 45%);
-      page-break-inside: avoid;
-    }
-    .cta-l { flex: 1 1 220px; min-width: 200px; }
-    .cta-r {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      align-items: stretch;
-      flex: 0 1 240px;
-      min-width: 200px;
-    }
-    .cta-h { font-size: 12.5px; font-weight: 800; letter-spacing: 0.08em; color: var(--violet-deep); margin-bottom: 9px; line-height: 1.35; }
-    .cta-d { font-size: 12px; color: var(--slate500); margin-bottom: 7px; line-height: 1.58; }
-    .btn {
-      display: block; text-align: center; text-decoration: none;
-      padding: 13px 17px; border-radius: 8px; font-size: 11px; font-weight: 800; letter-spacing: 0.05em;
-      line-height: 1.3;
-    }
-    .btn-proceed {
-      color: #fff;
-      background: linear-gradient(135deg, #9333ea, var(--violet-deep));
-      box-shadow: 0 4px 14px rgba(79, 70, 229, 0.35);
-      font-size: 12px;
-      padding: 15px 19px;
-    }
-    .btn-primary {
-      color: #fff;
-      background: linear-gradient(135deg, var(--violet-light), var(--violet-deep));
-      box-shadow: 0 2px 8px rgba(79, 70, 229, 0.25);
-    }
-    .btn-secondary {
-      color: #5b21b6; border: 1px solid #c4b5fd; background: #fff; font-weight: 700;
-    }
-    .btn-disabled { opacity: 0.65; cursor: default; pointer-events: none; }
-    .sig-wrap {
-      margin-top: 28px;
-      page-break-inside: avoid;
-      max-width: 320px;
-    }
-    .sig-img {
-      display: block;
-      width: 200px;
-      height: 48px;
-      object-fit: contain;
-      object-position: left bottom;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
       margin-bottom: 6px;
     }
-    .sig-img-spacer { height: 40px; margin-bottom: 6px; }
-    .sig-line { border-bottom: 1px solid var(--slate900); margin-bottom: 8px; width: 100%; max-width: 260px; }
-    .sig-name { font-size: 13px; font-weight: 800; color: var(--slate900); line-height: 1.35; }
-    .sig-role { font-size: 11.5px; color: var(--slate500); margin-top: 5px; line-height: 1.5; }
+    .quote-number {
+      font-size: 18px;
+      font-weight: 900;
+      color: var(--primary);
+      font-family: monospace, system-ui;
+      margin-bottom: 3px;
+    }
+    .quote-meta {
+      font-size: 11.5px;
+      color: var(--slate500);
+      line-height: 1.5;
+    }
+    .quote-meta strong {
+      color: var(--slate800);
+      font-weight: 600;
+    }
+    .quote-meta strong.pink-text {
+      color: var(--pink);
+    }
+    .proposal-card {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: linear-gradient(135deg, rgba(30, 0, 120, 0.04) 0%, rgba(200, 80, 250, 0.03) 100%);
+      border: 1px solid rgba(78, 18, 212, 0.18);
+      border-radius: 18px;
+      padding: 24px;
+      margin-bottom: 28px;
+      box-shadow: 0 4px 16px rgba(30, 0, 120, 0.04);
+      page-break-inside: avoid;
+    }
+    .proposal-left {
+      flex: 1;
+      padding-right: 24px;
+    }
+    .label-muted {
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--slate400);
+      margin-bottom: 4px;
+    }
+    .proposal-title {
+      font-size: 22px;
+      font-weight: 800;
+      color: var(--primary);
+      line-height: 1.25;
+      margin-bottom: 12px;
+    }
+    .badges-wrap {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .scope-badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 9999px;
+      background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
+      color: #fff;
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      box-shadow: 0 2px 4px rgba(30, 0, 120, 0.15);
+    }
+    .proposal-right {
+      width: 280px;
+      flex-shrink: 0;
+      border-left: 1.5px solid rgba(78, 18, 212, 0.15);
+      padding-left: 24px;
+    }
+    .label-purple {
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--accent);
+      margin-bottom: 4px;
+    }
+    .client-name {
+      font-size: 15px;
+      font-weight: 800;
+      color: var(--slate900);
+      line-height: 1.3;
+    }
+    .client-email {
+      font-size: 11.5px;
+      color: var(--slate500);
+      font-weight: 500;
+      margin-top: 2px;
+    }
+    .total-divider {
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid rgba(226, 232, 240, 0.8);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .total-label {
+      font-size: 11.5px;
+      font-weight: 700;
+      color: var(--primary);
+    }
+    .total-amount {
+      font-size: 16px;
+      font-weight: 800;
+      color: var(--primary);
+      font-family: monospace, system-ui;
+    }
+    .sec-heading {
+      font-size: 13.5px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--primary);
+      border-bottom: 1.5px solid var(--slate200);
+      padding-bottom: 8px;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      page-break-after: avoid;
+      break-after: avoid;
+    }
+    .sec-dot {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--accent) 0%, var(--pink) 100%);
+      box-shadow: 0 0 6px rgba(78, 18, 212, 0.25);
+    }
+    .sec-dot.pink { background: var(--pink); }
+    .sec-dot.indigo { background: var(--primary); }
+    .module-card {
+      margin-bottom: 24px;
+    }
+    .module-header {
+      background: linear-gradient(90deg, rgba(78, 18, 212, 0.08) 0%, rgba(200, 80, 250, 0.04) 100%);
+      border: 1px solid rgba(78, 18, 212, 0.22);
+      border-radius: 12px;
+      padding: 13px 20px;
+      margin-bottom: 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      page-break-after: avoid;
+      break-after: avoid;
+      box-shadow: 0 2px 6px rgba(78, 18, 212, 0.04);
+    }
+    .module-title {
+      font-size: 13px;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--primary);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .module-count {
+      font-size: 10.5px;
+      font-weight: 800;
+      color: var(--accent);
+      background-color: #ffffff;
+      border: 1px solid rgba(78, 18, 212, 0.25);
+      padding: 3px 12px;
+      border-radius: 9999px;
+      box-shadow: 0 1px 3px rgba(78, 18, 212, 0.08);
+    }
+    .module-body {
+      background: transparent;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .deliverable-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 14px;
+      padding: 13px 20px;
+      background-color: #ffffff;
+      border: 1px solid rgba(226, 232, 240, 0.85);
+      border-radius: 12px;
+      box-shadow: 0 1px 3px rgba(15, 23, 42, 0.02);
+      page-break-inside: avoid;
+      break-inside: avoid;
+    }
+    .deliverable-item:last-child {
+      border: 1px solid rgba(226, 232, 240, 0.85);
+    }
+    .deliv-num {
+      width: 24px;
+      height: 24px;
+      border-radius: 7px;
+      background: linear-gradient(135deg, var(--accent) 0%, var(--primary) 100%);
+      color: #ffffff;
+      font-size: 11px;
+      font-weight: 800;
+      font-family: monospace, system-ui;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      margin-top: 1px;
+      box-shadow: 0 2px 4px rgba(78, 18, 212, 0.2);
+    }
+    .deliv-text {
+      font-size: 12.5px;
+      font-weight: 600;
+      color: var(--slate800);
+      line-height: 1.55;
+      padding-top: 2px;
+    }
+    .three-col-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin-top: 8px;
+      margin-bottom: 24px;
+      page-break-inside: avoid;
+    }
+    .info-card {
+      padding: 16px;
+      border-radius: 16px;
+    }
+    .info-card.col-pink {
+      background-color: rgba(200, 80, 250, 0.04);
+      border: 1px solid rgba(200, 80, 250, 0.2);
+    }
+    .info-card.col-indigo {
+      background-color: rgba(30, 0, 120, 0.04);
+      border: 1px solid rgba(30, 0, 120, 0.2);
+    }
+    .info-card.col-purple {
+      background-color: rgba(78, 18, 212, 0.04);
+      border: 1px solid rgba(78, 18, 212, 0.2);
+    }
+    .info-card .sec-heading {
+      border-bottom: none;
+      padding-bottom: 0;
+      margin-bottom: 14px;
+      font-size: 11.5px;
+    }
+    .sec-heading.col-pink-title { color: var(--pink); }
+    .sec-heading.col-indigo-title { color: var(--primary); }
+    .sec-heading.col-purple-title { color: var(--accent); }
+    .info-list {
+      list-style: none;
+    }
+    .info-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      margin-bottom: 10px;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--slate700);
+      line-height: 1.45;
+    }
+    .info-item:last-child {
+      margin-bottom: 0;
+    }
+    .icon-pink { color: var(--pink); font-weight: 800; flex-shrink: 0; margin-top: 1px; }
+    .icon-indigo { color: var(--primary); font-weight: 800; flex-shrink: 0; margin-top: 1px; }
+    .icon-purple { color: var(--accent); font-weight: 800; flex-shrink: 0; margin-top: 1px; }
+    .auth-row {
+      border-top: 1px solid var(--slate200);
+      padding-top: 24px;
+      margin-top: 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      page-break-inside: avoid;
+    }
+    .auth-left {
+      max-width: 480px;
+    }
+    .auth-heading {
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--slate400);
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .auth-text {
+      font-size: 11.5px;
+      color: var(--slate600);
+      line-height: 1.55;
+    }
+    .auth-right {
+      text-align: right;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+    }
+    .sig-box {
+      height: 48px;
+      margin-bottom: 8px;
+    }
+    .sig-img {
+      height: 48px;
+      width: auto;
+      max-width: 180px;
+      object-fit: contain;
+      object-position: right bottom;
+      display: block;
+    }
+    .sig-line-box {
+      width: 180px;
+      border-top: 1px solid var(--slate800);
+      padding-top: 6px;
+      text-align: left;
+    }
+    .sig-title {
+      font-size: 11px;
+      font-weight: 800;
+      color: var(--primary);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+    .sig-company {
+      font-size: 10.5px;
+      color: var(--slate500);
+      margin-top: 1px;
+    }
     .doc-footer {
       position: absolute;
       bottom: 0;
-      left: 3mm;
-      right: 3mm;
+      left: 0;
+      right: 0;
+      width: 100%;
       padding-top: 14px;
-      border-top: 1px solid var(--slate300);
-      text-align: center;
-      font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    }
-    .doc-footer-main {
-      font-size: 10.5px;
+      padding-bottom: 8px;
+      border-top: 1px solid var(--slate100);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 11px;
+      color: var(--slate500);
       font-weight: 600;
-      color: #334155;
-      line-height: 1.5;
+      background: #fff;
+      z-index: 1000;
     }
-    .doc-footer a { color: #4F46E5; text-decoration: none; }
+    .doc-footer a {
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: 700;
+    }
   </style>
 </head>
 <body>
-<div class="page-pad">
-
-  <div class="header-row">
-    <div class="logo-box">
-      <img src="${esc(ctx.logoSrc)}" alt="WebBriks" width="148" height="48" />
+  <div class="container">
+    <div class="header-row">
+      <div class="header-left">
+        <img src="${esc(ctx.logoSrc)}" alt="WebBriks" class="logo-img" />
+      </div>
+      <div class="header-right">
+        <div class="quote-badge">OFFICIAL QUOTATION</div>
+        <div class="quote-number">#${esc(quotationNo)}</div>
+        <div class="quote-meta">Issue Date: <strong>${esc(issueDate)}</strong></div>
+        <div class="quote-meta">Valid Until: <strong class="pink-text">${esc(validUntilStr)}</strong></div>
+      </div>
     </div>
-    <div class="header-right">
-      <div class="h-title">QUOTATION</div>
-      <div class="title-accent"></div>
-      <div class="meta">Ref: <strong>${esc(q.quotationNumber || 'TBD')}</strong></div>
-      <div class="meta">Date: <strong>${esc(issueDate)}</strong></div>
-      <div class="meta">Valid until: <strong>${esc(validUntilStr)}</strong></div>
+
+    <div class="proposal-card">
+      <div class="proposal-left">
+        <div class="label-muted">PROPOSAL PACKAGE TITLE</div>
+        <h1 class="proposal-title">${esc(proposalTitle)}</h1>
+        <div class="badges-wrap">
+          ${badgesHtml}
+        </div>
+      </div>
+      <div class="proposal-right">
+        <div class="label-purple">PREPARED FOR</div>
+        <div class="client-name">${esc(clientName)}</div>
+        ${clientEmail ? `<div class="client-email">${esc(clientEmail)}</div>` : ''}
+        <div class="total-divider">
+          <span class="total-label">Grand Total Investment:</span>
+          <span class="total-amount">${formatMoneyPdf(finalAmount, currency)}</span>
+        </div>
+      </div>
     </div>
-  </div>
 
-  <div class="divider"></div>
+    ${overviewHtml}
 
-  <div class="billing">
-    <div class="bill-col">
-      <div class="lbl">Bill From</div>
-      <div class="bill-name">${esc(company?.name || 'Company')}</div>
-      ${company?.address ? `<div class="bill-txt">${esc(company.address)}</div>` : ''}
-      ${company?.email ? `<div class="bill-txt">${esc(company.email)}</div>` : ''}
-      ${company?.phone ? `<div class="bill-txt">${esc(company.phone)}</div>` : ''}
+    <div class="sec-heading">
+      <span class="sec-dot"></span>
+      1. Services &amp; Deliverables Scope (${scopes.length} Modules)
     </div>
-    <div class="bill-col r">
-      <div class="lbl">Bill To</div>
-      <div class="bill-name">${esc(client.contactName)}</div>
-      ${client.companyName ? `<div class="bill-txt">${esc(client.companyName)}</div>` : ''}
-      ${client.address ? `<div class="bill-txt">${esc(client.address)}</div>` : ''}
-      ${client.email ? `<div class="bill-txt">${esc(client.email)}</div>` : ''}
-      ${client.phone ? `<div class="bill-txt">${esc(client.phone)}</div>` : ''}
+    <div style="margin-bottom: 24px;">
+      ${modulesHtml}
     </div>
-  </div>
 
-  ${
-      q.overview
-          ? `<div class="sec">Overview</div><div class="card card-soft"><div class="bill-txt">${esc(q.overview).replace(/\n/g, '<br/>')}</div></div>`
-          : ''
-  }
-
-  ${
-      phases.length
-          ? `<div class="sec">Project Scope</div>
-    <div class="scope-stack">${phasesHtml}</div>`
-          : ''
-  }
-
-  <div class="sec">Services</div>
-  <div class="card" style="padding:0;">
-    <table class="svc">
-      <thead>
-        <tr>
-          <th class="td-no">No.</th>
-          <th class="td-name">Service</th>
-          <th class="td-num">Qty</th>
-          <th class="td-num">Rate</th>
-          <th class="td-num">Total</th>
-        </tr>
-      </thead>
-      <tbody>${rowsHtml}</tbody>
-    </table>
-  </div>
-
-  ${techTags.length ? `<div class="sec">Technology Stack</div><div class="card">${techHtml}</div>` : ''}
-
-  ${workflowSteps.length ? `<div class="sec">Workflow</div><div class="card">${workflowHtml}</div>` : ''}
-
-  <div class="sec">Pricing</div>
-  <div class="card" style="padding:0;">
-    <table class="price-table">
-      <thead>
-        <tr>
-          <th colspan="2" class="pricing-h pricing-th">Pricing Breakdown</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${pricingTbodyRows}
-      </tbody>
-    </table>
-  </div>
-
-  <div class="payment-block">
-  <div class="sec">Payment Terms</div>
-  <div class="card" style="padding:0;">
-    <table class="pay-table">
-      <tbody>${milestonesHtml}</tbody>
-    </table>
-  </div>
-  </div>
-
-  <div class="pdf-tail">
-  <div class="cta">
-    <div class="cta-l">
-      <div class="cta-h">NEXT STEPS</div>
-      <div class="cta-d">Please review this quotation and confirm acceptance to proceed with project initiation and milestone scheduling.</div>
-      ${ctaMilestoneText ? `<div class="cta-d">${ctaMilestoneText}</div>` : ''}
+    <div class="three-col-grid">
+      <div class="info-card col-pink">
+        <div class="sec-heading col-pink-title">
+          <span class="sec-dot pink"></span>
+          2. Not Included in Price
+        </div>
+        <ul class="info-list">
+          ${notIncludedHtml}
+        </ul>
+      </div>
+      <div class="info-card col-indigo">
+        <div class="sec-heading col-indigo-title">
+          <span class="sec-dot indigo"></span>
+          3. Client Needs to Provide
+        </div>
+        <ul class="info-list">
+          ${clientReqHtml}
+        </ul>
+      </div>
+      <div class="info-card col-purple">
+        <div class="sec-heading col-purple-title">
+          <span class="sec-dot" style="background: var(--accent);"></span>
+          4. Payment Milestones
+        </div>
+        <ul class="info-list">
+          ${paymentMilestonesHtml}
+        </ul>
+      </div>
     </div>
-  </div>
 
-  <div class="sig-wrap">
-    ${signatureBlock}
-    <div class="sig-line"></div>
-    <div class="sig-name">Md. Ashaduzzaman</div>
-    <div class="sig-role">Founder &amp; CEO, ${esc(company?.name || 'WebBriks')}</div>
-  </div>
-
-  <footer class="doc-footer">
-    <div class="doc-footer-main">
-      WebBriks — <a href="mailto:info@webbriks.com">info@webbriks.com</a> — <a href="https://www.webbriks.com">www.webbriks.com</a>
+    <div class="auth-row">
+      <div class="auth-left">
+        <div class="auth-heading">
+          <span>🛡️</span> AUTHORIZATION STATUS
+        </div>
+        <div class="auth-text">
+          This quotation is valid for 14 days from the date of issue. Upon acceptance, a formal contract or project milestone invoice will be issued.
+        </div>
+      </div>
+      <div class="auth-right">
+        <div class="sig-box">
+          ${ctx.signatureSrc ? `<img src="${esc(ctx.signatureSrc)}" alt="Authorized Signature" class="sig-img" />` : `<div style="height: 48px;"></div>`}
+        </div>
+        <div class="sig-line-box">
+          <div class="sig-title">Authorized Signature</div>
+          <div class="sig-company">Founder &amp; CEO, WebBriks</div>
+        </div>
+      </div>
     </div>
-  </footer>
-  </div>
 
-</div>
+    <footer class="doc-footer">
+      <div>
+        &copy; ${new Date().getFullYear()} <a href="https://webbriks.com">WebBriks</a>. All rights reserved.
+      </div>
+    </footer>
+  </div>
 </body>
 </html>`;
 }
@@ -853,6 +915,23 @@ export class QuotationPuppeteerPdfService {
                               }),
                     ),
                 );
+            });
+
+            await page.emulateMediaType('print');
+            await page.evaluate(() => {
+                const g = globalThis as any;
+                const container = g.document.querySelector('.container');
+                if (container) {
+                    const pageHeightPx = (271 / 25.4) * 96;
+                    const currentHeight = container.getBoundingClientRect().height;
+                    if (currentHeight > 0 && pageHeightPx > 0) {
+                        const totalPages = Math.ceil(currentHeight / pageHeightPx);
+                        const targetHeight = totalPages * pageHeightPx;
+                        if (targetHeight > currentHeight) {
+                            container.style.minHeight = `${targetHeight}px`;
+                        }
+                    }
+                }
             });
 
             const pdf = await page.pdf({

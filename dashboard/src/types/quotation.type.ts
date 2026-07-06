@@ -80,6 +80,9 @@ export interface QuotationData {
 
   // ── Unified Content ───────────────────────────────────────────────────
   overview?: string;
+  developmentScope?: string[];
+  notIncluded?: string[];
+  clientRequirements?: string[];
   phases: IQuotationPhase[];
   
   techStack: {

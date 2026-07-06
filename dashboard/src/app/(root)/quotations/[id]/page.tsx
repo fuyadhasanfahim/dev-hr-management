@@ -7,7 +7,6 @@ import {
     useSendQuotationMutation,
     useCreateNewVersionMutation,
     useDeleteQuotationMutation,
-    useGetGroupVersionsQuery,
 } from '@/redux/features/quotation/quotationApi';
 import { useConvertQuotationToOrderMutation } from '@/redux/features/order/orderApi';
 import { QuotationEmailDialog } from '../components/QuotationEmailDialog';
@@ -29,11 +28,9 @@ import {
     Send,
     Edit2,
     Copy,
-    History,
     AlertCircle,
     Trash2,
     CheckCircle2,
-    Clock,
     RefreshCcw,
     Layers,
     Cpu,
@@ -41,6 +38,11 @@ import {
     ReceiptText,
     Printer,
     Briefcase,
+    TrendingUp,
+    Video,
+    Camera,
+    Check,
+    Sparkles,
 } from 'lucide-react';
 import Link from 'next/link';
 import QuotationPuppeteerPdfBtn, {
@@ -73,12 +75,6 @@ export default function ViewQuotationPage() {
     }, [session]);
 
     const { data, isLoading, refetch } = useGetQuotationByIdQuery(id as string);
-    const { data: versions } = useGetGroupVersionsQuery(
-        data?.quotationGroupId || '',
-        {
-            skip: !data?.quotationGroupId,
-        },
-    );
 
     const [sendQuotation, { isLoading: isSending }] =
         useSendQuotationMutation();
@@ -97,6 +93,20 @@ export default function ViewQuotationPage() {
         const populated = data.clientId as unknown as { _id?: string };
         return populated?._id ?? '';
     }, [data?.clientId]);
+
+    const displayPhases = useMemo(() => {
+        if (!data) return [];
+        if (data.phases && data.phases.length > 0) return data.phases;
+        if (data.developmentScope && data.developmentScope.length > 0) {
+            return [
+                {
+                    title: 'Web Design & Development Scope',
+                    items: data.developmentScope,
+                },
+            ];
+        }
+        return [];
+    }, [data?.phases, data?.developmentScope]);
 
     const openSendPicker = () => {
         if (!dialogClientId) {
@@ -259,18 +269,53 @@ export default function ViewQuotationPage() {
     // Authoritative — computed once by calculateTotals() on save (category- and
     // quantity-aware). Never re-derive this from basePrice/additionalTotal locally.
     const discountAmount = totals.discountAmount ?? 0;
-    // Display-only aggregate; uses price × quantity to reconcile with grandTotal.
-    const additionalTotal =
-        data.additionalServices?.reduce((sum, s) => sum + lineItemAmount(s), 0) ??
-        0;
 
     // ── Category-aware presentation (mirrors CATEGORY_CONFIG used by the builder) ──
     const catConfig = getCategoryConfig(data.category);
-    const isWebDev = (data.category ?? 'web-development') === 'web-development';
-    const showPhases = isPhasesEnabled(data.category);
-    const showTech = catConfig.sections.includes('techStack');
-    const showWorkflow = catConfig.sections.includes('workflow');
+    const isWebDev = true; // Always allow base price and multi-service packages
+    const showPhases = Boolean((data.phases && data.phases.length > 0) || (data.developmentScope && data.developmentScope.length > 0));
+    const showTech = Boolean(data.techStack?.frontend || data.techStack?.backend || data.techStack?.database || (data.techStack?.tools && data.techStack.tools.length > 0));
+    const showWorkflow = Boolean(data.workflow && data.workflow.length > 0);
     const showUnitQty = isUnitBased(data.category);
+
+    const getCategoryBadgeStyle = (title: string = '') => {
+        const lower = title.toLowerCase();
+        if (lower.includes('marketing') || lower.includes('seo')) {
+            return {
+                bg: 'bg-[#C850FA]/10 dark:bg-[#C850FA]/20',
+                text: 'text-[#C850FA]',
+                border: 'border-[#C850FA]/30',
+                icon: <TrendingUp className="w-5 h-5 stroke-[2.5]" />,
+                gradient: 'from-[#C850FA]/5 to-transparent',
+            };
+        }
+        if (lower.includes('video') || lower.includes('motion')) {
+            return {
+                bg: 'bg-[#1E0078]/10 dark:bg-[#1E0078]/30',
+                text: 'text-[#1E0078] dark:text-indigo-300',
+                border: 'border-[#1E0078]/30 dark:border-[#1E0078]/50',
+                icon: <Video className="w-5 h-5 stroke-[2.5]" />,
+                gradient: 'from-[#1E0078]/5 to-transparent',
+            };
+        }
+        if (lower.includes('photo') || lower.includes('retouch')) {
+            return {
+                bg: 'bg-rose-500/10 dark:bg-rose-500/20',
+                text: 'text-rose-500',
+                border: 'border-rose-500/30',
+                icon: <Camera className="w-5 h-5 stroke-[2.5]" />,
+                gradient: 'from-rose-500/5 to-transparent',
+            };
+        }
+        return {
+            bg: 'bg-[#4E12D4]/10 dark:bg-[#4E12D4]/20',
+            text: 'text-[#4E12D4]',
+            border: 'border-[#4E12D4]/30',
+            icon: <Layers className="w-5 h-5 stroke-[2.5]" />,
+            gradient: 'from-[#4E12D4]/5 to-transparent',
+        };
+    };
+
 
     const money = (amount: number | undefined | null) =>
         `${currency}${(amount ?? 0).toLocaleString()}`;
@@ -470,184 +515,244 @@ export default function ViewQuotationPage() {
                     )}
 
                     {/* Overview */}
-                    <Card>
-                        <CardHeader className="border-b bg-muted/10">
-                            <CardTitle className="text-lg flex items-center gap-2">
-                                <FileText className="h-4 w-4 text-primary" />
-                                Project Overview
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="pt-6 space-y-5">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <div className="rounded-3xl border border-slate-200/80 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 shadow-sm overflow-hidden backdrop-blur-xl">
+                        <div className="p-5 border-b border-slate-100 dark:border-slate-800/80 bg-gradient-to-r from-slate-500/5 to-transparent flex items-center gap-3.5">
+                            <div className="w-11 h-11 rounded-2xl bg-slate-900 text-white dark:bg-white dark:text-slate-900 flex items-center justify-center shadow-sm">
+                                <FileText className="h-5 w-5 stroke-[2.5]" />
+                            </div>
+                            <div>
+                                <h3 className="text-lg font-bold tracking-tight text-slate-900 dark:text-white">
+                                    Project Overview
+                                </h3>
+                                <p className="text-xs text-slate-500 dark:text-slate-400">Client details and quotation proposal summary</p>
+                            </div>
+                        </div>
+                        <div className="p-6 space-y-6">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-4 rounded-2xl bg-slate-50/80 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800">
                                 <div className="space-y-1">
-                                    <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                                        Client
+                                    <div className="text-[10px] font-extrabold uppercase tracking-wider text-[#4E12D4]">
+                                        Client Contact
                                     </div>
-                                    <div className="font-bold">
-                                        {data.client.contactName}
+                                    <div className="text-base font-bold text-slate-900 dark:text-white">
+                                        {data.client.contactName || 'Valued Client'}
                                     </div>
                                     {data.client.companyName && (
-                                        <div className="text-xs text-muted-foreground">
+                                        <div className="text-xs font-semibold text-slate-600 dark:text-slate-300">
                                             {data.client.companyName}
                                         </div>
                                     )}
-                                    {(data.client.email ||
-                                        data.client.phone) && (
-                                        <div className="text-xs text-muted-foreground mt-2 space-y-0.5">
-                                            {data.client.email && (
-                                                <div>{data.client.email}</div>
-                                            )}
-                                            {data.client.phone && (
-                                                <div>{data.client.phone}</div>
-                                            )}
+                                    {(data.client.email || data.client.phone) && (
+                                        <div className="text-xs text-slate-500 dark:text-slate-400 pt-1 space-y-0.5 font-medium">
+                                            {data.client.email && <div>✉️ {data.client.email}</div>}
+                                            {data.client.phone && <div>📞 {data.client.phone}</div>}
                                         </div>
                                     )}
                                 </div>
                                 <div className="space-y-1">
-                                    <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                                        Proposal
+                                    <div className="text-[10px] font-extrabold uppercase tracking-wider text-[#C850FA]">
+                                        Proposal Package
                                     </div>
-                                    <div className="font-bold">
-                                        {catConfig.label}
+                                    <div className="text-base font-bold text-slate-900 dark:text-white">
+                                        {catConfig.label || 'Agency Proposal'}
                                     </div>
-                                    <div className="text-xs text-muted-foreground">
-                                        Issued{' '}
-                                        {data.details?.date
-                                            ? format(
-                                                  new Date(data.details.date),
-                                                  'PPP',
-                                              )
-                                            : '—'}
-                                        {' • '}
-                                        Valid until{' '}
-                                        {data.details?.validUntil
-                                            ? format(
-                                                  new Date(
-                                                      data.details.validUntil,
-                                                  ),
-                                                  'PPP',
-                                              )
-                                            : '—'}
+                                    <div className="text-xs text-slate-500 dark:text-slate-400 font-medium pt-1 space-y-0.5">
+                                        <div>📅 Issued: {data.details?.date ? format(new Date(data.details.date), 'PPP') : '—'}</div>
                                     </div>
                                 </div>
                             </div>
-
-                            <Separator />
 
                             <div className="space-y-2">
-                                <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                                    Summary
+                                <div className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500">
+                                    Executive Summary
                                 </div>
-                                <div className="text-sm leading-relaxed text-foreground/90 bg-muted/20 p-4 rounded-lg border border-dashed">
-                                    {data.overview?.trim()
-                                        ? data.overview
-                                        : 'No overview provided for this quotation.'}
+                                <div className="text-sm leading-relaxed text-slate-700 dark:text-slate-300 bg-slate-50/50 dark:bg-slate-800/20 p-5 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 font-medium">
+                                    {data.overview?.trim() ? data.overview : 'No executive summary provided for this quotation.'}
                                 </div>
                             </div>
-                        </CardContent>
-                    </Card>
+                        </div>
+                    </div>
 
-                    {/* Phases — only for categories that use phases */}
+                    {/* Multi-Service Deliverables Scope */}
                     {showPhases && (
-                    <Card>
-                        <CardHeader className="border-b bg-muted/10">
-                            <CardTitle className="text-lg flex items-center gap-2">
-                                <Layers className="h-4 w-4 text-primary" />
-                                Phases & Milestones
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="pt-6 space-y-4">
-                            {data.phases?.length ? (
-                                <div className="space-y-4">
-                                    {data.phases.map((p, idx) => (
+                    <div className="space-y-6">
+                        <div className="flex items-center gap-3 pt-2">
+                            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#4E12D4] to-[#C850FA] text-white flex items-center justify-center shadow-md shadow-[#4E12D4]/20">
+                                <Layers className="h-5 w-5 stroke-[2.5]" />
+                            </div>
+                            <div>
+                                <h3 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">
+                                    Deliverables Scope & Features
+                                </h3>
+                                <p className="text-xs text-slate-500 dark:text-slate-400">Detailed breakdown of included services and project deliverables</p>
+                            </div>
+                        </div>
+
+                        {displayPhases.length ? (
+                            <div className="space-y-5">
+                                {displayPhases.map((p, idx) => {
+                                    const style = getCategoryBadgeStyle(p.title);
+                                    return (
                                         <div
                                             key={`${p.title}-${idx}`}
-                                            className="rounded-xl border bg-card p-5"
+                                            className="rounded-3xl border border-slate-200/80 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 shadow-sm overflow-hidden backdrop-blur-xl transition-all duration-300 hover:shadow-md"
                                         >
-                                            <div className="flex items-start justify-between gap-3">
-                                                <div className="space-y-1">
-                                                    <div className="flex flex-wrap items-center gap-2">
-                                                        <span className="font-bold">
-                                                            Phase {idx + 1}:{' '}
-                                                            {p.title}
-                                                        </span>
-                                                        {(p.startDate ||
-                                                            p.endDate) && (
-                                                            <span className="text-xs font-mono text-muted-foreground bg-muted px-2 py-0.5 rounded border">
-                                                                {p.startDate
-                                                                    ? p.startDate
-                                                                    : 'TBD'}{' '}
-                                                                —{' '}
-                                                                {p.endDate
-                                                                    ? p.endDate
-                                                                    : 'TBD'}
-                                                            </span>
+                                            <div className={`p-5 border-b border-slate-100 dark:border-slate-800/80 bg-gradient-to-r ${style.gradient} flex items-center justify-between gap-4`}>
+                                                <div className="flex items-center gap-3.5">
+                                                    <div className={`w-11 h-11 rounded-2xl ${style.bg} ${style.text} flex items-center justify-center border ${style.border} shadow-sm`}>
+                                                        {style.icon}
+                                                    </div>
+                                                    <div>
+                                                        <div className="flex flex-wrap items-center gap-2">
+                                                            <h4 className="text-base font-extrabold tracking-tight text-slate-900 dark:text-white">
+                                                                {p.title || `Service Scope #${idx + 1}`}
+                                                            </h4>
+                                                            {(p.startDate || p.endDate) && (
+                                                                <span className="text-xs font-mono text-muted-foreground bg-muted/80 px-2.5 py-0.5 rounded-full border">
+                                                                    {p.startDate ? p.startDate : 'TBD'} — {p.endDate ? p.endDate : 'TBD'}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        {p.description && (
+                                                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{p.description}</p>
                                                         )}
                                                     </div>
-                                                    {p.description && (
-                                                        <div className="text-sm text-muted-foreground">
-                                                            {p.description}
-                                                        </div>
-                                                    )}
                                                 </div>
-                                                <Badge
-                                                    variant="secondary"
-                                                    className="text-[10px] font-bold"
-                                                >
-                                                    {p.items?.length ?? 0} items
+                                                <Badge variant="outline" className={`rounded-full px-3 py-1 text-xs font-bold ${style.text} ${style.border} ${style.bg}`}>
+                                                    {p.items?.length ?? 0} Deliverables
                                                 </Badge>
                                             </div>
-                                            {p.items?.length ? (
-                                                <ul className="mt-3 space-y-1 text-sm text-foreground/90 list-disc pl-5">
-                                                    {p.items.map((it, i) => (
-                                                        <li key={`${idx}-${i}`}>
-                                                            {it}
-                                                        </li>
-                                                    ))}
-                                                </ul>
-                                            ) : (
-                                                <div className="mt-3 text-sm text-muted-foreground italic">
-                                                    No items listed for this
-                                                    phase.
-                                                </div>
-                                            )}
+                                            <div className="p-5">
+                                                {p.items?.length ? (
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                                                        {p.items.map((it, i) => (
+                                                            <div key={`${idx}-${i}`} className="flex items-start gap-3 p-3.5 rounded-2xl bg-slate-50/80 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800/80 transition-all duration-200 hover:bg-slate-100/80 dark:hover:bg-slate-800/70 hover:border-slate-200/80">
+                                                                <span className={`w-6 h-6 rounded-xl ${style.bg} ${style.text} font-bold text-xs flex items-center justify-center shrink-0 mt-0.5 border ${style.border}`}>
+                                                                    {i + 1}
+                                                                </span>
+                                                                <span className="text-sm font-medium text-slate-700 dark:text-slate-300 leading-snug">
+                                                                    {it}
+                                                                </span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                ) : (
+                                                    <div className="text-sm text-slate-400 italic py-2">
+                                                        No deliverables listed for this service scope.
+                                                    </div>
+                                                )}
+                                            </div>
                                         </div>
-                                    ))}
+                                    );
+                                })}
+                            </div>
+                        ) : (
+                            <div className="text-sm text-slate-400 italic">No deliverables defined.</div>
+                        )}
+                    </div>
+                    )}
+
+                    {/* Exclusions: Not Included in This Price */}
+                    {data.notIncluded && data.notIncluded.length > 0 && (
+                    <div className="rounded-3xl border border-rose-200/80 dark:border-rose-900/40 bg-white/80 dark:bg-slate-900/60 shadow-sm overflow-hidden backdrop-blur-xl transition-all duration-300 hover:shadow-md">
+                        <div className="p-5 border-b border-rose-100 dark:border-rose-900/30 bg-gradient-to-r from-rose-500/5 to-transparent flex items-center justify-between gap-4">
+                            <div className="flex items-center gap-3.5">
+                                <div className="w-11 h-11 rounded-2xl bg-rose-500/10 text-rose-500 flex items-center justify-center border border-rose-500/20 shadow-sm">
+                                    <AlertCircle className="w-5 h-5 stroke-[2.5]" />
                                 </div>
-                            ) : (
-                                <div className="text-sm text-muted-foreground italic">
-                                    No phases defined.
+                                <div>
+                                    <h4 className="text-base font-extrabold tracking-tight text-slate-900 dark:text-white">
+                                        Not Included in This Price
+                                    </h4>
+                                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Exclusions and out-of-scope items</p>
                                 </div>
-                            )}
-                        </CardContent>
-                    </Card>
+                            </div>
+                            <Badge variant="outline" className="rounded-full px-3 py-1 text-xs font-bold text-rose-500 border-rose-500/30 bg-rose-500/10">
+                                {data.notIncluded.length} Exclusions
+                            </Badge>
+                        </div>
+                        <div className="p-5">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                                {data.notIncluded.map((item: string, idx: number) => (
+                                    <div key={idx} className="flex items-start gap-3 p-3.5 rounded-2xl bg-rose-50/50 dark:bg-rose-950/20 border border-rose-100/80 dark:border-rose-900/30 transition-all duration-200 hover:bg-rose-100/50 dark:hover:bg-rose-950/30">
+                                        <span className="w-6 h-6 rounded-xl bg-rose-500/10 text-rose-600 dark:text-rose-400 font-bold text-xs flex items-center justify-center shrink-0 mt-0.5 border border-rose-500/20">
+                                            ✕
+                                        </span>
+                                        <span className="text-sm font-medium text-slate-700 dark:text-slate-300 leading-snug">
+                                            {item}
+                                        </span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                    )}
+
+                    {/* Prerequisites: Client Needs to Provide */}
+                    {data.clientRequirements && data.clientRequirements.length > 0 && (
+                    <div className="rounded-3xl border border-[#4E12D4]/20 dark:border-[#4E12D4]/40 bg-white/80 dark:bg-slate-900/60 shadow-sm overflow-hidden backdrop-blur-xl transition-all duration-300 hover:shadow-md">
+                        <div className="p-5 border-b border-[#4E12D4]/10 dark:border-[#4E12D4]/30 bg-gradient-to-r from-[#4E12D4]/5 to-transparent flex items-center justify-between gap-4">
+                            <div className="flex items-center gap-3.5">
+                                <div className="w-11 h-11 rounded-2xl bg-[#4E12D4]/10 text-[#4E12D4] flex items-center justify-center border border-[#4E12D4]/20 shadow-sm">
+                                    <Check className="w-5 h-5 stroke-[2.5]" />
+                                </div>
+                                <div>
+                                    <h4 className="text-base font-extrabold tracking-tight text-slate-900 dark:text-white">
+                                        Client Needs to Provide
+                                    </h4>
+                                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Prerequisites and required assets from client</p>
+                                </div>
+                            </div>
+                            <Badge variant="outline" className="rounded-full px-3 py-1 text-xs font-bold text-[#4E12D4] border-[#4E12D4]/30 bg-[#4E12D4]/10">
+                                {data.clientRequirements.length} Requirements
+                            </Badge>
+                        </div>
+                        <div className="p-5">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                                {data.clientRequirements.map((item: string, idx: number) => (
+                                    <div key={idx} className="flex items-start gap-3 p-3.5 rounded-2xl bg-slate-50/80 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800/80 transition-all duration-200 hover:bg-slate-100/80 dark:hover:bg-slate-800/70 hover:border-slate-200/80">
+                                        <span className="w-6 h-6 rounded-xl bg-[#4E12D4]/10 text-[#4E12D4] font-bold text-xs flex items-center justify-center shrink-0 mt-0.5 border border-[#4E12D4]/20">
+                                            ✓
+                                        </span>
+                                        <span className="text-sm font-medium text-slate-700 dark:text-slate-300 leading-snug">
+                                            {item}
+                                        </span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
                     )}
 
                     {/* Tech stack + Workflow — category-gated */}
                     {(showTech || showWorkflow) && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         {showTech && (
-                        <Card>
-                            <CardHeader className="border-b bg-muted/10">
-                                <CardTitle className="text-base flex items-center gap-2">
-                                    <Cpu className="h-4 w-4 text-primary" />
-                                    Technology Stack
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent className="pt-6 space-y-3">
+                        <div className="rounded-3xl border border-slate-200/80 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 shadow-sm overflow-hidden backdrop-blur-xl">
+                            <div className="p-5 border-b border-slate-100 dark:border-slate-800/80 bg-gradient-to-r from-[#4E12D4]/5 to-transparent flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-2xl bg-[#4E12D4]/10 text-[#4E12D4] flex items-center justify-center border border-[#4E12D4]/20 shadow-sm">
+                                    <Cpu className="w-5 h-5 stroke-[2.5]" />
+                                </div>
+                                <div>
+                                    <h3 className="text-base font-extrabold tracking-tight text-slate-900 dark:text-white">
+                                        Technology Stack
+                                    </h3>
+                                    <p className="text-xs text-slate-500 dark:text-slate-400">Core architecture & tools</p>
+                                </div>
+                            </div>
+                            <div className="p-6 space-y-3">
                                 <div className="flex flex-wrap gap-2">
                                     {data.techStack?.frontend && (
-                                        <Badge variant="secondary">
+                                        <Badge variant="outline" className="rounded-xl px-3 py-1 text-xs font-semibold bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 shadow-sm">
                                             {data.techStack.frontend}
                                         </Badge>
                                     )}
                                     {data.techStack?.backend && (
-                                        <Badge variant="secondary">
+                                        <Badge variant="outline" className="rounded-xl px-3 py-1 text-xs font-semibold bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 shadow-sm">
                                             {data.techStack.backend}
                                         </Badge>
                                     )}
                                     {data.techStack?.database && (
-                                        <Badge variant="secondary">
+                                        <Badge variant="outline" className="rounded-xl px-3 py-1 text-xs font-semibold bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 shadow-sm">
                                             {data.techStack.database}
                                         </Badge>
                                     )}
@@ -655,7 +760,7 @@ export default function ViewQuotationPage() {
                                         <Badge
                                             key={t}
                                             variant="outline"
-                                            className="text-xs"
+                                            className="rounded-xl px-3 py-1 text-xs font-semibold bg-[#4E12D4]/5 border-[#4E12D4]/20 text-[#4E12D4] shadow-sm"
                                         >
                                             {t}
                                         </Badge>
@@ -665,184 +770,80 @@ export default function ViewQuotationPage() {
                                     !data.techStack?.backend &&
                                     !data.techStack?.database &&
                                     !(data.techStack?.tools || []).length && (
-                                        <div className="text-sm text-muted-foreground italic">
+                                        <div className="text-sm text-slate-400 italic py-4 text-center">
                                             No tech stack specified.
                                         </div>
                                     )}
-                            </CardContent>
-                        </Card>
+                            </div>
+                        </div>
                         )}
 
                         {showWorkflow && (
-                        <Card>
-                            <CardHeader className="border-b bg-muted/10">
-                                <CardTitle className="text-base flex items-center gap-2">
-                                    <Activity className="h-4 w-4 text-primary" />
-                                    Workflow
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent className="pt-6 space-y-2">
+                        <div className="rounded-3xl border border-slate-200/80 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 shadow-sm overflow-hidden backdrop-blur-xl">
+                            <div className="p-5 border-b border-slate-100 dark:border-slate-800/80 bg-gradient-to-r from-[#4E12D4]/5 to-transparent flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-2xl bg-[#4E12D4]/10 text-[#4E12D4] flex items-center justify-center border border-[#4E12D4]/20 shadow-sm">
+                                    <Activity className="w-5 h-5 stroke-[2.5]" />
+                                </div>
+                                <div>
+                                    <h3 className="text-base font-extrabold tracking-tight text-slate-900 dark:text-white">
+                                        Workflow & Process
+                                    </h3>
+                                    <p className="text-xs text-slate-500 dark:text-slate-400">Step-by-step execution plan</p>
+                                </div>
+                            </div>
+                            <div className="p-6">
                                 {data.workflow?.length ? (
-                                    <ol className="space-y-2">
+                                    <ol className="space-y-3">
                                         {data.workflow.map((step, idx) => (
                                             <li
                                                 key={idx}
-                                                className="flex gap-3"
+                                                className="flex items-start gap-3.5 p-3 rounded-2xl bg-slate-50/80 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800/80"
                                             >
-                                                <div className="mt-0.5 h-5 w-5 rounded-full bg-muted flex items-center justify-center text-[10px] font-bold">
+                                                <div className="mt-0.5 h-6 w-6 rounded-xl bg-[#4E12D4]/10 border border-[#4E12D4]/20 flex items-center justify-center text-xs font-extrabold text-[#4E12D4] shrink-0">
                                                     {idx + 1}
                                                 </div>
-                                                <div className="text-sm text-foreground/90">
+                                                <div className="text-sm font-medium text-slate-700 dark:text-slate-300 leading-snug pt-0.5">
                                                     {step}
                                                 </div>
                                             </li>
                                         ))}
                                     </ol>
                                 ) : (
-                                    <div className="text-sm text-muted-foreground italic">
+                                    <div className="text-sm text-slate-400 italic py-4 text-center">
                                         No workflow steps defined.
                                     </div>
                                 )}
-                            </CardContent>
-                        </Card>
+                            </div>
+                        </div>
                         )}
                     </div>
                     )}
-
-                    {/* Additional services */}
-                    <Card>
-                        <CardHeader className="border-b bg-muted/10">
-                            <CardTitle className="text-lg flex items-center gap-2">
-                                <ReceiptText className="h-4 w-4 text-primary" />
-                                {isWebDev
-                                    ? 'Additional Services'
-                                    : 'Packages / Line Items'}
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="pt-6">
-                            {data.additionalServices?.length ? (
-                                <div className="rounded-xl border overflow-hidden">
-                                    <Table>
-                                        <TableHeader className="bg-muted/30">
-                                            <TableRow>
-                                                <TableHead>Service</TableHead>
-                                                <TableHead>Billing</TableHead>
-                                                {showUnitQty && (
-                                                    <TableHead className="text-right">
-                                                        Qty
-                                                    </TableHead>
-                                                )}
-                                                <TableHead className="text-right">
-                                                    Amount
-                                                </TableHead>
-                                            </TableRow>
-                                        </TableHeader>
-                                        <TableBody>
-                                            {data.additionalServices.map(
-                                                (s, idx) => (
-                                                    <TableRow
-                                                        key={`${s.title}-${idx}`}
-                                                    >
-                                                        <TableCell className="font-medium">
-                                                            <div className="flex flex-col">
-                                                                <span>
-                                                                    {s.title}
-                                                                </span>
-                                                                {s.description && (
-                                                                    <span className="text-xs text-muted-foreground w-80 truncate">
-                                                                        {
-                                                                            s.description
-                                                                        }
-                                                                    </span>
-                                                                )}
-                                                            </div>
-                                                        </TableCell>
-                                                        <TableCell>
-                                                            <Badge
-                                                                variant="outline"
-                                                                className="text-[10px]"
-                                                            >
-                                                                {BILLING_CYCLE_LABELS[
-                                                                    s
-                                                                        .billingCycle
-                                                                ] ??
-                                                                    s.billingCycle}
-                                                            </Badge>
-                                                        </TableCell>
-                                                        {showUnitQty && (
-                                                            <TableCell className="text-right tabular-nums">
-                                                                {s.quantity ?? 1}
-                                                            </TableCell>
-                                                        )}
-                                                        <TableCell
-                                                            className={cn(
-                                                                'text-right font-bold',
-                                                                !canSeeFinancials &&
-                                                                    'blur-[3px] opacity-60 select-none',
-                                                            )}
-                                                        >
-                                                            {canSeeFinancials
-                                                                ? money(
-                                                                      lineItemAmount(
-                                                                          s,
-                                                                      ),
-                                                                  )
-                                                                : '******'}
-                                                        </TableCell>
-                                                    </TableRow>
-                                                ),
-                                            )}
-                                            <TableRow>
-                                                <TableCell
-                                                    colSpan={showUnitQty ? 3 : 2}
-                                                    className="text-right font-semibold"
-                                                >
-                                                    Total
-                                                </TableCell>
-                                                <TableCell
-                                                    className={cn(
-                                                        'text-right font-black',
-                                                        !canSeeFinancials &&
-                                                            'blur-[3px] opacity-60 select-none',
-                                                    )}
-                                                >
-                                                    {canSeeFinancials
-                                                        ? money(additionalTotal)
-                                                        : '******'}
-                                                </TableCell>
-                                            </TableRow>
-                                        </TableBody>
-                                    </Table>
-                                </div>
-                            ) : (
-                                <div className="text-sm text-muted-foreground italic">
-                                    No additional services added.
-                                </div>
-                            )}
-                        </CardContent>
-                    </Card>
                 </div>
 
                 {/* Sidebar */}
                 <div className="space-y-6">
                     {/* Value Card */}
-                    <Card className="overflow-hidden">
-                        <CardHeader className="bg-muted/20 border-b">
-                            <CardTitle className="text-lg flex items-center gap-2">
-                                <IconReceipt className="w-4 h-4" />
-                                Financial Summary
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="pt-6 space-y-4">
-                            <div className="p-4 bg-primary/10 rounded-2xl border border-primary/20 text-center relative overflow-hidden">
-                                <span className="text-muted-foreground text-sm font-medium">
-                                    Grand Total
+                    <div className="rounded-3xl border border-slate-200/80 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 shadow-sm overflow-hidden backdrop-blur-xl">
+                        <div className="p-5 border-b border-slate-100 dark:border-slate-800/80 bg-gradient-to-r from-[#4E12D4]/5 to-transparent flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-2xl bg-[#4E12D4]/10 text-[#4E12D4] flex items-center justify-center border border-[#4E12D4]/20 shadow-sm">
+                                <ReceiptText className="w-5 h-5 stroke-[2.5]" />
+                            </div>
+                            <div>
+                                <h3 className="text-base font-extrabold tracking-tight text-slate-900 dark:text-white">
+                                    Financial Summary
+                                </h3>
+                                <p className="text-xs text-slate-500 dark:text-slate-400">Total investment breakdown</p>
+                            </div>
+                        </div>
+                        <div className="p-6 space-y-5">
+                            <div className="p-5 bg-gradient-to-br from-[#4E12D4]/10 via-[#C850FA]/10 to-transparent rounded-2xl border border-[#4E12D4]/20 text-center relative overflow-hidden shadow-inner">
+                                <span className="text-slate-600 dark:text-slate-300 text-xs font-bold uppercase tracking-wider">
+                                    Grand Total Investment
                                 </span>
                                 <h2
                                     className={cn(
-                                        'text-4xl font-black text-primary mt-1 tracking-tight',
-                                        !canSeeFinancials &&
-                                            'blur-[4px] opacity-50 select-none',
+                                        'text-4xl font-black text-[#4E12D4] dark:text-[#C850FA] mt-1.5 tracking-tight',
+                                        !canSeeFinancials && 'blur-[4px] opacity-50 select-none'
                                     )}
                                 >
                                     {canSeeFinancials ? (
@@ -855,193 +856,98 @@ export default function ViewQuotationPage() {
                                     )}
                                 </h2>
                             </div>
-                            <div className="space-y-2 text-sm">
-                                {isWebDev && (
-                                <div className="flex items-center justify-between">
-                                    <span className="text-muted-foreground">
-                                        Base price
+                            <div className="space-y-3 text-sm font-medium pt-1">
+                                <div className="flex items-center justify-between py-1 border-b border-slate-100 dark:border-slate-800/50">
+                                    <span className="text-slate-500 dark:text-slate-400">
+                                        Base Package Price
                                     </span>
                                     <span
                                         className={cn(
-                                            'font-semibold',
-                                            !canSeeFinancials &&
-                                                'blur-[3px] select-none opacity-60',
+                                            'font-bold text-slate-800 dark:text-slate-200',
+                                            !canSeeFinancials && 'blur-[3px] select-none opacity-60'
                                         )}
                                     >
-                                        {canSeeFinancials
-                                            ? money(data.pricing?.basePrice)
-                                            : '******'}
+                                        {canSeeFinancials ? money(data.pricing?.basePrice) : '******'}
                                     </span>
                                 </div>
-                                )}
-                                <div className="flex items-center justify-between">
-                                    <span className="text-muted-foreground">
-                                        {isWebDev ? 'Add-ons' : 'Line items'}
+                                <div className="flex items-center justify-between py-1 border-b border-slate-100 dark:border-slate-800/50 text-emerald-600 dark:text-emerald-400">
+                                    <span>
+                                        Discount ({data.pricing?.discount ?? 0}%)
                                     </span>
                                     <span
                                         className={cn(
-                                            'font-semibold',
-                                            !canSeeFinancials &&
-                                                'blur-[3px] select-none opacity-60',
+                                            'font-extrabold',
+                                            !canSeeFinancials && 'blur-[3px] select-none opacity-60'
                                         )}
                                     >
-                                        {canSeeFinancials
-                                            ? money(additionalTotal)
-                                            : '******'}
+                                        {canSeeFinancials ? `− ${money(discountAmount)}` : '******'}
                                     </span>
                                 </div>
-                                <div className="flex items-center justify-between">
-                                    <span className="text-muted-foreground">
-                                        Discount ({data.pricing?.discount ?? 0}
-                                        %)
-                                    </span>
-                                    <span
-                                        className={cn(
-                                            'font-semibold',
-                                            !canSeeFinancials &&
-                                                'blur-[3px] select-none opacity-60',
-                                        )}
-                                    >
-                                        {canSeeFinancials
-                                            ? `− ${money(discountAmount)}`
-                                            : '******'}
-                                    </span>
-                                </div>
-                                <div className="flex items-center justify-between">
-                                    <span className="text-muted-foreground">
+                                <div className="flex items-center justify-between py-1 border-b border-slate-100 dark:border-slate-800/50">
+                                    <span className="text-slate-500 dark:text-slate-400">
                                         Subtotal
                                     </span>
                                     <span
                                         className={cn(
-                                            'font-semibold',
-                                            !canSeeFinancials &&
-                                                'blur-[3px] select-none opacity-60',
+                                            'font-bold text-slate-800 dark:text-slate-200',
+                                            !canSeeFinancials && 'blur-[3px] select-none opacity-60'
                                         )}
                                     >
-                                        {canSeeFinancials
-                                            ? money(subtotal)
-                                            : '******'}
+                                        {canSeeFinancials ? money(subtotal) : '******'}
                                     </span>
                                 </div>
-                                <div className="flex items-center justify-between">
-                                    <span className="text-muted-foreground">
+                                <div className="flex items-center justify-between py-1">
+                                    <span className="text-slate-500 dark:text-slate-400">
                                         Tax ({data.pricing?.taxRate ?? 0}%)
                                     </span>
                                     <span
                                         className={cn(
-                                            'font-semibold',
-                                            !canSeeFinancials &&
-                                                'blur-[3px] select-none opacity-60',
+                                            'font-bold text-slate-800 dark:text-slate-200',
+                                            !canSeeFinancials && 'blur-[3px] select-none opacity-60'
                                         )}
                                     >
-                                        {canSeeFinancials
-                                            ? money(taxAmount)
-                                            : '******'}
+                                        {canSeeFinancials ? money(taxAmount) : '******'}
                                     </span>
                                 </div>
                             </div>
-                        </CardContent>
-                    </Card>
+                        </div>
+                    </div>
 
-                    {/* Token / validity */}
-                    <Card className="overflow-hidden">
-                        <CardHeader className="bg-muted/20 border-b py-4">
-                            <CardTitle className="text-sm flex items-center gap-2">
-                                <Clock className="h-4 w-4" />
-                                Validity & Link
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="p-6 space-y-3 text-sm">
-                            <div className="flex items-center justify-between">
-                                <span className="text-muted-foreground">
-                                    Issued
-                                </span>
-                                <span className="font-semibold">
-                                    {data.details?.date
-                                        ? format(
-                                              new Date(data.details.date),
-                                              'MMM dd, yyyy',
-                                          )
-                                        : '—'}
+                    {/* Payment Milestones Card */}
+                    {data.paymentMilestones && data.paymentMilestones.length > 0 && (
+                        <div className="rounded-3xl border border-purple-500/20 dark:border-purple-500/30 bg-gradient-to-br from-purple-500/5 via-indigo-500/5 to-transparent shadow-sm overflow-hidden backdrop-blur-xl">
+                            <div className="p-4 border-b border-purple-500/15 bg-gradient-to-r from-purple-500/10 to-transparent flex items-center justify-between">
+                                <div className="flex items-center gap-2.5">
+                                    <Briefcase className="h-4 w-4 text-[#4E12D4] dark:text-[#C850FA] stroke-[2.5]" />
+                                    <h4 className="text-sm font-bold tracking-tight text-slate-900 dark:text-white">
+                                        Payment Milestones
+                                    </h4>
+                                </div>
+                                <span className="text-[10px] font-extrabold text-[#4E12D4] bg-white dark:bg-slate-800 px-2.5 py-0.5 rounded-full border border-purple-500/20 shadow-2xs">
+                                    {data.paymentMilestones.length} {data.paymentMilestones.length === 1 ? 'Term' : 'Milestones'}
                                 </span>
                             </div>
-                            <div className="flex items-center justify-between">
-                                <span className="text-muted-foreground">
-                                    Valid until
-                                </span>
-                                <span className="font-semibold">
-                                    {data.details?.validUntil
-                                        ? format(
-                                              new Date(data.details.validUntil),
-                                              'MMM dd, yyyy',
-                                          )
-                                        : '—'}
-                                </span>
-                            </div>
-                            <Separator />
-                            <div className="flex items-center justify-between">
-                                <span className="text-muted-foreground">
-                                    Token
-                                </span>
-                                <span className="font-mono text-[11px]">
-                                    {data.secureToken
-                                        ? 'Generated'
-                                        : 'Not generated'}
-                                </span>
-                            </div>
-                            <div className="flex items-center justify-between">
-                                <span className="text-muted-foreground">
-                                    Token expiry
-                                </span>
-                                <span className="font-semibold">
-                                    {data.tokenExpiresAt
-                                        ? format(
-                                              new Date(data.tokenExpiresAt),
-                                              'MMM dd, yyyy',
-                                          )
-                                        : '—'}
-                                </span>
-                            </div>
-                        </CardContent>
-                    </Card>
-
-                    {/* Version History */}
-                    <Card className="overflow-hidden">
-                        <CardHeader className="bg-muted/20 border-b py-4">
-                            <CardTitle className="text-sm flex items-center gap-2">
-                                <History className="h-4 w-4" />
-                                Version History
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="p-0 divide-y">
-                            {versions?.map((v) => (
-                                <Link
-                                    key={v._id}
-                                    href={`/quotations/${v._id}`}
-                                    className={`flex items-center justify-between px-6 py-4 hover:bg-muted/30 transition-colors ${v._id === data._id ? 'bg-muted/30 pointer-events-none' : ''}`}
-                                >
-                                    <div className="flex flex-col">
-                                        <span className="text-sm font-bold">
-                                            Version {v.version}
-                                        </span>
-                                        <span className="text-[10px] text-muted-foreground">
-                                            {v.createdAt &&
-                                                format(
-                                                    new Date(v.createdAt),
-                                                    'MMM dd, yyyy',
-                                                )}
-                                        </span>
+                            <div className="p-5 space-y-3">
+                                {data.paymentMilestones.map((m: any, idx: number) => (
+                                    <div key={idx} className="flex items-center justify-between p-3 rounded-2xl bg-white/80 dark:bg-slate-900/80 border border-slate-200/80 dark:border-slate-800 shadow-2xs">
+                                        <div className="flex items-center gap-2.5">
+                                            <span className="w-6 h-6 rounded-lg bg-gradient-to-br from-[#4E12D4] to-[#1E0078] text-white text-xs font-bold font-mono flex items-center justify-center shadow-xs shrink-0">
+                                                {String(idx + 1).padStart(2, '0')}
+                                            </span>
+                                            <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                                                {m.label}
+                                            </span>
+                                        </div>
+                                        {m.percentage > 0 && (
+                                            <span className="text-xs font-extrabold font-mono text-[#4E12D4] dark:text-[#C850FA] bg-[#4E12D4]/10 dark:bg-[#C850FA]/15 px-2.5 py-1 rounded-xl shrink-0">
+                                                {m.percentage}%
+                                            </span>
+                                        )}
                                     </div>
-                                    <Badge
-                                        variant="outline"
-                                        className={`${statusColors[v.status || 'draft']} text-[9px] h-5`}
-                                    >
-                                        {v.status}
-                                    </Badge>
-                                </Link>
-                            ))}
-                        </CardContent>
-                    </Card>
+                                ))}
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
 

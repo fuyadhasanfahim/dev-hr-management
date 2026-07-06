@@ -86,9 +86,9 @@ const initialState: QuotationData = {
   additionalServices: [],
   workflow: [],
   paymentMilestones: [
-    { label: "Upfront on acceptance", percentage: 50 },
-    { label: "After delivery handover", percentage: 30 },
-    { label: "Final approval / clearance", percentage: 20 },
+    { label: "30% Upfront Payment", percentage: 30 },
+    { label: "40% Midway Progress Milestone", percentage: 40 },
+    { label: "30% Final Delivery & Handover", percentage: 30 },
   ],
   totals: {
     subtotal: 0,
@@ -260,6 +260,8 @@ export const useQuotationStore = create<QuotationStore>((set) => ({
             title: templateData.details?.title || state.data.details.title,
           },
           phases: templateData.phases || [],
+          notIncluded: templateData.notIncluded || [],
+          clientRequirements: templateData.clientRequirements || [],
           techStack: {
             ...state.data.techStack,
             ...templateData.techStack,

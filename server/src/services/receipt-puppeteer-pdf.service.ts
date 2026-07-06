@@ -301,7 +301,7 @@ function buildPrintHtml(r: Record<string, any>, ctx: ReceiptPdfContext): string 
 
   <footer class="doc-footer">
     <div class="doc-footer-main">
-      WebBriks — <a href="mailto:info@webbriks.com">info@webbriks.com</a> — <a href="https://www.webbriks.com">www.webbriks.com</a>
+      &copy; ${new Date().getFullYear()} <a href="https://webbriks.com">WebBriks</a>. All rights reserved. &bull; <a href="mailto:info@webbriks.com">info@webbriks.com</a> &bull; <a href="https://webbriks.com">https://webbriks.com</a>
     </div>
   </footer>
   </div>

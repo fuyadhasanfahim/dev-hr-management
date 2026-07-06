@@ -1,38 +1,41 @@
-"use client";
+'use client';
 
-import React, { useEffect } from "react";
-import { useParams, useRouter } from "next/navigation";
-import { useGetQuotationByIdQuery } from "@/redux/features/quotation/quotationApi";
-import { useQuotationStore } from "@/store/useQuotationStore";
-import QuotationBuilder from "../../components/forms/QuotationBuilder";
-import { ArrowLeft, Loader2, ReceiptText, AlertTriangle } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import React, { useEffect, useRef } from 'react';
+import { useParams, useRouter } from 'next/navigation';
+import { useGetQuotationByIdQuery } from '@/redux/features/quotation/quotationApi';
+import { useQuotationStore } from '@/store/useQuotationStore';
+import QuotationBuilder from '../../components/forms/QuotationBuilder';
+import { Loader2, AlertTriangle } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 export default function EditQuotationPage() {
   const { id } = useParams();
   const { data, isLoading, isError } = useGetQuotationByIdQuery(id as string);
   const { setData } = useQuotationStore();
   const router = useRouter();
+  const isLoadedRef = useRef(false);
 
   useEffect(() => {
-    if (data) {
-      // Hydrate the store with sanitized data
+    isLoadedRef.current = false;
+  }, [id]);
+
+  useEffect(() => {
+    if (data && !isLoadedRef.current) {
+      isLoadedRef.current = true;
       const sanitizedData = {
         ...data,
-        // Extract ID from populated client object
         clientId:
-          typeof data.clientId === "object"
+          typeof data.clientId === 'object'
             ? (data.clientId as { _id: string })?._id
             : data.clientId,
-        // Format dates for HTML5 date inputs (yyyy-MM-dd)
         details: {
           ...data.details,
           date: data.details?.date
-            ? new Date(data.details.date).toISOString().split("T")[0]
-            : "",
+            ? new Date(data.details.date).toISOString().split('T')[0]
+            : '',
           validUntil: data.details?.validUntil
-            ? new Date(data.details.validUntil).toISOString().split("T")[0]
-            : "",
+            ? new Date(data.details.validUntil).toISOString().split('T')[0]
+            : '',
         },
       };
       setData(sanitizedData);
@@ -56,7 +59,7 @@ export default function EditQuotationPage() {
             We couldn&apos;t load this quotation. It may have been deleted or the
             link is incorrect.
           </p>
-          <Button variant="outline" onClick={() => router.push("/quotations")}>
+          <Button variant="outline" onClick={() => router.push('/quotations')}>
             Back to Quotations
           </Button>
         </div>
@@ -65,35 +68,8 @@ export default function EditQuotationPage() {
   }
 
   return (
-    <div className="container mx-auto p-6 space-y-6 animate-in fade-in duration-300">
-      {/* Header (Orders-like) */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <Button
-            variant="outline"
-            size="icon"
-            className="h-10 w-10 rounded-full shadow-sm"
-            onClick={() => router.push(`/quotations/${id}`)}
-          >
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-
-          <div>
-            <div className="flex items-center gap-2">
-              <ReceiptText className="h-5 w-5 text-muted-foreground" />
-              <h1 className="text-3xl font-bold tracking-tight">
-                Edit Quotation
-              </h1>
-            </div>
-            <p className="text-muted-foreground mt-1 text-sm">
-              {data?.details?.title || "Untitled"} • #
-              {data?.quotationNumber || "—"}
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {data.status !== "draft" && (
+    <div className="space-y-6 animate-in fade-in duration-300">
+      {data.status !== 'draft' && (
         <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50/60 dark:border-amber-800/50 dark:bg-amber-950/20 p-4">
           <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
           <div>
@@ -107,9 +83,11 @@ export default function EditQuotationPage() {
         </div>
       )}
 
-      <div className="rounded-xl border bg-card p-6">
-        <QuotationBuilder hideHeader />
-      </div>
+      <QuotationBuilder
+        pageTitle="Edit Quotation"
+        pageSubtitle={`${data?.details?.title || 'Untitled'} • #${data?.quotationNumber || '—'}`}
+        backUrl={`/quotations/${id}`}
+      />
     </div>
   );
 }

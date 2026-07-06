@@ -94,6 +94,10 @@ export interface IQuotation extends Document {
         discount: number; // Percentage (0-100)
     };
 
+    notIncluded?: string[];
+    clientRequirements?: string[];
+    developmentScope?: string[];
+
     additionalServices: IAdditionalService[];
     workflow: string[];
 
