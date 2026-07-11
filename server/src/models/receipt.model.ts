@@ -3,31 +3,29 @@ import type { QuotationCategory } from '../types/quotation.type.js';
 
 export type ReceiptPaymentType = 'full' | 'partial' | 'milestone';
 export type ReceiptStatus = 'issued' | 'void';
+export type PaymentStatus = 'pending' | 'partial' | 'paid' | 'void';
 
 export interface IReceipt extends Document {
     receiptNumber: string;
 
-    // ── Quotation linkage (mirrors how Order links via quotationGroupId) ──────
+    // ── Quotation linkage ─────────────────────────────────────────────────────
     quotationId: Types.ObjectId;
     quotationGroupId: string;
     quotationNumber: string;
 
-    // ── Snapshots (immutable at time of receipt creation) ─────────────────────
+    // ── Immutable snapshots at receipt creation ───────────────────────────────
     clientId: Types.ObjectId;
     clientName: string;
     projectTitle: string;
     category: QuotationCategory;
     currency: string;
 
-    // ── Payment details ────────────────────────────────────────────────────────
-    paymentType: ReceiptPaymentType;
-    milestoneLabel?: string;
-    amount: number;
-    paymentDate: Date;
-    method?: string;
-    note?: string;
+    // ── Payment ledger (computed from paymentHistory) ─────────────────────────
+    totalPaid: number;
+    paymentStatus: PaymentStatus;
+    paymentHistory: Types.ObjectId[];  // → ref ReceiptPayment
 
-    // ── Lifecycle ───────────────────────────────────────────────────────────────
+    // ── Lifecycle ─────────────────────────────────────────────────────────────
     status: ReceiptStatus;
     voidReason?: string;
 
@@ -55,16 +53,15 @@ const receiptSchema = new Schema<IReceipt>(
         },
         currency: { type: String, default: '৳' },
 
-        paymentType: {
+        // Ledger totals (updated atomically on each addPayment / voidPayment)
+        totalPaid: { type: Number, default: 0, min: 0 },
+        paymentStatus: {
             type: String,
-            enum: ['full', 'partial', 'milestone'],
-            required: true,
+            enum: ['pending', 'partial', 'paid', 'void'],
+            default: 'pending',
+            index: true,
         },
-        milestoneLabel: { type: String },
-        amount: { type: Number, required: true, min: 0 },
-        paymentDate: { type: Date, required: true },
-        method: { type: String },
-        note: { type: String },
+        paymentHistory: [{ type: Schema.Types.ObjectId, ref: 'ReceiptPayment' }],
 
         status: {
             type: String,
@@ -76,9 +73,7 @@ const receiptSchema = new Schema<IReceipt>(
 
         createdBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
     },
-    {
-        timestamps: true,
-    },
+    { timestamps: true },
 );
 
 receiptSchema.index({ quotationGroupId: 1, status: 1 });

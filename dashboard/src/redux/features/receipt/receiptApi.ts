@@ -1,5 +1,5 @@
 import { apiSlice } from "@/redux/api/apiSlice";
-import { IReceipt, PaymentSummary } from "@/types/receipt.type";
+import { IReceipt, IReceiptPayment, PaymentSummary } from "@/types/receipt.type";
 
 export interface RecipientSendStatus {
   email: string;
@@ -21,17 +21,22 @@ export interface ReceiptQueryParams {
   clientId?: string;
   quotationGroupId?: string;
   status?: string;
+  paymentStatus?: string;
   search?: string;
 }
 
-export interface CreateReceiptInput {
-  quotationId: string;
+export interface AddPaymentInput {
   paymentType: "full" | "partial" | "milestone";
   milestoneLabel?: string;
   amount: number;
   paymentDate?: string;
   method?: string;
   note?: string;
+}
+
+export interface AddPaymentResponse {
+  receipt: IReceipt;
+  payment: IReceiptPayment;
 }
 
 export const receiptApi = apiSlice.injectEndpoints({
@@ -65,28 +70,38 @@ export const receiptApi = apiSlice.injectEndpoints({
       providesTags: ["Receipt"],
     }),
 
-    // ── Create ────────────────────────────────────────────────────────────
-    createReceipt: builder.mutation<IReceipt, CreateReceiptInput>({
-      query: (body) => ({
-        url: "/receipts",
+    // ── Payment operations ────────────────────────────────────────────────
+    /** Add a payment entry to an existing receipt ledger */
+    addPayment: builder.mutation<
+      AddPaymentResponse,
+      { receiptId: string } & AddPaymentInput
+    >({
+      query: ({ receiptId, ...body }) => ({
+        url: `/receipts/${receiptId}/payments`,
         method: "POST",
         body,
       }),
-      transformResponse: (response: { data: IReceipt }) => response.data,
+      transformResponse: (response: { data: AddPaymentResponse }) => response.data,
       invalidatesTags: ["Receipt"],
     }),
 
-    /**
-     * Send receipt to client — attaches the branded PDF and emails it.
-     * POST /receipts/:id/send
-     */
+    /** Void a single payment entry */
+    voidPayment: builder.mutation<
+      AddPaymentResponse,
+      { receiptId: string; paymentId: string; reason?: string }
+    >({
+      query: ({ receiptId, paymentId, reason }) => ({
+        url: `/receipts/${receiptId}/payments/${paymentId}/void`,
+        method: "PATCH",
+        body: { reason },
+      }),
+      transformResponse: (response: { data: AddPaymentResponse }) => response.data,
+      invalidatesTags: ["Receipt"],
+    }),
+
+    // ── Comms ─────────────────────────────────────────────────────────────
     sendReceipt: builder.mutation<
-      {
-        data: {
-          recipients: RecipientSendStatus[];
-          emailSent: boolean;
-        };
-      },
+      { data: { recipients: RecipientSendStatus[]; emailSent: boolean } },
       { id: string; emails?: string[] }
     >({
       query: ({ id, emails }) => ({
@@ -97,7 +112,7 @@ export const receiptApi = apiSlice.injectEndpoints({
       invalidatesTags: ["Receipt"],
     }),
 
-    // ── Update ────────────────────────────────────────────────────────────
+    // ── Receipt lifecycle ─────────────────────────────────────────────────
     voidReceipt: builder.mutation<IReceipt, { id: string; reason?: string }>({
       query: ({ id, reason }) => ({
         url: `/receipts/${id}/void`,
@@ -108,7 +123,6 @@ export const receiptApi = apiSlice.injectEndpoints({
       invalidatesTags: ["Receipt"],
     }),
 
-    // ── Delete ────────────────────────────────────────────────────────────
     deleteReceipt: builder.mutation<void, string>({
       query: (id) => ({
         url: `/receipts/${id}`,
@@ -123,7 +137,8 @@ export const {
   useGetReceiptsQuery,
   useGetReceiptByIdQuery,
   useGetPaymentSummaryQuery,
-  useCreateReceiptMutation,
+  useAddPaymentMutation,
+  useVoidPaymentMutation,
   useSendReceiptMutation,
   useVoidReceiptMutation,
   useDeleteReceiptMutation,

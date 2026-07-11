@@ -1,5 +1,7 @@
 import { Types } from 'mongoose';
-import ReceiptModel, { type IReceipt, type ReceiptPaymentType } from '../models/receipt.model.js';
+import type { ClientSession } from 'mongoose';
+import ReceiptModel, { type IReceipt, type PaymentStatus, type ReceiptPaymentType } from '../models/receipt.model.js';
+import ReceiptPaymentModel, { type IReceiptPayment } from '../models/receipt-payment.model.js';
 import QuotationModel from '../models/quotation.model.js';
 import ClientModel from '../models/client.model.js';
 import { InvoiceCounter } from '../models/invoice-counter.model.js';
@@ -32,19 +34,41 @@ async function generateReceiptNumber(): Promise<string> {
     return `RCPT-${year}-${counter.seq.toString().padStart(4, '0')}`;
 }
 
-/** Sum of all still-valid ("issued") receipts for a quotation group. */
-async function sumPaid(quotationGroupId: string, excludeReceiptId?: string): Promise<number> {
-    const match: Record<string, unknown> = { quotationGroupId, status: 'issued' };
-    if (excludeReceiptId) match._id = { $ne: new Types.ObjectId(excludeReceiptId) };
-    const rows = await ReceiptModel.aggregate([
-        { $match: match },
-        { $group: { _id: null, total: { $sum: '$amount' } } },
-    ]);
-    return rows[0]?.total || 0;
+/**
+ * Recalculate and persist `totalPaid` and `paymentStatus` on a Receipt
+ * from its ReceiptPayment children. Call inside a session for atomicity.
+ */
+async function recalculateReceiptTotals(
+    receipt: IReceipt,
+    grandTotal: number,
+    session?: ClientSession,
+): Promise<void> {
+    const payments = await ReceiptPaymentModel.find(
+        { receiptId: receipt._id, status: 'recorded' },
+        { amount: 1 },
+        session ? { session } : {},
+    );
+
+    const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
+
+    let paymentStatus: PaymentStatus = 'pending';
+    if (totalPaid >= grandTotal && grandTotal > 0) {
+        paymentStatus = 'paid';
+    } else if (totalPaid > 0) {
+        paymentStatus = 'partial';
+    }
+
+    receipt.totalPaid = totalPaid;
+    receipt.paymentStatus = paymentStatus;
+
+    if (session) {
+        await receipt.save({ session });
+    } else {
+        await receipt.save();
+    }
 }
 
-export interface CreateReceiptInput {
-    quotationId: string;
+export interface AddPaymentInput {
     paymentType: ReceiptPaymentType;
     milestoneLabel?: string;
     amount: number;
@@ -54,68 +78,25 @@ export interface CreateReceiptInput {
 }
 
 export class ReceiptService {
-    static async createReceipt(data: CreateReceiptInput, userId: string): Promise<IReceipt> {
-        if (!data.quotationId) throw new AppError('quotationId is required', 400);
-        if (!data.paymentType) throw new AppError('paymentType is required', 400);
-        if (!data.amount || data.amount <= 0) {
-            throw new AppError('amount must be greater than 0', 400);
-        }
-
-        const quotation = await QuotationModel.findById(data.quotationId).populate('clientId', 'name');
-        if (!quotation) throw new AppError('Quotation not found', 404);
-
-        const grandTotal = quotation.totals?.grandTotal || 0;
-        const alreadyPaid = await sumPaid(quotation.quotationGroupId);
-        const remaining = grandTotal - alreadyPaid;
-
-        if (remaining <= 0.009) {
-            throw new AppError('This quotation is already fully paid.', 409);
-        }
-        if (data.amount > remaining + 0.01) {
-            throw new AppError(
-                `Amount exceeds remaining balance (${formatAmount(remaining, quotation.currency || 'USD')}).`,
-                400,
-            );
-        }
-
-        const receiptNumber = await generateReceiptNumber();
-        const client = quotation.clientId as unknown as { _id: Types.ObjectId; name?: string } | null;
-
-        const receipt = new ReceiptModel({
-            receiptNumber,
-            quotationId: quotation._id,
-            quotationGroupId: quotation.quotationGroupId,
-            quotationNumber: quotation.quotationNumber,
-            clientId: client?._id,
-            clientName: client?.name || quotation.client?.contactName || 'Client',
-            projectTitle: quotation.details?.title || 'Project',
-            category: quotation.category || 'web-development',
-            currency: quotation.currency || '৳',
-            paymentType: data.paymentType,
-            ...(data.paymentType === 'milestone' && data.milestoneLabel
-                ? { milestoneLabel: data.milestoneLabel }
-                : {}),
-            amount: data.amount,
-            paymentDate: data.paymentDate ? new Date(data.paymentDate) : new Date(),
-            ...(data.method ? { method: data.method } : {}),
-            ...(data.note ? { note: data.note } : {}),
-            status: 'issued',
-            createdBy: new Types.ObjectId(userId),
-        });
-
-        return await receipt.save();
-    }
-
+    /**
+     * Called automatically when a quotation is created.
+     * Creates one Receipt ledger document (zero-paid baseline).
+     */
     static async createZeroPaymentReceipt(quotation: any, userId: string): Promise<IReceipt> {
+        // Prevent duplicate — one receipt per quotation
+        const existing = await ReceiptModel.findOne({ quotationGroupId: quotation.quotationGroupId });
+        if (existing) {
+            logger.warn({ quotationGroupId: quotation.quotationGroupId }, 'receipt.zero_payment.already_exists');
+            return existing;
+        }
+
         const receiptNumber = await generateReceiptNumber();
         const clientId = quotation.clientId;
-        
+
         let clientName = quotation.client?.contactName || 'Client';
         if (clientId) {
-            const clientDoc = await ClientModel.findById(clientId);
-            if (clientDoc) {
-                clientName = clientDoc.name || clientName;
-            }
+            const clientDoc = await ClientModel.findById(clientId?._id || clientId);
+            if (clientDoc) clientName = clientDoc.name || clientName;
         }
 
         const receipt = new ReceiptModel({
@@ -128,15 +109,106 @@ export class ReceiptService {
             projectTitle: quotation.details?.title || 'Project',
             category: quotation.category || 'web-development',
             currency: quotation.currency || '৳',
-            paymentType: 'partial',
-            amount: 0,
-            paymentDate: new Date(),
+            totalPaid: 0,
+            paymentStatus: 'pending',
+            paymentHistory: [],
             status: 'issued',
             createdBy: new Types.ObjectId(userId),
-            note: 'Initial 0-payment receipt automatically generated on quotation creation.',
         });
 
         return await receipt.save();
+    }
+
+    /**
+     * Add a payment transaction to an existing Receipt ledger.
+     * Validates against quotation grand total before saving.
+     */
+    static async addPayment(
+        receiptId: string,
+        data: AddPaymentInput,
+        userId: string,
+    ): Promise<{ receipt: IReceipt; payment: IReceiptPayment }> {
+        if (!data.amount || data.amount <= 0) throw new AppError('amount must be greater than 0', 400);
+        if (!data.paymentType) throw new AppError('paymentType is required', 400);
+
+        const receipt = await ReceiptModel.findById(receiptId);
+        if (!receipt) throw new AppError('Receipt not found', 404);
+        if (receipt.status === 'void') throw new AppError('Cannot add payment to a voided receipt', 400);
+
+        // Fetch quotation grand total for balance validation
+        const quotation = await QuotationModel.findById(receipt.quotationId);
+        if (!quotation) throw new AppError('Linked quotation not found', 404);
+
+        const grandTotal = quotation.totals?.grandTotal || 0;
+        const remaining = Math.max(0, grandTotal - receipt.totalPaid);
+
+        if (remaining <= 0.009) throw new AppError('This quotation is already fully paid.', 409);
+        if (data.amount > remaining + 0.01) {
+            throw new AppError(
+                `Amount exceeds remaining balance (${formatAmount(remaining, receipt.currency || '৳')}).`,
+                400,
+            );
+        }
+
+        // Create the payment entry
+        const payment = new ReceiptPaymentModel({
+            receiptId: receipt._id,
+            paymentType: data.paymentType,
+            ...(data.paymentType === 'milestone' && data.milestoneLabel
+                ? { milestoneLabel: data.milestoneLabel }
+                : {}),
+            amount: data.amount,
+            paymentDate: data.paymentDate ? new Date(data.paymentDate) : new Date(),
+            ...(data.method ? { method: data.method } : {}),
+            ...(data.note ? { note: data.note } : {}),
+            status: 'recorded',
+            createdBy: new Types.ObjectId(userId),
+        });
+
+        await payment.save();
+
+        // Push to history and recalculate totals
+        receipt.paymentHistory.push(payment._id as Types.ObjectId);
+        await recalculateReceiptTotals(receipt, grandTotal);
+
+        logger.info(
+            { receiptId: receipt._id.toString(), paymentId: payment._id.toString(), amount: data.amount },
+            'receipt.payment.added',
+        );
+
+        return { receipt, payment };
+    }
+
+    /**
+     * Void a single payment entry and recalculate Receipt totals.
+     */
+    static async voidPayment(
+        receiptId: string,
+        paymentId: string,
+        reason?: string,
+    ): Promise<{ receipt: IReceipt; payment: IReceiptPayment }> {
+        const receipt = await ReceiptModel.findById(receiptId);
+        if (!receipt) throw new AppError('Receipt not found', 404);
+        if (receipt.status === 'void') throw new AppError('Receipt is already voided', 400);
+
+        const payment = await ReceiptPaymentModel.findOne({ _id: paymentId, receiptId: receipt._id });
+        if (!payment) throw new AppError('Payment entry not found', 404);
+        if (payment.status === 'void') throw new AppError('Payment is already voided', 400);
+
+        payment.status = 'void';
+        payment.voidReason = reason?.trim() || 'Voided by staff';
+        await payment.save();
+
+        const quotation = await QuotationModel.findById(receipt.quotationId);
+        const grandTotal = quotation?.totals?.grandTotal || 0;
+        await recalculateReceiptTotals(receipt, grandTotal);
+
+        logger.info(
+            { receiptId: receipt._id.toString(), paymentId, amount: payment.amount },
+            'receipt.payment.voided',
+        );
+
+        return { receipt, payment };
     }
 
     static async getReceipts(filters: any = {}, options: any = {}) {
@@ -147,6 +219,7 @@ export class ReceiptService {
         if (filters.clientId) mongoFilters.clientId = filters.clientId;
         if (filters.quotationGroupId) mongoFilters.quotationGroupId = filters.quotationGroupId;
         if (filters.status) mongoFilters.status = filters.status;
+        if (filters.paymentStatus) mongoFilters.paymentStatus = filters.paymentStatus;
         if (filters.search) {
             mongoFilters.$or = [
                 { receiptNumber: { $regex: filters.search, $options: 'i' } },
@@ -156,21 +229,38 @@ export class ReceiptService {
         }
 
         const [items, total] = await Promise.all([
-            ReceiptModel.find(mongoFilters).populate('quotationId', 'totals').sort(sort).skip(skip).limit(limit).exec(),
+            ReceiptModel.find(mongoFilters)
+                .populate('quotationId', 'totals')
+                .populate({
+                    path: 'paymentHistory',
+                    options: { sort: { paymentDate: -1 } },
+                })
+                .sort(sort)
+                .skip(skip)
+                .limit(limit)
+                .lean()
+                .exec(),
             ReceiptModel.countDocuments(mongoFilters),
         ]);
 
         return { items, total, page: Number(page), limit: Number(limit), totalPages: Math.ceil(total / limit) };
     }
 
-    static async getReceiptById(id: string): Promise<IReceipt | null> {
-        return ReceiptModel.findById(id);
+    static async getReceiptById(id: string) {
+        const receipt = await ReceiptModel.findById(id)
+            .populate('quotationId', 'totals quotationNumber quotationGroupId details paymentMilestones')
+            .populate({
+                path: 'paymentHistory',
+                options: { sort: { paymentDate: -1 } },
+            })
+            .lean();
+
+        if (!receipt) throw new AppError('Receipt not found', 404);
+        return receipt;
     }
 
     /**
-     * Powers both the "new receipt" form's live preview and the receipt detail
-     * page's payment history — quotation essentials + every receipt recorded
-     * against it + the resulting paid/remaining balance.
+     * Returns the quotation snapshot + full payment history for the summary panel.
      */
     static async getPaymentSummary(quotationGroupId: string) {
         const quotation = await QuotationModel.findOne({
@@ -179,14 +269,15 @@ export class ReceiptService {
         }).populate('clientId', 'name emails');
         if (!quotation) throw new AppError('Quotation not found', 404);
 
-        const receipts = await ReceiptModel.find({ quotationGroupId }).sort({
-            paymentDate: -1,
-            createdAt: -1,
-        });
-        const totalPaid = receipts
-            .filter((r) => r.status === 'issued')
-            .reduce((sum, r) => sum + r.amount, 0);
+        const receipt = await ReceiptModel.findOne({ quotationGroupId })
+            .populate({
+                path: 'paymentHistory',
+                options: { sort: { paymentDate: -1 } },
+            })
+            .lean();
+
         const grandTotal = quotation.totals?.grandTotal || 0;
+        const totalPaid = receipt?.totalPaid ?? 0;
         const remaining = Math.max(0, grandTotal - totalPaid);
 
         return {
@@ -201,7 +292,8 @@ export class ReceiptService {
                 paymentMilestones: quotation.paymentMilestones || [],
                 clientId: quotation.clientId,
             },
-            receipts,
+            receipt: receipt ?? null,
+            payments: (receipt?.paymentHistory ?? []) as unknown as IReceiptPayment[],
             totalPaid,
             remaining,
         };
@@ -213,6 +305,7 @@ export class ReceiptService {
         if (receipt.status === 'void') return receipt;
 
         receipt.status = 'void';
+        receipt.paymentStatus = 'void';
         receipt.voidReason = reason?.trim() || 'Voided by staff';
         return await receipt.save();
     }
@@ -220,6 +313,8 @@ export class ReceiptService {
     static async deleteReceipt(id: string): Promise<void> {
         const receipt = await ReceiptModel.findById(id);
         if (!receipt) throw new AppError('Receipt not found', 404);
+        // Also delete all child payment entries
+        await ReceiptPaymentModel.deleteMany({ receiptId: receipt._id });
         await receipt.deleteOne();
     }
 
@@ -229,23 +324,17 @@ export class ReceiptService {
     ): Promise<{ recipients: RecipientSendStatus[]; emailSent: boolean }> {
         const receipt = await ReceiptModel.findById(id);
         if (!receipt) throw new AppError('Receipt not found', 404);
-        if (receipt.status === 'void') {
-            throw new AppError('Cannot send a voided receipt', 400);
-        }
+        if (receipt.status === 'void') throw new AppError('Cannot send a voided receipt', 400);
 
         const client = await ClientModel.findById(receipt.clientId).lean();
-        const fromRequest = (recipientEmails ?? [])
-            .map((e) => String(e || '').trim())
-            .filter(Boolean);
+        const fromRequest = (recipientEmails ?? []).map((e) => String(e || '').trim()).filter(Boolean);
         const fromClient = (client?.emails ?? []).map((e) => String(e || '').trim()).filter(Boolean);
         const toList = Array.from(new Set((fromRequest.length ? fromRequest : fromClient).filter(Boolean)));
 
-        if (toList.length === 0) {
-            throw new AppError('Client has no emails on record', 400);
-        }
+        if (toList.length === 0) throw new AppError('Client has no emails on record', 400);
 
-        const { buffer, filename } = await ReceiptPuppeteerPdfService.generatePdf(id);
         const summary = await ReceiptService.getPaymentSummary(receipt.quotationGroupId);
+        const { buffer, filename } = await ReceiptPuppeteerPdfService.generatePdf(id);
 
         const recipients: RecipientSendStatus[] = [];
         await Promise.all(
@@ -256,17 +345,9 @@ export class ReceiptService {
                         clientName: receipt.clientName,
                         receiptNumber: receipt.receiptNumber,
                         projectTitle: receipt.projectTitle,
-                        amountFormatted: formatAmount(receipt.amount, receipt.currency || 'USD'),
-                        remainingFormatted: formatAmount(summary.remaining, receipt.currency || 'USD'),
-                        paymentDateFormatted: receipt.paymentDate
-                            ? new Date(receipt.paymentDate).toLocaleDateString('en-GB')
-                            : undefined,
-                        ...(receipt.milestoneLabel ? { milestoneLabel: receipt.milestoneLabel } : {}),
-                        attachment: {
-                            filename,
-                            content: buffer,
-                            contentType: 'application/pdf',
-                        },
+                        amountFormatted: formatAmount(receipt.totalPaid, receipt.currency || '৳'),
+                        remainingFormatted: formatAmount(summary.remaining, receipt.currency || '৳'),
+                        attachment: { filename, content: buffer, contentType: 'application/pdf' },
                     });
                     recipients.push({ email: to, status: 'sent' });
                 } catch (e: any) {
@@ -276,11 +357,7 @@ export class ReceiptService {
         );
 
         const emailSent = recipients.some((r) => r.status === 'sent');
-        logger.info(
-            { receiptId: receipt._id.toString(), emailSent, recipients },
-            'receipt.send_result',
-        );
-
+        logger.info({ receiptId: receipt._id.toString(), emailSent, recipients }, 'receipt.send_result');
         return { recipients, emailSent };
     }
 }

@@ -3,12 +3,34 @@ import { ReceiptService } from '../services/receipt.service.js';
 import { ReceiptPuppeteerPdfService } from '../services/receipt-puppeteer-pdf.service.js';
 import { logger } from '../lib/logger.js';
 
-const createReceipt = async (req: Request, res: Response, next: NextFunction) => {
+const addPayment = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const userId = req.user?.id;
         if (!userId) return next(new Error('Unauthorized'));
-        const result = await ReceiptService.createReceipt(req.body, userId);
-        res.status(201).json({ success: true, message: 'Receipt created successfully', data: result });
+        const { id } = req.params;
+        if (!id) return next(new Error('Receipt ID is required'));
+        const { receipt, payment } = await ReceiptService.addPayment(id, req.body, userId);
+        res.status(201).json({
+            success: true,
+            message: 'Payment recorded successfully',
+            data: { receipt, payment },
+        });
+    } catch (err) {
+        next(err);
+    }
+};
+
+const voidPayment = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const { id, paymentId } = req.params;
+        if (!id || !paymentId) return next(new Error('Receipt ID and Payment ID are required'));
+        const { reason } = req.body || {};
+        const { receipt, payment } = await ReceiptService.voidPayment(id, paymentId, reason);
+        res.status(200).json({
+            success: true,
+            message: 'Payment voided successfully',
+            data: { receipt, payment },
+        });
     } catch (err) {
         next(err);
     }
@@ -20,6 +42,7 @@ const getAllReceipts = async (req: Request, res: Response, next: NextFunction) =
         if (req.query.clientId) filters.clientId = req.query.clientId;
         if (req.query.quotationGroupId) filters.quotationGroupId = req.query.quotationGroupId;
         if (req.query.status) filters.status = req.query.status;
+        if (req.query.paymentStatus) filters.paymentStatus = req.query.paymentStatus;
         if (req.query.search) filters.search = req.query.search;
 
         const options = {
@@ -39,7 +62,6 @@ const getReceiptById = async (req: Request, res: Response, next: NextFunction) =
         const { id } = req.params;
         if (!id) return next(new Error('ID is required'));
         const result = await ReceiptService.getReceiptById(id);
-        if (!result) return res.status(404).json({ success: false, message: 'Receipt not found' });
         return res.status(200).json({ success: true, data: result });
     } catch (err) {
         next(err);
@@ -118,7 +140,8 @@ const deleteReceipt = async (req: Request, res: Response, next: NextFunction) =>
 };
 
 export default {
-    createReceipt,
+    addPayment,
+    voidPayment,
     getAllReceipts,
     getReceiptById,
     getPaymentSummary,

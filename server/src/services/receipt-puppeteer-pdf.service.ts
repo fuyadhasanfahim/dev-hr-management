@@ -318,26 +318,12 @@ export class ReceiptPuppeteerPdfService {
 
         const client = await ClientModel.findById(receipt.clientId).lean();
 
-        // "Previously paid" = every other still-valid receipt in the same
-        // quotation group (order-independent, mirrors ReceiptService's ledger math).
-        const otherIssued = await ReceiptModel.aggregate([
-            {
-                $match: {
-                    quotationGroupId: receipt.quotationGroupId,
-                    status: 'issued',
-                    _id: { $ne: receipt._id },
-                },
-            },
-            { $group: { _id: null, total: { $sum: '$amount' } } },
-        ]);
-        const totalPaidBefore = otherIssued[0]?.total || 0;
-
-        // Receipt doesn't snapshot the grand total, so fetch it once via the
-        // quotation this receipt was created against.
+        // In the new schema, Receipt.totalPaid is the authoritative cached sum.
         const quotation = await QuotationModel.findById(receipt.quotationId).lean();
         const grandTotal = quotation?.totals?.grandTotal || 0;
-        const paidAfter = totalPaidBefore + (receipt.status === 'issued' ? receipt.amount : 0);
+        const paidAfter = receipt.status === 'issued' ? (receipt.totalPaid ?? 0) : 0;
         const remaining = Math.max(0, grandTotal - paidAfter);
+
 
         const signatureUrl = process.env.COMPANY_SIGNATURE_URL || DEFAULT_SIGNATURE;
         let logoSrc =
@@ -353,7 +339,7 @@ export class ReceiptPuppeteerPdfService {
                 email: client?.emails?.[0],
                 phone: client?.phone,
             },
-            totalPaidBefore,
+            totalPaidBefore: paidAfter,
             remaining,
         });
 

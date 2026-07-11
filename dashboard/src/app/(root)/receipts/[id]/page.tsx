@@ -36,6 +36,7 @@ import {
   useGetPaymentSummaryQuery,
   useSendReceiptMutation,
   useVoidReceiptMutation,
+  useVoidPaymentMutation,
 } from "@/redux/features/receipt/receiptApi";
 import ReceiptPuppeteerPdfBtn, {
   receiptPdfFileStem,
@@ -65,6 +66,10 @@ export default function ReceiptDetailsPage() {
   const [voidDialogOpen, setVoidDialogOpen] = useState(false);
   const [voidReason, setVoidReason] = useState("");
 
+  const [voidPaymentTarget, setVoidPaymentTarget] = useState<string | null>(null);
+  const [voidPaymentReason, setVoidPaymentReason] = useState("");
+  const [voidPayment, { isLoading: isVoidingPayment }] = useVoidPaymentMutation();
+
   if (isLoading) {
     return (
       <div className="flex h-[60vh] items-center justify-center gap-2 text-sm text-muted-foreground">
@@ -90,16 +95,11 @@ export default function ReceiptDetailsPage() {
   const catConfig = getCategoryConfig(receipt.category);
   const money = (n: number) => formatMoney(n, receipt.currency);
 
-  const totalPaidBefore = summary
-    ? summary.receipts
-        .filter((r) => r.status === "issued" && r._id !== receipt._id)
-        .reduce((sum, r) => sum + r.amount, 0)
-    : 0;
   const grandTotal = summary?.quotation.grandTotal ?? 0;
-  const paidAfter = totalPaidBefore + (isVoid ? 0 : receipt.amount);
-  const remaining = Math.max(0, grandTotal - paidAfter);
+  const totalPaid = receipt.totalPaid ?? 0;
+  const remaining = Math.max(0, grandTotal - totalPaid);
   const isFullyPaid = remaining <= 0.009;
-  const progressPct = grandTotal > 0 ? Math.min(100, (paidAfter / grandTotal) * 100) : 0;
+  const progressPct = grandTotal > 0 ? Math.min(100, (totalPaid / grandTotal) * 100) : 0;
 
   const handleSend = async (selectedEmails: string[]) => {
     try {
@@ -129,6 +129,22 @@ export default function ReceiptDetailsPage() {
       setVoidReason("");
     } catch (err: any) {
       toast.error(err?.data?.message || "Failed to void receipt");
+    }
+  };
+
+  const handleVoidPayment = async () => {
+    if (!voidPaymentTarget) return;
+    try {
+      await voidPayment({
+        receiptId: receipt._id,
+        paymentId: voidPaymentTarget,
+        reason: voidPaymentReason || undefined,
+      }).unwrap();
+      toast.success("Payment entry voided");
+      setVoidPaymentTarget(null);
+      setVoidPaymentReason("");
+    } catch (err: any) {
+      toast.error(err?.data?.message || "Failed to void payment");
     }
   };
 
@@ -230,74 +246,94 @@ export default function ReceiptDetailsPage() {
                 </div>
                 <div className="space-y-1">
                   <span className="text-xs uppercase font-bold text-muted-foreground">
-                    Payment Type
+                    Payment Status
                   </span>
-                  <p className="font-medium">
-                    {PAYMENT_TYPE_LABELS[receipt.paymentType] || receipt.paymentType}
-                    {receipt.milestoneLabel ? ` — ${receipt.milestoneLabel}` : ""}
-                  </p>
+                  <p className="font-medium capitalize">{receipt.paymentStatus || "pending"}</p>
                 </div>
                 <div className="space-y-1">
                   <span className="text-xs uppercase font-bold text-muted-foreground flex items-center gap-1">
-                    <CalendarDays className="h-3 w-3" /> Payment Date
+                    <CalendarDays className="h-3 w-3" /> Created At
                   </span>
                   <p className="font-medium">
-                    {receipt.paymentDate
-                      ? format(new Date(receipt.paymentDate), "PPP")
+                    {receipt.createdAt
+                      ? format(new Date(receipt.createdAt), "PPP")
                       : "—"}
                   </p>
                 </div>
-                {receipt.method && (
-                  <div className="space-y-1">
-                    <span className="text-xs uppercase font-bold text-muted-foreground">
-                      Method
-                    </span>
-                    <p className="font-medium">{receipt.method}</p>
-                  </div>
-                )}
               </div>
-              {receipt.note && (
-                <div className="rounded-lg border bg-muted/10 p-3 text-sm text-muted-foreground">
-                  {receipt.note}
-                </div>
-              )}
             </CardContent>
           </Card>
 
-          {summary && summary.receipts.length > 1 && (
+          {receipt.paymentHistory && receipt.paymentHistory.length > 0 && (
             <Card>
               <CardHeader className="border-b bg-muted/10">
                 <CardTitle className="text-lg flex items-center gap-2">
                   <Wallet className="h-4 w-4 text-primary" />
-                  Payment History
+                  Payment History / Transactions
                 </CardTitle>
               </CardHeader>
               <CardContent className="pt-6 space-y-2">
-                {summary.receipts.map((r) => (
-                  <div
-                    key={r._id}
-                    className={`flex items-center justify-between rounded-lg border p-3 text-sm ${
-                      r._id === receipt._id ? "border-primary/40 bg-primary/5" : "bg-muted/10"
-                    }`}
-                  >
-                    <div className="flex flex-col gap-0.5">
-                      <span className="font-mono text-xs font-medium">{r.receiptNumber}</span>
-                      <span className="text-xs text-muted-foreground">
-                        {r.paymentDate ? format(new Date(r.paymentDate), "MMM d, yyyy") : "—"}
-                        {r.milestoneLabel ? ` • ${r.milestoneLabel}` : ""}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-semibold">{money(r.amount)}</span>
-                      <Badge
-                        variant={r.status === "void" ? "destructive" : "outline"}
-                        className="text-[10px]"
-                      >
-                        {r.status === "void" ? "Void" : "Issued"}
-                      </Badge>
-                    </div>
-                  </div>
-                ))}
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm text-left border-collapse">
+                    <thead>
+                      <tr className="border-b text-muted-foreground text-xs uppercase font-semibold">
+                        <th className="py-2 px-3">Date</th>
+                        <th className="py-2 px-3">Type</th>
+                        <th className="py-2 px-3">Method</th>
+                        <th className="py-2 px-3 text-right">Amount</th>
+                        <th className="py-2 px-3">Status</th>
+                        {!isVoid && <th className="py-2 px-3 text-right">Actions</th>}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      {receipt.paymentHistory.map((p) => {
+                        const isPaymentVoid = p.status === "void";
+                        return (
+                          <tr key={p._id} className="hover:bg-muted/5 transition-colors">
+                            <td className="py-3 px-3">
+                              {p.paymentDate ? format(new Date(p.paymentDate), "MMM dd, yyyy") : "—"}
+                            </td>
+                            <td className="py-3 px-3 font-medium">
+                              {PAYMENT_TYPE_LABELS[p.paymentType] || p.paymentType}
+                              {p.milestoneLabel ? ` (${p.milestoneLabel})` : ""}
+                            </td>
+                            <td className="py-3 px-3 capitalize">{p.method || "—"}</td>
+                            <td className={`py-3 px-3 text-right font-semibold ${isPaymentVoid ? "line-through text-muted-foreground" : "text-slate-900 dark:text-white"}`}>
+                              {money(p.amount)}
+                            </td>
+                            <td className="py-3 px-3">
+                              {isPaymentVoid ? (
+                                <Badge variant="destructive" className="text-[10px] px-1.5 py-0">Void</Badge>
+                              ) : (
+                                <Badge variant="outline" className="text-emerald-700 border-emerald-200 bg-emerald-50 text-[10px] px-1.5 py-0">Active</Badge>
+                              )}
+                              {isPaymentVoid && p.voidReason && (
+                                <span className="block text-[10px] text-red-500 mt-0.5 max-w-[150px] truncate" title={p.voidReason}>
+                                  Reason: {p.voidReason}
+                                </span>
+                              )}
+                            </td>
+                            {!isVoid && (
+                              <td className="py-3 px-3 text-right">
+                                {!isPaymentVoid && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-7 text-xs text-destructive hover:bg-destructive/10"
+                                    onClick={() => setVoidPaymentTarget(p._id)}
+                                  >
+                                    <Ban className="h-3 w-3 mr-1" />
+                                    Void
+                                  </Button>
+                                )}
+                              </td>
+                            )}
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               </CardContent>
             </Card>
           )}
@@ -318,17 +354,9 @@ export default function ReceiptDetailsPage() {
                 <span className="font-semibold">{money(grandTotal)}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">Previously Paid</span>
-                <span className="font-semibold">{money(totalPaidBefore)}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">
-                  {isVoid ? "This Payment (Voided)" : "This Payment"}
-                </span>
-                <span
-                  className={`font-bold ${isVoid ? "line-through text-muted-foreground" : "text-emerald-600"}`}
-                >
-                  {money(receipt.amount)}
+                <span className="text-muted-foreground">Total Collected</span>
+                <span className="font-bold text-emerald-600">
+                  {money(totalPaid)}
                 </span>
               </div>
 
@@ -415,6 +443,47 @@ export default function ReceiptDetailsPage() {
                 </>
               ) : (
                 "Void Receipt"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      <AlertDialog open={!!voidPaymentTarget} onOpenChange={(open) => !open && setVoidPaymentTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Void this payment transaction?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This specific payment transaction will be marked as voided. The receipt ledger's paid balance will automatically be updated.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-muted-foreground">
+              Reason (optional)
+            </label>
+            <Textarea
+              value={voidPaymentReason}
+              onChange={(e) => setVoidPaymentReason(e.target.value)}
+              placeholder="e.g. Incorrect amount, bounced payment..."
+              className="min-h-[70px]"
+            />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isVoidingPayment}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                handleVoidPayment();
+              }}
+              disabled={isVoidingPayment}
+              className="bg-destructive text-white hover:bg-destructive/90"
+            >
+              {isVoidingPayment ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Voiding...
+                </>
+              ) : (
+                "Void Payment"
               )}
             </AlertDialogAction>
           </AlertDialogFooter>

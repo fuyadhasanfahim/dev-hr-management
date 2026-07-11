@@ -33,10 +33,16 @@ import { getCategoryConfig } from "@/constants/quotation-templates";
 import { useGetClientsQuery } from "@/redux/features/client/clientApi";
 import { useGetQuotationsQuery } from "@/redux/features/quotation/quotationApi";
 import {
-  useCreateReceiptMutation,
+  useAddPaymentMutation,
   useGetPaymentSummaryQuery,
 } from "@/redux/features/receipt/receiptApi";
 import type { ReceiptPaymentType } from "@/types/receipt.type";
+
+const PAYMENT_TYPE_LABELS: Record<string, string> = {
+  full: "Full Payment",
+  partial: "Partial Payment",
+  milestone: "Milestone Payment",
+};
 
 function DatePickerInput({
   value,
@@ -100,7 +106,7 @@ export default function NewReceiptPage() {
     isLatestVersion: true,
     limit: 100,
   });
-  const [createReceipt, { isLoading: isCreating }] = useCreateReceiptMutation();
+  const [addPayment, { isLoading: isCreating }] = useAddPaymentMutation();
 
   const selectedQuotation = useMemo(
     () => quotationsData?.items.find((q) => q._id === quotationId),
@@ -188,8 +194,10 @@ export default function NewReceiptPage() {
     }
 
     try {
-      const created = await createReceipt({
-        quotationId,
+      const receiptId = summary?.receipt?._id;
+      if (!receiptId) return toast.error("No receipt ledger found for this quotation. Please contact support.");
+      const result = await addPayment({
+        receiptId,
         paymentType,
         ...(paymentType === "milestone" ? { milestoneLabel: milestoneLabel.trim() } : {}),
         amount: Number(amount),
@@ -197,8 +205,8 @@ export default function NewReceiptPage() {
         ...(method.trim() ? { method: method.trim() } : {}),
         ...(note.trim() ? { note: note.trim() } : {}),
       }).unwrap();
-      toast.success("Receipt recorded successfully!");
-      router.push(`/receipts/${created._id}`);
+      toast.success("Payment recorded successfully!");
+      router.push(`/receipts/${result.receipt._id}`);
     } catch (err: any) {
       toast.error(err?.data?.message || "Failed to record receipt");
     }
@@ -263,38 +271,38 @@ export default function NewReceiptPage() {
           {quotationGroupId && (
             <>
               {/* Previous receipts — read-only history */}
-              {summary && summary.receipts.length > 0 && (
+              {summary && summary.payments.length > 0 && (
                 <Card>
                   <CardHeader>
-                    <CardTitle className="text-lg">Previous Receipts</CardTitle>
+                    <CardTitle className="text-lg">Previous Payments</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-2">
-                    {summary.receipts.map((r) => (
+                    {summary.payments.map((p) => (
                       <div
-                        key={r._id}
+                        key={p._id}
                         className="flex items-center justify-between rounded-lg border bg-muted/20 p-3 text-sm opacity-70 pointer-events-none select-none"
                         aria-disabled="true"
                       >
                         <div className="flex flex-col gap-0.5">
-                          <span className="font-mono text-xs font-medium text-foreground">
-                            {r.receiptNumber}
+                          <span className="font-medium text-foreground capitalize">
+                            {PAYMENT_TYPE_LABELS[p.paymentType] || p.paymentType}
                           </span>
                           <span className="text-xs text-muted-foreground">
-                            {r.paymentDate
-                              ? format(new Date(r.paymentDate), "MMM d, yyyy")
+                            {p.paymentDate
+                              ? format(new Date(p.paymentDate), "MMM d, yyyy")
                               : "—"}
-                            {r.milestoneLabel ? ` • ${r.milestoneLabel}` : ""}
+                            {p.milestoneLabel ? ` • ${p.milestoneLabel}` : ""}
                           </span>
                         </div>
                         <div className="flex items-center gap-2">
                           <span className="font-semibold">
-                            {formatMoney(r.amount, summary.quotation.currency)}
+                            {formatMoney(p.amount, summary.quotation.currency)}
                           </span>
                           <Badge
-                            variant={r.status === "void" ? "destructive" : "outline"}
+                            variant={p.status === "void" ? "destructive" : "outline"}
                             className="text-[10px]"
                           >
-                            {r.status === "void" ? "Void" : "Issued"}
+                            {p.status === "void" ? "Void" : "Recorded"}
                           </Badge>
                         </div>
                       </div>

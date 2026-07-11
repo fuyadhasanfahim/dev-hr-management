@@ -32,7 +32,7 @@ import { getCategoryConfig } from "@/constants/quotation-templates";
 import {
   useGetReceiptsQuery,
   useVoidReceiptMutation,
-  useCreateReceiptMutation,
+  useAddPaymentMutation,
   useGetPaymentSummaryQuery,
 } from "@/redux/features/receipt/receiptApi";
 import { useConvertQuotationToOrderMutation } from "@/redux/features/order/orderApi";
@@ -72,7 +72,7 @@ export default function ReceiptsPage() {
     limit: 1000,
   });
   const [voidReceipt, { isLoading: isVoiding }] = useVoidReceiptMutation();
-  const [createReceipt, { isLoading: isCreatingReceipt }] = useCreateReceiptMutation();
+  const [addPayment, { isLoading: isAddingPayment }] = useAddPaymentMutation();
   const [convertQuotationToOrder, { isLoading: isConvertingOrder }] = useConvertQuotationToOrderMutation();
 
   const [voidTarget, setVoidTarget] = useState<IReceipt | null>(null);
@@ -98,16 +98,23 @@ export default function ReceiptsPage() {
 
   const stats = useMemo(() => {
     const issued = receipts.filter((r) => r.status === "issued");
-    const totalCollected = issued.reduce((sum, r) => sum + r.amount, 0);
+    const totalCollected = issued.reduce((sum, r) => sum + (r.totalPaid ?? 0), 0);
     const now = new Date();
+    // Use the latest payment date from paymentHistory for "this month" calc
     const thisMonth = issued
       .filter((r) => {
-        const d = new Date(r.paymentDate);
-        return (
-          d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()
-        );
+        const lastPayment = r.paymentHistory?.[0];
+        if (!lastPayment) return false;
+        const d = new Date(lastPayment.paymentDate);
+        return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
       })
-      .reduce((sum, r) => sum + r.amount, 0);
+      .reduce((sum, r) => {
+        // Sum only the payments from this month
+        return sum + (r.paymentHistory ?? []).filter((p) => {
+          const d = new Date(p.paymentDate);
+          return p.status === "recorded" && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+        }).reduce((s, p) => s + p.amount, 0);
+      }, 0);
     const voidCount = receipts.filter((r) => r.status === "void").length;
     return {
       total: qData?.total ?? receipts.length,
@@ -174,11 +181,11 @@ export default function ReceiptsPage() {
       return;
     }
 
-    const toastId = toast.loading("Recording payment receipt...");
+    const toastId = toast.loading("Recording payment...");
     try {
-      // 1. Create the receipt record
-      await createReceipt({
-        quotationId: paymentTarget.quotationId.toString(),
+      // Use the receipt's own _id to add a payment to it
+      await addPayment({
+        receiptId: paymentTarget._id,
         paymentType,
         amount: parsedAmount,
         paymentDate: formattedDateString,
@@ -189,7 +196,7 @@ export default function ReceiptsPage() {
 
       toast.success("Payment recorded successfully", { id: toastId });
 
-      // 2. Conditionally convert to order automatically
+      // Conditionally convert to order automatically
       if (autoCreateOrder) {
         const orderToastId = toast.loading("Converting quotation to order...");
         try {
@@ -215,15 +222,15 @@ export default function ReceiptsPage() {
   const columns = useMemo<ColumnDef<IReceipt, any>[]>(
     () => [
       {
-        accessorKey: "paymentDate",
-        header: "Date",
+        id: "lastPaymentDate",
+        header: "Last Payment",
+        accessorFn: (row) => row.paymentHistory?.[0]?.paymentDate ?? row.createdAt,
         cell: ({ row }) => {
           const r = row.original;
+          const last = r.paymentHistory?.[0];
           return (
             <span className="text-slate-500 dark:text-slate-400 text-sm">
-              {r.paymentDate
-                ? format(new Date(r.paymentDate), "MMM dd, yyyy")
-                : "—"}
+              {last ? format(new Date(last.paymentDate), "MMM dd, yyyy") : "—"}
             </span>
           );
         },
@@ -272,21 +279,21 @@ export default function ReceiptsPage() {
       },
       {
         id: "stage",
-        header: "Stage",
-        accessorFn: (row) => row.paymentType,
+        header: "Payment Status",
+        accessorFn: (row) => row.paymentStatus,
         cell: ({ row }) => {
           const r = row.original;
+          const cfg: Record<string, { label: string; cls: string }> = {
+            pending:  { label: "Pending",  cls: "text-slate-500 border-slate-200 bg-slate-50 dark:bg-slate-900/30" },
+            partial:  { label: "Partial",  cls: "text-amber-600 border-amber-200 bg-amber-50 dark:bg-amber-900/20 dark:text-amber-400" },
+            paid:     { label: "Paid",     cls: "text-emerald-700 border-emerald-200 bg-emerald-50 dark:bg-emerald-900/20 dark:text-emerald-400" },
+            void:     { label: "Void",     cls: "text-red-600 border-red-200 bg-red-50 dark:bg-red-900/20 dark:text-red-400" },
+          };
+          const c = cfg[r.paymentStatus] ?? cfg.pending;
           return (
-            <div className="flex flex-col">
-              <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">
-                {PAYMENT_TYPE_LABELS[r.paymentType] || r.paymentType}
-              </span>
-              {r.milestoneLabel && (
-                <span className="text-xs text-slate-400 dark:text-slate-500">
-                  {r.milestoneLabel}
-                </span>
-              )}
-            </div>
+            <Badge variant="outline" className={`capitalize text-[11px] font-semibold px-2.5 py-0.5 ${c.cls}`}>
+              {c.label}
+            </Badge>
           );
         },
       },
@@ -305,13 +312,21 @@ export default function ReceiptsPage() {
         },
       },
       {
-        accessorKey: "amount",
+        id: "totalPaid",
         header: () => <div className="text-right">Paid Amount</div>,
+        accessorFn: (row) => row.totalPaid,
         cell: ({ row }) => {
           const r = row.original;
           return (
-            <div className="text-right font-black text-slate-900 dark:text-white">
-              {formatMoney(r.amount, r.currency)}
+            <div className="text-right">
+              <span className="font-black text-slate-900 dark:text-white">
+                {formatMoney(r.totalPaid ?? 0, r.currency)}
+              </span>
+              {(r.paymentHistory?.length ?? 0) > 0 && (
+                <span className="block text-[10px] text-slate-400">
+                  {r.paymentHistory.filter(p => p.status === "recorded").length} payment{r.paymentHistory.filter(p => p.status === "recorded").length !== 1 ? "s" : ""}
+                </span>
+              )}
             </div>
           );
         },
@@ -520,10 +535,10 @@ export default function ReceiptsPage() {
             </button>
             <button
               onClick={handleAddPaymentSubmit}
-              disabled={isCreatingReceipt || isConvertingOrder}
+              disabled={isAddingPayment || isConvertingOrder}
               className="rounded-2xl bg-brand-primary text-white text-xs font-bold px-4 py-2 hover:bg-brand-primary/90 flex items-center gap-1.5 cursor-pointer"
             >
-              {isCreatingReceipt || isConvertingOrder ? (
+              {isAddingPayment || isConvertingOrder ? (
                 <>
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
                   Saving...
@@ -537,29 +552,63 @@ export default function ReceiptsPage() {
       >
         <form onSubmit={handleAddPaymentSubmit} className="space-y-4">
           {/* Branded Financial Overview */}
-          {summaryData && (
-            <div className="rounded-2xl bg-brand-primary/5 dark:bg-brand-primary/10 p-4 border border-brand-primary/15 flex flex-col gap-1.5 animate-in fade-in duration-200">
-              <div className="flex justify-between text-xs">
-                <span className="text-slate-500 dark:text-slate-400 font-medium">Total Amount:</span>
-                <span className="font-extrabold text-slate-900 dark:text-white">
-                  {formatMoney(summaryData.quotation?.grandTotal || 0, paymentTarget?.currency || "৳")}
-                </span>
+          {summaryData && (() => {
+            const grandTotal = summaryData.quotation?.grandTotal || 0;
+            const alreadyPaid = summaryData.totalPaid || 0;
+            const todayAmt = amount && !isNaN(parseFloat(amount)) && parseFloat(amount) > 0 ? parseFloat(amount) : 0;
+            const remainingAfter = Math.max(0, (summaryData.remaining || 0) - todayAmt);
+            const paidPercent = grandTotal > 0 ? Math.min(100, (alreadyPaid / grandTotal) * 100) : 0;
+            const todayPercent = grandTotal > 0 ? Math.min(100 - paidPercent, (todayAmt / grandTotal) * 100) : 0;
+            const currency = paymentTarget?.currency || "৳";
+            return (
+              <div className="rounded-2xl overflow-hidden border border-brand-primary/15 dark:border-brand-primary/25 animate-in fade-in duration-200 shadow-sm">
+                {/* Gradient header */}
+                <div className="bg-gradient-to-br from-[#4E12D4]/8 via-[#C850FA]/5 to-[#4E12D4]/4 dark:from-[#4E12D4]/20 dark:via-[#C850FA]/10 dark:to-[#4E12D4]/15 px-4 pt-3.5 pb-3.5">
+                  <div className="flex justify-between items-center mb-2.5">
+                    <span className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Quotation Total</span>
+                    <span className="text-sm font-black text-slate-900 dark:text-white tracking-tight">
+                      {formatMoney(grandTotal, currency)}
+                    </span>
+                  </div>
+                  {/* Segmented progress bar */}
+                  <div className="h-1.5 w-full rounded-full bg-slate-200/60 dark:bg-slate-800/80 overflow-hidden">
+                    <div className="h-full flex">
+                      <div className="h-full bg-emerald-500 transition-all duration-500 ease-out rounded-l-full" style={{ width: `${paidPercent}%` }} />
+                      <div className="h-full bg-brand-accent/70 transition-all duration-500 ease-out" style={{ width: `${todayPercent}%` }} />
+                    </div>
+                  </div>
+                  {/* Legend */}
+                  <div className="flex items-center gap-3 mt-1.5">
+                    <span className="flex items-center gap-1 text-[9px] font-bold text-slate-400">
+                      <span className="h-1.5 w-2.5 rounded-full bg-emerald-500 inline-block" />
+                      Already paid
+                    </span>
+                    {todayAmt > 0 && (
+                      <span className="flex items-center gap-1 text-[9px] font-bold text-slate-400">
+                        <span className="h-1.5 w-2.5 rounded-full bg-brand-accent/70 inline-block" />
+                        This payment
+                      </span>
+                    )}
+                  </div>
+                </div>
+                {/* Two stat cells */}
+                <div className="grid grid-cols-2 divide-x divide-slate-100 dark:divide-slate-800/80 bg-white/70 dark:bg-slate-900/30">
+                  <div className="px-4 py-3">
+                    <p className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-600 dark:text-emerald-500 mb-0.5">Today's Payment</p>
+                    <p className="text-base font-black text-emerald-600 dark:text-emerald-400 leading-none">
+                      {todayAmt > 0 ? formatMoney(todayAmt, currency) : <span className="text-slate-300 dark:text-slate-600 text-sm font-semibold">—</span>}
+                    </p>
+                  </div>
+                  <div className="px-4 py-3">
+                    <p className="text-[10px] font-extrabold uppercase tracking-wider text-brand-primary dark:text-purple-400 mb-0.5">Remaining After</p>
+                    <p className="text-base font-black text-brand-primary dark:text-purple-300 leading-none">
+                      {formatMoney(remainingAfter, currency)}
+                    </p>
+                  </div>
+                </div>
               </div>
-              <div className="flex justify-between text-xs">
-                <span className="text-slate-500 dark:text-slate-400 font-medium">Paid So Far:</span>
-                <span className="font-bold text-emerald-600 dark:text-emerald-400">
-                  {formatMoney(summaryData.totalPaid || 0, paymentTarget?.currency || "৳")}
-                </span>
-              </div>
-              <div className="h-[1px] bg-slate-200 dark:bg-slate-800 my-1" />
-              <div className="flex justify-between text-xs">
-                <span className="text-slate-500 dark:text-slate-400 font-bold">Remaining Balance:</span>
-                <span className="font-black text-brand-primary dark:text-purple-400">
-                  {formatMoney(summaryData.remaining || 0, paymentTarget?.currency || "৳")}
-                </span>
-              </div>
-            </div>
-          )}
+            );
+          })()}
 
           <div className="grid grid-cols-2 gap-4">
             {/* Payment Type */}

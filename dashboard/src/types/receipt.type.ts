@@ -2,12 +2,35 @@ import { QuotationCategory, IPaymentMilestone } from "@/types/quotation.type";
 
 export type ReceiptPaymentType = "full" | "partial" | "milestone";
 export type ReceiptStatus = "issued" | "void";
+export type PaymentStatus = "pending" | "partial" | "paid" | "void";
+export type PaymentEntryStatus = "recorded" | "void";
 
+/** A single payment transaction entry (child of IReceipt) */
+export interface IReceiptPayment {
+  _id: string;
+  receiptId: string;
+
+  paymentType: ReceiptPaymentType;
+  milestoneLabel?: string;
+  amount: number;
+  paymentDate: string;
+  method?: string;
+  note?: string;
+
+  status: PaymentEntryStatus;
+  voidReason?: string;
+
+  createdBy?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+/** The receipt ledger — one per quotation */
 export interface IReceipt {
   _id: string;
   receiptNumber: string;
 
-  quotationId: string;
+  quotationId: string | { _id: string; totals?: { grandTotal?: number } };
   quotationGroupId: string;
   quotationNumber: string;
 
@@ -17,12 +40,10 @@ export interface IReceipt {
   category: QuotationCategory;
   currency: string;
 
-  paymentType: ReceiptPaymentType;
-  milestoneLabel?: string;
-  amount: number;
-  paymentDate: string;
-  method?: string;
-  note?: string;
+  // Cached ledger totals
+  totalPaid: number;
+  paymentStatus: PaymentStatus;
+  paymentHistory: IReceiptPayment[];
 
   status: ReceiptStatus;
   voidReason?: string;
@@ -46,7 +67,8 @@ export interface PaymentSummaryQuotation {
 
 export interface PaymentSummary {
   quotation: PaymentSummaryQuotation;
-  receipts: IReceipt[];
+  receipt: IReceipt | null;
+  payments: IReceiptPayment[];
   totalPaid: number;
   remaining: number;
 }
