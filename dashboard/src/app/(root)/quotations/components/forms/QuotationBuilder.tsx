@@ -34,8 +34,6 @@ import {
   useCreateQuotationMutation,
   useUpdateQuotationMutation,
   useSendQuotationMutation,
-  useGetQuotationTemplatesQuery,
-  QuotationTemplateData,
 } from '@/redux/features/quotation/quotationApi';
 import { format } from 'date-fns';
 import { formatMoney } from '@/lib/money';
@@ -189,13 +187,11 @@ export default function QuotationBuilder({
     updateClient,
     updateDetails,
     updatePricing,
-    loadDynamicTemplate,
     setData,
     setPaymentMilestones,
   } = useQuotationStore();
 
   const { data: clientsData, isLoading: clientsLoading } = useGetClientsQuery({});
-  const { data: templatesData, isLoading: templatesLoading } = useGetQuotationTemplatesQuery();
   const [createQuotation, { isLoading: isCreating }] = useCreateQuotationMutation();
   const [updateQuotation, { isLoading: isUpdating }] = useUpdateQuotationMutation();
   const [sendQuotation, { isLoading: isSending }] = useSendQuotationMutation();
@@ -400,14 +396,7 @@ export default function QuotationBuilder({
     return Math.max(0, taxed);
   }, [basePrice, discount, taxRate]);
 
-  const handleTemplateSelect = (templateId: string) => {
-    const t = templatesData?.find((x) => x._id === templateId);
-    if (t) {
-      isStoreInitializedRef.current = false;
-      loadDynamicTemplate(t);
-      toast.success(`🎉 Successfully loaded template: "${t.name}"!`);
-    }
-  };
+
 
   const dynamicAiPrompt = useMemo(() => {
     const activeHeaders = activeServices
@@ -680,7 +669,7 @@ export default function QuotationBuilder({
               </h1>
               <p className="text-sm text-muted-foreground mt-1">
                 {pageSubtitle ||
-                  'Build stunning, version-controlled quotations synchronized with Universal Multi-Service Templates.'}
+                  'Build stunning, version-controlled quotations with ease.'}
               </p>
             </div>
           </div>
@@ -689,9 +678,9 @@ export default function QuotationBuilder({
               type="button"
               onClick={() => setIsPdfModalOpen(true)}
               className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-purple-500/15 via-indigo-500/15 to-pink-500/15 hover:from-purple-500/25 hover:via-indigo-500/25 hover:to-pink-500/25 border border-purple-500/40 text-[#4E12D4] dark:text-purple-200 hover:text-[#3d0da8] dark:hover:text-white font-bold text-xs tracking-wide shadow-sm hover:shadow-md transition-all duration-200 hover:scale-[1.03] active:scale-95 cursor-pointer"
+              disabled={isCreating || isUpdating}
             >
-              <Eye className="w-4 h-4 text-[#C850FA] animate-pulse" />
-              <span>Preview PDF</span>
+              <Eye className="w-4 h-4" /> Live PDF Preview
             </button>
 
             <PremiumButton
@@ -717,7 +706,7 @@ export default function QuotationBuilder({
         </div>
       )}
 
-      {/* Top Controls: Client Selector, Metadata & Template Import */}
+      {/* Top Controls: Client Selector & Metadata */}
       <PremiumCard accent="purple">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 mb-5 border-b border-slate-200/60 dark:border-slate-800/60">
           <div className="flex items-center gap-3.5">
@@ -729,7 +718,7 @@ export default function QuotationBuilder({
                 1. Client & Quotation Settings
               </h2>
               <p className="text-xs text-slate-500 dark:text-slate-400 font-normal mt-0.5">
-                Select client details and load pre-configured multi-service templates.
+                Select client details and configure quotation settings.
               </p>
             </div>
           </div>
@@ -810,23 +799,7 @@ export default function QuotationBuilder({
               <Receipt className="w-4 h-4 text-[#C850FA]" /> Proposal & Template Setup
             </h3>
 
-            <div>
-              <label className="text-xs font-medium text-muted-foreground mb-1.5 block">
-                Load Universal Multi-Service Template
-              </label>
-              <ShadcnSelect onValueChange={handleTemplateSelect}>
-                <SelectTrigger className="w-full h-10 bg-background border-[#C850FA]/30 rounded-xl font-medium text-[#1E0078] dark:text-indigo-200">
-                  <SelectValue placeholder={templatesLoading ? 'Loading templates...' : '⚡ Load Pre-configured Template...'} />
-                </SelectTrigger>
-                <SelectContent>
-                  {templatesData?.map((t: QuotationTemplateData) => (
-                    <SelectItem key={t._id || t.name} value={t._id || ''}>
-                      {t.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </ShadcnSelect>
-            </div>
+
 
             <div className="space-y-3 pt-2">
               <PremiumInput

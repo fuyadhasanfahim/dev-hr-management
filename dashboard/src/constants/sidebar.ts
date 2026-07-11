@@ -132,23 +132,7 @@ export const sidebarGroups: SidebarGroup[] = [
                 icon: IconReceipt,
                 access: [Role.SUPER_ADMIN, Role.ADMIN],
             },
-            {
-                title: "Templates",
-                url: "/templates",
-                icon: IconBriefcase,
-                access: [Role.SUPER_ADMIN, Role.ADMIN],
-            },
-            {
-                title: "Test Template (AI)",
-                url: "/test-template",
-                icon: IconBriefcase,
-                access: [
-                    Role.SUPER_ADMIN,
-                    Role.ADMIN,
-                    Role.TEAM_LEADER,
-                    Role.STAFF,
-                ],
-            },
+
             {
                 title: "Quotations",
                 url: "/quotations",

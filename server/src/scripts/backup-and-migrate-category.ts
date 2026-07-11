@@ -37,7 +37,7 @@ dotenv.config({ path: path.join(__dirname, '../../.env') });
 
 import { connect, disconnect } from 'mongoose';
 import QuotationModel from '../models/quotation.model.js';
-import QuotationTemplateModel from '../models/quotation-template.model.js';
+
 
 const DEFAULT_CATEGORY = 'web-development';
 
@@ -98,18 +98,13 @@ async function run() {
     await mkdir(BACKUP_DIR, { recursive: true });
     console.log(`Backing up collections to: ${BACKUP_DIR}\n`);
     const quotationBackup = await backupCollection(QuotationModel, stamp);
-    const templateBackup = await backupCollection(QuotationTemplateModel, stamp);
     console.log('Backup complete.\n');
 
-    // ── STEP 2: MIGRATE (only reached if both backups succeeded) ──────────────
+    // ── STEP 2: MIGRATE (only reached if backup succeeded) ──────────────
     console.log('Backfilling category...');
     const quotationMigration = await migrateCollection(
         'quotations',
         QuotationModel,
-    );
-    const templateMigration = await migrateCollection(
-        'quotationtemplates',
-        QuotationTemplateModel,
     );
     console.log('');
 
@@ -117,13 +112,10 @@ async function run() {
     const quotationRemaining = await QuotationModel.countDocuments(
         MISSING_CATEGORY_FILTER,
     );
-    const templateRemaining = await QuotationTemplateModel.countDocuments(
-        MISSING_CATEGORY_FILTER,
-    );
 
-    if (quotationRemaining > 0 || templateRemaining > 0) {
+    if (quotationRemaining > 0) {
         console.warn(
-            `WARNING: documents still lacking a category — quotations: ${quotationRemaining}, quotationtemplates: ${templateRemaining}. Manual review required.`,
+            `WARNING: documents still lacking a category — quotations: ${quotationRemaining}. Manual review required.`,
         );
     } else {
         console.log('Verification passed: every document has a category.');
@@ -133,12 +125,11 @@ async function run() {
     console.log('\n──────────────── SUMMARY ────────────────');
     console.log('Backup files:');
     console.log(`  ${quotationBackup.file}`);
-    console.log(`  ${templateBackup.file}`);
     console.log(
-        `Documents backed up: quotations=${quotationBackup.count}, quotationtemplates=${templateBackup.count}`,
+        `Documents backed up: quotations=${quotationBackup.count}`,
     );
     console.log(
-        `Documents migrated:  quotations=${quotationMigration.modified}, quotationtemplates=${templateMigration.modified}`,
+        `Documents migrated:  quotations=${quotationMigration.modified}`,
     );
     console.log('──────────────────────────────────────────');
 

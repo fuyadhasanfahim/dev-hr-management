@@ -12,6 +12,7 @@ import { logger } from '../lib/logger.js';
 import ClientModel from '../models/client.model.js';
 import emailService from './email.service.js';
 import { sendClientSmsIfBDT } from './sms-notification.service.js';
+import { ReceiptService } from './receipt.service.js';
 
 import type { QuotationMilestoneEmailInfo } from '../templates/QuotationEmail.js';
 import * as React from 'react';
@@ -266,7 +267,15 @@ export class QuotationService {
             creationFingerprint,
         });
 
-        return await quotation.save();
+        const savedQuotation = await quotation.save();
+
+        try {
+            await ReceiptService.createZeroPaymentReceipt(savedQuotation, userId);
+        } catch (err) {
+            logger.error(`Failed to create automatic zero-payment receipt: ${err}`);
+        }
+
+        return savedQuotation;
     }
 
     static async updateQuotation(

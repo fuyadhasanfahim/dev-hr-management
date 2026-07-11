@@ -39,8 +39,6 @@ interface QuotationStore {
 
   // Helpers
   loadTemplate: (templateKey: string) => void;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  loadDynamicTemplate: (template: any) => void;
   setData: (data: QuotationData) => void;
   reset: () => void;
 }
@@ -244,38 +242,7 @@ export const useQuotationStore = create<QuotationStore>((set) => ({
       };
     }),
 
-  loadDynamicTemplate: (template) =>
-    set((state) => {
-      if (!template) return state;
-      // Exclude ID and metadata fields from the template so they don't pollute the new quotation
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { _id, name, createdBy, createdAt, updatedAt, __v, ...templateData } = template;
-      
-      return {
-        data: {
-          ...state.data,
-          ...templateData,
-          details: {
-            ...state.data.details,
-            title: templateData.details?.title || state.data.details.title,
-          },
-          phases: templateData.phases || [],
-          notIncluded: templateData.notIncluded || [],
-          clientRequirements: templateData.clientRequirements || [],
-          techStack: {
-            ...state.data.techStack,
-            ...templateData.techStack,
-          },
-          pricing: {
-            ...state.data.pricing,
-            ...templateData.pricing,
-          },
-          additionalServices: templateData.additionalServices || [],
-          workflow: templateData.workflow || [],
-          paymentMilestones: templateData.paymentMilestones || [],
-        } as QuotationData
-      };
-    }),
+
 
   setData: (data) => set({ data }),
   reset: () => set({ data: initialState }),

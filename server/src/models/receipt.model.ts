@@ -61,7 +61,7 @@ const receiptSchema = new Schema<IReceipt>(
             required: true,
         },
         milestoneLabel: { type: String },
-        amount: { type: Number, required: true, min: 0.01 },
+        amount: { type: Number, required: true, min: 0 },
         paymentDate: { type: Date, required: true },
         method: { type: String },
         note: { type: String },

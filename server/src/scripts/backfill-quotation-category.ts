@@ -22,7 +22,7 @@ dotenv.config({ path: path.join(__dirname, '../../.env') });
 
 import { connect, disconnect } from 'mongoose';
 import QuotationModel from '../models/quotation.model.js';
-import QuotationTemplateModel from '../models/quotation-template.model.js';
+
 
 const DEFAULT_CATEGORY = 'web-development';
 
@@ -69,8 +69,6 @@ async function migrate() {
     await connect(mongoUri);
     console.log('Connected.\n');
 
-    await backfillCollection('QuotationTemplate', QuotationTemplateModel);
-    console.log('');
     await backfillCollection('Quotation', QuotationModel);
 
     await disconnect();

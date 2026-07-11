@@ -106,6 +106,39 @@ export class ReceiptService {
         return await receipt.save();
     }
 
+    static async createZeroPaymentReceipt(quotation: any, userId: string): Promise<IReceipt> {
+        const receiptNumber = await generateReceiptNumber();
+        const clientId = quotation.clientId;
+        
+        let clientName = quotation.client?.contactName || 'Client';
+        if (clientId) {
+            const clientDoc = await ClientModel.findById(clientId);
+            if (clientDoc) {
+                clientName = clientDoc.name || clientName;
+            }
+        }
+
+        const receipt = new ReceiptModel({
+            receiptNumber,
+            quotationId: quotation._id,
+            quotationGroupId: quotation.quotationGroupId,
+            quotationNumber: quotation.quotationNumber,
+            clientId: clientId?._id || clientId,
+            clientName,
+            projectTitle: quotation.details?.title || 'Project',
+            category: quotation.category || 'web-development',
+            currency: quotation.currency || '৳',
+            paymentType: 'partial',
+            amount: 0,
+            paymentDate: new Date(),
+            status: 'issued',
+            createdBy: new Types.ObjectId(userId),
+            note: 'Initial 0-payment receipt automatically generated on quotation creation.',
+        });
+
+        return await receipt.save();
+    }
+
     static async getReceipts(filters: any = {}, options: any = {}) {
         const { page = 1, limit = 10, sort = { createdAt: -1 } } = options;
         const skip = (page - 1) * limit;
@@ -123,7 +156,7 @@ export class ReceiptService {
         }
 
         const [items, total] = await Promise.all([
-            ReceiptModel.find(mongoFilters).sort(sort).skip(skip).limit(limit).exec(),
+            ReceiptModel.find(mongoFilters).populate('quotationId', 'totals').sort(sort).skip(skip).limit(limit).exec(),
             ReceiptModel.countDocuments(mongoFilters),
         ]);
 
