@@ -59,14 +59,12 @@ async function processEarningCommission(earningId: string, _changedBy: string, p
             return null;
         }
 
-        // 4. Calculate total GROSS BDT (sum of payment USD * rate, before fees/tax)
-        // Only include payments that have a real conversion rate (> 1)
-        const totalGrossBDT = earning.payments
-            .filter((p) => (p.conversionRate || 1) > 1)
-            .reduce(
-                (sum, p) => sum + (p.amount || 0) * (p.conversionRate || 1),
-                0,
-            );
+        // 4. Calculate total GROSS BDT. Earnings are recorded directly in Taka
+        // now (no currency conversion), so gross BDT is just the summed payment amounts.
+        const totalGrossBDT = earning.payments.reduce(
+            (sum, p) => sum + (p.amount || 0),
+            0,
+        );
 
         // 5. Calculate incremental commission (based on Gross BDT)
         const totalExpectedCommission = Math.round(totalGrossBDT * COMMISSION_RATE * 100) / 100;

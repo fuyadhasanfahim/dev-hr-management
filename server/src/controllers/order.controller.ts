@@ -6,8 +6,8 @@ import { maskOrder, maskOrders } from '../utils/masking.js';
 /**
  * CRITICAL: POST / (createOrder) has been intentionally removed.
  *
- * Orders MUST only be created through the quotation pipeline:
- *   quotation accepted → upfront payment webhook → event worker → createOrderFromQuotation()
+ * Orders MUST only be created through the quotation pipeline via
+ * POST /api/orders/convert-quotation (staff-triggered, see convertQuotationToOrder).
  *
  * Any attempt to POST /api/orders directly is blocked at the router level with a 405.
  */
@@ -58,7 +58,7 @@ async function getOrderById(req: Request, res: Response, next: NextFunction): Pr
  */
 async function updateOrderStatus(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-        const { status, note, sendEmail, customEmailMessage, selectedEmails } = req.body;
+        const { status, note } = req.body;
         const userId = req.user?.id;
         if (!userId) {
             next(new AppError('Unauthorized', 401));
@@ -78,42 +78,9 @@ async function updateOrderStatus(req: Request, res: Response, next: NextFunction
             status,
             userId,
             note,
-            {
-                sendEmail,
-                customEmailMessage,
-                selectedEmails,
-            },
         );
         const sanitized = maskOrder(result, req.user?.role);
         res.status(200).json({ success: true, data: sanitized });
-    } catch (err) {
-        next(err);
-    }
-}
-
-/**
- * Staff marks an order as delivered.
- * Requires at least one asset to be uploaded first.
- */
-async function markDelivered(req: Request, res: Response, next: NextFunction): Promise<void> {
-    try {
-        const userId = req.user?.id;
-        if (!userId) {
-            next(new AppError('Unauthorized', 401));
-            return;
-        }
-        if (!req.params.id) {
-            next(new AppError('Order id is required', 400));
-            return;
-        }
-
-        const result = await OrderService.markDelivered(req.params.id, userId);
-        const sanitized = maskOrder(result, req.user?.role);
-        res.status(200).json({
-            success: true,
-            message: 'Order marked as delivered. Client has been notified.',
-            data: sanitized,
-        });
     } catch (err) {
         next(err);
     }
@@ -237,7 +204,6 @@ export default {
     getAllOrders,
     getOrderById,
     updateOrderStatus,
-    markDelivered,
     getAsset,
     getAssetPublic,
     convertQuotationToOrder,

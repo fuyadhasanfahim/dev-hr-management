@@ -81,7 +81,6 @@ export const updateOrderSchema = createOrderSchema.partial().extend({
         .enum([
             'pending',
             'in_progress',
-            'quality_check',
             'revision',
             'completed',
             'delivered',

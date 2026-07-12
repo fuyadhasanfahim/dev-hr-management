@@ -3,16 +3,10 @@ import { OrderStatus, OrderPriority } from "@/types/order.type";
 export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
   pending: "Pending",
   in_progress: "In Progress",
-  quality_check: "QC Review",
-  revision: "Revision",
-  completed: "Completed",
+  revision: "In Revision",
+  completed: "Complete",
   delivered: "Delivered",
   cancelled: "Cancelled",
-  // ── Team-Clear Pipeline Statuses ───────────────────────────────────
-  pending_upfront: "Awaiting 50% Upfront",
-  active: "Active (50% Paid)",
-  pending_delivery: "Awaiting 30% Delivery",
-  pending_final: "Awaiting 20% Final",
 };
 
 export const ORDER_PRIORITY_LABELS: Record<OrderPriority, string> = {
@@ -25,16 +19,10 @@ export const ORDER_PRIORITY_LABELS: Record<OrderPriority, string> = {
 export const ORDER_STATUS_COLORS: Record<OrderStatus, string> = {
   pending: "bg-yellow-500/20 text-yellow-700 dark:text-yellow-400",
   in_progress: "bg-blue-500/20 text-blue-700 dark:text-blue-400",
-  quality_check: "bg-purple-500/20 text-purple-700 dark:text-purple-400",
   revision: "bg-orange-500/20 text-orange-700 dark:text-orange-400",
   completed: "bg-green-500/20 text-green-700 dark:text-green-400",
   delivered: "bg-emerald-500/20 text-emerald-700 dark:text-emerald-400",
   cancelled: "bg-red-500/20 text-red-700 dark:text-red-400",
-  // ── New Pipeline Colors ────────────────────────────────────────────
-  pending_upfront: "bg-amber-500/20 text-amber-700 dark:text-amber-400 border-amber-200",
-  active: "bg-teal-500/20 text-teal-700 dark:text-teal-400 border-teal-200",
-  pending_delivery: "bg-indigo-500/20 text-indigo-700 dark:text-indigo-400 border-indigo-200",
-  pending_final: "bg-cyan-500/20 text-cyan-700 dark:text-cyan-400 border-cyan-200",
 };
 
 export const ORDER_PRIORITY_COLORS: Record<OrderPriority, string> = {

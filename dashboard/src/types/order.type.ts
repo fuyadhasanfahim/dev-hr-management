@@ -1,16 +1,10 @@
 export type OrderStatus =
     | "pending"
     | "in_progress"
-    | "quality_check"
     | "revision"
     | "completed"
     | "delivered"
-    | "cancelled"
-    // ── Quotation Pipeline Statuses (New) ───────────────────────────────
-    | "pending_upfront"
-    | "active"
-    | "pending_delivery"
-    | "pending_final";
+    | "cancelled";
 
 export type OrderPriority = "low" | "normal" | "high" | "urgent";
 
@@ -210,11 +204,6 @@ export interface UpdateOrderInput extends Partial<CreateOrderInput> {
 export interface UpdateStatusInput {
     status: OrderStatus;
     note?: string;
-    customEmailMessage?: string;
-    downloadLink?: string;
-    sendEmail?: boolean;
-    selectedEmail?: string;
-    selectedEmails?: string[];
 }
 
 export interface ExtendDeadlineInput {

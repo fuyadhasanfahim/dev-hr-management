@@ -3,18 +3,11 @@ import { Schema, model, Document, Types } from 'mongoose';
 // ─── Enums ────────────────────────────────────────────────────────────────────
 
 export enum OrderStatus {
-    PENDING            = 'pending',           // Legacy/generic pending
-    PENDING_UPFRONT    = 'pending_upfront',    // New: accepted, awaiting upfront payment
-    ACTIVE             = 'active',            // New: upfront paid, project active
+    PENDING            = 'pending',
     IN_PROGRESS        = 'in_progress',       // team working
-    QUALITY_CHECK      = 'quality_check',     // internal review
     REVISION           = 'revision',          // client requested changes
-    PENDING_DELIVERY   = 'pending_delivery',   // New: staff triggered delivery, awaiting payment
+    COMPLETED          = 'completed',
     DELIVERED          = 'delivered',          // team marked delivered
-    PENDING_FINAL      = 'pending_final',      // New: awaiting final payment
-    AWAITING_APPROVAL  = 'awaiting_approval', // client notified
-    APPROVED           = 'approved',           // client approved, delivery payment due
-    COMPLETED          = 'completed',          // all payments done
     CANCELLED          = 'cancelled',
 }
 
@@ -34,21 +27,12 @@ export enum AssetType {
 // ─── Valid Status Transitions ─────────────────────────────────────────────────
 // Enforced in OrderService.transitionStatus — not here (schema is not the place for flow logic)
 export const ALLOWED_STATUS_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
-    [OrderStatus.PENDING]:           [OrderStatus.IN_PROGRESS, OrderStatus.CANCELLED],
-    [OrderStatus.PENDING_UPFRONT]:   [OrderStatus.ACTIVE, OrderStatus.CANCELLED],
-    [OrderStatus.ACTIVE]:            [OrderStatus.IN_PROGRESS, OrderStatus.CANCELLED],
-    [OrderStatus.IN_PROGRESS]:       [OrderStatus.QUALITY_CHECK, OrderStatus.REVISION, OrderStatus.CANCELLED],
-    [OrderStatus.QUALITY_CHECK]:     [OrderStatus.PENDING_DELIVERY, OrderStatus.DELIVERED, OrderStatus.COMPLETED, OrderStatus.REVISION, OrderStatus.IN_PROGRESS, OrderStatus.CANCELLED],
-    [OrderStatus.REVISION]:          [OrderStatus.IN_PROGRESS, OrderStatus.CANCELLED],
-    [OrderStatus.PENDING_DELIVERY]:  [OrderStatus.DELIVERED, OrderStatus.REVISION, OrderStatus.CANCELLED],
-    [OrderStatus.DELIVERED]:         [OrderStatus.PENDING_FINAL, OrderStatus.COMPLETED, OrderStatus.REVISION, OrderStatus.CANCELLED],
-    [OrderStatus.PENDING_FINAL]:     [OrderStatus.COMPLETED, OrderStatus.CANCELLED],
-
-
-    [OrderStatus.AWAITING_APPROVAL]: [OrderStatus.APPROVED, OrderStatus.IN_PROGRESS],
-    [OrderStatus.APPROVED]:          [OrderStatus.COMPLETED],
-    [OrderStatus.COMPLETED]:         [OrderStatus.REVISION],
-    [OrderStatus.CANCELLED]:         [OrderStatus.PENDING_UPFRONT],
+    [OrderStatus.PENDING]:      [OrderStatus.IN_PROGRESS, OrderStatus.CANCELLED],
+    [OrderStatus.IN_PROGRESS]:  [OrderStatus.COMPLETED, OrderStatus.REVISION, OrderStatus.CANCELLED],
+    [OrderStatus.REVISION]:     [OrderStatus.IN_PROGRESS, OrderStatus.CANCELLED],
+    [OrderStatus.COMPLETED]:    [OrderStatus.DELIVERED, OrderStatus.REVISION],
+    [OrderStatus.DELIVERED]:    [OrderStatus.REVISION],
+    [OrderStatus.CANCELLED]:    [],
 };
 
 // ─── Interfaces ───────────────────────────────────────────────────────────────

@@ -82,7 +82,7 @@ export const receiptApi = apiSlice.injectEndpoints({
         body,
       }),
       transformResponse: (response: { data: AddPaymentResponse }) => response.data,
-      invalidatesTags: ["Receipt"],
+      invalidatesTags: ["Receipt", "Earning"],
     }),
 
     /** Void a single payment entry */
@@ -96,7 +96,7 @@ export const receiptApi = apiSlice.injectEndpoints({
         body: { reason },
       }),
       transformResponse: (response: { data: AddPaymentResponse }) => response.data,
-      invalidatesTags: ["Receipt"],
+      invalidatesTags: ["Receipt", "Earning"],
     }),
 
     // ── Comms ─────────────────────────────────────────────────────────────

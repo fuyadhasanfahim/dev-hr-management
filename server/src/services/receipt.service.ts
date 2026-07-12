@@ -9,6 +9,7 @@ import { AppError } from '../utils/AppError.js';
 import { logger } from '../lib/logger.js';
 import emailService from './email.service.js';
 import { ReceiptPuppeteerPdfService } from './receipt-puppeteer-pdf.service.js';
+import earningService from './earning.service.js';
 
 export type RecipientSendStatus = {
     email: string;
@@ -176,6 +177,12 @@ export class ReceiptService {
             'receipt.payment.added',
         );
 
+        try {
+            await earningService.syncEarningFromReceipt(receipt._id.toString(), userId);
+        } catch (err) {
+            logger.error({ err, receiptId: receipt._id.toString() }, 'earning.sync_failed');
+        }
+
         return { receipt, payment };
     }
 
@@ -207,6 +214,12 @@ export class ReceiptService {
             { receiptId: receipt._id.toString(), paymentId, amount: payment.amount },
             'receipt.payment.voided',
         );
+
+        try {
+            await earningService.syncEarningFromReceipt(receipt._id.toString());
+        } catch (err) {
+            logger.error({ err, receiptId: receipt._id.toString() }, 'earning.sync_failed');
+        }
 
         return { receipt, payment };
     }

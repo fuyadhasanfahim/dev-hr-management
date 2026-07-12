@@ -1,52 +1,40 @@
 import { Document, Types } from 'mongoose';
 
-export type EarningStatus = 'unpaid' | 'paid';
+export type EarningStatus = 'partial' | 'paid' | 'void';
 
-export interface IPaymentLedger {
-    invoiceNumber: string;
+export interface IEarningPayment {
+    receiptPaymentId: Types.ObjectId;
     amount: number;
-    amountInBDT: number;
-    method: 'Stripe' | 'PayPal' | 'Manual' | string;
-    transactionId: string;
-    paidAt: Date;
-    conversionRate: number;
-    fees?: number;
-    tax?: number;
+    paymentDate: Date;
+    paymentType: string;
+    milestoneLabel?: string;
+    method?: string;
+    note?: string;
 }
 
+/**
+ * An Earning mirrors a Receipt 1:1 — it only exists once the receipt has at
+ * least one recorded payment, and is fully kept in sync from the receipt's
+ * payment history by `EarningService.syncEarningFromReceipt`.
+ */
 export interface IEarning extends Document {
     clientId: Types.ObjectId;
-    month: number;
-    year: number;
-
-    // Linked orders
-    orderIds: Types.ObjectId[];
-
-    // Aggregated data
-    imageQty: number;
-    totalAmount: number;
+    receiptId: Types.ObjectId;
+    quotationGroupId: string;
+    quotationNumber: string;
+    orderTitle: string;
     currency: string;
 
-    // Withdrawal info (filled when status = paid)
-    fees: number;
-    tax: number;
-    conversionRate: number;
-    netAmount: number;
-    amountInBDT: number;
+    totalAmount: number;   // grand total, from Quotation.totals.grandTotal
+    paidAmount: number;    // mirrors receipt.totalPaid
+    amountInBDT: number;   // = paidAmount (no currency conversion)
 
-    // Status
     status: EarningStatus;
-    paidAmount: number;
-    paidAmountBDT: number;
-    payments: IPaymentLedger[];
-    paidAt?: Date;
-    paidBy?: Types.ObjectId;
+    month: number;         // derived from the latest payment's date
+    year: number;
 
-    // Legacy support
-    isLegacy: boolean;
-    legacyClientCode?: string;
+    payments: IEarningPayment[];
 
-    notes?: string;
     createdBy: Types.ObjectId;
     createdAt: Date;
     updatedAt: Date;
@@ -59,135 +47,53 @@ export interface IEarningPopulated {
         clientId: string;
         name: string;
         emails: string[];
-        currency?: string;
     };
-    month: number;
-    year: number;
-    orderIds: string[];
-    imageQty: number;
-    totalAmount: number;
+    receiptId: {
+        _id: string;
+        receiptNumber: string;
+    };
+    quotationGroupId: string;
+    quotationNumber: string;
+    orderTitle: string;
     currency: string;
-    fees: number;
-    tax: number;
-    conversionRate: number;
-    netAmount: number;
+    totalAmount: number;
+    paidAmount: number;
     amountInBDT: number;
     status: EarningStatus;
-    paidAmount: number;
-    paidAmountBDT: number;
+    month: number;
+    year: number;
     payments: Array<{
-        invoiceNumber: string;
+        receiptPaymentId: string;
         amount: number;
-        amountInBDT: number;
-        method: string;
-        transactionId: string;
-        paidAt: string;
-        conversionRate: number;
+        paymentDate: string;
+        paymentType: string;
+        milestoneLabel?: string;
+        method?: string;
+        note?: string;
     }>;
-    paidAt?: string;
-    paidBy?: string;
-    isLegacy: boolean;
-    legacyClientCode?: string;
-    notes?: string;
     createdBy: string;
     createdAt: string;
     updatedAt: string;
-}
-
-export interface CreateEarningForOrderData {
-    orderId: string;
-    clientId: string;
-    orderDate: Date;
-    orderAmount: number;
-    imageQty: number;
-    currency: string;
-    createdBy: string;
-}
-
-export interface WithdrawEarningData {
-    amount?: number | undefined; // Optional: specify amount for partial payment
-    method?: string | undefined; // Optional: specify method
-    invoiceNumber?: string | undefined; // Optional: link to a specific invoice
-    transactionId?: string | undefined; // Optional: reference ID
-    fees?: number | undefined;
-    tax?: number | undefined;
-    conversionRate?: number | undefined;
-    notes?: string | undefined;
-    paidBy: string;
-    isConversion?: boolean | undefined;
-    paymentId?: string | undefined;
-    isGapConversion?: boolean | undefined;
-}
-
-export interface BulkWithdrawData {
-    earningIds: string[];
-    totalFees: number;
-    totalTax: number;
-    conversionRate: number;
-    notes?: string;
-    paidBy: string;
 }
 
 export interface EarningQueryParams {
     page?: number;
     limit?: number;
     clientId?: string;
-    clientIds?: string[];
     status?: EarningStatus;
-    // Date filters
+    search?: string;
     filterType?: 'today' | 'week' | 'month' | 'year';
     month?: number;
     year?: number;
 }
 
-export interface CurrencyStat {
-    currency: string;
-    totalAmount: number;
-    paidAmount: number;
-    unpaidAmount: number;
-    paidCount: number;
-    unpaidCount: number;
-    paidAmountBDT: number;
-}
-
 export interface EarningStatsResult {
-    totalUnpaidCount: number;
-    totalUnpaidAmount: number;
-    totalPaidCount: number;
+    totalCount: number;
+    totalAmount: number;
     totalPaidAmount: number;
-    totalPaidBDT: number;
-    filteredUnpaidCount: number;
-    filteredUnpaidAmount: number;
-    filteredPaidCount: number;
+    partialCount: number;
+    paidCount: number;
+    filteredCount: number;
+    filteredTotalAmount: number;
     filteredPaidAmount: number;
-    filteredPaidBDT: number;
-    currencyStats: CurrencyStat[];
-    filteredCurrencyStats: CurrencyStat[];
-}
-
-export interface ClientOrdersForWithdraw {
-    clientId: string;
-    clientName: string;
-    clientCode: string;
-    currency: string;
-    earningId: string;
-    month: number;
-    year: number;
-    orderCount: number;
-    imageQty: number;
-    totalAmount: number;
-}
-
-export interface ImportLegacyEarningData {
-    clientId: string;
-    legacyClientCode: string;
-    month: number;
-    year: number;
-    imageQty: number;
-    totalAmount: number;
-    currency: string;
-    conversionRate: number;
-    amountInBDT: number;
-    status: EarningStatus;
-    createdBy: string;
 }

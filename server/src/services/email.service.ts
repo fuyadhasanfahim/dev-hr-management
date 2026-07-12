@@ -5,7 +5,6 @@ import { VerificationEmail } from '../templates/VerificationEmail.js';
 import { ResetPasswordEmail } from '../templates/ResetPasswordEmail.js';
 import { InvitationEmail } from '../templates/InvitationEmail.js';
 import { ApplicationStatusEmail } from '../templates/ApplicationStatusEmail.js';
-import { OrderStatusUpdateEmail } from '../templates/OrderStatusUpdateEmail.js';
 import { QuotationEmail, type QuotationMilestoneEmailInfo } from '../templates/QuotationEmail.js';
 import { ReceiptEmail } from '../templates/ReceiptEmail.js';
 import * as React from 'react';
@@ -97,40 +96,6 @@ const sendPinResetEmail = async (data: SendPinResetData) => {
         return info;
     } catch (error) {
         console.error('Error sending PIN reset email:', error);
-        throw error;
-    }
-};
-
-interface SendOrderStatusData {
-    to: string;
-    clientName: string;
-    orderName: string;
-    status: string;
-    message: string;
-}
-
-const sendOrderStatusEmail = async (data: SendOrderStatusData) => {
-    try {
-        const emailHtml = await render(
-            React.createElement(OrderStatusUpdateEmail, {
-                clientName: data.clientName,
-                orderName: data.orderName,
-                status: data.status,
-                message: data.message,
-            }),
-        );
-
-        const mailOptions = {
-            from: 'HR Management | WebBriks',
-            to: data.to,
-            subject: `Order Update: ${data.orderName} (${data.status})`,
-            html: emailHtml,
-        };
-
-        const info = await transporter.sendMail(mailOptions);
-        return info;
-    } catch (error) {
-        console.error('Error sending order status email:', error);
         throw error;
     }
 };
@@ -601,7 +566,6 @@ const sendConsultationScheduledEmail = async (data: SendConsultationScheduledDat
 export default {
     sendInvoiceEmail,
     sendPinResetEmail,
-    sendOrderStatusEmail,
     sendVerificationEmail,
     sendResetPasswordEmail,
     sendInvitationEmail,

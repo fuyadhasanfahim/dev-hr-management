@@ -3,10 +3,54 @@ import type { IEarning } from '../types/earning.type.js';
 
 const EarningSchema = new Schema<IEarning>(
     {
-        // Client and time period
         clientId: {
             type: Schema.Types.ObjectId,
             ref: 'Client',
+            required: true,
+            index: true,
+        },
+        receiptId: {
+            type: Schema.Types.ObjectId,
+            ref: 'Receipt',
+            required: true,
+        },
+        quotationGroupId: {
+            type: String,
+            required: true,
+        },
+        quotationNumber: {
+            type: String,
+            required: true,
+        },
+        orderTitle: {
+            type: String,
+            required: true,
+        },
+        currency: {
+            type: String,
+            required: true,
+            default: '৳',
+        },
+
+        totalAmount: {
+            type: Number,
+            required: true,
+            min: 0,
+        },
+        paidAmount: {
+            type: Number,
+            required: true,
+            min: 0,
+        },
+        amountInBDT: {
+            type: Number,
+            required: true,
+            min: 0,
+        },
+
+        status: {
+            type: String,
+            enum: ['partial', 'paid', 'void'],
             required: true,
             index: true,
         },
@@ -21,107 +65,23 @@ const EarningSchema = new Schema<IEarning>(
             required: true,
         },
 
-        // Linked orders (empty for legacy data)
-        orderIds: [
-            {
-                type: Schema.Types.ObjectId,
-                ref: 'Order',
-            },
-        ],
-
-        // Aggregated data
-        imageQty: {
-            type: Number,
-            default: 0,
-            min: 0,
-        },
-        totalAmount: {
-            type: Number,
-            required: true,
-            min: 0,
-        },
-        currency: {
-            type: String,
-            required: true,
-            uppercase: true,
-            default: 'USD',
-        },
-
-        // Withdrawal info
-        fees: {
-            type: Number,
-            default: 0,
-            min: 0,
-        },
-        tax: {
-            type: Number,
-            default: 0,
-            min: 0,
-        },
-        conversionRate: {
-            type: Number,
-            default: 1,
-            min: 0,
-        },
-        netAmount: {
-            type: Number,
-            default: 0,
-        },
-        amountInBDT: {
-            type: Number,
-            default: 0,
-        },
-
-        // Status
-        status: {
-            type: String,
-            enum: ['unpaid', 'paid'],
-            default: 'unpaid',
-            index: true,
-        },
-        paidAmount: {
-            type: Number,
-            default: 0,
-        },
-        paidAmountBDT: {
-            type: Number,
-            default: 0,
-        },
         payments: [
             {
-                invoiceNumber: String,
-                amount: Number,
-                amountInBDT: Number,
-                method: String,
-                transactionId: String,
-                paidAt: Date,
-                conversionRate: Number,
-                fees: { type: Number, default: 0 },
-                tax: { type: Number, default: 0 },
+                receiptPaymentId: {
+                    type: Schema.Types.ObjectId,
+                    ref: 'ReceiptPayment',
+                    required: true,
+                },
+                amount: { type: Number, required: true },
+                paymentDate: { type: Date, required: true },
+                paymentType: { type: String, required: true },
+                milestoneLabel: { type: String },
+                method: { type: String },
+                note: { type: String },
+                _id: false,
             },
         ],
-        paidAt: {
-            type: Date,
-        },
-        paidBy: {
-            type: Schema.Types.ObjectId,
-            ref: 'User',
-        },
 
-        // Legacy support
-        isLegacy: {
-            type: Boolean,
-            default: false,
-        },
-        legacyClientCode: {
-            type: String,
-            trim: true,
-        },
-
-        notes: {
-            type: String,
-            trim: true,
-        },
         createdBy: {
             type: Schema.Types.ObjectId,
             ref: 'User',
@@ -133,10 +93,9 @@ const EarningSchema = new Schema<IEarning>(
     },
 );
 
-// Unique constraint: One earning per client per month/year
-EarningSchema.index({ clientId: 1, month: 1, year: 1 }, { unique: true });
+// One Earning per Receipt — it only exists once the receipt has a recorded payment.
+EarningSchema.index({ receiptId: 1 }, { unique: true });
 
-// Other indexes for common queries
 EarningSchema.index({ status: 1, year: -1, month: -1 });
 EarningSchema.index({ clientId: 1, year: -1, month: -1 });
 

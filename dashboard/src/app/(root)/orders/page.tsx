@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
   useGetOrdersQuery,
@@ -11,7 +11,6 @@ import {
   useUpdateOrderStatusMutation,
   useExtendDeadlineMutation,
   useAddRevisionMutation,
-  useLazyGetOrdersQuery,
   useGetOrderYearsQuery,
 } from "@/redux/features/order/orderApi";
 import { useGetClientsQuery } from "@/redux/features/client/clientApi";
@@ -36,7 +35,6 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -76,8 +74,6 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Loader,
-  ChevronLeft,
-  ChevronRight,
   Plus,
   Trash2,
   Edit2,
@@ -90,7 +86,6 @@ import {
   AlertTriangle,
   FileText,
   History,
-  Search,
   Filter,
   X,
   CheckSquare,
@@ -103,11 +98,9 @@ import {
 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import Link from "next/link";
-import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { OrderForm, type OrderFormData } from "@/components/order/OrderForm";
 import { OrderTimeline } from "@/components/order/OrderTimeline";
-import { EmailDialog } from "./EmailDialog";
 import { Badge } from "@/components/ui/badge";
 import {
   Tooltip,
@@ -121,67 +114,25 @@ import { cn } from "@/lib/utils";
 import { useSession } from "@/lib/auth-client";
 import { useGetMeQuery } from "@/redux/features/staff/staffApi";
 import { Role } from "@/constants/role";
+import { TableContent } from "@/components/shared/table-content";
+import { ColumnDef } from "@tanstack/react-table";
+import { SelectContent as StatusPicker } from "@/components/shared/select-content";
 
 // Status workflow: defines which statuses can transition to which
 // Key = current status, Value = array of allowed next statuses
 const statusWorkflow: Record<OrderStatus, OrderStatus[]> = {
   pending: ["in_progress", "cancelled"],
-  in_progress: ["quality_check", "revision", "cancelled"],
-  quality_check: ["pending_delivery", "revision", "in_progress"],
+  in_progress: ["completed", "revision", "cancelled"],
   revision: ["in_progress", "cancelled"],
-  completed: ["revision"],
-  delivered: ["pending_final", "revision", "cancelled"], 
-  cancelled: ["pending_upfront"],
-  // ── Manual Bypass Transitions ──────────────────────────────────────
-  // These allow the team to move the process forward, but payment-critical
-  // transitions (to 'delivered' or 'completed') are removed to favor webhooks.
-  pending_upfront: ["active", "cancelled"], 
-  active: ["in_progress", "cancelled"], 
-  pending_delivery: ["revision", "cancelled"], // Cannot manually mark delivered
-  pending_final: ["cancelled"], // Cannot manually mark completed
+  completed: ["delivered", "revision"],
+  delivered: ["revision"],
+  cancelled: [],
 };
 
-// Helper function to check if a status transition is allowed
-const canTransitionTo = (
-  currentStatus: OrderStatus,
-  targetStatus: OrderStatus,
-): boolean => {
-  if (currentStatus === targetStatus) return false; // Can't transition to same status
-  return statusWorkflow[currentStatus]?.includes(targetStatus) || false;
-};
-
-/**
- * [NEW] Dynamically filters and upgrades status transition options based on payment state.
- * If a phase is already paid, it 'upgrades' the option (e.g. pending_delivery -> delivered).
- */
+// Returns the valid next-step statuses for an order, excluding its current status
 const getFilteredStatusOptions = (order: IOrder): OrderStatus[] => {
-  const currentStatus = order.status;
-  const baseOptions = statusWorkflow[currentStatus] || [];
-  const payment = order.paymentPhases;
-
-  // For legacy orders without payment tracker, return defaults
-  if (!payment) return baseOptions;
-
-  const isUpfrontPaid = payment.upfront?.status === "paid";
-  const isDeliveryPaid = payment.delivery?.status === "paid";
-  const isFinalPaid = payment.final?.status === "paid";
-
-  // Special Case: All phases paid
-  if (isUpfrontPaid && isDeliveryPaid && isFinalPaid) {
-    const restricted = ["delivered", "completed", "revision", "cancelled"] as OrderStatus[];
-    return restricted.filter(opt => opt !== currentStatus);
-  }
-
-  return baseOptions.map((opt) => {
-    // If staff wants to move to delivery phase but it's already paid, offer direct 'delivered'
-    if (opt === "pending_delivery" && isDeliveryPaid) return "delivered";
-    
-    // If staff wants to move to final phase but it's already paid, offer direct 'completed'
-    if (opt === "pending_final" && isFinalPaid) return "completed";
-    
-    return opt;
-  }).filter((opt, index, self) => 
-    self.indexOf(opt) === index && opt !== currentStatus
+  return (statusWorkflow[order.status] || []).filter(
+    (opt) => opt !== order.status,
   );
 };
 
@@ -206,8 +157,6 @@ export default function OrdersPage() {
   const router = useRouter();
   const { data: session } = useSession();
   const { data: meData } = useGetMeQuery({});
-  const apiBase =
-    process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
   const isTelemarketer = useMemo(() => {
     return (
       (session?.user?.role === Role.STAFF ||
@@ -219,13 +168,9 @@ export default function OrdersPage() {
     const r = session?.user?.role;
     return r === Role.SUPER_ADMIN || r === Role.ADMIN || r === Role.HR_MANAGER;
   }, [session]);
-  const [page, setPage] = useState(1);
   const [filters, setFilters] = useState<OrderFilters>({
-    search: "",
-    status: undefined,
     priority: undefined,
     clientId: undefined,
-    limit: 10,
   });
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
@@ -262,47 +207,6 @@ export default function OrdersPage() {
   const [revisionInstruction, setRevisionInstruction] = useState("");
   const [statusChangeNote, setStatusChangeNote] = useState("");
 
-  // Email dialog state
-  const [isEmailDialogOpen, setIsEmailDialogOpen] = useState(false);
-  const [emailPendingOrder, setEmailPendingOrder] = useState<IOrder | null>(
-    null,
-  );
-  const [emailPendingStatus, setEmailPendingStatus] =
-    useState<OrderStatus | null>(null);
-  const [isEmailSending, setIsEmailSending] = useState(false);
-
-  const confirmEmailAndStatusChange = async (
-    message: string,
-    downloadLink?: string,
-    selectedEmails?: string[],
-  ) => {
-    if (!emailPendingOrder || !emailPendingStatus) return;
-    setIsEmailSending(true);
-    try {
-      await updateOrderStatus({
-        id: emailPendingOrder._id,
-        data: {
-          status: emailPendingStatus,
-          customEmailMessage: message,
-          downloadLink,
-          sendEmail: true,
-          selectedEmails,
-        } as UpdateStatusInput,
-      }).unwrap();
-      toast.success(
-        `Status updated to ${ORDER_STATUS_LABELS[emailPendingStatus]} and email sent!`,
-      );
-      setIsEmailDialogOpen(false);
-      setEmailPendingOrder(null);
-      setEmailPendingStatus(null);
-    } catch (error: unknown) {
-      const err = error as ApiErrorResponse;
-      toast.error(err?.data?.message || "Failed to update status & send email");
-    } finally {
-      setIsEmailSending(false);
-    }
-  };
-
   // Date filter state
   const [selectedMonth, setSelectedMonth] = useState<string>("");
   const [selectedYear, setSelectedYear] = useState<string>("");
@@ -334,17 +238,10 @@ export default function OrdersPage() {
   ];
 
   // Queries
-  const {
-    data: orderData,
-    isLoading,
-    isFetching,
-    refetch,
-  } = useGetOrdersQuery({
-    ...filters,
-    page,
-    month: selectedMonth ? parseInt(selectedMonth) : undefined,
-    year: selectedYear ? parseInt(selectedYear) : undefined,
-  });
+  // Fetch everything up-front (like receipts/quotations) and filter/paginate
+  // client-side via TableContent — the backend doesn't apply month/year/priority
+  // filters server-side anyway, so this also fixes those being silent no-ops.
+  const { data: orderData, isLoading } = useGetOrdersQuery({ limit: 1000 });
   const { data: statsData } = useGetOrderStatsQuery();
   const { data: clientsData } = useGetClientsQuery({ limit: 100 });
 
@@ -358,50 +255,36 @@ export default function OrdersPage() {
     useExtendDeadlineMutation();
   const [addRevision, { isLoading: isAddingRevision }] =
     useAddRevisionMutation();
-  const [triggerGetAll, { isLoading: isLoadingAll }] = useLazyGetOrdersQuery();
 
   const orders = useMemo(() => orderData?.data || [], [orderData]);
-  const meta = orderData?.meta;
   const stats = statsData?.data;
   const clients = useMemo(() => clientsData?.clients || [], [clientsData]);
 
-  // Self-heal: in environments where the payment webhook worker isn't running,
-  // orders may not be backfilled even after upfront payment is confirmed.
-  // If we see 0 orders, run a single reconcile pass and refetch.
-  const reconcileAttemptedRef = useRef(false);
-  useEffect(() => {
-    if (reconcileAttemptedRef.current) return;
-    if (isLoading || isFetching) return;
-    if (!meta) return;
-    if (meta.total > 0) return;
-
-    reconcileAttemptedRef.current = true;
-    (async () => {
-      try {
-        await fetch(
-          `${apiBase}/api/quotation-payments/reconcile-orders`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            credentials: "include",
-            body: JSON.stringify({}),
-          },
-        );
-      } catch {
-        // best-effort
-      } finally {
-        refetch();
+  // Month / Year / Priority / Client filters, applied client-side
+  const filteredOrders = useMemo(() => {
+    return orders.filter((order) => {
+      if (filters.priority && order.priority !== filters.priority) return false;
+      if (filters.clientId) {
+        const cid =
+          typeof order.clientId === "object" ? order.clientId._id : order.clientId;
+        if (cid !== filters.clientId) return false;
       }
-    })();
-  }, [apiBase, isLoading, isFetching, meta, refetch]);
+      if (selectedMonth || selectedYear) {
+        const d = new Date(order.createdAt || order.orderDate);
+        if (selectedMonth && d.getMonth() + 1 !== parseInt(selectedMonth)) return false;
+        if (selectedYear && d.getFullYear() !== parseInt(selectedYear)) return false;
+      }
+      return true;
+    });
+  }, [orders, filters.priority, filters.clientId, selectedMonth, selectedYear]);
 
-  // Check if all current page orders are selected
+  // Check if every currently-filtered order is selected
   const allOrdersSelected = useMemo(() => {
     return (
-      orders.length > 0 &&
-      orders.every((order) => selectedOrderIds.has(order._id))
+      filteredOrders.length > 0 &&
+      filteredOrders.every((order) => selectedOrderIds.has(order._id))
     );
-  }, [orders, selectedOrderIds]);
+  }, [filteredOrders, selectedOrderIds]);
 
   // Toggle single order selection
   const toggleOrderSelection = (orderId: string) => {
@@ -416,41 +299,17 @@ export default function OrdersPage() {
     });
   };
 
-  // Toggle all orders on current page
+  // Toggle all currently-filtered orders
   const toggleAllOrders = (checked: boolean) => {
     setSelectedOrderIds((prev) => {
       const newSet = new Set(prev);
       if (checked) {
-        orders.forEach((order) => newSet.add(order._id));
+        filteredOrders.forEach((order) => newSet.add(order._id));
       } else {
-        // If unchecking "Select All Page", we should probably clear specific page IDs
-        // But if "All Total" was selected, user expects to clear just this page?
-        // Standard behavior: Uncheck header = Uncheck all visible.
-        orders.forEach((order) => newSet.delete(order._id));
+        filteredOrders.forEach((order) => newSet.delete(order._id));
       }
       return newSet;
     });
-  };
-
-  const handleSelectAllMatches = async () => {
-    if (!meta) return;
-    try {
-      const result = await triggerGetAll({
-        ...filters,
-        limit: meta.total,
-        month: selectedMonth ? parseInt(selectedMonth) : undefined,
-        year: selectedYear ? parseInt(selectedYear) : undefined,
-      }).unwrap();
-
-      if (result.data) {
-        const allIds = result.data.map((o) => o._id);
-        setSelectedOrderIds(new Set(allIds));
-        toast.success(`All ${allIds.length} orders selected`);
-      }
-    } catch (error) {
-      console.error("Failed to select all", error);
-      toast.error("Failed to select all orders");
-    }
   };
 
   // Clear selection and exit selection mode
@@ -464,7 +323,6 @@ export default function OrdersPage() {
     value: string | number | undefined,
   ) => {
     setFilters((prev) => ({ ...prev, [key]: value || undefined }));
-    setPage(1);
   };
 
   const handleCreateOrder = async (data: OrderFormData) => {
@@ -563,16 +421,6 @@ export default function OrdersPage() {
       setPendingStatusChange({ orderId, status: newStatus });
       setStatusChangeNote("");
       setIsStatusChangeDialogOpen(true);
-      return;
-    }
-
-    // Feature: send emails on status changes
-    // We now prompt for email selection and customization for ALL manual status changes
-    const orderObj = orderData?.data.find((o: any) => o._id === orderId);
-    if (orderObj) {
-      setEmailPendingStatus(newStatus);
-      setEmailPendingOrder(orderObj);
-      setIsEmailDialogOpen(true);
       return;
     }
 
@@ -680,6 +528,354 @@ export default function OrdersPage() {
     setSelectedOrder(order);
     setIsTimelineDialogOpen(true);
   };
+
+  const statusFilterOptions = useMemo(
+    () =>
+      Object.entries(ORDER_STATUS_LABELS).map(([value, label]) => ({
+        label,
+        value,
+      })),
+    [],
+  );
+
+  const columns = useMemo<ColumnDef<IOrder, any>[]>(() => {
+    const cols: ColumnDef<IOrder, any>[] = [];
+
+    if (isSelectionMode) {
+      cols.push({
+        id: "select",
+        header: () => (
+          <Checkbox
+            checked={allOrdersSelected}
+            onCheckedChange={(checked) => toggleAllOrders(!!checked)}
+            aria-label="Select all orders"
+          />
+        ),
+        cell: ({ row }) => (
+          <Checkbox
+            checked={selectedOrderIds.has(row.original._id)}
+            onCheckedChange={() => toggleOrderSelection(row.original._id)}
+            aria-label={`Select ${row.original.quotationSnapshot?.templateName || row.original.orderName || "Order"}`}
+          />
+        ),
+      });
+    }
+
+    cols.push(
+      {
+        id: "orderId",
+        header: "Order ID",
+        accessorFn: (row) => row._id,
+        cell: ({ row }) => (
+          <span className="font-mono text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
+            #{row.original._id.slice(-6)}
+          </span>
+        ),
+      },
+      {
+        id: "client",
+        header: "Client",
+        accessorFn: (row) =>
+          typeof row.clientId === "object" ? row.clientId.name : "",
+        cell: ({ row }) => {
+          const order = row.original;
+          return (
+            <span className="font-semibold text-sm">
+              {typeof order.clientId === "object" ? order.clientId.name : "N/A"}
+            </span>
+          );
+        },
+      },
+      {
+        id: "project",
+        header: "Project / Service",
+        accessorFn: (row) => row.quotationSnapshot?.templateName || row.orderName,
+        cell: ({ row }) => (
+          <span className="font-medium text-sm line-clamp-1 max-w-[200px] block">
+            {row.original.quotationSnapshot?.templateName ||
+              row.original.orderName ||
+              "Untitled Project"}
+          </span>
+        ),
+      },
+      {
+        id: "type",
+        header: "Type",
+        accessorFn: (row) => row.orderType,
+        cell: ({ row }) => (
+          <Badge
+            variant="secondary"
+            className="capitalize text-[10px] h-5 px-1.5 font-bold tracking-wide"
+          >
+            {row.original.orderType || "Service"}
+          </Badge>
+        ),
+      },
+      {
+        id: "items",
+        header: () => <div className="text-center">Items</div>,
+        accessorFn: (row) => row.quotationSnapshot?.scopeOfWork?.length || 0,
+        cell: ({ row }) => (
+          <div className="flex justify-center">
+            <div className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-muted text-[11px] font-bold">
+              {row.original.quotationSnapshot?.scopeOfWork?.length || 0}
+            </div>
+          </div>
+        ),
+      },
+      {
+        id: "total",
+        header: () => <div className="text-right">Total</div>,
+        accessorFn: (row) =>
+          row.quotationSnapshot?.grandTotal || row.totalAmount || row.totalPrice || 0,
+        cell: ({ row }) => {
+          const order = row.original;
+          return (
+            <div className="text-right">
+              <span
+                className={cn(
+                  "font-bold text-sm",
+                  !canSeeFinancials && "blur-[4px] select-none pointer-events-none",
+                )}
+              >
+                {order.quotationSnapshot?.currency === "USD"
+                  ? "$"
+                  : order.quotationSnapshot?.currency || "$"}
+                {(
+                  order.quotationSnapshot?.grandTotal ||
+                  order.totalAmount ||
+                  order.totalPrice ||
+                  0
+                ).toLocaleString(undefined, {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })}
+              </span>
+            </div>
+          );
+        },
+      },
+      {
+        id: "payment",
+        header: () => <div className="text-center">Payment</div>,
+        cell: ({ row }) => {
+          const phases = row.original.paymentPhases;
+          if (!phases)
+            return (
+              <div className="text-center text-[10px] text-muted-foreground font-medium italic bg-muted/30 rounded py-1 border border-dashed">
+                No Data
+              </div>
+            );
+
+          const due =
+            (phases.upfront?.amountDue || 0) +
+            (phases.delivery?.amountDue || 0) +
+            (phases.final?.amountDue || 0);
+          const paid =
+            (phases.upfront?.amountPaid || 0) +
+            (phases.delivery?.amountPaid || 0) +
+            (phases.final?.amountPaid || 0);
+          const pct =
+            typeof phases.totalPercentage === "number"
+              ? phases.totalPercentage
+              : due > 0
+                ? Math.min(100, Math.floor((paid / due) * 100))
+                : 0;
+
+          let stage = "Upfront";
+          let stageStyle =
+            "bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-950/30 dark:text-amber-400";
+
+          if (phases.upfront?.status === "paid") {
+            stage = "Delivery";
+            stageStyle =
+              "bg-sky-100 text-sky-800 border-sky-200 dark:bg-sky-950/30 dark:text-sky-400";
+          }
+          if (phases.delivery?.status === "paid") {
+            stage = "Final";
+            stageStyle =
+              "bg-indigo-100 text-indigo-800 border-indigo-200 dark:bg-indigo-950/30 dark:text-indigo-400";
+          }
+          if (phases.final?.status === "paid") {
+            stage = "Paid";
+            stageStyle =
+              "bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400";
+          }
+
+          return (
+            <div className="space-y-1 px-1 w-full max-w-[110px] mx-auto">
+              <div className="flex items-center justify-between gap-1 text-[9px] font-bold">
+                <span
+                  className={cn(
+                    "px-1 rounded-[4px] border tracking-tight truncate uppercase scale-[0.95] origin-left",
+                    stageStyle,
+                  )}
+                >
+                  {stage}
+                </span>
+                <span
+                  className={cn(
+                    "font-mono tracking-tight",
+                    pct === 100 ? "text-emerald-600" : "text-foreground/80",
+                  )}
+                >
+                  {pct}%
+                </span>
+              </div>
+              <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden ring-1 ring-inset ring-black/5 dark:ring-white/5">
+                <div
+                  className={cn(
+                    "h-full transition-all duration-700 ease-out rounded-full",
+                    pct === 100
+                      ? "bg-gradient-to-r from-emerald-500 to-emerald-400"
+                      : "bg-gradient-to-r from-primary/90 to-primary",
+                  )}
+                  style={{ width: `${pct}%` }}
+                />
+              </div>
+            </div>
+          );
+        },
+      },
+      {
+        id: "status",
+        header: () => <div className="text-center">Status</div>,
+        accessorFn: (row) => row.status,
+        cell: ({ row }) => {
+          const order = row.original;
+          return (
+            <div className="flex justify-center">
+              <StatusPicker
+                value={order.status}
+                onChange={(value) =>
+                  handleStatusChange(order._id, value as OrderStatus)
+                }
+                options={[
+                  {
+                    label: ORDER_STATUS_LABELS[order.status] ?? order.status,
+                    value: order.status,
+                  },
+                  ...getFilteredStatusOptions(order).map((s) => ({
+                    label: ORDER_STATUS_LABELS[s],
+                    value: s,
+                  })),
+                ]}
+                triggerClassName={cn(
+                  "h-7 text-[10px] font-bold uppercase tracking-wider justify-center",
+                  ORDER_STATUS_COLORS[order.status],
+                )}
+                className="w-[130px]"
+              />
+            </div>
+          );
+        },
+      },
+      {
+        id: "createdDate",
+        header: "Created Date",
+        accessorFn: (row) => row.createdAt || row.orderDate,
+        cell: ({ row }) => (
+          <span className="text-muted-foreground text-[12px] whitespace-nowrap">
+            {safeFormat(row.original.createdAt || row.original.orderDate, "MMM dd, yyyy")}
+          </span>
+        ),
+      },
+      {
+        id: "actions",
+        header: () => <div className="text-center">Actions</div>,
+        cell: ({ row }) => {
+          const order = row.original;
+          return (
+            <TooltipProvider>
+              <div className="flex items-center justify-center gap-1">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={() => openViewDialog(order)}
+                    >
+                      <Eye className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>View Details</p>
+                  </TooltipContent>
+                </Tooltip>
+
+                {(!isTelemarketer ||
+                  (isTelemarketer &&
+                    (typeof order.clientId === "object"
+                      ? order.clientId.createdBy?._id
+                      : order.clientId) === session?.user?.id)) && (
+                  <>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => openEditDialog(order)}
+                        >
+                          <Edit2 className="h-4 w-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Edit Order</p>
+                      </TooltipContent>
+                    </Tooltip>
+
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-destructive hover:bg-destructive/10"
+                          onClick={() => {
+                            setSelectedOrder(order);
+                            setIsDeleteDialogOpen(true);
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Delete Order</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </>
+                )}
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => openTimelineDialog(order)}
+                    >
+                      <History className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>View Timeline</p>
+                  </TooltipContent>
+                </Tooltip>
+              </div>
+            </TooltipProvider>
+          );
+        },
+      },
+    );
+
+    return cols;
+  }, [
+    isSelectionMode,
+    selectedOrderIds,
+    allOrdersSelected,
+    canSeeFinancials,
+    isTelemarketer,
+    session,
+  ]);
 
   return (
     <div className="space-y-6">
@@ -865,159 +1061,6 @@ export default function OrdersPage() {
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Filters */}
-          <div className="rounded-xl border bg-muted/30 p-4">
-            <div className="flex items-center gap-2 mb-4">
-              <Filter className="h-4 w-4 text-muted-foreground" />
-              <span className="text-sm font-medium">Filters</span>
-            </div>
-            <TooltipProvider>
-              <div className="flex flex-wrap gap-4 items-center">
-                {/* Search */}
-                <div className="relative flex-1 min-w-[200px]">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Search..."
-                    value={filters.search || ""}
-                    onChange={(e) =>
-                      handleFilterChange("search", e.target.value)
-                    }
-                    className="pl-9 bg-background"
-                  />
-                </div>
-
-                {/* Month Filter */}
-                <Select
-                  value={selectedMonth}
-                  onValueChange={(value) => {
-                    setSelectedMonth(value);
-                    setPage(1);
-                  }}
-                >
-                  <SelectTrigger className="bg-background w-[140px]">
-                    <SelectValue placeholder="All Months" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {months.map((month) => (
-                      <SelectItem key={month.value} value={month.value}>
-                        {month.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-
-                {/* Year Filter */}
-                <Select
-                  value={selectedYear}
-                  onValueChange={(value) => {
-                    setSelectedYear(value);
-                    setPage(1);
-                  }}
-                >
-                  <SelectTrigger className="bg-background w-[120px]">
-                    <SelectValue placeholder="All Years" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {sortedYears.map((year) => (
-                      <SelectItem key={year} value={year.toString()}>
-                        {year}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-
-                {/* Status Filter */}
-                <Select
-                  value={filters.status || ""}
-                  onValueChange={(value) =>
-                    handleFilterChange("status", value as OrderStatus)
-                  }
-                >
-                  <SelectTrigger className="bg-background w-[140px]">
-                    <SelectValue placeholder="All Statuses" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Object.entries(ORDER_STATUS_LABELS).map(
-                      ([value, label]) => (
-                        <SelectItem key={value} value={value}>
-                          {label}
-                        </SelectItem>
-                      ),
-                    )}
-                  </SelectContent>
-                </Select>
-
-                {/* Priority Filter */}
-                <Select
-                  value={filters.priority || ""}
-                  onValueChange={(value) =>
-                    handleFilterChange("priority", value as OrderPriority)
-                  }
-                >
-                  <SelectTrigger className="bg-background w-[140px]">
-                    <SelectValue placeholder="All Priorities" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Object.entries(ORDER_PRIORITY_LABELS).map(
-                      ([value, label]) => (
-                        <SelectItem key={value} value={value}>
-                          {label}
-                        </SelectItem>
-                      ),
-                    )}
-                  </SelectContent>
-                </Select>
-
-                {/* Client Filter */}
-                <Select
-                  value={filters.clientId || ""}
-                  onValueChange={(value) =>
-                    handleFilterChange("clientId", value)
-                  }
-                >
-                  <SelectTrigger className="bg-background w-[140px]">
-                    <SelectValue placeholder="All Clients" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {clients.map((client) => (
-                      <SelectItem key={client._id} value={client._id}>
-                        {client.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-
-                {/* Clear Filters Button */}
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      onClick={() => {
-                        setFilters({
-                          search: "",
-                          status: undefined,
-                          priority: undefined,
-                          clientId: undefined,
-                          limit: 10,
-                        });
-                        setSelectedMonth("");
-                        setSelectedYear("");
-                        setPage(1);
-                      }}
-                      className="bg-background"
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Clear Filters</p>
-                  </TooltipContent>
-                </Tooltip>
-              </div>
-            </TooltipProvider>
-          </div>
-
           {/* Selection Action Bar */}
           {isSelectionMode && (
             <div className="flex items-center justify-between p-3 rounded-lg border bg-primary/5 border-primary/20">
@@ -1054,462 +1097,104 @@ export default function OrdersPage() {
             </div>
           )}
 
-          {/* Select All Matching Banner */}
-          {isSelectionMode &&
-            allOrdersSelected &&
-            meta &&
-            meta.total > selectedOrderIds.size && (
-              <div className="flex items-center justify-center p-2 bg-blue-50/50 dark:bg-blue-950/20 border border-blue-100 dark:border-blue-900 rounded-lg text-sm text-blue-600 dark:text-blue-400">
-                <span>
-                  All {orders.length} orders on this page are selected.
-                </span>
-                <Button
-                  variant="link"
-                  className="ml-2 h-auto p-0 font-semibold"
-                  onClick={handleSelectAllMatches}
-                  disabled={isLoadingAll}
-                >
-                  {isLoadingAll ? (
-                    <>
-                      <Loader className="h-3 w-3 animate-spin" />
-                      Selecting all {meta.total} orders...
-                    </>
-                  ) : (
-                    `Select all ${meta.total} orders`
-                  )}
-                </Button>
-              </div>
-            )}
-
           {/* Table */}
-          <div className="border">
-            {isLoading ? (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="border-r">Name</TableHead>
-                    <TableHead className="border-r">Client</TableHead>
-                    <TableHead className="border-r">Time Left</TableHead>
-                    <TableHead className="border-r">Qty</TableHead>
-                    <TableHead className="border-r">Total</TableHead>
-                    <TableHead className="border-r">Payment</TableHead>
-                    <TableHead className="border-r">Status</TableHead>
-                    <TableHead className="border-r">Priority</TableHead>
-                    <TableHead>Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {[...Array(5)].map((_, i) => (
-                    <TableRow key={i}>
-                      <TableCell className="border-r">
-                        <Skeleton className="h-4 w-32" />
-                      </TableCell>
-                      <TableCell className="border-r">
-                        <Skeleton className="h-4 w-24" />
-                      </TableCell>
-                      <TableCell className="border-r">
-                        <Skeleton className="h-4 w-16" />
-                      </TableCell>
-                      <TableCell className="border-r">
-                        <Skeleton className="h-4 w-10" />
-                      </TableCell>
-                      <TableCell className="border-r">
-                        <Skeleton className="h-4 w-16" />
-                      </TableCell>
-                      <TableCell className="border-r">
-                        <div className="space-y-1 px-2">
-                          <div className="flex justify-between"><Skeleton className="h-2 w-8" /><Skeleton className="h-2 w-4" /></div>
-                          <Skeleton className="h-1.5 w-full" />
-                        </div>
-                      </TableCell>
-                      <TableCell className="border-r">
-                        <Skeleton className="h-6 w-20" />
-                      </TableCell>
-                      <TableCell className="border-r">
-                        <Skeleton className="h-6 w-16" />
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex gap-1">
-                          <Skeleton className="h-8 w-8" />
-                          <Skeleton className="h-8 w-8" />
-                          <Skeleton className="h-8 w-8" />
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-muted/50 hover:bg-muted/50">
-                    {isSelectionMode && (
-                      <TableHead className="w-[50px] px-4">
-                        <Checkbox
-                          checked={allOrdersSelected}
-                          onCheckedChange={(checked) =>
-                            toggleAllOrders(!!checked)
-                          }
-                          aria-label="Select all orders"
-                        />
-                      </TableHead>
-                    )}
-                    <TableHead className="w-[100px] font-semibold">
-                      Order ID
-                    </TableHead>
-                    <TableHead className="font-semibold">Client</TableHead>
-                    <TableHead className="font-semibold">
-                      Project / Service
-                    </TableHead>
-                    <TableHead className="font-semibold">Type</TableHead>
-                    <TableHead className="text-center font-semibold">
-                      Items
-                    </TableHead>
-                    <TableHead className="font-semibold text-right">
-                      Total
-                    </TableHead>
-                    <TableHead className="font-semibold text-center">
-                      Payment
-                    </TableHead>
-                    <TableHead className="text-center font-semibold">
-                      Status
-                    </TableHead>
-                    <TableHead className="font-semibold">
-                      Created Date
-                    </TableHead>
-                    <TableHead className="text-center font-semibold">
-                      Actions
-                    </TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {orders.length === 0 ? (
-                    <TableRow>
-                      <TableCell
-                        colSpan={isSelectionMode ? 11 : 10}
-                        className="h-[400px] text-center"
-                      >
-                        <div className="flex flex-col items-center justify-center gap-4 animate-in fade-in zoom-in duration-300">
-                          <div className="rounded-2xl bg-muted/50 p-6 ring-1 ring-border">
-                            <Package className="h-12 w-12 text-muted-foreground/50" />
-                          </div>
-                          <div className="space-y-2">
-                            <h3 className="text-xl font-semibold tracking-tight">
-                              No orders found
-                            </h3>
-                            <p className="text-sm text-muted-foreground max-w-[300px] mx-auto">
-                              We couldn&apos;t find any orders matching your
-                              current filters. Try adjusting them or create a
-                              new order.
-                            </p>
-                          </div>
-                          <Button
-                            variant="outline"
-                            onClick={() => setIsDeleteDialogOpen(true)}
-                            className="mt-2"
-                          >
-                            <Plus className="h-4 w-4" />
-                            Create New Order
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    orders.map((order: IOrder) => (
-                      <TableRow
-                        key={order._id}
-                        className={cn(
-                          "group transition-colors",
-                          isSelectionMode &&
-                            selectedOrderIds.has(order._id) &&
-                            "bg-primary/5 hover:bg-primary/10",
-                        )}
-                      >
-                        {isSelectionMode && (
-                          <TableCell className="px-4">
-                            <Checkbox
-                              checked={selectedOrderIds.has(order._id)}
-                              onCheckedChange={() =>
-                                toggleOrderSelection(order._id)
-                              }
-                              aria-label={`Select ${order.quotationSnapshot?.templateName || order.orderName || "Order"}`}
-                            />
-                          </TableCell>
-                        )}
-                        <TableCell className="font-mono text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
-                          #{order._id.slice(-6)}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex flex-col gap-0.5">
-                            <span className="font-semibold text-sm">
-                              {typeof order.clientId === "object"
-                                ? order.clientId.name
-                                : "N/A"}
-                            </span>
-                            <span className="text-[10px] text-muted-foreground uppercase tracking-tight">
-                              {typeof order.clientId === "object"
-                                ? (order.clientId.emails?.[0] || "")
-                                : ""}
-                            </span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="max-w-[200px]">
-                          <span className="font-medium text-sm line-clamp-1 group-hover:text-primary transition-colors">
-                            {order.quotationSnapshot?.templateName ||
-                              order.orderName ||
-                              "Untitled Project"}
-                          </span>
-                        </TableCell>
-                        <TableCell>
-                          <Badge
-                            variant="secondary"
-                            className="capitalize text-[10px] h-5 px-1.5 font-bold tracking-wide"
-                          >
-                            {order.orderType || "Service"}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-center">
-                          <div className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-muted text-[11px] font-bold">
-                            {order.quotationSnapshot?.scopeOfWork?.length || 0}
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <span className={cn("font-bold text-sm", !canSeeFinancials && "blur-[4px] select-none pointer-events-none")}>
-                            {order.quotationSnapshot?.currency === "USD" ? "$" : order.quotationSnapshot?.currency || "$"}
-                            {(
-                              order.quotationSnapshot?.grandTotal ||
-                              order.totalAmount ||
-                              order.totalPrice ||
-                              0
-                            ).toLocaleString(undefined, {
-                              minimumFractionDigits: 2,
-                              maximumFractionDigits: 2,
-                            })}
-                          </span>
-                        </TableCell>
-                        <TableCell className="min-w-[120px]">
-                          {(() => {
-                            const phases = order.paymentPhases;
-                            if (!phases) return <div className="text-center text-[10px] text-muted-foreground font-medium italic bg-muted/30 rounded py-1 border border-dashed">No Data</div>;
-                            
-                            const due = (phases.upfront?.amountDue || 0) + (phases.delivery?.amountDue || 0) + (phases.final?.amountDue || 0);
-                            const paid = (phases.upfront?.amountPaid || 0) + (phases.delivery?.amountPaid || 0) + (phases.final?.amountPaid || 0);
-                            const pct = typeof phases.totalPercentage === "number" ? phases.totalPercentage : (due > 0 ? Math.min(100, Math.floor((paid / due) * 100)) : 0);
-                            
-                            let stage = "Upfront";
-                            let stageStyle = "bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-950/30 dark:text-amber-400";
-                            
-                            if (phases.upfront?.status === "paid") {
-                              stage = "Delivery";
-                              stageStyle = "bg-sky-100 text-sky-800 border-sky-200 dark:bg-sky-950/30 dark:text-sky-400";
-                            }
-                            if (phases.delivery?.status === "paid") {
-                              stage = "Final";
-                              stageStyle = "bg-indigo-100 text-indigo-800 border-indigo-200 dark:bg-indigo-950/30 dark:text-indigo-400";
-                            }
-                            if (phases.final?.status === "paid") {
-                              stage = "Paid";
-                              stageStyle = "bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400";
-                            }
-                            
-                            return (
-                              <div className="space-y-1 px-1 w-full max-w-[110px] mx-auto">
-                                <div className="flex items-center justify-between gap-1 text-[9px] font-bold">
-                                  <span className={cn("px-1 rounded-[4px] border tracking-tight truncate uppercase scale-[0.95] origin-left", stageStyle)}>{stage}</span>
-                                  <span className={cn("font-mono tracking-tight", pct === 100 ? "text-emerald-600" : "text-foreground/80")}>{pct}%</span>
-                                </div>
-                                <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden ring-1 ring-inset ring-black/5 dark:ring-white/5">
-                                  <div 
-                                    className={cn("h-full transition-all duration-700 ease-out rounded-full", pct === 100 ? "bg-gradient-to-r from-emerald-500 to-emerald-400" : "bg-gradient-to-r from-primary/90 to-primary")} 
-                                    style={{ width: `${pct}%` }} 
-                                  />
-                                </div>
-                              </div>
-                            );
-                          })()}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex justify-center">
-                            <Select
-                              value={order.status}
-                              onValueChange={(value) =>
-                                handleStatusChange(
-                                  order._id,
-                                  value as OrderStatus,
-                                )
-                              }
-                            >
-                              <SelectTrigger
-                                className={cn(
-                                  "h-7 w-[120px] text-[10px] font-bold uppercase tracking-wider border-none ring-0 focus:ring-0",
-                                  ORDER_STATUS_COLORS[order.status],
-                                )}
-                              >
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value={order.status} className="text-xs uppercase tracking-wider font-bold">
-                                  {ORDER_STATUS_LABELS[order.status]} (Current)
-                                </SelectItem>
-                                  {getFilteredStatusOptions(order).map((statusValue) => (
-                                    <SelectItem
-                                      key={statusValue}
-                                      value={statusValue}
-                                      className="text-xs uppercase tracking-wider"
-                                    >
-                                      {ORDER_STATUS_LABELS[statusValue]}
-                                    </SelectItem>
-                                  ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-muted-foreground text-[12px] whitespace-nowrap">
-                          {safeFormat(
-                            order.createdAt || order.orderDate,
-                            "MMM dd, yyyy",
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <TooltipProvider>
-                            <div className="flex items-center justify-center gap-1">
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-8 w-8"
-                                    onClick={() => openViewDialog(order)}
-                                  >
-                                    <Eye className="h-4 w-4" />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                  <p>View Details</p>
-                                </TooltipContent>
-                              </Tooltip>
-
-                              {(!isTelemarketer ||
-                                (isTelemarketer &&
-                                  (typeof order.clientId === "object"
-                                    ? order.clientId.createdBy?._id
-                                    : order.clientId) ===
-                                    session?.user?.id)) && (
-                                <>
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className="h-8 w-8"
-                                        onClick={() => openEditDialog(order)}
-                                      >
-                                        <Edit2 className="h-4 w-4" />
-                                      </Button>
-                                    </TooltipTrigger>
-                                    <TooltipContent>
-                                      <p>Edit Order</p>
-                                    </TooltipContent>
-                                  </Tooltip>
-
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className="h-8 w-8 text-destructive hover:bg-destructive/10"
-                                        onClick={() => {
-                                          setSelectedOrder(order);
-                                          setIsDeleteDialogOpen(true);
-                                        }}
-                                      >
-                                        <Trash2 className="h-4 w-4" />
-                                      </Button>
-                                    </TooltipTrigger>
-                                    <TooltipContent>
-                                      <p>Delete Order</p>
-                                    </TooltipContent>
-                                  </Tooltip>
-                                </>
-                              )}
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={() => openTimelineDialog(order)}
-                                  >
-                                    <History className="h-4 w-4" />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                  <p>View Timeline</p>
-                                </TooltipContent>
-                              </Tooltip>
-                            </div>
-                          </TooltipProvider>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            )}
-          </div>
-
-          {/* Pagination */}
-          {meta && (
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-6">
-                <div className="text-sm text-muted-foreground">
-                  Page {meta.page} of {Math.max(1, meta.totalPages)} (
-                  {meta.total} total)
+          <TableContent
+            data={filteredOrders}
+            columns={columns}
+            isLoading={isLoading}
+            searchPlaceholder="Search by order ID, client, or project..."
+            statusFilterKey="status"
+            statusOptions={statusFilterOptions}
+            extraFilters={
+              <>
+                <div className="hidden md:flex items-center gap-1.5 text-xs font-bold text-muted-foreground shrink-0">
+                  <Filter className="h-3.5 w-3.5" />
+                  Filters
                 </div>
-                <div className="flex items-center gap-2">
-                  <p className="text-sm font-medium">Rows per page</p>
-                  <Select
-                    value={`${filters.limit || 10}`}
-                    onValueChange={(value) => {
-                      handleFilterChange("limit", Number(value));
-                    }}
-                  >
-                    <SelectTrigger className="h-8 w-[70px]">
-                      <SelectValue placeholder={filters.limit || 10} />
+                <div className="w-full md:w-[130px] shrink-0">
+                  <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+                    <SelectTrigger className="bg-background w-full">
+                      <SelectValue placeholder="All Months" />
                     </SelectTrigger>
-                    <SelectContent side="top">
-                      {[10, 20, 30, 40, 50].map((pageSize) => (
-                        <SelectItem key={pageSize} value={`${pageSize}`}>
-                          {pageSize}
+                    <SelectContent>
+                      {months.map((month) => (
+                        <SelectItem key={month.value} value={month.value}>
+                          {month.label}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  disabled={page === 1 || isFetching}
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                  Previous
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() =>
-                    setPage((p) => Math.min(meta.totalPages, p + 1))
-                  }
-                  disabled={page >= meta.totalPages || isFetching}
-                >
-                  Next
-                  <ChevronRight className="h-4 w-4 ml-2" />
-                </Button>
-              </div>
-            </div>
-          )}
+                <div className="w-full md:w-[110px] shrink-0">
+                  <Select value={selectedYear} onValueChange={setSelectedYear}>
+                    <SelectTrigger className="bg-background w-full">
+                      <SelectValue placeholder="All Years" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {sortedYears.map((year) => (
+                        <SelectItem key={year} value={year.toString()}>
+                          {year}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="w-full md:w-[130px] shrink-0">
+                  <Select
+                    value={filters.priority || ""}
+                    onValueChange={(value) =>
+                      handleFilterChange("priority", value as OrderPriority)
+                    }
+                  >
+                    <SelectTrigger className="bg-background w-full">
+                      <SelectValue placeholder="All Priorities" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(ORDER_PRIORITY_LABELS).map(
+                        ([value, label]) => (
+                          <SelectItem key={value} value={value}>
+                            {label}
+                          </SelectItem>
+                        ),
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="w-full md:w-[150px] shrink-0">
+                  <Select
+                    value={filters.clientId || ""}
+                    onValueChange={(value) => handleFilterChange("clientId", value)}
+                  >
+                    <SelectTrigger className="bg-background w-full">
+                      <SelectValue placeholder="All Clients" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {clients.map((client) => (
+                        <SelectItem key={client._id} value={client._id}>
+                          {client.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {(filters.priority || filters.clientId || selectedMonth || selectedYear) && (
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => {
+                      setFilters({ priority: undefined, clientId: undefined });
+                      setSelectedMonth("");
+                      setSelectedYear("");
+                    }}
+                    className="bg-background shrink-0"
+                    title="Clear filters"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                )}
+              </>
+            }
+          />
         </CardContent>
       </Card>
 
@@ -2020,16 +1705,6 @@ export default function OrdersPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-
-      {/* Email Notification Dialog */}
-      <EmailDialog
-        open={isEmailDialogOpen}
-        onOpenChange={setIsEmailDialogOpen}
-        order={emailPendingOrder}
-        status={emailPendingStatus as OrderStatus}
-        onSend={confirmEmailAndStatusChange}
-        isLoading={isEmailSending}
-      />
     </div>
   );
 }

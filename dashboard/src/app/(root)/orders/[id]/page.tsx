@@ -47,21 +47,15 @@ import { OrderTasksTab } from "@/components/tasks/OrderTasksTab";
 
 import { OrderStatus, IOrder } from "@/types/order.type";
 import { ORDER_STATUS_LABELS } from "@/lib/constants";
-import { EmailDialog } from "../EmailDialog";
 
 // Status workflow: defines which statuses can transition to which
 const statusWorkflow: Record<OrderStatus, OrderStatus[]> = {
   pending: ["in_progress", "cancelled"],
-  in_progress: ["quality_check", "revision", "cancelled"],
-  quality_check: ["pending_delivery", "revision", "in_progress"],
+  in_progress: ["completed", "revision", "cancelled"],
   revision: ["in_progress", "cancelled"],
-  completed: ["revision"],
-  delivered: ["pending_final", "revision", "cancelled"], 
-  cancelled: ["pending_upfront"],
-  pending_upfront: ["active", "cancelled"], 
-  active: ["in_progress", "cancelled"], 
-  pending_delivery: ["revision", "cancelled"], 
-  pending_final: ["cancelled"], 
+  completed: ["delivered", "revision"],
+  delivered: ["revision"],
+  cancelled: [],
 };
 
 const getFilteredStatusOptions = (order: IOrder): OrderStatus[] => {
@@ -95,32 +89,16 @@ export default function OrderDetailsPage() {
     const { data, isLoading, error } = useGetOrderByIdQuery(id);
     const order = data?.data;
     // -- Status Management Flow logic --
-    const [updateOrderStatus, { isLoading: isUpdatingStatus }] = useUpdateOrderStatusMutation();
-    const [isEmailDialogOpen, setIsEmailDialogOpen] = useState(false);
-    const [pendingTargetStatus, setPendingTargetStatus] = useState<OrderStatus | null>(null);
+    const [updateOrderStatus] = useUpdateOrderStatusMutation();
 
-    const handleStatusClick = (target: OrderStatus) => {
-        setPendingTargetStatus(target);
-        setIsEmailDialogOpen(true);
-    };
-
-    const handleSendStatusEmail = async (message: string, downloadLink?: string, selectedEmails?: string[]) => {
-        if (!pendingTargetStatus) return;
+    const handleStatusClick = async (target: OrderStatus) => {
         try {
             await updateOrderStatus({
                 id: id,
-                data: {
-                    status: pendingTargetStatus,
-                    customEmailMessage: message,
-                    downloadLink,
-                    sendEmail: true,
-                    selectedEmails,
-                },
+                data: { status: target },
             }).unwrap();
-            
-            toast.success(`Status successfully updated to ${ORDER_STATUS_LABELS[pendingTargetStatus] || pendingTargetStatus}`);
-            setIsEmailDialogOpen(false);
-            setPendingTargetStatus(null);
+
+            toast.success(`Status successfully updated to ${ORDER_STATUS_LABELS[target] || target}`);
         } catch (err: any) {
             toast.error(err?.data?.message || "Failed to update order status.");
         }
@@ -382,17 +360,6 @@ export default function OrderDetailsPage() {
                     </Card>
                 </div>
             </div>
-            {/* Email confirmation dialog used for global status workflows */}
-            {pendingTargetStatus && (
-                <EmailDialog
-                    open={isEmailDialogOpen}
-                    onOpenChange={setIsEmailDialogOpen}
-                    order={order}
-                    status={pendingTargetStatus}
-                    onSend={handleSendStatusEmail}
-                    isLoading={isUpdatingStatus}
-                />
-            )}
         </div>
     );
 }

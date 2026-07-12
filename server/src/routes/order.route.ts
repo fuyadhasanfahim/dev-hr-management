@@ -10,7 +10,7 @@ const STAFF_ROLES = [Role.SUPER_ADMIN, Role.ADMIN, Role.HR_MANAGER, Role.TEAM_LE
 
 /**
  * POST / is intentionally BLOCKED.
- * Orders can ONLY be created via the quotation pipeline (quotation accepted → upfront payment → event worker).
+ * Orders can ONLY be created via the quotation pipeline (POST /convert-quotation).
  * This guard prevents accidental re-enabling of manual order creation.
  */
 router.post('/', (_req, res) => {
@@ -18,7 +18,7 @@ router.post('/', (_req, res) => {
         success: false,
         message:
             'Method Not Allowed: Orders cannot be created manually. ' +
-            'Orders are automatically created after a quotation is accepted and upfront payment is confirmed.',
+            'Convert an accepted quotation into an order via POST /convert-quotation instead.',
     });
 });
 
@@ -27,7 +27,6 @@ router.get('/:id',      authorize(...STAFF_ROLES), OrderController.getOrderById)
 
 router.patch('/:id/status',         authorize(...STAFF_ROLES), OrderController.updateOrderStatus);
 router.patch('/:id/team',           authorize(...STAFF_ROLES), OrderController.updateOrderTeam);
-router.post('/:id/deliver',         authorize(...STAFF_ROLES), OrderController.markDelivered);
 router.post('/convert-quotation',    authorize(...STAFF_ROLES), OrderController.convertQuotationToOrder);
 
 // Public asset delivery endpoint — accessToken is the credential (no JWT).

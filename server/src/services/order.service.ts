@@ -12,8 +12,6 @@ import { AppError } from '../utils/AppError.js';
 import { InvoiceCounter } from '../models/invoice-counter.model.js';
 import type { IQuotation } from '../types/quotation.type.js';
 import { logger } from '../lib/logger.js';
-import emailService from './email.service.js';
-import { sendClientSmsIfBDT } from './sms-notification.service.js';
 
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -201,8 +199,8 @@ async function enrichOrdersWithPaymentInfo(orders: any[]): Promise<any[]> {
 // ─── OrderService ─────────────────────────────────────────────────────────────
 
 /**
- * INTERNAL ONLY — not exposed via HTTP route.
- * Called exclusively from the QuotationEventWorker after upfront payment succeeds.
+ * Creates an order from an accepted quotation. Called from
+ * `POST /api/orders/convert-quotation` (staff-triggered).
  *
  * IDEMPOTENCY GUARD: Checks for existing order with this quotationGroupId
  * inside the transaction. If one already exists, returns it without creating a duplicate.
@@ -278,13 +276,13 @@ async function createOrderFromQuotation(
                     quotationSnapshot: snapshot,
                     clientId: quotation.clientId,
                     orderType,
-                    status: OrderStatus.PENDING_UPFRONT,
+                    status: OrderStatus.PENDING,
                     statusHistory: [
                         {
-                            status: OrderStatus.PENDING_UPFRONT,
+                            status: OrderStatus.PENDING,
                             changedBy: new Types.ObjectId(actualCreatedBy),
                             updatedAt: new Date(),
-                            note: 'Order created automatically after quotation acceptance',
+                            note: 'Order created from accepted quotation',
                         },
                     ],
                     assets: [],
@@ -341,11 +339,6 @@ async function transitionStatus(
     newStatus: OrderStatus,
     userId: string,
     note?: string,
-    emailOptions?: {
-        sendEmail?: boolean;
-        customEmailMessage?: string;
-        selectedEmails?: string[];
-    },
 ): Promise<IOrder> {
     const order = await OrderModel.findById(orderId);
     if (!order) throw new AppError('Order not found', 404);
@@ -394,114 +387,6 @@ async function transitionStatus(
             logger.info({ orderId, newStatus }, 'order.transition.triggering_manual_unlock');
             await unlockAssets(orderId);
         }
-    }
-
-
-    // Feature: Send email notification to client if requested
-    if (emailOptions?.sendEmail) {
-        try {
-            const recipients = emailOptions.selectedEmails?.length
-                ? emailOptions.selectedEmails.join(', ')
-                : updated.quotationSnapshot?.clientEmail;
-
-            if (recipients) {
-                await emailService.sendOrderStatusEmail({
-                    to: recipients,
-                    clientName: updated.quotationSnapshot?.clientName || 'Client',
-                    orderName: updated.quotationSnapshot?.templateName || updated.orderNumber,
-                    status: newStatus.toUpperCase().replace('_', ' '),
-                    message: emailOptions.customEmailMessage || `Your order status has been updated to ${newStatus.toUpperCase().replace('_', ' ')}.`,
-                });
-                logger.info({ orderId, recipients, newStatus }, 'order.transition.email_sent');
-
-                // SMS for BDT-currency clients
-                if (updated.clientId) {
-                    const orderLabel = updated.quotationSnapshot?.templateName || updated.orderNumber;
-                    const smsMsg = `Order update: ${orderLabel} status changed to ${newStatus.toUpperCase().replace('_', ' ')}. Check your email for details. - WebBriks`;
-                    sendClientSmsIfBDT(updated.clientId.toString(), smsMsg).catch((err) =>
-                        logger.error({ err, orderId }, 'order.transition.sms_failed'),
-                    );
-                }
-
-            }
-
-        } catch (err) {
-            logger.error({ err, orderId }, 'order.transition.email_failed');
-        }
-    }
-
-    return updated;
-}
-
-/**
- * Staff marks order as delivered.
- * RULE: At least one asset must be uploaded before delivery can be marked.
- */
-async function markDelivered(orderId: string, userId: string): Promise<IOrder> {
-    const order = await OrderModel.findById(orderId);
-    if (!order) throw new AppError('Order not found', 404);
-
-    if (order.status !== OrderStatus.IN_PROGRESS) {
-        throw new AppError(
-            `Order must be in_progress to mark as delivered. Current: ${order.status}`,
-            409,
-        );
-    }
-
-    if (!order.assets || order.assets.length === 0) {
-        throw new AppError(
-            'Cannot mark as delivered: no assets have been uploaded. Add at least one deliverable asset first.',
-            422,
-        );
-    }
-
-    const updated = await OrderModel.findOneAndUpdate(
-        { _id: order._id, __v: order.__v, status: OrderStatus.IN_PROGRESS },
-        {
-            $set: {
-                status: OrderStatus.PENDING_DELIVERY,
-                deliveredAt: new Date(),
-            },
-            $push: {
-                statusHistory: {
-                    status: OrderStatus.PENDING_DELIVERY,
-                    changedBy: new Types.ObjectId(userId),
-                    updatedAt: new Date(),
-                    note: 'Delivery initiated by team.',
-                },
-            },
-        },
-        { new: true },
-    );
-
-    if (!updated)
-        throw new AppError(
-            'Order was modified concurrently. Please retry.',
-            409,
-        );
-
-    // Best-effort: notify client via email (do not block delivery status change if SMTP fails).
-    try {
-        const to = updated.quotationSnapshot?.clientEmail;
-        if (to) {
-            await emailService.sendOrderStatusEmail({
-                to,
-                clientName: updated.quotationSnapshot?.clientName || 'Client',
-                orderName:
-                    updated.quotationSnapshot?.templateName ||
-                    updated.orderNumber,
-                status: OrderStatus.DELIVERED,
-                message:
-                    'Your order has been marked as delivered. You can now access and review your deliverables.',
-            });
-        } else {
-            logger.warn(
-                { orderId },
-                'order.delivered.email_skipped_missing_client_email',
-            );
-        }
-    } catch (err) {
-        logger.error({ err, orderId }, 'order.delivered.email_failed');
     }
 
     return updated;
@@ -553,47 +438,6 @@ async function unlockAssets(orderId: string): Promise<IOrder> {
 
     if (!updated)
         throw new AppError('Order not found during asset unlock', 404);
-    return updated;
-}
-
-/**
- * Complete the order after final payment (20%) is confirmed.
- */
-async function completeOrder(orderId: string): Promise<IOrder> {
-    const order = await OrderModel.findById(orderId);
-    if (!order) throw new AppError('Order not found', 404);
-
-    if (order.status !== OrderStatus.DELIVERED) {
-        throw new AppError(
-            `Order must be in delivered state to complete. Current: ${order.status}`,
-            409,
-        );
-    }
-
-    const updated = await OrderModel.findOneAndUpdate(
-        { _id: order._id, __v: order.__v, status: OrderStatus.DELIVERED },
-        {
-            $set: {
-                status: OrderStatus.COMPLETED,
-                completedAt: new Date(),
-            },
-            $push: {
-                statusHistory: {
-                    status: OrderStatus.COMPLETED,
-                    changedBy: new Types.ObjectId('000000000000000000000000'),
-                    updatedAt: new Date(),
-                    note: 'Order completed',
-                },
-            },
-        },
-        { new: true },
-    );
-
-    if (!updated)
-        throw new AppError(
-            'Order was modified concurrently during completion.',
-            409,
-        );
     return updated;
 }
 
@@ -703,9 +547,7 @@ async function updateOrderTeam(
 export default {
     createOrderFromQuotation,
     transitionStatus,
-    markDelivered,
     unlockAssets,
-    completeOrder,
     getAllOrdersFromDB,
     getOrderByIdFromDB,
     getAssetByAccessToken,

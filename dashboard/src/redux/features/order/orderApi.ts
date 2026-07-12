@@ -180,17 +180,6 @@ export const orderApi = apiSlice.injectEndpoints({
             ],
         }),
 
-        markDelivered: builder.mutation<OrderResponse, string>({
-            query: (id) => ({
-                url: `/orders/${id}/delivered`,
-                method: 'POST',
-            }),
-            invalidatesTags: (_result, _error, id) => [
-                { type: 'Order', id },
-                { type: 'Order', id: 'LIST' },
-            ],
-        }),
-
         convertQuotationToOrder: builder.mutation<
             OrderResponse,
             { quotationGroupId: string }
@@ -223,6 +212,5 @@ export const {
     useExtendDeadlineMutation,
     useAddRevisionMutation,
     useDeleteOrderMutation,
-    useMarkDeliveredMutation,
     useConvertQuotationToOrderMutation,
 } = orderApi;

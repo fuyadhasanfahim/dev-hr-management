@@ -321,6 +321,9 @@ interface TableContentProps<TData> {
   statusFilterKey?: string; // e.g., 'status', 'role'
   statusOptions?: { label: string; value: string }[];
   statusPlaceholder?: string;
+  // Extra custom filter controls (e.g. month/year/client selects), rendered inline
+  // alongside search + status in the control panel.
+  extraFilters?: React.ReactNode;
   // Header Action button / controls
   actionHeader?: React.ReactNode;
 }
@@ -335,6 +338,7 @@ export function TableContent<TData>({
   statusFilterKey,
   statusOptions,
   statusPlaceholder = 'All Status',
+  extraFilters,
   actionHeader,
 }: TableContentProps<TData>) {
   // Filters state
@@ -479,6 +483,8 @@ export function TableContent<TData>({
               />
             </div>
           )}
+
+          {extraFilters}
         </div>
 
         {/* Date Filter Range & Action button */}
