@@ -70,6 +70,25 @@ export interface IStatusHistory {
     note?: string;
 }
 
+export interface IQuotationSnapshotLineItem {
+    title: string;
+    price: number;
+    billingCycle: 'one-time' | 'monthly' | 'yearly' | 'per-image' | 'per-video';
+    quantity?: number;
+    description?: string | undefined;
+}
+
+/** Per-service pricing/scope breakdown, frozen at order-creation time. */
+export interface IQuotationSnapshotService {
+    category: string;
+    scopeDescription?: string;
+    scopeItems: string[];
+    basePrice: number;
+    lineItems: IQuotationSnapshotLineItem[];
+    discount: number; // Percentage
+    taxRate: number; // Percentage
+}
+
 /**
  * Immutable snapshot of the quotation at the time the order was created.
  * Once written, this sub-document MUST NOT be mutated.
@@ -86,19 +105,15 @@ export interface IQuotationSnapshot {
     clientName: string;
     clientEmail: string;
     overview?: string;
-    scopeOfWork: Array<{ title: string; description: string; items: string[]; startDate?: string; endDate?: string }>;
+    /** One entry per selected service — title/description/items, for the order UI's scope-of-work display. */
+    scopeOfWork: Array<{ title: string; description: string; items: string[] }>;
+    /** Full per-service pricing breakdown (audit trail for finance). */
+    services: IQuotationSnapshotService[];
+    /** Monthly/yearly line items billed separately, excluded from grandTotal. */
+    recurringCharges: IQuotationSnapshotLineItem[];
     currency: string;
     grandTotal: number;       // in original currency unit (not cents)
-    taxRate: number;
-    discount: number;
-    additionalServicesTotal: number;
-    additionalServices?: Array<{
-        title: string;
-        price: number;
-        billingCycle: 'one-time' | 'monthly' | 'yearly' | 'per-image' | 'per-video';
-        quantity?: number;
-        description?: string | undefined;
-    }>;
+    discountAmount: number;
     taxAmount: number;
 }
 
@@ -160,6 +175,15 @@ const milestoneSchema = new Schema<IOrderMilestone>(
     { _id: false },
 );
 
+const snapshotLineItemSchema = {
+    title: String,
+    price: Number,
+    billingCycle: { type: String, enum: ['one-time', 'monthly', 'yearly', 'per-image', 'per-video'] },
+    quantity: { type: Number },
+    description: String,
+    _id: false,
+};
+
 const snapshotSchema = new Schema<IQuotationSnapshot>(
     {
         quotationId: { type: Schema.Types.ObjectId, required: true },
@@ -177,26 +201,25 @@ const snapshotSchema = new Schema<IQuotationSnapshot>(
                 title: String,
                 description: String,
                 items: [String],
-                startDate: String,
-                endDate: String,
                 _id: false,
             },
         ],
+        services: [
+            {
+                category: { type: String, required: true },
+                scopeDescription: String,
+                scopeItems: [String],
+                basePrice: { type: Number, default: 0 },
+                lineItems: [snapshotLineItemSchema],
+                discount: { type: Number, default: 0 },
+                taxRate: { type: Number, default: 0 },
+                _id: false,
+            },
+        ],
+        recurringCharges: [snapshotLineItemSchema],
         currency: { type: String, required: true },
         grandTotal: { type: Number, required: true },
-        taxRate: { type: Number, required: true },
-        discount: { type: Number, required: true },
-        additionalServicesTotal: { type: Number, required: true },
-        additionalServices: [
-            {
-                title: String,
-                price: Number,
-                billingCycle: { type: String, enum: ['one-time', 'monthly', 'yearly', 'per-image', 'per-video'] },
-                quantity: { type: Number },
-                description: String,
-                _id: false,
-            },
-        ],
+        discountAmount: { type: Number, required: true },
         taxAmount: { type: Number, required: true },
     },
     { _id: false },

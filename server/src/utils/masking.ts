@@ -68,13 +68,26 @@ export function maskOrder(order: any, role?: string): any {
     if (obj.quotationSnapshot) {
         delete obj.quotationSnapshot.grandTotal;
         delete obj.quotationSnapshot.taxAmount;
-        delete obj.quotationSnapshot.taxRate;
-        delete obj.quotationSnapshot.discount;
-        delete obj.quotationSnapshot.additionalServicesTotal;
-        delete obj.quotationSnapshot.subTotal;
+        delete obj.quotationSnapshot.discountAmount;
 
-        if (Array.isArray(obj.quotationSnapshot.additionalServices)) {
-            obj.quotationSnapshot.additionalServices = obj.quotationSnapshot.additionalServices.map((s: any) => {
+        if (Array.isArray(obj.quotationSnapshot.services)) {
+            obj.quotationSnapshot.services = obj.quotationSnapshot.services.map((svc: any) => {
+                const { basePrice, discount, taxRate, lineItems, ...rest } = svc;
+                return {
+                    ...rest,
+                    ...(Array.isArray(lineItems)
+                        ? {
+                              lineItems: lineItems.map((item: any) => {
+                                  const { price, ...itemRest } = item;
+                                  return itemRest;
+                              }),
+                          }
+                        : {}),
+                };
+            });
+        }
+        if (Array.isArray(obj.quotationSnapshot.recurringCharges)) {
+            obj.quotationSnapshot.recurringCharges = obj.quotationSnapshot.recurringCharges.map((s: any) => {
                 const { price, ...rest } = s;
                 return rest;
             });
@@ -102,29 +115,32 @@ export function maskQuotation(quotation: any, role?: string): any {
 
     obj.isFinancialsMasked = true;
 
-    if (obj.pricing) {
-        delete obj.pricing.subTotal;
-        delete obj.pricing.discount;
-        delete obj.pricing.taxRate;
-        delete obj.pricing.taxAmount;
-        delete obj.pricing.grandTotal;
-    }
     if (obj.totals) {
-        delete obj.totals.subTotal;
-        delete obj.totals.discount;
+        delete obj.totals.subtotal;
+        delete obj.totals.discountAmount;
         delete obj.totals.taxAmount;
         delete obj.totals.grandTotal;
     }
 
-    if (Array.isArray(obj.additionalServices)) {
-        obj.additionalServices = obj.additionalServices.map((s: any) => {
-            const { price, ...rest } = s;
-            return rest;
+    if (Array.isArray(obj.services)) {
+        obj.services = obj.services.map((svc: any) => {
+            const { basePrice, discount, taxRate, lineItems, ...rest } = svc;
+            return {
+                ...rest,
+                ...(Array.isArray(lineItems)
+                    ? {
+                          lineItems: lineItems.map((item: any) => {
+                              const { price, ...itemRest } = item;
+                              return itemRest;
+                          }),
+                      }
+                    : {}),
+            };
         });
     }
-    if (Array.isArray(obj.scopeOfWork)) {
-        obj.scopeOfWork = obj.scopeOfWork.map((s: any) => {
-            const { price, rate, amount, ...rest } = s;
+    if (Array.isArray(obj.recurringCharges)) {
+        obj.recurringCharges = obj.recurringCharges.map((s: any) => {
+            const { price, ...rest } = s;
             return rest;
         });
     }

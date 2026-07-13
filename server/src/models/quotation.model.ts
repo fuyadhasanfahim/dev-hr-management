@@ -1,15 +1,7 @@
 import { model, Schema } from 'mongoose';
 import type { IQuotation } from '../types/quotation.type.js';
 
-const phaseSchema = new Schema({
-    title: { type: String, required: true },
-    description: { type: String },
-    items: [{ type: String }],
-    startDate: { type: String },
-    endDate: { type: String },
-}, { _id: false });
-
-const serviceSchema = new Schema({
+const lineItemSchema = new Schema({
     title: { type: String, required: true },
     price: { type: Number, required: true },
     billingCycle: {
@@ -17,10 +9,34 @@ const serviceSchema = new Schema({
         enum: ['one-time', 'monthly', 'yearly', 'per-image', 'per-video'],
         default: 'one-time',
     },
-    // Units for unit-based categories (per-image / per-video). Absent ⇒ treated
-    // as 1 by totals, so web-development line items stay byte-identical.
+    // Units for unit-based line items (per-image / per-video). Absent ⇒ treated
+    // as 1 by totals, so one-time line items stay byte-identical.
     quantity: { type: Number },
     description: { type: String },
+}, { _id: false });
+
+const techStackSchema = new Schema({
+    description: { type: String },
+    frontend: [{ type: String }],
+    backend: [{ type: String }],
+    database: [{ type: String }],
+    tools: [{ type: String }],
+}, { _id: false });
+
+const quotationServiceSchema = new Schema({
+    category: {
+        type: String,
+        enum: ['web-development', 'photo-editing', 'marketing', 'video-editing'],
+        required: true,
+    },
+    scopeDescription: { type: String },
+    scopeItems: [{ type: String }],
+    // Only meaningful for the web-development category; absent for others.
+    techStack: techStackSchema,
+    basePrice: { type: Number, default: 0 },
+    lineItems: [lineItemSchema],
+    discount: { type: Number, default: 0 },
+    taxRate: { type: Number, default: 0 },
 }, { _id: false });
 
 const paymentMilestoneSchema = new Schema({
@@ -38,12 +54,6 @@ const quotationSchema = new Schema<IQuotation>(
 
         // ── Identity ──────────────────────────────────────────────────────────────
         quotationNumber: { type: String, required: true, unique: true, index: true },
-        category: {
-            type: String,
-            enum: ['web-development', 'photo-editing', 'marketing', 'video-editing'],
-            required: true,
-            default: 'web-development',
-        },
         serviceType: { type: String, enum: ['web-development'], required: true },
         clientId: { type: Schema.Types.ObjectId, ref: 'Client', required: true },
 
@@ -62,28 +72,23 @@ const quotationSchema = new Schema<IQuotation>(
             validUntil: { type: Date, required: true },
         },
 
-        // ── Refactored Content ─────────────────────────────────────────────────────
-        overview: String,
-        phases: [phaseSchema],
-        
-        techStack: {
-            frontend: { type: String, default: '' },
-            backend: { type: String, default: '' },
-            database: { type: String, default: '' },
-            tools: [{ type: String }],
-        },
+        // ── Multi-service content & pricing ──────────────────────────────────────
+        // One entry per selected service (web-development / marketing / photo-editing
+        // / video-editing). Each service owns its own scope, pricing, and (for
+        // web-development) tech stack — this is the single source of truth that
+        // replaced the old flat category/pricing/additionalServices/phases/techStack.
+        services: { type: [quotationServiceSchema], default: [] },
 
-        pricing: {
-            basePrice: { type: Number, default: 0 },
-            taxRate: { type: Number, default: 0 },
-            discount: { type: Number, default: 0 },
-        },
+        overview: String,
 
         notIncluded: [{ type: String }],
         clientRequirements: [{ type: String }],
-        developmentScope: [{ type: String }],
 
-        additionalServices: [serviceSchema],
+        // Monthly/yearly line items flattened out of `services[].lineItems`, kept
+        // separate from `totals` since they're billed on an ongoing basis and are
+        // not part of the upfront/milestone-based grand total.
+        recurringCharges: [lineItemSchema],
+
         workflow: [{ type: String }],
 
         paymentMilestones: { type: [paymentMilestoneSchema], default: undefined },
@@ -91,6 +96,8 @@ const quotationSchema = new Schema<IQuotation>(
         // ── Currency snapshot (used in PDF/UI/events) ────────────────────────────
         currency: { type: String, default: '৳' },
 
+        // Aggregate of every service's one-time/upfront portion (see quotation.service.ts
+        // calculateTotals()). Recurring charges are intentionally excluded.
         totals: {
             subtotal: { type: Number, default: 0 },
             discountAmount: { type: Number, default: 0 },

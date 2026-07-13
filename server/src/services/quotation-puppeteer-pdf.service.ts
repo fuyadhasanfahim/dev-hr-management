@@ -3,6 +3,22 @@ import puppeteer from 'puppeteer';
 import QuotationModel from '../models/quotation.model.js';
 import { AppError } from '../utils/AppError.js';
 import { logger } from '../lib/logger.js';
+import { isUpfrontBillingCycle } from '../types/quotation.type.js';
+
+const CATEGORY_LABELS: Record<string, string> = {
+    'web-development': 'Web Design & Development',
+    marketing: 'Marketing',
+    'photo-editing': 'Photo Editing',
+    'video-editing': 'Video Editing',
+};
+
+const BILLING_LABELS: Record<string, string> = {
+    'one-time': 'One-time',
+    monthly: 'Monthly',
+    yearly: 'Yearly',
+    'per-image': 'Per image',
+    'per-video': 'Per video',
+};
 
 /** Matches client `QuotationPDF` + `formatMoney` (BDT / ISO / symbol). */
 function formatMoneyPdf(
@@ -91,11 +107,8 @@ function buildPrintHtml(
     const client = q.client || {};
     const details = q.details || {};
     const totals = q.totals || {};
-    const pricing = q.pricing || {};
-    const phases = Array.isArray(q.phases) ? q.phases : [];
-    const additionalServices = Array.isArray(q.additionalServices)
-        ? q.additionalServices
-        : [];
+    const services: any[] = Array.isArray(q.services) ? q.services : [];
+    const recurringCharges: any[] = Array.isArray(q.recurringCharges) ? q.recurringCharges : [];
     const notIncludedRaw = Array.isArray(q.notIncluded) ? q.notIncluded : [];
     const clientReqRaw = Array.isArray(q.clientRequirements)
         ? q.clientRequirements
@@ -113,7 +126,6 @@ function buildPrintHtml(
     const clientName = client.contactName || client.companyName || 'Valued Client';
     const clientEmail = client.email || '';
     const proposalTitle = details?.title || 'Multi-Service Agency Proposal';
-    const finalAmount = Number(totals?.grandTotal ?? pricing?.basePrice ?? 0);
 
     const defaultNotIncluded = [
         'Domain Registration & Premium Web Hosting (Billed Separately)',
@@ -133,117 +145,215 @@ function buildPrintHtml(
     const clientRequirements =
         clientReqRaw.length > 0 ? clientReqRaw : defaultClientRequirements;
 
-    interface ScopeModule {
+    // ── One numbered section per selected service, each with its own scope,
+    // tech stack (web-development only), and line-item pricing table. ────────
+    interface ServiceModuleResult {
         label: string;
-        badgeText: string;
-        items: string[];
-    }
-    const scopes: ScopeModule[] = [];
-
-    if (phases.length > 0) {
-        phases.forEach((p: any) => {
-            const title = String(p.title || 'Service Module').trim();
-            const titleLower = title.toLowerCase();
-            let badgeText = 'WEB DEV';
-            if (titleLower.includes('market') || titleLower.includes('seo'))
-                badgeText = 'MARKETING';
-            else if (
-                titleLower.includes('video') ||
-                titleLower.includes('motion')
-            )
-                badgeText = 'VIDEO EDITING';
-            else if (
-                titleLower.includes('photo') ||
-                titleLower.includes('retouch')
-            )
-                badgeText = 'PHOTO EDITING';
-            else if (
-                titleLower.includes('web') ||
-                titleLower.includes('dev') ||
-                titleLower.includes('design')
-            )
-                badgeText = 'WEB DEV';
-            else badgeText = title.substring(0, 14).toUpperCase();
-
-            const items = Array.isArray(p.items)
-                ? p.items.map((x: any) => String(x || '').trim()).filter(Boolean)
-                : [];
-            if (items.length === 0 && p.description) {
-                items.push(String(p.description).trim());
-            }
-
-            scopes.push({
-                label: title,
-                badgeText,
-                items:
-                    items.length > 0
-                        ? items
-                        : ['Comprehensive deliverables and feature scope as agreed.'],
-            });
-        });
+        html: string;
+        grandTotal: number;
     }
 
-    if (additionalServices.length > 0) {
-        scopes.push({
-            label: 'Additional Add-on Services & Enhancements',
-            badgeText: 'ADD-ONS',
-            items: additionalServices.map((s: any) => {
-                const qty = s.quantity ?? 1;
-                const cycle =
-                    s.billingCycle && s.billingCycle !== 'one-time'
-                        ? ` (${s.billingCycle})`
-                        : '';
-                const desc = s.description ? ` — ${s.description}` : '';
-                return `${s.title}${cycle}${desc} [Qty: ${qty} @ ${formatMoneyPdf(s.price, currency)}]`;
-            }),
-        });
-    }
+    function renderServiceModule(service: any, idx: number): ServiceModuleResult {
+        const label = CATEGORY_LABELS[service?.category] || String(service?.category || 'Service');
+        const scopeDescription = String(service?.scopeDescription || '').trim();
+        const rawItems = Array.isArray(service?.scopeItems)
+            ? service.scopeItems.map((x: any) => String(x || '').trim()).filter(Boolean)
+            : [];
+        const scopeItems = rawItems.length > 0
+            ? rawItems
+            : ['Comprehensive deliverables and feature scope as agreed.'];
 
-    if (scopes.length === 0) {
-        scopes.push({
-            label: 'Web Design & Development Scope',
-            badgeText: 'WEB DEV',
-            items: [
-                details?.title || 'Comprehensive Responsive Web Architecture & Design System',
-                'High-converting Landing Page with Modern UI/UX',
-                'Dynamic Backend API & Database Integration',
-                'Speed Optimization (90+ Google PageSpeed Score)',
-            ],
-        });
-    }
-
-    const uniqueBadges = Array.from(new Set(scopes.map((s) => s.badgeText)));
-
-    const badgesHtml = uniqueBadges
-        .map(
-            (badge) => `<span class="scope-badge">${esc(badge)}</span>`
-        )
-        .join('');
-
-    const modulesHtml = scopes
-        .map((scope, idx) => {
-            const letter = String.fromCharCode(65 + idx);
-            const itemsHtml = scope.items
-                .map(
-                    (item, itemIdx) => `
+        const descHtml = scopeDescription ? `<p class="module-desc">${esc(scopeDescription)}</p>` : '';
+        const itemsHtml = scopeItems
+            .map(
+                (item: string, itemIdx: number) => `
               <div class="deliverable-item">
                 <span class="deliv-num">${String(itemIdx + 1).padStart(2, '0')}</span>
                 <span class="deliv-text">${esc(item)}</span>
               </div>`
-                )
-                .join('');
-            return `
+            )
+            .join('');
+
+        // Technology stack table — only meaningful for web-development.
+        let techHtml = '';
+        const tech = service?.techStack;
+        if (tech) {
+            const rows: Array<[string, string[]]> = (
+                [
+                    ['Frontend', tech.frontend],
+                    ['Backend', tech.backend],
+                    ['Database', tech.database],
+                    ['Tools', tech.tools],
+                ] as Array<[string, unknown]>
+            ).filter(([, list]) => Array.isArray(list) && (list as string[]).length > 0) as Array<[string, string[]]>;
+
+            if (rows.length > 0) {
+                const techDesc = tech.description
+                    ? `<p class="module-desc">${esc(tech.description)}</p>`
+                    : '';
+                const techRows = rows
+                    .map(
+                        ([layer, list]) => `
+                <tr><td style="font-weight:700;color:var(--slate800);white-space:nowrap;">${esc(layer)}</td><td>${list.map((t) => esc(t)).join(', ')}</td></tr>`
+                    )
+                    .join('');
+                techHtml = `
+          <div style="margin-top: 14px;">
+            <div class="sub-heading">Technology Stack</div>
+            ${techDesc}
+            <table class="tech-table">
+              <thead><tr><th style="width:120px;">Layer</th><th>Technologies</th></tr></thead>
+              <tbody>${techRows}</tbody>
+            </table>
+          </div>`;
+            }
+        }
+
+        // Line-item investment table — base fee + add-ons, tagged upfront vs recurring.
+        const basePrice = Number(service?.basePrice) || 0;
+        const lineItems: any[] = Array.isArray(service?.lineItems) ? service.lineItems : [];
+        let upfrontTotal = basePrice;
+        const lineRows: string[] = [];
+
+        if (basePrice > 0) {
+            lineRows.push(`
+              <tr>
+                <td>Base Project Fee</td>
+                <td><span class="billing-tag upfront">One-time</span></td>
+                <td class="num">1</td>
+                <td class="num">${formatMoneyPdf(basePrice, currency)}</td>
+                <td class="num">${formatMoneyPdf(basePrice, currency)}</td>
+              </tr>`);
+        }
+
+        lineItems.forEach((item) => {
+            const qty = item.quantity ?? 1;
+            const lineTotal = (Number(item.price) || 0) * qty;
+            const upfront = isUpfrontBillingCycle(item.billingCycle || 'one-time');
+            if (upfront) upfrontTotal += lineTotal;
+            lineRows.push(`
+              <tr>
+                <td>${esc(item.title)}${item.description ? `<div style="font-size:10.5px;color:var(--slate500);margin-top:2px;">${esc(item.description)}</div>` : ''}</td>
+                <td><span class="billing-tag ${upfront ? 'upfront' : 'recurring'}">${esc(BILLING_LABELS[item.billingCycle] || item.billingCycle)}</span></td>
+                <td class="num">${qty}</td>
+                <td class="num">${formatMoneyPdf(item.price, currency)}</td>
+                <td class="num">${formatMoneyPdf(lineTotal, currency)}</td>
+              </tr>`);
+        });
+
+        const discount = Number(service?.discount) || 0;
+        const taxRate = Number(service?.taxRate) || 0;
+        const discountAmount = (upfrontTotal * discount) / 100;
+        const afterDiscount = upfrontTotal - discountAmount;
+        const taxAmount = (afterDiscount * taxRate) / 100;
+        const grandTotal = afterDiscount + taxAmount;
+
+        let pricingHtml = '';
+        if (lineRows.length > 0) {
+            pricingHtml = `
+          <div style="margin-top: 14px;">
+            <div class="sub-heading">Investment</div>
+            <table class="pricing-table">
+              <thead><tr><th>Item</th><th>Billing</th><th class="num">Qty</th><th class="num">Unit Price</th><th class="num">Amount</th></tr></thead>
+              <tbody>
+                ${lineRows.join('')}
+                ${discount > 0 ? `<tr><td colspan="4" style="text-align:right;color:var(--slate500);">Discount (${discount}%)</td><td class="num">- ${formatMoneyPdf(discountAmount, currency)}</td></tr>` : ''}
+                ${taxRate > 0 ? `<tr><td colspan="4" style="text-align:right;color:var(--slate500);">Tax / VAT (${taxRate}%)</td><td class="num">+ ${formatMoneyPdf(taxAmount, currency)}</td></tr>` : ''}
+                <tr class="total-row"><td colspan="4" style="text-align:right;">Service Total</td><td class="num">${formatMoneyPdf(grandTotal, currency)}</td></tr>
+              </tbody>
+            </table>
+          </div>`;
+        }
+
+        const html = `
         <div class="module-card">
           <div class="module-header">
-            <span class="module-title">${letter}. ${esc(scope.label)}</span>
-            <span class="module-count">${scope.items.length} Deliverables</span>
+            <span class="module-title">${idx + 1}. ${esc(label)}</span>
+            <span class="module-count">${scopeItems.length} ${scopeItems.length === 1 ? 'Feature' : 'Features'}</span>
           </div>
+          ${descHtml}
           <div class="module-body">
             ${itemsHtml}
           </div>
+          ${techHtml}
+          ${pricingHtml}
         </div>`;
-        })
+
+        return { label, html, grandTotal };
+    }
+
+    const serviceModules: ServiceModuleResult[] =
+        services.length > 0
+            ? services.map((s, idx) => renderServiceModule(s, idx))
+            : [
+                  renderServiceModule(
+                      {
+                          category: 'web-development',
+                          scopeItems: [
+                              details?.title || 'Comprehensive Responsive Web Architecture & Design System',
+                              'High-converting Landing Page with Modern UI/UX',
+                              'Dynamic Backend API & Database Integration',
+                              'Speed Optimization (90+ Google PageSpeed Score)',
+                          ],
+                      },
+                      0,
+                  ),
+              ];
+
+    const modulesHtml = serviceModules.map((m) => m.html).join('');
+
+    // ── Investment & Pricing Summary — per-service subtotal + grand total. ───
+    let sectionNum = serviceModules.length;
+    sectionNum += 1;
+    const investmentSectionNum = sectionNum;
+    const summaryRows = serviceModules
+        .map(
+            (m) => `
+        <tr><td>${esc(m.label)}</td><td class="num">${formatMoneyPdf(m.grandTotal, currency)}</td></tr>`
+        )
         .join('');
+    const grandTotal = Number(totals?.grandTotal ?? 0);
+    const investmentSummaryHtml = `
+    <div class="sec-heading">
+      <span class="sec-dot"></span>
+      ${investmentSectionNum}. Investment &amp; Pricing Summary
+    </div>
+    <table class="summary-table" style="margin-bottom: 24px;">
+      <thead><tr><th>Service</th><th class="num">Amount</th></tr></thead>
+      <tbody>
+        ${summaryRows}
+        <tr class="total-row"><td>Grand Total Investment</td><td class="num">${formatMoneyPdf(grandTotal, currency)}</td></tr>
+      </tbody>
+    </table>`;
+
+    // ── Ongoing / Recurring Charges — billed separately from the total above. ─
+    let ongoingChargesHtml = '';
+    if (recurringCharges.length > 0) {
+        sectionNum += 1;
+        const ongoingRows = recurringCharges
+            .map((item) => {
+                const qty = item.quantity ?? 1;
+                return `
+        <tr><td>${esc(item.title)}${item.description ? `<div style="font-size:10.5px;color:var(--slate500);margin-top:2px;">${esc(item.description)}</div>` : ''}</td><td><span class="billing-tag recurring">${esc(BILLING_LABELS[item.billingCycle] || item.billingCycle)}</span></td><td class="num">${qty}</td><td class="num">${formatMoneyPdf(item.price, currency)}</td></tr>`;
+            })
+            .join('');
+        ongoingChargesHtml = `
+    <div class="sec-heading">
+      <span class="sec-dot pink"></span>
+      ${sectionNum}. Ongoing / Recurring Charges (Billed Separately)
+    </div>
+    <div class="ongoing-box">
+      <div class="ongoing-box-note">These charges are billed on an ongoing basis (not part of the one-time investment above) and start once the corresponding service is live.</div>
+      <table class="pricing-table">
+        <thead><tr><th>Item</th><th>Billing</th><th class="num">Qty</th><th class="num">Rate</th></tr></thead>
+        <tbody>${ongoingRows}</tbody>
+      </table>
+    </div>`;
+    }
+
+    const notIncludedSectionNum = sectionNum + 1;
+    const clientReqSectionNum = sectionNum + 2;
+    const paymentSectionNum = sectionNum + 3;
 
     const notIncludedHtml = notIncludedItems
         .map(
@@ -287,13 +397,19 @@ function buildPrintHtml(
         )
         .join('');
 
-    const overviewHtml = q.overview
-        ? `
-      <div class="sec-heading"><span class="sec-dot"></span> Executive Overview</div>
-      <div class="module-card" style="padding: 16px 20px; font-size: 12.5px; color: #334155; line-height: 1.6; margin-bottom: 24px;">
-        ${esc(q.overview).replace(/\n/g, '<br/>')}
-      </div>`
-        : '';
+    const companyName = String(q.company?.name || 'WebBriks').trim();
+    const companyAddress = String(q.company?.address || '').trim();
+    const companyEmail = String(q.company?.email || '').trim();
+    const companyPhone = String(q.company?.phone || '').trim();
+    const companyWebsite = String(q.company?.website || 'webbriks.com').trim();
+    const coverMessageRaw = String(q.overview || '').trim();
+    const coverMessage =
+        coverMessageRaw ||
+        `Dear ${clientName},\n\nThank you for taking the time to review our proposal and for sharing your requirements with us. We are pleased to present this quotation covering the complete scope of work discussed.\n\nPlease find the detailed breakdown of deliverables, pricing, and terms on the following pages.`;
+    const coverMessageHtml = coverMessage
+        .split(/\n{2,}/)
+        .map((para) => `<p>${esc(para).replace(/\n/g, '<br/>')}</p>`)
+        .join('');
 
     return `<!DOCTYPE html>
 <html lang="en">
@@ -331,6 +447,39 @@ function buildPrintHtml(
       padding: 4px 4px 0 4px;
       display: flex;
       flex-direction: column;
+    }
+    .cover-page {
+      page-break-after: always;
+      break-after: page;
+    }
+    .cover-message {
+      margin-top: 8px;
+      padding: 28px 30px;
+      border-radius: 18px;
+      background: linear-gradient(135deg, rgba(30, 0, 120, 0.03) 0%, rgba(200, 80, 250, 0.02) 100%);
+      border: 1px solid rgba(78, 18, 212, 0.14);
+    }
+    .cover-message p {
+      font-size: 12.5px;
+      color: var(--slate700);
+      line-height: 1.85;
+      margin-bottom: 14px;
+    }
+    .cover-message p:last-child {
+      margin-bottom: 0;
+    }
+    .cover-signoff {
+      margin-top: 22px;
+      padding-top: 18px;
+      border-top: 1px solid rgba(78, 18, 212, 0.12);
+      font-size: 12px;
+      color: var(--slate600);
+    }
+    .cover-signoff-company {
+      font-weight: 800;
+      color: var(--primary);
+      margin-top: 2px;
+      font-size: 13px;
     }
     .header-row {
       display: flex;
@@ -556,6 +705,12 @@ function buildPrintHtml(
       border-radius: 9999px;
       box-shadow: 0 1px 3px rgba(78, 18, 212, 0.08);
     }
+    .module-desc {
+      font-size: 11.5px;
+      color: var(--slate600);
+      line-height: 1.6;
+      margin: 2px 2px 12px 2px;
+    }
     .module-body {
       background: transparent;
       display: flex;
@@ -724,9 +879,6 @@ function buildPrintHtml(
       padding-top: 14px;
       padding-bottom: 8px;
       border-top: 1px solid var(--slate100);
-      display: flex;
-      justify-content: center;
-      align-items: center;
       font-size: 11px;
       color: var(--slate500);
       font-weight: 600;
@@ -737,56 +889,147 @@ function buildPrintHtml(
       text-decoration: none;
       font-weight: 700;
     }
+    .footer-cols {
+      display: flex;
+      justify-content: space-between;
+      gap: 20px;
+      width: 100%;
+    }
+    .footer-col {
+      flex: 1;
+      font-size: 10.5px;
+      color: var(--slate500);
+      line-height: 1.6;
+    }
+    .footer-col-title {
+      font-size: 9.5px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--primary);
+      margin-bottom: 3px;
+    }
+    .sub-heading {
+      font-size: 10.5px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--accent);
+      margin-bottom: 8px;
+    }
+    .tech-table, .pricing-table, .summary-table {
+      width: 100%;
+      border-collapse: collapse;
+      page-break-inside: avoid;
+    }
+    .tech-table th, .pricing-table th, .summary-table th {
+      text-align: left;
+      font-size: 9.5px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--slate500);
+      padding: 7px 10px;
+      border-bottom: 1.5px solid var(--slate200);
+    }
+    .tech-table td, .pricing-table td, .summary-table td {
+      font-size: 11.5px;
+      color: var(--slate700);
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--slate100);
+      vertical-align: top;
+    }
+    .pricing-table th.num, .pricing-table td.num,
+    .summary-table th.num, .summary-table td.num {
+      text-align: right;
+      font-family: monospace, system-ui;
+    }
+    .pricing-table td.num, .summary-table td.num {
+      font-weight: 700;
+      color: var(--slate800);
+    }
+    .pricing-table tr.total-row td, .summary-table tr.total-row td {
+      font-weight: 800;
+      color: var(--primary);
+      border-top: 1.5px solid var(--slate200);
+      border-bottom: none;
+    }
+    .billing-tag {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 9999px;
+      font-size: 9px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      white-space: nowrap;
+    }
+    .billing-tag.upfront { background: rgba(78, 18, 212, 0.08); color: var(--accent); }
+    .billing-tag.recurring { background: rgba(200, 80, 250, 0.12); color: var(--pink); }
+    .ongoing-box {
+      margin: 0 0 24px 0;
+      padding: 16px 18px;
+      border-radius: 14px;
+      background: rgba(200, 80, 250, 0.03);
+      border: 1px dashed rgba(200, 80, 250, 0.35);
+      page-break-inside: avoid;
+    }
+    .ongoing-box-note {
+      font-size: 10.5px;
+      color: var(--slate500);
+      margin-bottom: 10px;
+      line-height: 1.5;
+    }
   </style>
 </head>
 <body>
   <div class="container">
-    <div class="header-row">
-      <div class="header-left">
-        <img src="${esc(ctx.logoSrc)}" alt="WebBriks" class="logo-img" />
-      </div>
-      <div class="header-right">
-        <div class="quote-badge">OFFICIAL QUOTATION</div>
-        <div class="quote-number">#${esc(quotationNo)}</div>
-        <div class="quote-meta">Issue Date: <strong>${esc(issueDate)}</strong></div>
-        <div class="quote-meta">Valid Until: <strong class="pink-text">${esc(validUntilStr)}</strong></div>
-      </div>
-    </div>
-
-    <div class="proposal-card">
-      <div class="proposal-left">
-        <div class="label-muted">PROPOSAL PACKAGE TITLE</div>
-        <h1 class="proposal-title">${esc(proposalTitle)}</h1>
-        <div class="badges-wrap">
-          ${badgesHtml}
+    <div class="cover-page">
+      <div class="header-row">
+        <div class="header-left">
+          <img src="${esc(ctx.logoSrc)}" alt="WebBriks" class="logo-img" />
+        </div>
+        <div class="header-right">
+          <div class="quote-badge">OFFICIAL QUOTATION</div>
+          <div class="quote-number">#${esc(quotationNo)}</div>
+          <div class="quote-meta">Issue Date: <strong>${esc(issueDate)}</strong></div>
+          <div class="quote-meta">Valid Until: <strong class="pink-text">${esc(validUntilStr)}</strong></div>
         </div>
       </div>
-      <div class="proposal-right">
-        <div class="label-purple">PREPARED FOR</div>
-        <div class="client-name">${esc(clientName)}</div>
-        ${clientEmail ? `<div class="client-email">${esc(clientEmail)}</div>` : ''}
-        <div class="total-divider">
-          <span class="total-label">Grand Total Investment:</span>
-          <span class="total-amount">${formatMoneyPdf(finalAmount, currency)}</span>
+
+      <div class="proposal-card">
+        <div class="proposal-left">
+          <div class="label-muted">PROPOSAL PACKAGE TITLE</div>
+          <h1 class="proposal-title" style="margin-bottom: 0;">${esc(proposalTitle)}</h1>
+        </div>
+        <div class="proposal-right">
+          <div class="label-purple">PREPARED FOR</div>
+          <div class="client-name">${esc(clientName)}</div>
+          ${clientEmail ? `<div class="client-email">${esc(clientEmail)}</div>` : ''}
+        </div>
+      </div>
+
+      <div class="cover-message">
+        ${coverMessageHtml}
+        <div class="cover-signoff">
+          <div>Warm regards,</div>
+          <div class="cover-signoff-company">${esc(companyName)}</div>
         </div>
       </div>
     </div>
 
-    ${overviewHtml}
-
-    <div class="sec-heading">
-      <span class="sec-dot"></span>
-      1. Services &amp; Deliverables Scope (${scopes.length} Modules)
-    </div>
     <div style="margin-bottom: 24px;">
       ${modulesHtml}
     </div>
+
+    ${investmentSummaryHtml}
+    ${ongoingChargesHtml}
 
     <div class="three-col-grid">
       <div class="info-card col-pink">
         <div class="sec-heading col-pink-title">
           <span class="sec-dot pink"></span>
-          2. Not Included in Price
+          ${notIncludedSectionNum}. Not Included in Price
         </div>
         <ul class="info-list">
           ${notIncludedHtml}
@@ -795,7 +1038,7 @@ function buildPrintHtml(
       <div class="info-card col-indigo">
         <div class="sec-heading col-indigo-title">
           <span class="sec-dot indigo"></span>
-          3. Client Needs to Provide
+          ${clientReqSectionNum}. Client Needs to Provide
         </div>
         <ul class="info-list">
           ${clientReqHtml}
@@ -804,7 +1047,7 @@ function buildPrintHtml(
       <div class="info-card col-purple">
         <div class="sec-heading col-purple-title">
           <span class="sec-dot" style="background: var(--accent);"></span>
-          4. Payment Milestones
+          ${paymentSectionNum}. Payment Milestones
         </div>
         <ul class="info-list">
           ${paymentMilestonesHtml}
@@ -834,8 +1077,21 @@ function buildPrintHtml(
 
     <div class="footer-spacer"></div>
     <footer class="doc-footer">
-      <div>
-        &copy; ${new Date().getFullYear()} <a href="https://webbriks.com">WebBriks</a>. All rights reserved.
+      <div class="footer-cols">
+        <div class="footer-col">
+          <div class="footer-col-title">${esc(companyName)}</div>
+          ${companyAddress ? `<div>${esc(companyAddress)}</div>` : ''}
+        </div>
+        <div class="footer-col">
+          <div class="footer-col-title">Contact</div>
+          ${companyEmail ? `<div>${esc(companyEmail)}</div>` : ''}
+          ${companyPhone ? `<div>${esc(companyPhone)}</div>` : ''}
+        </div>
+        <div class="footer-col" style="text-align: right;">
+          <div class="footer-col-title">Web</div>
+          <div><a href="https://${esc(companyWebsite.replace(/^https?:\/\//, ''))}">${esc(companyWebsite)}</a></div>
+          <div>&copy; ${new Date().getFullYear()} ${esc(companyName)}. All rights reserved.</div>
+        </div>
       </div>
     </footer>
   </div>
@@ -922,6 +1178,7 @@ export class QuotationPuppeteerPdfService {
                 const g = globalThis as any;
                 const doc = g.document;
                 const container = doc.querySelector('.container');
+                const coverPage = doc.querySelector('.cover-page');
                 const spacer = doc.querySelector('.footer-spacer');
                 const footer = doc.querySelector('.doc-footer');
                 if (container && spacer && footer) {
@@ -931,13 +1188,28 @@ export class QuotationPuppeteerPdfService {
                     // Temporarily collapse spacer to measure real content height
                     spacer.style.height = '0px';
 
-                    const contentHeight = container.scrollHeight;
+                    const totalHeight = container.scrollHeight;
+                    const coverHeight = coverPage
+                        ? coverPage.getBoundingClientRect().height
+                        : 0;
+                    // The cover page has a forced page-break-after, so it always
+                    // consumes whole printed page(s) regardless of its own height.
+                    const coverPages = coverPage
+                        ? Math.max(1, Math.ceil(coverHeight / pageHeightPx))
+                        : 0;
+                    const restHeight = Math.max(0, totalHeight - coverHeight);
                     const footerHeight = footer.getBoundingClientRect().height;
-                    const totalPages = Math.ceil(contentHeight / pageHeightPx);
+
+                    const restPages =
+                        restHeight > 0 ? Math.ceil(restHeight / pageHeightPx) : 0;
+                    const totalPages = Math.max(1, coverPages + restPages);
                     const lastPageBottom = totalPages * pageHeightPx;
 
+                    // Height already consumed once the flowing (non-cover) content ends.
+                    const consumedUpToContentEnd = coverPages * pageHeightPx + restHeight;
+
                     // Space remaining on last page minus footer height
-                    const remaining = lastPageBottom - contentHeight - footerHeight;
+                    const remaining = lastPageBottom - consumedUpToContentEnd - footerHeight;
 
                     if (remaining > 0) {
                         spacer.style.height = `${remaining}px`;

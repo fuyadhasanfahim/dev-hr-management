@@ -1,12 +1,39 @@
 import { create } from "zustand";
 import {
   QuotationData,
-  IQuotationPhase,
-  IAdditionalService,
+  IQuotationService,
+  IQuotationLineItem,
+  IQuotationTechStack,
   IPaymentMilestone,
+  QuotationCategory,
   ServiceType,
 } from "@/types/quotation.type";
-import { QUOTATION_TEMPLATES } from "@/constants/quotation-templates";
+import { QUOTATION_TEMPLATES, getDefaultBillingCycle, isUnitBased } from "@/constants/quotation-templates";
+
+function emptyService(category: QuotationCategory): IQuotationService {
+  return {
+    category,
+    scopeDescription: "",
+    scopeItems: [],
+    ...(category === "web-development"
+      ? { techStack: { description: "", frontend: [], backend: [], database: [], tools: [] } }
+      : {}),
+    basePrice: 0,
+    lineItems: [],
+    discount: 0,
+    taxRate: 0,
+  };
+}
+
+function defaultLineItem(category: QuotationCategory): IQuotationLineItem {
+  return {
+    title: "New Line Item",
+    price: 0,
+    billingCycle: getDefaultBillingCycle(category),
+    ...(isUnitBased(category) ? { quantity: 1 } : {}),
+    description: "",
+  };
+}
 
 interface QuotationStore {
   data: QuotationData;
@@ -17,19 +44,20 @@ interface QuotationStore {
 
   // Content Updates
   updateOverview: (overview: string) => void;
-  updateTechStack: (stack: Partial<QuotationData["techStack"]>) => void;
   updateWorkflow: (workflow: string[]) => void;
-  updatePricing: (pricing: Partial<QuotationData["pricing"]>) => void;
+  updateNotIncluded: (items: string[]) => void;
+  updateClientRequirements: (items: string[]) => void;
 
-  // Phase CRUD
-  addPhase: (phase?: IQuotationPhase) => void;
-  updatePhase: (index: number, updates: Partial<IQuotationPhase>) => void;
-  removePhase: (index: number) => void;
-
-  // Additional Services CRUD
-  addService: (service?: IAdditionalService) => void;
-  updateService: (index: number, updates: Partial<IAdditionalService>) => void;
-  removeService: (index: number) => void;
+  // Multi-service CRUD — one IQuotationService per selected category.
+  toggleService: (category: QuotationCategory) => void;
+  updateService: (category: QuotationCategory, updates: Partial<IQuotationService>) => void;
+  updateTechStack: (category: QuotationCategory, updates: Partial<IQuotationTechStack>) => void;
+  addScopeItem: (category: QuotationCategory, item?: string) => void;
+  updateScopeItem: (category: QuotationCategory, index: number, value: string) => void;
+  removeScopeItem: (category: QuotationCategory, index: number) => void;
+  addLineItem: (category: QuotationCategory, item?: IQuotationLineItem) => void;
+  updateLineItem: (category: QuotationCategory, index: number, updates: Partial<IQuotationLineItem>) => void;
+  removeLineItem: (category: QuotationCategory, index: number) => void;
 
   // Payment Milestones CRUD
   setPaymentMilestones: (milestones: IPaymentMilestone[]) => void;
@@ -44,7 +72,6 @@ interface QuotationStore {
 }
 
 const initialState: QuotationData = {
-  category: "web-development",
   serviceType: "web-development",
   clientId: "",
   currency: "৳",
@@ -69,19 +96,20 @@ const initialState: QuotationData = {
     validUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
   },
   overview: "",
-  phases: [],
-  techStack: {
-    frontend: "",
-    backend: "",
-    database: "",
-    tools: [],
-  },
-  pricing: {
-    basePrice: 0,
-    taxRate: 0,
-    discount: 0,
-  },
-  additionalServices: [],
+  services: [],
+  notIncluded: [
+    "Domain Registration & Premium Web Hosting (Billed Separately)",
+    "Third-party Paid API Licenses, Plugins, or Premium Fonts",
+    "Paid Ad Spend for Facebook, Google, or LinkedIn Campaigns",
+    "Raw Unedited Studio Footage or Source Design Files (Unless specified)",
+  ],
+  clientRequirements: [
+    "High-resolution Brand Logo, Color Palette & Typography Guidelines",
+    "Admin Access / Credentials to Hosting, Domain, or CMS Platform",
+    "Final Approved Text Content, Copywriting & Product Photography",
+    "Dedicated Point of Contact for Prompt Feedback and Approvals",
+  ],
+  recurringCharges: [],
   workflow: [],
   paymentMilestones: [
     { label: "30% Upfront Payment", percentage: 30 },
@@ -122,68 +150,125 @@ export const useQuotationStore = create<QuotationStore>((set) => ({
   updateOverview: (overview) =>
     set((state) => ({ data: { ...state.data, overview } })),
 
-  updateTechStack: (stack) =>
-    set((state) => ({
-      data: { ...state.data, techStack: { ...state.data.techStack, ...stack } },
-    })),
-
   updateWorkflow: (workflow) =>
     set((state) => ({ data: { ...state.data, workflow } })),
 
-  updatePricing: (pricing) =>
-    set((state) => ({
-      data: { ...state.data, pricing: { ...state.data.pricing, ...pricing } },
-    })),
+  updateNotIncluded: (items) =>
+    set((state) => ({ data: { ...state.data, notIncluded: items } })),
 
-  addPhase: (phase) =>
-    set((state) => ({
-      data: {
-        ...state.data,
-        phases: [
-          ...state.data.phases,
-          phase || { title: "New Phase", description: "", items: [] },
-        ],
-      },
-    })),
+  updateClientRequirements: (items) =>
+    set((state) => ({ data: { ...state.data, clientRequirements: items } })),
 
-  updatePhase: (index, updates) =>
+  toggleService: (category) =>
     set((state) => {
-      const newPhases = [...state.data.phases];
-      newPhases[index] = { ...newPhases[index], ...updates };
-      return { data: { ...state.data, phases: newPhases } };
+      const exists = state.data.services.some((s) => s.category === category);
+      const services = exists
+        ? state.data.services.filter((s) => s.category !== category)
+        : [...state.data.services, emptyService(category)];
+      return { data: { ...state.data, services } };
     }),
 
-  removePhase: (index) =>
+  updateService: (category, updates) =>
     set((state) => ({
       data: {
         ...state.data,
-        phases: state.data.phases.filter((_, i) => i !== index),
+        services: state.data.services.map((s) =>
+          s.category === category ? { ...s, ...updates } : s,
+        ),
       },
     })),
 
-  addService: (service) =>
+  updateTechStack: (category, updates) =>
     set((state) => ({
       data: {
         ...state.data,
-        additionalServices: [
-          ...state.data.additionalServices,
-          service || { title: "New Service", price: 0, billingCycle: "one-time", description: "" },
-        ],
+        services: state.data.services.map((s) =>
+          s.category === category
+            ? {
+                ...s,
+                techStack: {
+                  description: "",
+                  frontend: [],
+                  backend: [],
+                  database: [],
+                  tools: [],
+                  ...s.techStack,
+                  ...updates,
+                },
+              }
+            : s,
+        ),
       },
     })),
 
-  updateService: (index, updates) =>
-    set((state) => {
-      const newServices = [...state.data.additionalServices];
-      newServices[index] = { ...newServices[index], ...updates };
-      return { data: { ...state.data, additionalServices: newServices } };
-    }),
-
-  removeService: (index) =>
+  addScopeItem: (category, item = "New feature deliverable description...") =>
     set((state) => ({
       data: {
         ...state.data,
-        additionalServices: state.data.additionalServices.filter((_, i) => i !== index),
+        services: state.data.services.map((s) =>
+          s.category === category ? { ...s, scopeItems: [...s.scopeItems, item] } : s,
+        ),
+      },
+    })),
+
+  updateScopeItem: (category, index, value) =>
+    set((state) => ({
+      data: {
+        ...state.data,
+        services: state.data.services.map((s) =>
+          s.category === category
+            ? { ...s, scopeItems: s.scopeItems.map((it, i) => (i === index ? value : it)) }
+            : s,
+        ),
+      },
+    })),
+
+  removeScopeItem: (category, index) =>
+    set((state) => ({
+      data: {
+        ...state.data,
+        services: state.data.services.map((s) =>
+          s.category === category
+            ? { ...s, scopeItems: s.scopeItems.filter((_, i) => i !== index) }
+            : s,
+        ),
+      },
+    })),
+
+  addLineItem: (category, item) =>
+    set((state) => ({
+      data: {
+        ...state.data,
+        services: state.data.services.map((s) =>
+          s.category === category
+            ? { ...s, lineItems: [...s.lineItems, item || defaultLineItem(category)] }
+            : s,
+        ),
+      },
+    })),
+
+  updateLineItem: (category, index, updates) =>
+    set((state) => ({
+      data: {
+        ...state.data,
+        services: state.data.services.map((s) => {
+          if (s.category !== category) return s;
+          const lineItems = [...s.lineItems];
+          lineItems[index] = { ...lineItems[index], ...updates };
+          return { ...s, lineItems };
+        }),
+      },
+    })),
+
+  removeLineItem: (category, index) =>
+    set((state) => ({
+      data: {
+        ...state.data,
+        services: state.data.services.map((s) =>
+          s.category === category
+            ? { ...s, lineItems: s.lineItems.filter((_, i) => i !== index) }
+            : s,
+        ),
       },
     })),
 
@@ -230,19 +315,9 @@ export const useQuotationStore = create<QuotationStore>((set) => ({
             ...state.data.details,
             ...template.details,
           },
-          techStack: {
-            ...state.data.techStack,
-            ...template.techStack,
-          },
-          pricing: {
-            ...state.data.pricing,
-            ...template.pricing,
-          },
         } as QuotationData
       };
     }),
-
-
 
   setData: (data) => set({ data }),
   reset: () => set({ data: initialState }),

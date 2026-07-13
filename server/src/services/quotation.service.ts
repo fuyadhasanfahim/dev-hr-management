@@ -3,8 +3,9 @@ import jwt from 'jsonwebtoken';
 import mongoose, { Types } from 'mongoose';
 import QuotationModel from '../models/quotation.model.js';
 import { InvoiceCounter } from '../models/invoice-counter.model.js';
-import type { IQuotation } from '../types/quotation.type.js';
+import type { IQuotation, IQuotationLineItem } from '../types/quotation.type.js';
 import type { QuotationStatus } from '../types/quotation.type.js';
+import { isUpfrontBillingCycle } from '../types/quotation.type.js';
 import { AppError } from '../utils/AppError.js';
 import { OutboxService } from './outbox.service.js';
 import { getCorrelationId } from '../lib/requestContext.js';
@@ -13,11 +14,9 @@ import ClientModel from '../models/client.model.js';
 import emailService from './email.service.js';
 import { sendClientSmsIfBDT } from './sms-notification.service.js';
 import { ReceiptService } from './receipt.service.js';
+import { QuotationPuppeteerPdfService } from './quotation-puppeteer-pdf.service.js';
 
 import type { QuotationMilestoneEmailInfo } from '../templates/QuotationEmail.js';
-import * as React from 'react';
-import { renderToBuffer } from '@react-pdf/renderer';
-import { QuotationPdf } from '../templates/QuotationPdf.js';
 
 export type RecipientSendStatus = {
     email: string;
@@ -43,37 +42,46 @@ if (!QUOTATION_TOKEN_SECRET) {
 
 // ─── Calculation Helper ───────────────────────────────────────────────────────
 
-function calculateTotals(data: Partial<IQuotation>) {
-    const basePrice = data.pricing?.basePrice || 0;
-    // Per-line amount = price × (quantity ?? 1). Web-development line items carry
-    // no quantity ⇒ ×1 ⇒ byte-identical to the previous price-only sum.
-    const additionalServicesTotal =
-        data.additionalServices?.reduce(
-            (acc, s) => acc + (s.price || 0) * (s.quantity ?? 1),
-            0,
-        ) || 0;
-    const discountRate = data.pricing?.discount || 0;
-    const taxRate = data.pricing?.taxRate || 0;
+function calculateTotals(data: Partial<IQuotation>): {
+    totals: { subtotal: number; discountAmount: number; taxAmount: number; grandTotal: number };
+    recurringCharges: IQuotationLineItem[];
+} {
+    const services = data.services || [];
+    const recurringCharges: IQuotationLineItem[] = [];
 
-    // Category-aware subtotal.
-    // - web-development: basePrice + additionalServices (UNCHANGED — byte-identical to before).
-    // - other categories: driven purely by additionalServices line items; basePrice
-    //   is treated as 0 (ignored even if present).
-    const isWebDev = (data.category ?? 'web-development') === 'web-development';
-    const subtotalBeforeDiscount = isWebDev
-        ? basePrice + additionalServicesTotal
-        : additionalServicesTotal;
+    let discountAmount = 0;
+    let subtotal = 0;
+    let taxAmount = 0;
 
-    const discountAmount = (subtotalBeforeDiscount * discountRate) / 100;
-    const subtotal = subtotalBeforeDiscount - discountAmount;
-    const taxAmount = (subtotal * taxRate) / 100;
+    for (const service of services) {
+        const basePrice = service.basePrice || 0;
+
+        // Per-line amount = price × (quantity ?? 1). Upfront cycles (one-time /
+        // per-image / per-video) feed this service's totals; monthly/yearly
+        // cycles are billed separately and are pulled out into recurringCharges.
+        const upfrontLineItemsTotal = (service.lineItems || []).reduce((acc, item) => {
+            if (isUpfrontBillingCycle(item.billingCycle)) {
+                return acc + (item.price || 0) * (item.quantity ?? 1);
+            }
+            recurringCharges.push(item);
+            return acc;
+        }, 0);
+
+        const serviceBase = basePrice + upfrontLineItemsTotal;
+        const serviceDiscount = (serviceBase * (service.discount || 0)) / 100;
+        const serviceSubtotal = serviceBase - serviceDiscount;
+        const serviceTax = (serviceSubtotal * (service.taxRate || 0)) / 100;
+
+        discountAmount += serviceDiscount;
+        subtotal += serviceSubtotal;
+        taxAmount += serviceTax;
+    }
+
     const grandTotal = subtotal + taxAmount;
 
     return {
-        subtotal,
-        discountAmount,
-        taxAmount,
-        grandTotal,
+        totals: { subtotal, discountAmount, taxAmount, grandTotal },
+        recurringCharges,
     };
 }
 
@@ -253,11 +261,12 @@ export class QuotationService {
         const quotationGroupId = crypto.randomUUID();
 
         // Server-side calculation of totals for integrity
-        const totals = calculateTotals(data);
+        const { totals, recurringCharges } = calculateTotals(data);
 
         const quotation = new QuotationModel({
             ...data,
             totals,
+            recurringCharges,
             quotationNumber,
             quotationGroupId,
             version: 1,
@@ -293,11 +302,11 @@ export class QuotationService {
             );
         }
 
-        const totals = calculateTotals({ ...quotation.toObject(), ...data });
-        
+        const { totals, recurringCharges } = calculateTotals({ ...quotation.toObject(), ...data });
+
         const { quotationGroupId: _g, version: _v, isLatestVersion: _l, ...safeData } = data as any;
 
-        Object.assign(quotation, { ...safeData, totals });
+        Object.assign(quotation, { ...safeData, totals, recurringCharges });
         return await quotation.save();
     }
 
@@ -366,16 +375,13 @@ export class QuotationService {
             } else {
                 let pdfBuffer: Buffer | undefined;
                 try {
-                    // Keep PDF generation server-side; attach to each recipient email.
-                    const raw = await renderToBuffer(
-                        React.createElement(QuotationPdf, {
-                            quotation: saved.toObject ? saved.toObject() : saved,
-                            clientName: saved.client?.contactName || client?.name || 'Client',
-                            currency: saved.currency || 'USD',
-                        }) as any,
+                    // Reuse the exact same Puppeteer-rendered PDF used for the download
+                    // button, so the emailed attachment is byte-identical to what the
+                    // client sees when they download it themselves.
+                    const { buffer } = await QuotationPuppeteerPdfService.generatePdf(
+                        saved._id.toString(),
                     );
-                    // Some renderer versions return Uint8Array-like; nodemailer expects Buffer.
-                    pdfBuffer = Buffer.isBuffer(raw) ? raw : Buffer.from(raw as any);
+                    pdfBuffer = buffer;
                 } catch (e: any) {
                     logger.warn(
                         {
@@ -560,9 +566,9 @@ export class QuotationService {
 
             const { _id: _, __v: __, secureToken: ___, tokenExpiresAt: ____, orderId: _____, ...baseData } = currentLatest.toObject();
             const quotationNumber = await generateQuotationNumber();
-            
+
             // Recalculate totals for the new version
-            const totals = calculateTotals({ ...baseData, ...data });
+            const { totals, recurringCharges } = calculateTotals({ ...baseData, ...data });
 
             const createdDocs = await QuotationModel.create(
                 [
@@ -570,6 +576,7 @@ export class QuotationService {
                         ...baseData,
                         ...data,
                         totals,
+                        recurringCharges,
                         _id: new Types.ObjectId(),
                         quotationNumber,
                         quotationGroupId,

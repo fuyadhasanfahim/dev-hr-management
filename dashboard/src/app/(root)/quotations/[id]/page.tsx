@@ -55,13 +55,9 @@ import { toast } from 'sonner';
 import { useSession } from '@/lib/auth-client';
 import { Role } from '@/constants/role';
 import { cn } from '@/lib/utils';
-import {
-    getCategoryConfig,
-    isPhasesEnabled,
-    isUnitBased,
-    lineItemAmount,
-    BILLING_CYCLE_LABELS,
-} from '@/constants/quotation-templates';
+import { CATEGORY_CONFIG } from '@/constants/quotation-templates';
+import { computeQuotationTotals } from '@/lib/quotation-totals';
+import type { QuotationCategory } from '@/types/quotation.type';
 
 export default function ViewQuotationPage() {
     const router = useRouter();
@@ -95,18 +91,15 @@ export default function ViewQuotationPage() {
     }, [data?.clientId]);
 
     const displayPhases = useMemo(() => {
-        if (!data) return [];
-        if (data.phases && data.phases.length > 0) return data.phases;
-        if (data.developmentScope && data.developmentScope.length > 0) {
-            return [
-                {
-                    title: 'Web Design & Development Scope',
-                    items: data.developmentScope,
-                },
-            ];
-        }
-        return [];
-    }, [data?.phases, data?.developmentScope]);
+        if (!data?.services) return [];
+        return data.services.map((s) => ({
+            title: CATEGORY_CONFIG[s.category as QuotationCategory]?.label || s.category,
+            description: s.scopeDescription,
+            items: s.scopeItems || [],
+        }));
+    }, [data?.services]);
+
+    const liveTotals = useMemo(() => computeQuotationTotals(data?.services || []), [data?.services]);
 
     const openSendPicker = () => {
         if (!dialogClientId) {
@@ -271,12 +264,19 @@ export default function ViewQuotationPage() {
     const discountAmount = totals.discountAmount ?? 0;
 
     // ── Category-aware presentation (mirrors CATEGORY_CONFIG used by the builder) ──
-    const catConfig = getCategoryConfig(data.category);
-    const isWebDev = true; // Always allow base price and multi-service packages
-    const showPhases = Boolean((data.phases && data.phases.length > 0) || (data.developmentScope && data.developmentScope.length > 0));
-    const showTech = Boolean(data.techStack?.frontend || data.techStack?.backend || data.techStack?.database || (data.techStack?.tools && data.techStack.tools.length > 0));
+    const proposalLabel = (data.services || [])
+        .map((s) => CATEGORY_CONFIG[s.category as QuotationCategory]?.label || s.category)
+        .join(' + ') || 'Agency Proposal';
+    const webDevService = (data.services || []).find((s) => s.category === 'web-development');
+    const showPhases = Boolean(data.services && data.services.length > 0);
+    const showTech = Boolean(
+        webDevService?.techStack &&
+            ((webDevService.techStack.frontend?.length ?? 0) > 0 ||
+                (webDevService.techStack.backend?.length ?? 0) > 0 ||
+                (webDevService.techStack.database?.length ?? 0) > 0 ||
+                (webDevService.techStack.tools?.length ?? 0) > 0),
+    );
     const showWorkflow = Boolean(data.workflow && data.workflow.length > 0);
-    const showUnitQty = isUnitBased(data.category);
 
     const getCategoryBadgeStyle = (title: string = '') => {
         const lower = title.toLowerCase();
@@ -553,7 +553,7 @@ export default function ViewQuotationPage() {
                                         Proposal Package
                                     </div>
                                     <div className="text-base font-bold text-slate-900 dark:text-white">
-                                        {catConfig.label || 'Agency Proposal'}
+                                        {proposalLabel}
                                     </div>
                                     <div className="text-xs text-slate-500 dark:text-slate-400 font-medium pt-1 space-y-0.5">
                                         <div>📅 Issued: {data.details?.date ? format(new Date(data.details.date), 'PPP') : '—'}</div>
@@ -606,11 +606,6 @@ export default function ViewQuotationPage() {
                                                             <h4 className="text-base font-extrabold tracking-tight text-slate-900 dark:text-white">
                                                                 {p.title || `Service Scope #${idx + 1}`}
                                                             </h4>
-                                                            {(p.startDate || p.endDate) && (
-                                                                <span className="text-xs font-mono text-muted-foreground bg-muted/80 px-2.5 py-0.5 rounded-full border">
-                                                                    {p.startDate ? p.startDate : 'TBD'} — {p.endDate ? p.endDate : 'TBD'}
-                                                                </span>
-                                                            )}
                                                         </div>
                                                         {p.description && (
                                                             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{p.description}</p>
@@ -740,40 +735,25 @@ export default function ViewQuotationPage() {
                                 </div>
                             </div>
                             <div className="p-6 space-y-3">
+                                {webDevService?.techStack?.description && (
+                                    <p className="text-xs text-slate-500 dark:text-slate-400">{webDevService.techStack.description}</p>
+                                )}
                                 <div className="flex flex-wrap gap-2">
-                                    {data.techStack?.frontend && (
-                                        <Badge variant="outline" className="rounded-xl px-3 py-1 text-xs font-semibold bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 shadow-sm">
-                                            {data.techStack.frontend}
-                                        </Badge>
-                                    )}
-                                    {data.techStack?.backend && (
-                                        <Badge variant="outline" className="rounded-xl px-3 py-1 text-xs font-semibold bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 shadow-sm">
-                                            {data.techStack.backend}
-                                        </Badge>
-                                    )}
-                                    {data.techStack?.database && (
-                                        <Badge variant="outline" className="rounded-xl px-3 py-1 text-xs font-semibold bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 shadow-sm">
-                                            {data.techStack.database}
-                                        </Badge>
-                                    )}
-                                    {(data.techStack?.tools || []).map((t) => (
+                                    {[
+                                        ...(webDevService?.techStack?.frontend || []),
+                                        ...(webDevService?.techStack?.backend || []),
+                                        ...(webDevService?.techStack?.database || []),
+                                        ...(webDevService?.techStack?.tools || []),
+                                    ].map((t, i) => (
                                         <Badge
-                                            key={t}
+                                            key={`${t}-${i}`}
                                             variant="outline"
-                                            className="rounded-xl px-3 py-1 text-xs font-semibold bg-[#4E12D4]/5 border-[#4E12D4]/20 text-[#4E12D4] shadow-sm"
+                                            className="rounded-xl px-3 py-1 text-xs font-semibold bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 shadow-sm"
                                         >
                                             {t}
                                         </Badge>
                                     ))}
                                 </div>
-                                {!data.techStack?.frontend &&
-                                    !data.techStack?.backend &&
-                                    !data.techStack?.database &&
-                                    !(data.techStack?.tools || []).length && (
-                                        <div className="text-sm text-slate-400 italic py-4 text-center">
-                                            No tech stack specified.
-                                        </div>
-                                    )}
                             </div>
                         </div>
                         )}
@@ -857,22 +837,25 @@ export default function ViewQuotationPage() {
                                 </h2>
                             </div>
                             <div className="space-y-3 text-sm font-medium pt-1">
-                                <div className="flex items-center justify-between py-1 border-b border-slate-100 dark:border-slate-800/50">
-                                    <span className="text-slate-500 dark:text-slate-400">
-                                        Base Package Price
-                                    </span>
-                                    <span
-                                        className={cn(
-                                            'font-bold text-slate-800 dark:text-slate-200',
-                                            !canSeeFinancials && 'blur-[3px] select-none opacity-60'
-                                        )}
-                                    >
-                                        {canSeeFinancials ? money(data.pricing?.basePrice) : '******'}
-                                    </span>
-                                </div>
+                                {liveTotals.perService.length > 1 &&
+                                    liveTotals.perService.map((s) => (
+                                        <div key={s.category} className="flex items-center justify-between py-1 border-b border-slate-100 dark:border-slate-800/50">
+                                            <span className="text-slate-500 dark:text-slate-400">
+                                                {CATEGORY_CONFIG[s.category as QuotationCategory]?.label || s.category}
+                                            </span>
+                                            <span
+                                                className={cn(
+                                                    'font-bold text-slate-800 dark:text-slate-200',
+                                                    !canSeeFinancials && 'blur-[3px] select-none opacity-60'
+                                                )}
+                                            >
+                                                {canSeeFinancials ? money(s.grandTotal) : '******'}
+                                            </span>
+                                        </div>
+                                    ))}
                                 <div className="flex items-center justify-between py-1 border-b border-slate-100 dark:border-slate-800/50 text-emerald-600 dark:text-emerald-400">
                                     <span>
-                                        Discount ({data.pricing?.discount ?? 0}%)
+                                        Discount
                                     </span>
                                     <span
                                         className={cn(
@@ -898,7 +881,7 @@ export default function ViewQuotationPage() {
                                 </div>
                                 <div className="flex items-center justify-between py-1">
                                     <span className="text-slate-500 dark:text-slate-400">
-                                        Tax ({data.pricing?.taxRate ?? 0}%)
+                                        Tax / VAT
                                     </span>
                                     <span
                                         className={cn(

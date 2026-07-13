@@ -98,61 +98,78 @@ function buildQuotationSnapshot(
             'Snapshot build failed: totals.taxAmount is missing',
             500,
         );
+    if (quotation.totals?.discountAmount == null)
+        throw new AppError(
+            'Snapshot build failed: totals.discountAmount is missing',
+            500,
+        );
 
-    // ── Phase validation — fail loud on any invalid phase entry ──────────────
-    const phases = quotation.phases ?? [];
-    phases.forEach((p, i) => {
-        if (p == null || typeof p.title !== 'string' || p.title.trim() === '') {
+    // ── Service validation — fail loud on any invalid service entry ──────────
+    const services = quotation.services ?? [];
+    if (services.length === 0) {
+        throw new AppError(
+            'Snapshot build failed: quotation has no services selected',
+            500,
+        );
+    }
+    services.forEach((s, i) => {
+        if (s == null || typeof s.category !== 'string' || s.category.trim() === '') {
             throw new AppError(
-                `Snapshot build failed: phases[${i}] is invalid or missing title`,
+                `Snapshot build failed: services[${i}] is invalid or missing category`,
                 500,
             );
         }
+        (s.lineItems ?? []).forEach((item, j) => {
+            if (item == null || typeof item.price !== 'number' || isNaN(item.price)) {
+                throw new AppError(
+                    `Snapshot build failed: services[${i}].lineItems[${j}].price is invalid`,
+                    500,
+                );
+            }
+        });
     });
 
-    const scopeOfWork = phases.map((p) => ({
-        title: p.title,
-        description: typeof p.description === 'string' ? p.description : '',
-        items: Array.isArray(p.items) ? [...p.items] : [],
-        ...(p.startDate ? { startDate: p.startDate } : {}),
-        ...(p.endDate ? { endDate: p.endDate } : {}),
+    const CATEGORY_LABELS: Record<string, string> = {
+        'web-development': 'Web Design & Development',
+        marketing: 'Marketing',
+        'photo-editing': 'Photo Editing',
+        'video-editing': 'Video Editing',
+    };
+
+    const scopeOfWork = services.map((s) => ({
+        title: CATEGORY_LABELS[s.category] || s.category,
+        description: typeof s.scopeDescription === 'string' ? s.scopeDescription : '',
+        items: Array.isArray(s.scopeItems) ? [...s.scopeItems] : [],
     }));
 
-    // ── additionalServices — optional; each entry must have a numeric price ───
-    const additionalServicesTotal = Array.isArray(quotation.additionalServices)
-        ? quotation.additionalServices.reduce((sum, svc, i) => {
-              if (
-                  svc == null ||
-                  typeof svc.price !== 'number' ||
-                  isNaN(svc.price)
-              ) {
-                  throw new AppError(
-                      `Snapshot build failed: additionalServices[${i}].price is invalid`,
-                      500,
-                  );
-              }
-              // Per-line amount = price × (quantity ?? 1); web-dev has no
-              // quantity ⇒ ×1, so existing orders are byte-identical.
-              return sum + svc.price * (svc.quantity ?? 1);
-          }, 0)
-        : 0;
+    const snapshotServices = services.map((s) => ({
+        category: s.category,
+        ...(s.scopeDescription ? { scopeDescription: String(s.scopeDescription) } : {}),
+        scopeItems: Array.isArray(s.scopeItems) ? [...s.scopeItems] : [],
+        basePrice: Number(s.basePrice) || 0,
+        lineItems: (s.lineItems ?? []).map((item) => ({
+            title: String(item.title || ''),
+            price: Number(item.price) || 0,
+            billingCycle: item.billingCycle || 'one-time',
+            ...(typeof item.quantity === 'number' ? { quantity: item.quantity } : {}),
+            ...(item.description ? { description: String(item.description) } : {}),
+        })),
+        discount: Number(s.discount) || 0,
+        taxRate: Number(s.taxRate) || 0,
+    }));
+
+    const recurringCharges = (quotation.recurringCharges ?? []).map((item) => ({
+        title: String(item.title || ''),
+        price: Number(item.price) || 0,
+        billingCycle: item.billingCycle || 'monthly',
+        ...(typeof item.quantity === 'number' ? { quantity: item.quantity } : {}),
+        ...(item.description ? { description: String(item.description) } : {}),
+    }));
 
     // ── Currency: trim → uppercase → fallback USD ─────────────────────────────
     const rawCurrency =
         typeof quotation.currency === 'string' ? quotation.currency.trim() : '';
     const currency = rawCurrency !== '' ? rawCurrency.toUpperCase() : 'USD';
-
-    // ── Pricing fields must be present ────────────────────────────────────────
-    if (quotation.pricing?.taxRate == null)
-        throw new AppError(
-            'Snapshot build failed: pricing.taxRate is missing',
-            500,
-        );
-    if (quotation.pricing?.discount == null)
-        throw new AppError(
-            'Snapshot build failed: pricing.discount is missing',
-            500,
-        );
 
     return deepFreeze<IQuotationSnapshot>({
         quotationId: quotation._id as Types.ObjectId,
@@ -168,20 +185,11 @@ function buildQuotationSnapshot(
             ? { overview: quotation.overview }
             : {}),
         scopeOfWork,
+        services: snapshotServices,
+        recurringCharges,
         currency,
         grandTotal: quotation.totals.grandTotal,
-        taxRate: quotation.pricing.taxRate,
-        discount: quotation.pricing.discount,
-        additionalServicesTotal,
-        additionalServices: Array.isArray(quotation.additionalServices)
-            ? quotation.additionalServices.map((s) => ({
-                  title: String(s.title || ''),
-                  price: Number(s.price) || 0,
-                  billingCycle: s.billingCycle || 'one-time',
-                  ...(typeof s.quantity === 'number' ? { quantity: s.quantity } : {}),
-                  ...(s.description ? { description: String(s.description) } : {}),
-              }))
-            : [],
+        discountAmount: quotation.totals.discountAmount,
         taxAmount: quotation.totals.taxAmount,
     });
 }

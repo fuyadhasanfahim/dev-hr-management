@@ -102,9 +102,7 @@ export interface IQuotationSnapshot {
     scopeOfWork: Array<{ title: string; description: string; items: string[] }>;
     currency: string;
     grandTotal: number;
-    taxRate: number;
-    discount: number;
-    additionalServicesTotal: number;
+    discountAmount: number;
     taxAmount: number;
 }
 

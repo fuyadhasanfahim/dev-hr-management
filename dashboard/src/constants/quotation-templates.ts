@@ -1,4 +1,4 @@
-import { QuotationData, QuotationCategory, BillingCycle } from "@/types/quotation.type";
+import { QuotationData, QuotationCategory, BillingCycle, IQuotationLineItem } from "@/types/quotation.type";
 
 export const QUOTATION_TEMPLATES: Record<string, Partial<QuotationData>> = {};
 
@@ -130,6 +130,31 @@ export function getDefaultBillingCycle(
 ): BillingCycle {
   return getCategoryConfig(category).billingOptions[0] ?? "one-time";
 }
+
+/**
+ * Suggested (prefillable) add-on line items per category — mostly the mixed
+ * one-time/recurring charges (hosting, domain, ad retainers) that agencies
+ * commonly forget to price separately. Purely a UI convenience: "Add Suggested"
+ * copies one of these into the service's lineItems instead of starting blank.
+ */
+export const SUGGESTED_LINE_ITEMS: Record<QuotationCategory, IQuotationLineItem[]> = {
+  "web-development": [
+    { title: "Web Hosting (Cloud VPS)", price: 0, billingCycle: "yearly", description: "Hosting/server cost, billed separately from the project fee." },
+    { title: "Domain Renewal", price: 0, billingCycle: "yearly", description: "Annual domain registration renewal." },
+    { title: "Maintenance & Support Retainer", price: 0, billingCycle: "monthly", description: "Ongoing bug-fixing and minor update support." },
+  ],
+  marketing: [
+    { title: "SEO Retainer", price: 0, billingCycle: "monthly", description: "Ongoing on-page/off-page SEO work." },
+    { title: "Ad Campaign Management", price: 0, billingCycle: "monthly", description: "Facebook/Google Ads management fee (excludes ad spend)." },
+    { title: "Campaign Setup", price: 0, billingCycle: "one-time", description: "One-time tracking, pixel, and campaign structure setup." },
+  ],
+  "photo-editing": [
+    { title: "Photo Retouching (per image)", price: 0, billingCycle: "per-image", quantity: 1, description: "Background removal, color correction, retouching." },
+  ],
+  "video-editing": [
+    { title: "Video Editing (per video)", price: 0, billingCycle: "per-video", quantity: 1, description: "Cutting, color grading, captions, and export." },
+  ],
+};
 
 /**
  * Canonical per-line amount used by ALL totals computations:

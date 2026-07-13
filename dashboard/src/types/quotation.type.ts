@@ -16,14 +16,6 @@ export type QuotationStatus =
   | "expired"
   | "change_requested";
 
-export interface IQuotationPhase {
-  title: string;
-  description?: string;
-  items: string[];
-  startDate?: string;
-  endDate?: string;
-}
-
 export type BillingCycle =
   | "one-time"
   | "monthly"
@@ -31,13 +23,37 @@ export type BillingCycle =
   | "per-image"
   | "per-video";
 
-export interface IAdditionalService {
+/** true for billing cycles paid upfront (once, or per delivered unit); false for ongoing/recurring cycles. */
+export const isUpfrontBillingCycle = (cycle: BillingCycle): boolean =>
+  cycle === "one-time" || cycle === "per-image" || cycle === "per-video";
+
+export interface IQuotationLineItem {
   title: string;
-  price: number; // for unit-based categories this is the UNIT price
+  price: number; // for unit-based cycles this is the UNIT price
   billingCycle: BillingCycle;
   /** Units for unit-based pricing (per-image / per-video). Absent ⇒ treated as 1. */
   quantity?: number;
   description?: string;
+}
+
+export interface IQuotationTechStack {
+  description?: string;
+  frontend: string[];
+  backend: string[];
+  database: string[];
+  tools: string[];
+}
+
+export interface IQuotationService {
+  category: QuotationCategory;
+  scopeDescription?: string;
+  scopeItems: string[];
+  /** Only meaningful for the web-development category. */
+  techStack?: IQuotationTechStack;
+  basePrice: number;
+  lineItems: IQuotationLineItem[];
+  discount: number; // Percentage (0-100), applies to this service's one-time portion
+  taxRate: number; // Percentage
 }
 
 export interface IPaymentMilestone {
@@ -53,7 +69,6 @@ export interface QuotationData {
   version?: number;
   isLatestVersion?: boolean;
 
-  category: QuotationCategory;
   serviceType: ServiceType;
   clientId: string;
 
@@ -78,33 +93,24 @@ export interface QuotationData {
     validUntil: string;
   };
 
-  // ── Unified Content ───────────────────────────────────────────────────
   overview?: string;
-  developmentScope?: string[];
+
+  /** One entry per selected service — the single source of truth for scope, tech stack, and pricing. */
+  services: IQuotationService[];
+
   notIncluded?: string[];
   clientRequirements?: string[];
-  phases: IQuotationPhase[];
-  
-  techStack: {
-    frontend: string;
-    backend: string;
-    database: string;
-    tools: string[];
-  };
 
-  pricing: {
-    basePrice: number;
-    taxRate: number; // Percentage
-    discount: number; // Percentage (0-100)
-  };
+  /** Monthly/yearly line items flattened out of services[].lineItems, billed separately from totals.grandTotal. */
+  recurringCharges?: IQuotationLineItem[];
 
-  additionalServices: IAdditionalService[];
   workflow: string[];
 
   paymentMilestones?: IPaymentMilestone[];
 
   currency?: string;
 
+  /** Aggregate of every service's one-time/upfront portion. Recurring charges are excluded. */
   totals: {
     subtotal: number;
     discountAmount: number;
