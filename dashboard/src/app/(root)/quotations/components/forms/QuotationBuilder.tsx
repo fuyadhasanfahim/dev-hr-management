@@ -24,6 +24,8 @@ import {
   Image as ImageIcon,
   Video,
   X as XIcon,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useGetClientsQuery } from '@/redux/features/client/clientApi';
@@ -169,6 +171,55 @@ function TagInput({
   );
 }
 
+const parseRawProposalToBullets = (text: string): string => {
+  const lines = text.split('\n');
+  const result: string[] = [];
+  let lastWasHeader = false;
+
+  for (let i = 0; i < lines.length; i++) {
+    const rawLine = lines[i];
+    const line = rawLine.trim();
+    if (!line) continue;
+
+    // Detect section headers
+    const headingMatch = line.match(/^(\d+[\.\)]\s*)?([A-Z\d][\w\s&/,\-()]{3,60})$/);
+    const looksLikeHeader = !/^[-*•◦▪+]\s*/.test(line) && 
+                            line.length < 75 && 
+                            !line.endsWith('.') &&
+                            !line.endsWith(':') &&
+                            !/^(we |this |since |the |our |included|please|during|sslcommerz|surjopay|referral)/i.test(line);
+
+    if (headingMatch || looksLikeHeader) {
+      const cleanHeader = line.replace(/^\d+[\.\)]\s*/, '').trim();
+      result.push(`• ${cleanHeader}`);
+      lastWasHeader = true;
+    } 
+    // Detect bullet list items
+    else if (/^[-*•◦▪+]\s*/.test(line)) {
+      const cleanItem = line.replace(/^[-*•◦▪+]\s*/, '').trim();
+      const leadingSpaces = rawLine.match(/^\s*/)?.[0].length || 0;
+      const indent = leadingSpaces >= 3 ? '    • ' : '  • ';
+      result.push(`${indent}${cleanItem}`);
+      lastWasHeader = false;
+    } 
+    // Paragraph or descriptive sentences (filler/introductions)
+    else {
+      const isFiller = line.endsWith(':') || 
+                       /will (include|provide|be|help|finalize|integrate|connect|have)/i.test(line) ||
+                       /^(we |this |since |the |important |during |payment |referral |alert |manual |report |B2B |POS )/i.test(line);
+      
+      if (!isFiller) {
+        if (lastWasHeader) {
+          result.push(`  • ${line}`);
+        } else {
+          result.push(`• ${line}`);
+        }
+      }
+    }
+  }
+  return result.join('\n');
+};
+
 const SERVICE_ORDER: QuotationCategory[] = ['web-development', 'marketing', 'photo-editing', 'video-editing'];
 
 const SERVICE_UI: Record<QuotationCategory, { icon: typeof Globe; color: string; borderColor: string; iconBg: string }> = {
@@ -241,6 +292,7 @@ export default function QuotationBuilder({
   const notIncludedItems = data.notIncluded || [];
   const clientRequirements = data.clientRequirements || [];
 
+  const [collapsedServices, setCollapsedServices] = useState<Record<string, boolean>>({});
   const [aiInputText, setAiInputText] = useState('');
   const [recipientModalOpen, setRecipientModalOpen] = useState(false);
   const [isPdfModalOpen, setIsPdfModalOpen] = useState(false);
@@ -304,93 +356,7 @@ export default function QuotationBuilder({
 
   const activeServices = useMemo(() => data.services.map((s) => s.category), [data.services]);
 
-  const dynamicAiPrompt = useMemo(() => {
-    if (activeServices.length === 0) {
-      return 'Select at least one active service above, then this prompt will be generated automatically.';
-    }
-    const headers = activeServices
-      .map((catId, idx) => {
-        const label = CATEGORY_CONFIG[catId].label;
-        let desc = '(List feature deliverables as bullet points)';
-        if (catId === 'web-development') desc = '(List web structure, UI design, and development features as bullet points)';
-        else if (catId === 'marketing') desc = '(List SEO audit, GA4 setup, and ad campaign features as bullet points)';
-        else if (catId === 'video-editing') desc = '(List video editing, color grading, and reel features as bullet points)';
-        else if (catId === 'photo-editing') desc = '(List photo retouching, background removal, and graphic features as bullet points)';
-        return `${idx + 1}. ${label} Scope\n${desc}`;
-      })
-      .join('\n\n');
 
-    const exclusionsIdx = activeServices.length + 1;
-    const reqIdx = activeServices.length + 2;
-
-    return `Please create a Multi-Service Agency Proposal for the selected services with these exact section headings:\n\n${headers}\n\n${exclusionsIdx}. Not Included in This Price\n(List exclusions like domain, hosting, ad budget as bullet points)\n\n${reqIdx}. Client Needs to Provide\n(List required client assets like brand guidelines, credentials as bullet points)`;
-  }, [activeServices]);
-
-  const copyPrompt = () => {
-    navigator.clipboard.writeText(dynamicAiPrompt);
-    const names = activeServices.map((id) => CATEGORY_CONFIG[id]?.label).filter(Boolean).join(', ');
-    toast.success(`🎉 AI Prompt for [${names}] copied to clipboard!`);
-  };
-
-  const handleAiImport = () => {
-    if (!aiInputText.trim()) {
-      toast.error('Please paste ChatGPT proposal output first!');
-      return;
-    }
-
-    const sections = aiInputText.split(/\n(?=\d+\.\s+)|(?=###\s*\d*\.\s*)|(?=##\s*)/gi);
-    let totalParsed = 0;
-    let nextNotIncluded = notIncludedItems;
-    let nextClientReq = clientRequirements;
-    const detectedByCategory: Partial<Record<QuotationCategory, string[]>> = {};
-
-    sections.forEach((sec) => {
-      const lines = sec
-        .split('\n')
-        .map((l) => l.trim().replace(/^[-*•✅❌👉⚡🎬📸📈]\s*/, ''))
-        .filter(Boolean);
-      if (lines.length < 2) return;
-
-      const header = lines[0].toLowerCase();
-      const items = lines.slice(1).filter((l) => l.length > 5 && !l.toLowerCase().includes('scope'));
-      if (items.length === 0) return;
-
-      let targetCatId: QuotationCategory | null = null;
-      if (header.includes('web') || header.includes('design') || header.includes('development') || header.includes('ui/ux')) {
-        targetCatId = 'web-development';
-      } else if (header.includes('marketing') || header.includes('seo') || header.includes('campaign')) {
-        targetCatId = 'marketing';
-      } else if (header.includes('video') || header.includes('motion') || header.includes('reel')) {
-        targetCatId = 'video-editing';
-      } else if (header.includes('photo') || header.includes('retouch') || header.includes('graphic')) {
-        targetCatId = 'photo-editing';
-      }
-
-      if (targetCatId) {
-        detectedByCategory[targetCatId] = items;
-        totalParsed += items.length;
-      } else if (header.includes('not included') || header.includes('exclusion')) {
-        nextNotIncluded = items;
-        totalParsed += items.length;
-      } else if (header.includes('provide') || header.includes('client need') || header.includes('requirement')) {
-        nextClientReq = items;
-        totalParsed += items.length;
-      }
-    });
-
-    if (totalParsed > 0) {
-      (Object.keys(detectedByCategory) as QuotationCategory[]).forEach((cat) => {
-        if (!data.services.some((s) => s.category === cat)) toggleService(cat);
-        updateService(cat, { scopeItems: detectedByCategory[cat] });
-      });
-      if (nextNotIncluded !== notIncludedItems) updateNotIncluded(nextNotIncluded);
-      if (nextClientReq !== clientRequirements) updateClientRequirements(nextClientReq);
-      setAiInputText('');
-      toast.success(`🎉 Successfully auto-filled ${totalParsed} items across multi-service categories!`);
-    } else {
-      toast.error("Could not auto-detect sections! Ensure headings like 'Web Design Scope' or 'Not Included' are present.");
-    }
-  };
 
   const addNotIncludedItem = () => updateNotIncluded([...notIncludedItems, 'New exclusion note...']);
   const updateNotIncludedItem = (index: number, val: string) => {
@@ -438,6 +404,222 @@ export default function QuotationBuilder({
       toast.error(maybe?.data?.message || 'Failed to save quotation!');
       return null;
     }
+  };
+
+  const copyPrompt = () => {
+    if (activeServices.length === 0) {
+      toast.error('Please select at least one active service above first!');
+      return;
+    }
+
+    const servicesText = activeServices
+      .map((catId) => {
+        const label = CATEGORY_CONFIG[catId].label;
+        return `- ${label}`;
+      })
+      .join('\n');
+
+    const prompt = `You are a professional proposal builder. Please generate a detailed service scope and deliverables layout for a client proposal based on the following selected services:
+${servicesText}
+
+Format the response EXACTLY as shown in the template below. Use standard bullets (•) for main features, and indent sub-features with two spaces (  •). Do not use markdown bolding (**) inside the deliverables list.
+
+--- TEMPLATE START ---
+${activeServices.map((catId) => {
+  const label = CATEGORY_CONFIG[catId].label;
+  return `${label} Scope
+Description: [Write a concise, 1-2 sentence description of what is included in this service]
+Deliverables:
+• [Feature Title, e.g. E-Commerce Core Setup]
+  • [Sub-feature item 1, e.g. Product Catalog Setup]
+  • [Sub-feature item 2, e.g. Shopping Cart & Checkout Flow]
+• [Next Feature Title, e.g. CRM & Administration]
+  • [Sub-feature item, e.g. Role-based permissions]`;
+}).join('\n\n')}
+
+Not Included:
+• [Item not included, e.g. Domain & premium web hosting costs]
+• [Item not included, e.g. Paid marketing campaign budget]
+
+Client Needs to Provide:
+• [Client requirement, e.g. Brand guidelines, logo, and typography assets]
+• [Client requirement, e.g. Admin access credentials to current site hosting]
+--- TEMPLATE END ---`;
+
+    navigator.clipboard.writeText(prompt);
+    toast.success('📋 Dynamic AI Prompt copied to clipboard! Paste it into ChatGPT/Claude.');
+  };
+
+  const handleAiImport = () => {
+    if (!aiInputText.trim()) {
+      toast.error('Please paste the AI-generated proposal first!');
+      return;
+    }
+
+    const lines = aiInputText.split('\n');
+    let currentServiceCategory: QuotationCategory | null = null;
+    
+    const serviceScopes: Record<QuotationCategory, string[]> = {
+      'web-development': [],
+      'marketing': [],
+      'photo-editing': [],
+      'video-editing': []
+    };
+    
+    const serviceDescriptions: Record<QuotationCategory, string> = {
+      'web-development': '',
+      'marketing': '',
+      'photo-editing': '',
+      'video-editing': ''
+    };
+    
+    let parsingExclusions = false;
+    let parsingRequirements = false;
+    
+    const tempNotIncluded: string[] = [];
+    const tempClientReqs: string[] = [];
+
+    for (let i = 0; i < lines.length; i++) {
+      const rawLine = lines[i];
+      const line = rawLine.trim();
+      if (!line) continue;
+
+      const lower = line.toLowerCase();
+      
+      const isBullet = /^[-*•◦▪+]\s*/.test(line) || rawLine.startsWith(' ') || rawLine.startsWith('\t');
+      const isSpecialLine = lower.startsWith('description:') || lower.startsWith('service name:') || lower.startsWith('deliverables:');
+      
+      if (!isBullet && !isSpecialLine && (line.length < 60 || lower.includes('scope') || lower.includes('included') || lower.includes('provide') || lower.includes('requirements'))) {
+        // Section triggers
+        if (lower.includes('web') && (lower.includes('dev') || lower.includes('design') || lower.includes('site') || lower.includes('crm') || lower.includes('scope'))) {
+          currentServiceCategory = 'web-development';
+          parsingExclusions = false;
+          parsingRequirements = false;
+          continue;
+        } else if (lower.includes('marketing') || lower.includes('seo') || lower.includes('campaign') || lower.includes('ads')) {
+          currentServiceCategory = 'marketing';
+          parsingExclusions = false;
+          parsingRequirements = false;
+          continue;
+        } else if (lower.includes('video') || lower.includes('motion') || lower.includes('reel') || lower.includes('production')) {
+          currentServiceCategory = 'video-editing';
+          parsingExclusions = false;
+          parsingRequirements = false;
+          continue;
+        } else if (lower.includes('photo') || lower.includes('retouch') || lower.includes('graphic')) {
+          currentServiceCategory = 'photo-editing';
+          parsingExclusions = false;
+          parsingRequirements = false;
+          continue;
+        } else if (lower.includes('not included') || lower.includes('exclusions') || lower.includes('not included in this price')) {
+          currentServiceCategory = null;
+          parsingExclusions = true;
+          parsingRequirements = false;
+          continue;
+        } else if (lower.includes('client needs to provide') || lower.includes('client requirements') || lower.includes('client need') || lower.includes('prerequisites') || lower.includes('client provide') || lower.includes('provide')) {
+          currentServiceCategory = null;
+          parsingExclusions = false;
+          parsingRequirements = true;
+          continue;
+        }
+      }
+
+      if (currentServiceCategory) {
+        if (line.toLowerCase().startsWith('description:')) {
+          serviceDescriptions[currentServiceCategory] = line.replace(/^description:\s*/i, '').trim();
+        } else if (line.toLowerCase().startsWith('service name:')) {
+          continue;
+        } else if (line.toLowerCase().startsWith('deliverables:')) {
+          continue;
+        } else {
+          const leadingSpaces = rawLine.match(/^\s*/)?.[0].length || 0;
+          const isSub = leadingSpaces >= 2 || rawLine.startsWith('\t');
+          const cleanText = line.replace(/^[-*•◦▪+]\s*/, '').trim();
+          
+          if (cleanText) {
+            const prefix = isSub ? '  • ' : '• ';
+            serviceScopes[currentServiceCategory].push(`${prefix}${cleanText}`);
+          }
+        }
+      } else if (parsingExclusions) {
+        const cleanText = line.replace(/^[-*•◦▪+]\s*/, '').trim();
+        if (cleanText) {
+          tempNotIncluded.push(cleanText);
+        }
+      } else if (parsingRequirements) {
+        const cleanText = line.replace(/^[-*•◦▪+]\s*/, '').trim();
+        if (cleanText) {
+          tempClientReqs.push(cleanText);
+        }
+      }
+    }
+
+    let updatedCount = 0;
+    (Object.keys(serviceScopes) as QuotationCategory[]).forEach((cat) => {
+      const items = serviceScopes[cat];
+      const desc = serviceDescriptions[cat];
+      if (items.length > 0 || desc) {
+        if (!data.services.some((s) => s.category === cat)) {
+          toggleService(cat);
+        }
+        
+        const updates: any = {};
+        if (items.length > 0) updates.scopeItems = items;
+        if (desc) updates.scopeDescription = desc;
+        
+        updateService(cat, updates);
+        updatedCount++;
+      }
+    });
+
+    if (tempNotIncluded.length > 0) {
+      updateNotIncluded(tempNotIncluded);
+    }
+    if (tempClientReqs.length > 0) {
+      updateClientRequirements(tempClientReqs);
+    }
+
+    if (updatedCount > 0 || tempNotIncluded.length > 0 || tempClientReqs.length > 0) {
+      toast.success('✨ Successfully imported AI proposal into quotation settings!');
+      setAiInputText('');
+    } else {
+      toast.error('Could not detect structure! Ensure block headings like "Web Development Scope" are present.');
+    }
+  };
+
+  const setItemType = (catId: QuotationCategory, index: number, type: 'heading' | 'main' | 'sub') => {
+    const s = data.services.find((x) => x.category === catId);
+    if (!s) return;
+    const nextItems = [...s.scopeItems];
+    let text = nextItems[index].trim();
+    text = text.replace(/^###\s*/, '').replace(/^[-*•◦▪+]\s*/, '').trim();
+    
+    if (type === 'heading') {
+      nextItems[index] = `### ${text}`;
+    } else if (type === 'main') {
+      nextItems[index] = `• ${text}`;
+    } else if (type === 'sub') {
+      nextItems[index] = `  • ${text}`;
+    }
+    updateService(catId, { scopeItems: nextItems });
+  };
+
+  const deleteItem = (catId: QuotationCategory, index: number) => {
+    const s = data.services.find((x) => x.category === catId);
+    if (!s) return;
+    const nextItems = s.scopeItems.filter((_, i) => i !== index);
+    updateService(catId, { scopeItems: nextItems });
+  };
+
+  const editItemText = (catId: QuotationCategory, index: number, newText: string) => {
+    const s = data.services.find((x) => x.category === catId);
+    if (!s) return;
+    const nextItems = [...s.scopeItems];
+    const original = nextItems[index];
+    const match = original.match(/^(\s*###\s*|\s*[-*•◦▪+]\s*|\s*)/);
+    const prefix = match ? match[0] : '';
+    nextItems[index] = `${prefix}${newText}`;
+    updateService(catId, { scopeItems: nextItems });
   };
 
   const openRecipientPicker = () => {
@@ -718,13 +900,23 @@ export default function QuotationBuilder({
 
             return (
               <div key={catId} className="rounded-3xl border border-slate-200/80 dark:border-slate-800 bg-white/70 dark:bg-slate-900/50 backdrop-blur-xl shadow-sm overflow-hidden">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-6 bg-gradient-to-r from-purple-500/10 via-indigo-500/5 to-transparent border-b border-purple-500/15 dark:border-purple-500/20">
-                  <div className="flex items-center gap-3.5 min-w-0">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-6 bg-gradient-to-r from-purple-500/10 via-indigo-500/5 to-transparent border-b border-purple-500/15 dark:border-purple-500/20 select-none">
+                  <div 
+                    onClick={() => setCollapsedServices(prev => ({ ...prev, [catId]: !prev[catId] }))}
+                    className="flex items-center gap-3.5 min-w-0 cursor-pointer group/header flex-1"
+                  >
                     <div className={`w-12 h-12 rounded-2xl ${ui.iconBg} flex items-center justify-center shrink-0`}>
                       <IconComponent className="w-6 h-6 stroke-[2.2]" />
                     </div>
                     <div className="min-w-0">
-                      <h3 className={`text-lg font-black tracking-tight truncate ${ui.color}`}>{idx + 1}. {cfg.label}</h3>
+                      <div className="flex items-center gap-2">
+                        <h3 className={`text-lg font-black tracking-tight truncate ${ui.color}`}>{idx + 1}. {cfg.label}</h3>
+                        {collapsedServices[catId] ? (
+                          <ChevronDown className="w-4 h-4 text-muted-foreground group-hover/header:text-foreground transition-colors" />
+                        ) : (
+                          <ChevronUp className="w-4 h-4 text-muted-foreground group-hover/header:text-foreground transition-colors" />
+                        )}
+                      </div>
                       <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mt-0.5">Scope, {catId === 'web-development' ? 'tech stack, ' : ''}and pricing for this service.</p>
                     </div>
                   </div>
@@ -737,223 +929,402 @@ export default function QuotationBuilder({
                   </button>
                 </div>
 
-                <div className="p-6 space-y-6">
-                  <PremiumTextarea
-                    label="Scope Description"
-                    placeholder={`Short description of what's included in ${cfg.label}...`}
-                    value={service.scopeDescription || ''}
-                    onChange={(e) => updateService(catId, { scopeDescription: e.target.value })}
-                    rows={2}
-                  />
+                {!collapsedServices[catId] && (
+                  <div className="p-6 space-y-6">
+                    <PremiumTextarea
+                      label="Scope Description"
+                      placeholder={`Short description of what's included in ${cfg.label}...`}
+                      value={service.scopeDescription || ''}
+                      onChange={(e) => updateService(catId, { scopeDescription: e.target.value })}
+                      rows={2}
+                    />
 
-                  {/* Deliverables */}
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <label className="text-xs font-bold text-foreground/80 uppercase tracking-wider">Deliverables</label>
-                      <button
-                        type="button"
-                        onClick={() => addScopeItem(catId)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#4E12D4] text-white hover:bg-[#3d0da8] font-bold text-[11px] transition-all cursor-pointer"
-                      >
-                        <Plus className="w-3 h-3" /> Add Deliverable
-                      </button>
-                    </div>
-                    {service.scopeItems.length === 0 ? (
-                      <p className="text-xs text-slate-400 italic">No deliverables added yet.</p>
-                    ) : (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        <AnimatePresence>
-                          {service.scopeItems.map((item, i) => (
-                            <motion.div
-                              key={i}
-                              initial={{ opacity: 0, y: 8 }}
-                              animate={{ opacity: 1, y: 0 }}
-                              exit={{ opacity: 0, scale: 0.95 }}
-                              className="group relative flex items-start gap-3 p-3.5 rounded-xl bg-white dark:bg-slate-900/80 border border-slate-200/80 dark:border-slate-800"
+                    {/* Deliverables */}
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-bold text-foreground/80 uppercase tracking-wider">Deliverables</label>
+                        {!(catId === 'web-development' || catId === 'marketing') && (
+                          <button
+                            type="button"
+                            onClick={() => addScopeItem(catId)}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#4E12D4] text-white hover:bg-[#3d0da8] font-bold text-[11px] transition-all cursor-pointer"
+                          >
+                            <Plus className="w-3 h-3" /> Add Deliverable
+                          </button>
+                        )}
+                      </div>
+                      {catId === 'web-development' || catId === 'marketing' ? (
+                        <div className="space-y-2">
+                          <textarea
+                            value={service.scopeItems.join('\n')}
+                            onChange={(e) => updateService(catId, { scopeItems: e.target.value.split('\n') })}
+                            onPaste={(e) => {
+                              const pastedText = e.clipboardData.getData('text');
+                              const hasNumberedHeaders = /\b\d+[\.\)]\s+[A-Z]/g.test(pastedText);
+                              const hasDashes = /^\s*[-*•◦▪+]\s+\w+/m.test(pastedText);
+                              
+                              if (hasNumberedHeaders || hasDashes) {
+                                e.preventDefault();
+                                const formatted = parseRawProposalToBullets(pastedText);
+                                
+                                const start = e.currentTarget.selectionStart;
+                                const end = e.currentTarget.selectionEnd;
+                                const currentValue = e.currentTarget.value;
+                                const newValue = currentValue.substring(0, start) + formatted + currentValue.substring(end);
+                                
+                                updateService(catId, { scopeItems: newValue.split('\n') });
+                                toast.success('✨ Automatically cleaned and formatted proposal scope!');
+                              }
+                            }}
+                            rows={12}
+                            placeholder={`• E-Commerce Website Scope\n  • Modern, clean, and responsive design\n  • Mobile & desktop optimized layout\n\n• CRM / Admin Panel Scope\n  • Dashboard overview\n  • Product management`}
+                            className="w-full p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 focus:border-[#4E12D4] focus:ring-2 focus:ring-[#4E12D4]/10 text-sm font-semibold text-slate-800 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none transition-all resize-y leading-relaxed"
+                          />
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mt-1">
+                            <p className="text-[11px] text-slate-400 dark:text-slate-500 font-medium">
+                              💡 Tip: Type <code className="px-1 py-0.5 rounded bg-muted">• Feature</code> for root items, and indent with spaces like <code className="px-1 py-0.5 rounded bg-muted">&nbsp;&nbsp;• Sub-feature</code> for sub-features. Use newlines to separate.
+                            </p>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const rawVal = service.scopeItems.join('\n');
+                                const cleaned = parseRawProposalToBullets(rawVal);
+                                updateService(catId, { scopeItems: cleaned.split('\n') });
+                                toast.success('✨ Cleaned and formatted deliverables!');
+                              }}
+                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-500/10 text-purple-600 dark:text-purple-400 hover:bg-purple-500/20 font-bold text-[11px] transition-all cursor-pointer shrink-0 self-end sm:self-auto"
                             >
-                              <span className="w-6 h-6 rounded-lg bg-[#4E12D4]/10 text-[#4E12D4] font-mono font-bold text-[10px] flex items-center justify-center shrink-0 mt-0.5">
-                                {String(i + 1).padStart(2, '0')}
-                              </span>
-                              <textarea
-                                value={item}
-                                onChange={(e) => updateScopeItem(catId, i, e.target.value)}
-                                rows={2}
-                                placeholder="Describe this deliverable..."
-                                className="flex-1 bg-transparent border-0 focus:outline-none text-sm font-semibold text-slate-800 dark:text-slate-100 placeholder:text-slate-400 resize-none"
+                              <Sparkles className="w-3 h-3" /> Clean & Format Text
+                            </button>
+                          </div>
+
+                          {/* Live Preview of parsed deliverables */}
+                          {service.scopeItems.length > 0 && service.scopeItems.some(it => it.trim()) && (
+                            <div className="mt-4 p-5 rounded-2xl bg-slate-50/50 dark:bg-slate-800/10 border border-slate-200/60 dark:border-slate-800/80 space-y-3">
+                              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-widest block select-none">Live Interactive Preview Editor</span>
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                                {(() => {
+                                  let runningIndex = 1;
+                                  return service.scopeItems.map((it, i) => {
+                                    const trimmed = String(it || '').trim();
+                                    if (!trimmed) return null;
+
+                                    const isHeading = trimmed.startsWith('### ');
+                                    const leadingSpaces = it.match(/^\s*/)?.[0].length || 0;
+                                    const isSub = leadingSpaces >= 2 || it.startsWith('\t');
+                                    const cleanText = trimmed.replace(/^###\s*/, '').replace(/^[-*•◦▪+]\s*/, '').trim();
+
+                                    const activeBtnStyle = "bg-[#4E12D4] text-white";
+                                    const inactiveBtnStyle = "bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400";
+
+                                    const actionControls = (
+                                      <div className="flex items-center gap-1 opacity-0 group-hover/item:opacity-100 focus-within:opacity-100 transition-opacity shrink-0 ml-2">
+                                        <button
+                                          type="button"
+                                          title="Make Heading"
+                                          onClick={() => setItemType(catId, i, 'heading')}
+                                          className={`px-1.5 py-0.5 rounded text-[9px] font-bold cursor-pointer transition-all ${isHeading ? activeBtnStyle : inactiveBtnStyle}`}
+                                        >
+                                          H
+                                        </button>
+                                        <button
+                                          type="button"
+                                          title="Make Main Feature"
+                                          onClick={() => setItemType(catId, i, 'main')}
+                                          className={`px-1.5 py-0.5 rounded text-[9px] font-bold cursor-pointer transition-all ${(!isHeading && !isSub) ? activeBtnStyle : inactiveBtnStyle}`}
+                                        >
+                                          Main
+                                        </button>
+                                        <button
+                                          type="button"
+                                          title="Make Sub Feature"
+                                          onClick={() => setItemType(catId, i, 'sub')}
+                                          className={`px-1.5 py-0.5 rounded text-[9px] font-bold cursor-pointer transition-all ${isSub ? activeBtnStyle : inactiveBtnStyle}`}
+                                        >
+                                          Sub
+                                        </button>
+                                        <button
+                                          type="button"
+                                          title="Delete Item"
+                                          onClick={() => deleteItem(catId, i)}
+                                          className="p-1 rounded text-red-500 hover:bg-red-500/10 cursor-pointer transition-all ml-0.5"
+                                        >
+                                          <Trash2 className="w-3 h-3" />
+                                        </button>
+                                      </div>
+                                    );
+
+                                    if (isHeading) {
+                                      return (
+                                        <div key={i} className="col-span-full mt-3 first:mt-0 mb-1 pb-1 border-b border-purple-500/20 flex items-center justify-between group/item hover:bg-slate-100/20 dark:hover:bg-slate-800/10 px-2 rounded-lg">
+                                          <input
+                                            value={cleanText}
+                                            onChange={(e) => editItemText(catId, i, e.target.value)}
+                                            className="text-xs font-black tracking-tight text-[#4E12D4] dark:text-purple-400 uppercase bg-transparent border-0 focus:outline-none flex-1 py-1"
+                                          />
+                                          {actionControls}
+                                        </div>
+                                      );
+                                    }
+
+                                    if (isSub) {
+                                      return (
+                                        <div key={i} className="col-span-full flex items-center justify-between gap-2 pl-6 py-1 group/item hover:bg-slate-100/30 dark:hover:bg-slate-800/10 rounded-lg pr-2">
+                                          <div className="flex items-center gap-2 flex-1">
+                                            <span className="w-1.5 h-1.5 rounded-full bg-[#4E12D4] dark:bg-purple-400 shrink-0"></span>
+                                            <input
+                                              value={cleanText}
+                                              onChange={(e) => editItemText(catId, i, e.target.value)}
+                                              className="text-xs font-semibold text-slate-600 dark:text-slate-400 bg-transparent border-0 focus:outline-none flex-1 py-0.5"
+                                            />
+                                          </div>
+                                          {actionControls}
+                                        </div>
+                                      );
+                                    }
+
+                                    const startsWithBullet = /^[-*•◦▪+]\s*/.test(trimmed);
+
+                                    if (startsWithBullet) {
+                                      return (
+                                        <div key={i} className="col-span-full md:col-span-1 group relative flex items-center justify-between gap-3.5 p-4 rounded-2xl bg-purple-500/[0.03] dark:bg-purple-500/[0.05] border border-purple-500/20 hover:border-purple-500/40 hover:bg-purple-500/[0.06] shadow-2xs hover:shadow-md transition-all duration-200">
+                                          <div className="flex items-center gap-3.5 flex-1">
+                                            <div className="w-7 h-7 rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0 font-black text-xs shadow-2xs">
+                                              •
+                                            </div>
+                                            <input
+                                              value={cleanText}
+                                              onChange={(e) => editItemText(catId, i, e.target.value)}
+                                              className="bg-transparent border-0 focus:outline-none focus:ring-0 text-sm font-semibold text-slate-800 dark:text-slate-100 placeholder:text-slate-400 flex-1 py-0.5"
+                                            />
+                                          </div>
+                                          {actionControls}
+                                        </div>
+                                      );
+                                    }
+
+                                    const standardIndex = runningIndex++;
+
+                                    return (
+                                      <div key={i} className="col-span-full md:col-span-1 group relative flex items-center justify-between gap-3.5 p-4 rounded-2xl bg-purple-500/[0.03] dark:bg-purple-500/[0.05] border border-purple-500/20 hover:border-purple-500/40 hover:bg-purple-500/[0.06] shadow-2xs hover:shadow-md transition-all duration-200">
+                                        <div className="flex items-center gap-3.5 flex-1">
+                                          <div className="w-7 h-7 rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0 font-black text-xs shadow-2xs">
+                                            {standardIndex}
+                                          </div>
+                                          <input
+                                            value={cleanText}
+                                            onChange={(e) => editItemText(catId, i, e.target.value)}
+                                            className="bg-transparent border-0 focus:outline-none focus:ring-0 text-sm font-semibold text-slate-800 dark:text-slate-100 placeholder:text-slate-400 flex-1 py-0.5"
+                                          />
+                                        </div>
+                                        {actionControls}
+                                      </div>
+                                    );
+                                  });
+                                })()}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        service.scopeItems.length === 0 ? (
+                          <p className="text-xs text-slate-400 italic">No deliverables added yet.</p>
+                        ) : (
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <AnimatePresence>
+                              {service.scopeItems.map((item, i) => (
+                                <motion.div
+                                  key={i}
+                                  initial={{ opacity: 0, y: 8 }}
+                                  animate={{ opacity: 1, y: 0 }}
+                                  exit={{ opacity: 0, scale: 0.95 }}
+                                  className="group relative flex items-start gap-3 p-3.5 rounded-xl bg-white dark:bg-slate-900/80 border border-slate-200/80 dark:border-slate-800"
+                                >
+                                  <span className="w-6 h-6 rounded-lg bg-[#4E12D4]/10 text-[#4E12D4] font-mono font-bold text-[10px] flex items-center justify-center shrink-0 mt-0.5">
+                                    {String(i + 1).padStart(2, '0')}
+                                  </span>
+                                  <textarea
+                                    value={item}
+                                    onChange={(e) => updateScopeItem(catId, i, e.target.value)}
+                                    rows={2}
+                                    placeholder="Describe this deliverable..."
+                                    className="flex-1 bg-transparent border-0 text-sm font-semibold text-slate-800 dark:text-slate-100 placeholder:text-slate-400 resize-none focus:outline-none"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => removeScopeItem(catId, i)}
+                                    className="opacity-40 group-hover:opacity-100 p-1.5 text-slate-400 hover:text-red-500 rounded-lg hover:bg-red-500/10 transition-all cursor-pointer"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </motion.div>
+                              ))}
+                            </AnimatePresence>
+                          </div>
+                        )
+                      )}
+                    </div>
+
+                    {/* Tech Stack — web-development only */}
+                    {catId === 'web-development' && (
+                      <div className="space-y-3 p-4 rounded-2xl bg-muted/20 border border-border/40">
+                        <label className="text-xs font-bold text-foreground/80 uppercase tracking-wider">Technology Stack</label>
+                        <PremiumTextarea
+                          placeholder="Short description of the technology stack (shown above the table in the PDF)..."
+                          value={service.techStack?.description || ''}
+                          onChange={(e) => updateTechStack(catId, { description: e.target.value })}
+                          rows={2}
+                        />
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <TagInput
+                            label="Frontend"
+                            values={service.techStack?.frontend || []}
+                            onChange={(next) => updateTechStack(catId, { frontend: next })}
+                            placeholder="e.g. Next.js"
+                          />
+                          <TagInput
+                            label="Backend"
+                            values={service.techStack?.backend || []}
+                            onChange={(next) => updateTechStack(catId, { backend: next })}
+                            placeholder="e.g. Node.js"
+                          />
+                          <TagInput
+                            label="Database"
+                            values={service.techStack?.database || []}
+                            onChange={(next) => updateTechStack(catId, { database: next })}
+                            placeholder="e.g. MongoDB"
+                          />
+                          <TagInput
+                            label="Tools"
+                            values={service.techStack?.tools || []}
+                            onChange={(next) => updateTechStack(catId, { tools: next })}
+                            placeholder="e.g. Figma"
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Pricing: base + discount/tax */}
+                    <div className={`grid grid-cols-1 ${showBasePrice ? 'sm:grid-cols-3' : 'sm:grid-cols-2'} gap-4`}>
+                      {showBasePrice && (
+                        <PremiumInput
+                          label="Base / Package Price"
+                          type="number"
+                          placeholder="0.00"
+                          value={service.basePrice || ''}
+                          onChange={(e) => updateService(catId, { basePrice: parseFloat(e.target.value) || 0 })}
+                        />
+                      )}
+                      <PremiumInput
+                        label="Discount (%)"
+                        type="number"
+                        placeholder="0%"
+                        value={service.discount || ''}
+                        onChange={(e) => updateService(catId, { discount: parseFloat(e.target.value) || 0 })}
+                      />
+                      <PremiumInput
+                        label="VAT / Tax (%)"
+                        type="number"
+                        placeholder="0%"
+                        value={service.taxRate || ''}
+                        onChange={(e) => updateService(catId, { taxRate: parseFloat(e.target.value) || 0 })}
+                      />
+                    </div>
+
+                    {/* Line items */}
+                    <div className="space-y-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <label className="text-xs font-bold text-foreground/80 uppercase tracking-wider">
+                          Add-on / Line Items {unitLabel ? `(priced per ${unitLabel})` : '(one-time or recurring — e.g. hosting, retainers)'}
+                        </label>
+                        <div className="flex items-center gap-2">
+                          {suggestions.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => suggestions.forEach((it) => addLineItem(catId, { ...it }))}
+                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-muted text-foreground/80 hover:bg-muted/70 font-bold text-[11px] transition-all cursor-pointer"
+                            >
+                              <Sparkles className="w-3 h-3" /> Add Suggested
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => addLineItem(catId)}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#4E12D4] text-white hover:bg-[#3d0da8] font-bold text-[11px] transition-all cursor-pointer"
+                          >
+                            <Plus className="w-3 h-3" /> Add Line Item
+                          </button>
+                        </div>
+                      </div>
+
+                      {service.lineItems.length === 0 ? (
+                        <p className="text-xs text-slate-400 italic">No add-on line items yet.</p>
+                      ) : (
+                        <div className="space-y-2">
+                          {service.lineItems.map((item, i) => (
+                            <div
+                              key={i}
+                              className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-center p-3 rounded-xl bg-white dark:bg-slate-900/80 border border-slate-200/80 dark:border-slate-800"
+                            >
+                              <input
+                                value={item.title}
+                                onChange={(e) => updateLineItem(catId, i, { title: e.target.value })}
+                                placeholder="Item title"
+                                className="sm:col-span-4 bg-transparent border border-transparent focus:border-[#4E12D4]/40 rounded-lg px-2 py-1.5 text-sm font-semibold focus:outline-none"
+                              />
+                              <select
+                                value={item.billingCycle}
+                                onChange={(e) => updateLineItem(catId, i, { billingCycle: e.target.value as BillingCycle })}
+                                className="sm:col-span-2 bg-background border border-border/60 rounded-lg px-2 py-1.5 text-xs font-semibold focus:outline-none"
+                              >
+                                {billingOptions.map((bc) => (
+                                  <option key={bc} value={bc}>
+                                    {BILLING_CYCLE_LABELS[bc]}
+                                  </option>
+                                ))}
+                              </select>
+                              {unitBased && (
+                                <input
+                                  type="number"
+                                  value={item.quantity ?? 1}
+                                  onChange={(e) => updateLineItem(catId, i, { quantity: parseFloat(e.target.value) || 1 })}
+                                  placeholder="Qty"
+                                  className="sm:col-span-1 bg-background border border-border/60 rounded-lg px-2 py-1.5 text-xs font-semibold focus:outline-none"
+                                />
+                              )}
+                              <input
+                                type="number"
+                                value={item.price || ''}
+                                onChange={(e) => updateLineItem(catId, i, { price: parseFloat(e.target.value) || 0 })}
+                                placeholder="Unit price"
+                                className={`${unitBased ? 'sm:col-span-2' : 'sm:col-span-3'} bg-background border border-border/60 rounded-lg px-2 py-1.5 text-xs font-semibold focus:outline-none`}
+                              />
+                              <input
+                                value={item.description || ''}
+                                onChange={(e) => updateLineItem(catId, i, { description: e.target.value })}
+                                placeholder="Note (optional)"
+                                className="sm:col-span-2 bg-transparent border border-transparent focus:border-[#4E12D4]/40 rounded-lg px-2 py-1.5 text-xs focus:outline-none"
                               />
                               <button
                                 type="button"
-                                onClick={() => removeScopeItem(catId, i)}
-                                className="opacity-40 group-hover:opacity-100 p-1.5 text-slate-400 hover:text-red-500 rounded-lg hover:bg-red-500/10 transition-all cursor-pointer"
+                                onClick={() => removeLineItem(catId, i)}
+                                className="sm:col-span-1 flex items-center justify-center p-1.5 text-slate-400 hover:text-red-500 rounded-lg hover:bg-red-500/10 transition-all cursor-pointer"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
                               </button>
-                            </motion.div>
+                            </div>
                           ))}
-                        </AnimatePresence>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Tech Stack — web-development only */}
-                  {catId === 'web-development' && (
-                    <div className="space-y-3 p-4 rounded-2xl bg-muted/20 border border-border/40">
-                      <label className="text-xs font-bold text-foreground/80 uppercase tracking-wider">Technology Stack</label>
-                      <PremiumTextarea
-                        placeholder="Short description of the technology stack (shown above the table in the PDF)..."
-                        value={service.techStack?.description || ''}
-                        onChange={(e) => updateTechStack(catId, { description: e.target.value })}
-                        rows={2}
-                      />
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <TagInput
-                          label="Frontend"
-                          values={service.techStack?.frontend || []}
-                          onChange={(next) => updateTechStack(catId, { frontend: next })}
-                          placeholder="e.g. Next.js"
-                        />
-                        <TagInput
-                          label="Backend"
-                          values={service.techStack?.backend || []}
-                          onChange={(next) => updateTechStack(catId, { backend: next })}
-                          placeholder="e.g. Node.js"
-                        />
-                        <TagInput
-                          label="Database"
-                          values={service.techStack?.database || []}
-                          onChange={(next) => updateTechStack(catId, { database: next })}
-                          placeholder="e.g. MongoDB"
-                        />
-                        <TagInput
-                          label="Tools"
-                          values={service.techStack?.tools || []}
-                          onChange={(next) => updateTechStack(catId, { tools: next })}
-                          placeholder="e.g. Figma"
-                        />
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Pricing: base + discount/tax */}
-                  <div className={`grid grid-cols-1 ${showBasePrice ? 'sm:grid-cols-3' : 'sm:grid-cols-2'} gap-4`}>
-                    {showBasePrice && (
-                      <PremiumInput
-                        label="Base / Package Price"
-                        type="number"
-                        placeholder="0.00"
-                        value={service.basePrice || ''}
-                        onChange={(e) => updateService(catId, { basePrice: parseFloat(e.target.value) || 0 })}
-                      />
-                    )}
-                    <PremiumInput
-                      label="Discount (%)"
-                      type="number"
-                      placeholder="0%"
-                      value={service.discount || ''}
-                      onChange={(e) => updateService(catId, { discount: parseFloat(e.target.value) || 0 })}
-                    />
-                    <PremiumInput
-                      label="VAT / Tax (%)"
-                      type="number"
-                      placeholder="0%"
-                      value={service.taxRate || ''}
-                      onChange={(e) => updateService(catId, { taxRate: parseFloat(e.target.value) || 0 })}
-                    />
-                  </div>
-
-                  {/* Line items */}
-                  <div className="space-y-3">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <label className="text-xs font-bold text-foreground/80 uppercase tracking-wider">
-                        Add-on / Line Items {unitLabel ? `(priced per ${unitLabel})` : '(one-time or recurring — e.g. hosting, retainers)'}
-                      </label>
-                      <div className="flex items-center gap-2">
-                        {suggestions.length > 0 && (
-                          <button
-                            type="button"
-                            onClick={() => suggestions.forEach((it) => addLineItem(catId, { ...it }))}
-                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-muted text-foreground/80 hover:bg-muted/70 font-bold text-[11px] transition-all cursor-pointer"
-                          >
-                            <Sparkles className="w-3 h-3" /> Add Suggested
-                          </button>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => addLineItem(catId)}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#4E12D4] text-white hover:bg-[#3d0da8] font-bold text-[11px] transition-all cursor-pointer"
-                        >
-                          <Plus className="w-3 h-3" /> Add Line Item
-                        </button>
-                      </div>
+                        </div>
+                      )}
                     </div>
 
-                    {service.lineItems.length === 0 ? (
-                      <p className="text-xs text-slate-400 italic">No add-on line items yet.</p>
-                    ) : (
-                      <div className="space-y-2">
-                        {service.lineItems.map((item, i) => (
-                          <div
-                            key={i}
-                            className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-center p-3 rounded-xl bg-white dark:bg-slate-900/80 border border-slate-200/80 dark:border-slate-800"
-                          >
-                            <input
-                              value={item.title}
-                              onChange={(e) => updateLineItem(catId, i, { title: e.target.value })}
-                              placeholder="Item title"
-                              className="sm:col-span-4 bg-transparent border border-transparent focus:border-[#4E12D4]/40 rounded-lg px-2 py-1.5 text-sm font-semibold focus:outline-none"
-                            />
-                            <select
-                              value={item.billingCycle}
-                              onChange={(e) => updateLineItem(catId, i, { billingCycle: e.target.value as BillingCycle })}
-                              className="sm:col-span-2 bg-background border border-border/60 rounded-lg px-2 py-1.5 text-xs font-semibold focus:outline-none"
-                            >
-                              {billingOptions.map((bc) => (
-                                <option key={bc} value={bc}>
-                                  {BILLING_CYCLE_LABELS[bc]}
-                                </option>
-                              ))}
-                            </select>
-                            {unitBased && (
-                              <input
-                                type="number"
-                                value={item.quantity ?? 1}
-                                onChange={(e) => updateLineItem(catId, i, { quantity: parseFloat(e.target.value) || 1 })}
-                                placeholder="Qty"
-                                className="sm:col-span-1 bg-background border border-border/60 rounded-lg px-2 py-1.5 text-xs font-semibold focus:outline-none"
-                              />
-                            )}
-                            <input
-                              type="number"
-                              value={item.price || ''}
-                              onChange={(e) => updateLineItem(catId, i, { price: parseFloat(e.target.value) || 0 })}
-                              placeholder="Unit price"
-                              className={`${unitBased ? 'sm:col-span-2' : 'sm:col-span-3'} bg-background border border-border/60 rounded-lg px-2 py-1.5 text-xs font-semibold focus:outline-none`}
-                            />
-                            <input
-                              value={item.description || ''}
-                              onChange={(e) => updateLineItem(catId, i, { description: e.target.value })}
-                              placeholder="Note (optional)"
-                              className="sm:col-span-2 bg-transparent border border-transparent focus:border-[#4E12D4]/40 rounded-lg px-2 py-1.5 text-xs focus:outline-none"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => removeLineItem(catId, i)}
-                              className="sm:col-span-1 flex items-center justify-center p-1.5 text-slate-400 hover:text-red-500 rounded-lg hover:bg-red-500/10 transition-all cursor-pointer"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                    {/* Per-service total readout */}
+                    <div className="flex items-center justify-between p-4 rounded-xl bg-muted/30 border border-border/40">
+                      <span className="text-sm font-bold text-foreground/80">{cfg.label} Total (one-time)</span>
+                      <span className="text-lg font-black text-[#4E12D4]">{formatMoney(serviceTotal.grandTotal, currency)}</span>
+                    </div>
                   </div>
-
-                  {/* Per-service total readout */}
-                  <div className="flex items-center justify-between p-4 rounded-xl bg-muted/30 border border-border/40">
-                    <span className="text-sm font-bold text-foreground/80">{cfg.label} Total (one-time)</span>
-                    <span className="text-lg font-black text-[#4E12D4]">{formatMoney(serviceTotal.grandTotal, currency)}</span>
-                  </div>
-                </div>
+                )}
               </div>
             );
           })}
@@ -1017,7 +1388,7 @@ export default function QuotationBuilder({
         )}
       </PremiumCard>
 
-      {/* 5. AI Auto-Fill */}
+      {/* 5. AI Auto-Fill & Import Tool */}
       <PremiumCard accent="magenta">
         <div className="flex items-center gap-3.5 pb-5 mb-5 border-b border-slate-200/60 dark:border-slate-800/60">
           <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-[#C850FA] to-[#4E12D4] text-white flex items-center justify-center shadow-md shadow-[#C850FA]/20">
@@ -1025,10 +1396,10 @@ export default function QuotationBuilder({
           </div>
           <div>
             <h2 className="text-xl font-extrabold tracking-tight text-slate-900 dark:text-white">
-              5. AI Auto-Fill Prototype
+              5. AI Auto-Fill &amp; Import Tool
             </h2>
             <p className="text-xs text-slate-500 dark:text-slate-400 font-normal mt-0.5">
-              Copy the prompt below, paste it into ChatGPT, and paste the AI response back to auto-fill deliverables.
+              Copy the custom prompt for your selected services, paste it to ChatGPT/Claude, and paste the response back to import everything.
             </p>
           </div>
         </div>
@@ -1036,23 +1407,23 @@ export default function QuotationBuilder({
         <div className="space-y-4">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 rounded-xl bg-muted/20 border border-border/40">
             <div className="text-xs text-muted-foreground">
-              <span className="font-semibold text-foreground">💡 Smart Prompt Copy:</span> Generates a prompt containing only headings for your currently selected active services.
+              <span className="font-semibold text-foreground">💡 Smart Prompt Builder:</span> Generates a tailor-made prompt containing only your active selected services.
             </div>
-            <PremiumButton variant="outline" size="sm" onClick={copyPrompt} leftIcon={<Copy className="w-3.5 h-3.5" />} disabled={activeServices.length === 0}>
-              Copy Multi-Service AI Prompt
+            <PremiumButton variant="outline" size="sm" onClick={copyPrompt} leftIcon={<Copy className="w-3.5 h-3.5" />}>
+              Copy Custom AI Prompt
             </PremiumButton>
           </div>
 
           <div className="space-y-3">
             <PremiumTextarea
-              placeholder="Paste ChatGPT proposal output here... (e.g. 1. Web Development Scope: ... 2. Marketing Scope: ... 3. Not Included: ...)"
+              placeholder="Paste ChatGPT/Claude structured response here..."
               value={aiInputText}
               onChange={(e) => setAiInputText(e.target.value)}
-              rows={4}
+              rows={6}
             />
             <div className="flex justify-end">
               <PremiumButton variant="magenta" size="sm" onClick={handleAiImport} leftIcon={<Sparkles className="w-3.5 h-3.5" />}>
-                Smart Import to Quotation
+                Smart Import to Proposal
               </PremiumButton>
             </div>
           </div>

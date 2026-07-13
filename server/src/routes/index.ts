@@ -37,6 +37,7 @@ import { TaskRoutes } from "./task.route.js";
 import { SupportRoutes } from "./support.route.js";
 import { AIChatRoutes } from "./ai-chat.route.js";
 import { ConsultationRoutes } from "./consultation.route.js";
+import { testAiPdfRoute } from "./test-ai-pdf.route.js";
 
 const router: Router = Router();
 
@@ -190,6 +191,10 @@ const moduleRoutes = [
     {
         path: "/consultations",
         route: ConsultationRoutes,
+    },
+    {
+        path: "/test",
+        route: testAiPdfRoute,
     },
 ];
 

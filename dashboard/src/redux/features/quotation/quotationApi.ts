@@ -1,7 +1,6 @@
 import { apiSlice } from '@/redux/api/apiSlice';
 import { QuotationData } from '@/types/quotation.type';
 
-
 export interface RecipientSendStatus {
   email: string;
   status: 'sent' | 'failed';

@@ -164,13 +164,53 @@ function buildPrintHtml(
             : ['Comprehensive deliverables and feature scope as agreed.'];
 
         const descHtml = scopeDescription ? `<p class="module-desc">${esc(scopeDescription)}</p>` : '';
+        let runningItemIndex = 1;
         const itemsHtml = scopeItems
             .map(
-                (item: string, itemIdx: number) => `
+                (item: string) => {
+                    const trimmed = String(item || '').trim();
+                    if (!trimmed) return '';
+
+                    if (trimmed.startsWith('### ')) {
+                        const headingText = trimmed.replace(/^###\s*/, '');
+                        return `
+              <div class="deliverable-heading" style="margin-top: 14px; margin-bottom: 6px; font-size: 13.5px; font-weight: 800; color: var(--accent); border-bottom: 1.5px solid rgba(78, 18, 212, 0.15); padding-bottom: 4px; page-break-after: avoid; break-after: avoid; width: 100%;">
+                ${esc(headingText)}
+              </div>`;
+                    }
+
+                    // Detect nested sub-features
+                    const leadingSpaces = item.match(/^\s*/)?.[0].length || 0;
+                    const isSub = leadingSpaces >= 2 || item.startsWith('\t');
+
+                    const cleanText = trimmed.replace(/^[-*•◦▪+]\s*/, '').trim();
+
+                    if (isSub) {
+                        return `
+              <div class="deliverable-item sub-feature" style="margin-left: 24px; border-left: 2px solid rgba(78, 18, 212, 0.15); padding: 5px 16px; background-color: transparent; border-radius: 0; border-top: none; border-right: none; border-bottom: none; box-shadow: none; display: flex; align-items: center; gap: 8px; margin-top: 2px; margin-bottom: 2px; page-break-inside: avoid; break-inside: avoid; width: 100%;">
+                <span class="sub-dot" style="width: 5px; height: 5px; border-radius: 50%; background-color: #4E12D4; flex-shrink: 0; display: inline-block;"></span>
+                <span class="deliv-text" style="font-size: 11px; font-weight: 500; color: var(--slate600);">${esc(cleanText)}</span>
+              </div>`;
+                    }
+
+                    const startsWithBullet = /^[-*•◦▪+]\s*/.test(trimmed);
+
+                    if (startsWithBullet) {
+                        return `
+              <div class="deliverable-item" style="display: flex; align-items: center; gap: 12px; padding: 10px 16px; background-color: #ffffff; border: 1px solid rgba(226, 232, 240, 0.85); border-radius: 10px; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.01); page-break-inside: avoid; break-inside: avoid; width: 100%;">
+                <span class="feature-dot" style="width: 7px; height: 7px; border-radius: 50%; background: linear-gradient(135deg, var(--accent) 0%, var(--primary) 100%); flex-shrink: 0; box-shadow: 0 1px 3px rgba(78, 18, 212, 0.3); display: inline-block;"></span>
+                <span class="deliv-text" style="font-size: 12px; font-weight: 700; color: var(--slate800);">${esc(cleanText)}</span>
+              </div>`;
+                    }
+
+                    // Standard numbered item
+                    const idxStr = String(runningItemIndex++).padStart(2, '0');
+                    return `
               <div class="deliverable-item">
-                <span class="deliv-num">${String(itemIdx + 1).padStart(2, '0')}</span>
-                <span class="deliv-text">${esc(item)}</span>
-              </div>`
+                <span class="deliv-num">${idxStr}</span>
+                <span class="deliv-text">${esc(cleanText)}</span>
+              </div>`;
+                }
             )
             .join('');
 

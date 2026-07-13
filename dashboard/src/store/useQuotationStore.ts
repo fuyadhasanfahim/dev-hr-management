@@ -97,24 +97,13 @@ const initialState: QuotationData = {
   },
   overview: "",
   services: [],
-  notIncluded: [
-    "Domain Registration & Premium Web Hosting (Billed Separately)",
-    "Third-party Paid API Licenses, Plugins, or Premium Fonts",
-    "Paid Ad Spend for Facebook, Google, or LinkedIn Campaigns",
-    "Raw Unedited Studio Footage or Source Design Files (Unless specified)",
-  ],
-  clientRequirements: [
-    "High-resolution Brand Logo, Color Palette & Typography Guidelines",
-    "Admin Access / Credentials to Hosting, Domain, or CMS Platform",
-    "Final Approved Text Content, Copywriting & Product Photography",
-    "Dedicated Point of Contact for Prompt Feedback and Approvals",
-  ],
+  notIncluded: [],
+  clientRequirements: [],
   recurringCharges: [],
   workflow: [],
   paymentMilestones: [
-    { label: "30% Upfront Payment", percentage: 30 },
-    { label: "40% Midway Progress Milestone", percentage: 40 },
-    { label: "30% Final Delivery & Handover", percentage: 30 },
+    { label: "50% Upfront Payment", percentage: 50 },
+    { label: "50% Final Delivery & Handover", percentage: 50 },
   ],
   totals: {
     subtotal: 0,

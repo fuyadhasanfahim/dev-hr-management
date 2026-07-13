@@ -619,16 +619,66 @@ export default function ViewQuotationPage() {
                                             <div className="p-5">
                                                 {p.items?.length ? (
                                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
-                                                        {p.items.map((it, i) => (
-                                                            <div key={`${idx}-${i}`} className="flex items-start gap-3 p-3.5 rounded-2xl bg-slate-50/80 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800/80 transition-all duration-200 hover:bg-slate-100/80 dark:hover:bg-slate-800/70 hover:border-slate-200/80">
-                                                                <span className={`w-6 h-6 rounded-xl ${style.bg} ${style.text} font-bold text-xs flex items-center justify-center shrink-0 mt-0.5 border ${style.border}`}>
-                                                                    {i + 1}
-                                                                </span>
-                                                                <span className="text-sm font-medium text-slate-700 dark:text-slate-300 leading-snug">
-                                                                    {it}
-                                                                </span>
-                                                            </div>
-                                                        ))}
+                                                        {(() => {
+                                                             let runningIndex = 1;
+                                                             return p.items.map((it, i) => {
+                                                                 const trimmed = String(it || '').trim();
+                                                                 if (!trimmed) return null;
+
+                                                                 const isHeading = trimmed.startsWith('### ');
+                                                                 const leadingSpaces = it.match(/^\s*/)?.[0].length || 0;
+                                                                 const isSub = leadingSpaces >= 2 || it.startsWith('\t');
+                                                                 const cleanText = trimmed.replace(/^[-*•◦▪+]\s*/, '').trim();
+
+                                                                 if (isHeading) {
+                                                                     const headingText = trimmed.replace(/^###\s*/, '');
+                                                                     return (
+                                                                         <div key={`${idx}-${i}`} className="col-span-full mt-4 first:mt-0 mb-1 pb-1 border-b border-purple-500/20">
+                                                                             <h5 className="text-sm font-extrabold tracking-tight text-[#4E12D4] dark:text-purple-400 uppercase select-none">
+                                                                                 {headingText}
+                                                                             </h5>
+                                                                         </div>
+                                                                     );
+                                                                 }
+
+                                                                 if (isSub) {
+                                                                     return (
+                                                                         <div key={`${idx}-${i}`} className="col-span-full flex items-start gap-2.5 pl-6 py-1 select-none">
+                                                                             <span className="w-1.5 h-1.5 rounded-full bg-[#4E12D4] dark:bg-purple-400 shrink-0 mt-2"></span>
+                                                                             <span className="text-xs font-semibold text-slate-600 dark:text-slate-400 leading-snug">
+                                                                                 {cleanText}
+                                                                             </span>
+                                                                         </div>
+                                                                     );
+                                                                 }
+
+                                                                 const startsWithBullet = /^[-*•◦▪+]\s*/.test(trimmed);
+
+                                                                 if (startsWithBullet) {
+                                                                     return (
+                                                                         <div key={`${idx}-${i}`} className="col-span-full md:col-span-1 flex items-start gap-3 p-3 rounded-2xl bg-white dark:bg-slate-900/60 border border-slate-100 dark:border-slate-800/80 transition-all duration-200">
+                                                                             <span className="w-2.5 h-2.5 rounded-full bg-gradient-to-br from-[#4E12D4] to-[#C850FA] shrink-0 mt-1.5 border border-[#4E12D4]/20 shadow-sm"></span>
+                                                                             <span className="text-sm font-bold text-slate-800 dark:text-slate-200 leading-snug">
+                                                                                 {cleanText}
+                                                                             </span>
+                                                                         </div>
+                                                                     );
+                                                                 }
+
+                                                                 const standardIndex = runningIndex++;
+
+                                                                 return (
+                                                                     <div key={`${idx}-${i}`} className="flex items-start gap-3 p-3.5 rounded-2xl bg-slate-50/80 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800/80 transition-all duration-200 hover:bg-slate-100/80 dark:hover:bg-slate-800/70 hover:border-slate-200/80">
+                                                                         <span className={`w-6 h-6 rounded-xl ${style.bg} ${style.text} font-bold text-xs flex items-center justify-center shrink-0 mt-0.5 border ${style.border}`}>
+                                                                             {standardIndex}
+                                                                         </span>
+                                                                         <span className="text-sm font-medium text-slate-700 dark:text-slate-300 leading-snug">
+                                                                             {cleanText}
+                                                                         </span>
+                                                                     </div>
+                                                                 );
+                                                             });
+                                                         })()}
                                                     </div>
                                                 ) : (
                                                     <div className="text-sm text-slate-400 italic py-2">

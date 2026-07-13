@@ -91,5 +91,8 @@ const envConfig = {
 
     // Gemini AI
     gemini_api_key: process.env.GEMINI_API_KEY || '',
+
+    // OpenAI (test-pdf tool)
+    openai_api_key: process.env.OPENAI_API_KEY || '',
 };
 export default envConfig;
