@@ -1,6 +1,7 @@
 import { format } from 'date-fns';
 import puppeteer from 'puppeteer';
 import ReceiptModel from '../models/receipt.model.js';
+import ReceiptPaymentModel from '../models/receipt-payment.model.js';
 import ClientModel from '../models/client.model.js';
 import QuotationModel from '../models/quotation.model.js';
 import { AppError } from '../utils/AppError.js';
@@ -312,25 +313,68 @@ function buildPrintHtml(r: Record<string, any>, ctx: ReceiptPdfContext): string 
 }
 
 export class ReceiptPuppeteerPdfService {
-    static async generatePdf(receiptId: string): Promise<{ buffer: Buffer; filename: string }> {
+    /**
+     * Generates the PDF for a single payment transaction on this Receipt ledger.
+     * Defaults to the most recently recorded payment when `paymentId` is omitted
+     * (e.g. right after a new payment is added).
+     */
+    static async generatePdf(
+        receiptId: string,
+        paymentId?: string,
+    ): Promise<{ buffer: Buffer; filename: string }> {
         const receipt = await ReceiptModel.findById(receiptId).lean();
         if (!receipt) throw new AppError('Receipt not found', 404);
 
         const client = await ClientModel.findById(receipt.clientId).lean();
-
-        // In the new schema, Receipt.totalPaid is the authoritative cached sum.
         const quotation = await QuotationModel.findById(receipt.quotationId).lean();
         const grandTotal = quotation?.totals?.grandTotal || 0;
-        const paidAfter = receipt.status === 'issued' ? (receipt.totalPaid ?? 0) : 0;
-        const remaining = Math.max(0, grandTotal - paidAfter);
 
+        // The ledger can hold many payments — resolve the one this PDF represents.
+        const payments = await ReceiptPaymentModel.find({
+            receiptId: receipt._id,
+            status: 'recorded',
+        })
+            // Same-day payments share an identical paymentDate — tie-break on
+            // createdAt (true insertion order) so "most recent" is deterministic.
+            .sort({ paymentDate: 1, createdAt: 1 })
+            .lean();
+
+        const paymentIndex = paymentId
+            ? payments.findIndex((p) => p._id.toString() === paymentId)
+            : payments.length - 1;
+
+        if (paymentIndex === -1) throw new AppError('Payment not found on this receipt', 404);
+        const payment = payments[paymentIndex];
+        if (!payment) throw new AppError('No payments have been recorded on this receipt yet', 404);
+
+        const totalPaidBefore = payments
+            .slice(0, paymentIndex)
+            .reduce((sum, p) => sum + p.amount, 0);
+        const paidThroughThisPayment = totalPaidBefore + payment.amount;
+        const remaining = Math.max(0, grandTotal - paidThroughThisPayment);
+
+        // `payments` only includes status: 'recorded' entries, so this PDF always
+        // represents a live payment — void status here reflects the whole receipt.
+        const receiptForHtml = {
+            receiptNumber: receipt.receiptNumber,
+            quotationNumber: receipt.quotationNumber,
+            currency: receipt.currency,
+            status: receipt.status,
+            voidReason: receipt.voidReason,
+            amount: payment.amount,
+            paymentType: payment.paymentType,
+            milestoneLabel: payment.milestoneLabel,
+            method: payment.method,
+            note: payment.note,
+            paymentDate: payment.paymentDate,
+        };
 
         const signatureUrl = process.env.COMPANY_SIGNATURE_URL || DEFAULT_SIGNATURE;
         let logoSrc =
             (await fetchImageAsDataUrl(DEFAULT_LOGO)) || FALLBACK_PIXEL_PNG;
         const signatureSrc = (await fetchImageAsDataUrl(signatureUrl)) || '';
 
-        const html = buildPrintHtml(receipt as Record<string, any>, {
+        const html = buildPrintHtml(receiptForHtml, {
             logoSrc,
             signatureSrc,
             client: {
@@ -339,7 +383,7 @@ export class ReceiptPuppeteerPdfService {
                 email: client?.emails?.[0],
                 phone: client?.phone,
             },
-            totalPaidBefore: paidAfter,
+            totalPaidBefore,
             remaining,
         });
 
@@ -379,7 +423,9 @@ export class ReceiptPuppeteerPdfService {
 
             const rn = String(receipt.receiptNumber || '').trim();
             const stem = rn ? (rn.startsWith('#') ? rn : `#${rn}`) : 'receipt';
-            const filename = `${stem}.pdf`.replace(/[/\\?%*:|"<>]/g, '-');
+            // Disambiguate the filename when a ledger holds more than one payment.
+            const suffix = payments.length > 1 ? `-P${paymentIndex + 1}` : '';
+            const filename = `${stem}${suffix}.pdf`.replace(/[/\\?%*:|"<>]/g, '-');
             return { buffer: Buffer.from(pdf), filename };
         } catch (e: unknown) {
             const err = e as { message?: string };

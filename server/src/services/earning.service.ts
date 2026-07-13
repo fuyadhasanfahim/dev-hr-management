@@ -25,10 +25,12 @@ async function syncEarningFromReceipt(
     const receipt = await ReceiptModel.findById(receiptId);
     if (!receipt) return null;
 
+    // Same-day payments share an identical paymentDate — tie-break on
+    // createdAt (true insertion order) so "latest payment" is deterministic.
     const payments = await ReceiptPaymentModel.find({
         receiptId: receipt._id,
         status: 'recorded',
-    }).sort({ paymentDate: 1 });
+    }).sort({ paymentDate: 1, createdAt: 1 });
 
     if (payments.length === 0) {
         await EarningModel.deleteOne({ receiptId: receipt._id });

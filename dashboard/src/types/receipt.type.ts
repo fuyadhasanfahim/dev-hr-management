@@ -63,6 +63,8 @@ export interface PaymentSummaryQuotation {
   grandTotal: number;
   paymentMilestones: IPaymentMilestone[];
   clientId: string;
+  /** Set once an Order has been created from this quotation group. */
+  orderId?: string | null;
 }
 
 export interface PaymentSummary {

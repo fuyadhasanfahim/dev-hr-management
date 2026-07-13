@@ -15,6 +15,7 @@ import {
 } from "@/redux/features/quotation/quotationApi";
 import { useConvertQuotationToOrderMutation } from "@/redux/features/order/orderApi";
 import { QuotationEmailDialog } from "./components/QuotationEmailDialog";
+import { AddPaymentDialog } from "@/components/receipt/AddPaymentDialog";
 import { toast } from "sonner";
 import { useQuotationStore } from "@/store/useQuotationStore";
 import { QuotationData, QuotationStatus } from "@/types/quotation.type";
@@ -30,6 +31,7 @@ import {
   Trash2,
   Send,
   Loader2,
+  Receipt,
 } from "lucide-react";
 import { useSession } from "@/lib/auth-client";
 import { Role } from "@/constants/role";
@@ -85,6 +87,9 @@ export default function QuotationsPage() {
   const [pickerQuotation, setPickerQuotation] = useState<QuotationData | null>(
     null,
   );
+
+  // ── Create Receipt dialog state ─────────────────────────────────────────
+  const [receiptTarget, setReceiptTarget] = useState<QuotationData | null>(null);
 
   const pickerClientId = useMemo(
     () => (pickerQuotation ? resolveClientId(pickerQuotation) ?? "" : ""),
@@ -318,6 +323,19 @@ export default function QuotationsPage() {
                 </Button>
               )}
 
+              {/* Create Receipt */}
+              {q.isLatestVersion !== false && !["superseded", "expired"].includes(q.status || "") && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8.5 w-8.5 rounded-xl text-slate-400 hover:text-brand-primary dark:hover:text-purple-400"
+                  title="Record a payment / create receipt"
+                  onClick={() => setReceiptTarget(q)}
+                >
+                  <Receipt className="h-4.5 w-4.5" />
+                </Button>
+              )}
+
               {/* View */}
               <Button
                 variant="ghost"
@@ -499,6 +517,13 @@ export default function QuotationsPage() {
         }}
         onSend={handleConfirmSend}
         isSending={Boolean(sendingId)}
+      />
+
+      <AddPaymentDialog
+        quotationGroupId={receiptTarget?.quotationGroupId ?? null}
+        quotationNumber={receiptTarget?.quotationNumber}
+        onClose={() => setReceiptTarget(null)}
+        onRecorded={refetch}
       />
     </div>
   );

@@ -121,3 +121,4 @@ server/build/
 server/logs/
 server/uploads/
 server/backups/
+server/.cache/

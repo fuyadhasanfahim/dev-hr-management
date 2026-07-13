@@ -5,7 +5,6 @@ import OrderModel, {
     type IQuotationSnapshot,
     OrderStatus,
     OrderType,
-    ALLOWED_STATUS_TRANSITIONS,
 } from '../models/order.model.js';
 import QuotationModel from '../models/quotation.model.js';
 import { AppError } from '../utils/AppError.js';
@@ -331,8 +330,9 @@ async function createOrderFromQuotation(
 }
 
 /**
- * Transition order status through the state machine.
- * Rejects transitions not in ALLOWED_STATUS_TRANSITIONS.
+ * Transition order status. Staff may set any status directly — no
+ * workflow-order restriction — but the update stays optimistic-concurrency
+ * safe and still runs the delivered/completed asset-unlock side effect.
  */
 async function transitionStatus(
     orderId: string,
@@ -342,15 +342,6 @@ async function transitionStatus(
 ): Promise<IOrder> {
     const order = await OrderModel.findById(orderId);
     if (!order) throw new AppError('Order not found', 404);
-
-    const allowed = ALLOWED_STATUS_TRANSITIONS[order.status];
-    if (!allowed.includes(newStatus)) {
-        throw new AppError(
-            `Invalid status transition: ${order.status} → ${newStatus}. ` +
-                `Allowed next states: [${allowed.join(', ')}]`,
-            409,
-        );
-    }
 
     const updated = await OrderModel.findOneAndUpdate(
         { _id: order._id, __v: order.__v },

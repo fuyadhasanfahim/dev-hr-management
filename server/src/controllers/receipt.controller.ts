@@ -107,7 +107,8 @@ const downloadReceiptPdfPuppeteer = async (req: Request, res: Response, next: Ne
     try {
         const { id } = req.params;
         if (!id) return next(new Error('ID is required'));
-        const { buffer, filename } = await ReceiptPuppeteerPdfService.generatePdf(id);
+        const paymentId = typeof req.query.paymentId === 'string' ? req.query.paymentId : undefined;
+        const { buffer, filename } = await ReceiptPuppeteerPdfService.generatePdf(id, paymentId);
         res.setHeader('Content-Type', 'application/pdf');
         res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
         res.send(buffer);

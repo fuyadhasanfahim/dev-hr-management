@@ -36,6 +36,7 @@ import {
   useAddPaymentMutation,
   useGetPaymentSummaryQuery,
 } from "@/redux/features/receipt/receiptApi";
+import { downloadReceiptPdf, receiptPdfFileStem } from "@/lib/download-receipt-pdf";
 import type { ReceiptPaymentType } from "@/types/receipt.type";
 
 const PAYMENT_TYPE_LABELS: Record<string, string> = {
@@ -206,6 +207,18 @@ export default function NewReceiptPage() {
         ...(note.trim() ? { note: note.trim() } : {}),
       }).unwrap();
       toast.success("Payment recorded successfully!");
+
+      const pdfToastId = toast.loading("Generating receipt PDF...");
+      const downloaded = await downloadReceiptPdf(
+        result.receipt._id,
+        receiptPdfFileStem(result.receipt.receiptNumber)
+      );
+      if (downloaded) {
+        toast.success("Receipt PDF downloaded", { id: pdfToastId });
+      } else {
+        toast.dismiss(pdfToastId);
+      }
+
       router.push(`/receipts/${result.receipt._id}`);
     } catch (err: any) {
       toast.error(err?.data?.message || "Failed to record receipt");

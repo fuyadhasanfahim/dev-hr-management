@@ -20,8 +20,10 @@ import {
   Eye,
   Filter,
   X,
+  Receipt,
 } from "lucide-react";
 import { TableContent } from "@/components/shared/table-content";
+import { AddPaymentDialog } from "@/components/receipt/AddPaymentDialog";
 import {
   useGetEarningsQuery,
   useGetEarningStatsQuery,
@@ -54,7 +56,10 @@ export default function EarningsPage() {
   const [month, setMonth] = useState<string>("");
   const [year, setYear] = useState<string>("");
 
-  const { data: earningsData, isLoading } = useGetEarningsQuery({ limit: 1000 });
+  // ── Create Receipt dialog state ─────────────────────────────────────────
+  const [receiptTarget, setReceiptTarget] = useState<IEarning | null>(null);
+
+  const { data: earningsData, isLoading, refetch } = useGetEarningsQuery({ limit: 1000 });
   const { data: statsData } = useGetEarningStatsQuery();
   const { data: yearsData } = useGetEarningYearsQuery();
   const { data: clientsData } = useGetClientsQuery({ limit: 100 });
@@ -179,21 +184,35 @@ export default function EarningsPage() {
       {
         id: "actions",
         header: () => <div className="text-right">Actions</div>,
-        cell: ({ row }) => (
-          <div className="flex items-center justify-end">
-            <Button
-              asChild
-              variant="ghost"
-              size="icon"
-              className="h-8.5 w-8.5 rounded-xl text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
-              title="View Receipt"
-            >
-              <Link href={`/receipts/${row.original.receiptId?._id}`}>
-                <Eye className="h-4.5 w-4.5" />
-              </Link>
-            </Button>
-          </div>
-        ),
+        cell: ({ row }) => {
+          const e = row.original;
+          return (
+            <div className="flex items-center justify-end gap-1">
+              {e.status !== "void" && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8.5 w-8.5 rounded-xl text-slate-400 hover:text-brand-primary dark:hover:text-purple-400"
+                  title="Record a payment / create receipt"
+                  onClick={() => setReceiptTarget(e)}
+                >
+                  <Receipt className="h-4.5 w-4.5" />
+                </Button>
+              )}
+              <Button
+                asChild
+                variant="ghost"
+                size="icon"
+                className="h-8.5 w-8.5 rounded-xl text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
+                title="View Receipt"
+              >
+                <Link href={`/receipts/${e.receiptId?._id}`}>
+                  <Eye className="h-4.5 w-4.5" />
+                </Link>
+              </Button>
+            </div>
+          );
+        },
       },
     ],
     [],
@@ -338,6 +357,13 @@ export default function EarningsPage() {
             )}
           </>
         }
+      />
+
+      <AddPaymentDialog
+        quotationGroupId={receiptTarget?.quotationGroupId ?? null}
+        quotationNumber={receiptTarget?.quotationNumber}
+        onClose={() => setReceiptTarget(null)}
+        onRecorded={refetch}
       />
     </div>
   );

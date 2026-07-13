@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Textarea } from "@/components/ui/textarea";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -15,7 +16,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Plus,
   Eye,
@@ -32,34 +32,14 @@ import { getCategoryConfig } from "@/constants/quotation-templates";
 import {
   useGetReceiptsQuery,
   useVoidReceiptMutation,
-  useAddPaymentMutation,
-  useGetPaymentSummaryQuery,
 } from "@/redux/features/receipt/receiptApi";
-import { useConvertQuotationToOrderMutation } from "@/redux/features/order/orderApi";
 import type { IReceipt } from "@/types/receipt.type";
 import ReceiptPuppeteerPdfBtn, {
   receiptPdfFileStem,
 } from "@/components/receipt/ReceiptPuppeteerPdfBtn";
+import { AddPaymentDialog } from "@/components/receipt/AddPaymentDialog";
 import { TableContent } from "@/components/shared/table-content";
 import { ColumnDef } from "@tanstack/react-table";
-import { DialogContent } from "@/components/shared/dialog-content";
-import { SelectContent } from "@/components/shared/select-content";
-import { CalendarContent } from "@/components/shared/calendar-content";
-import { CheckboxContent } from "@/components/shared/checkbox-content";
-import { z } from "zod";
-
-const PAYMENT_TYPE_LABELS: Record<string, string> = {
-  full: "Full Payment",
-  partial: "Partial Payment",
-  milestone: "Milestone",
-};
-
-// Zod validation schema for payment record
-const paymentFormSchema = z.object({
-  amount: z.number().positive("Amount must be greater than 0"),
-  paymentDate: z.string().min(1, "Payment date is required"),
-  milestoneLabel: z.string().optional(),
-});
 
 function resolveQuotationTotal(r: IReceipt): number {
   if (!r.quotationId) return 0;
@@ -72,27 +52,11 @@ export default function ReceiptsPage() {
     limit: 1000,
   });
   const [voidReceipt, { isLoading: isVoiding }] = useVoidReceiptMutation();
-  const [addPayment, { isLoading: isAddingPayment }] = useAddPaymentMutation();
-  const [convertQuotationToOrder, { isLoading: isConvertingOrder }] = useConvertQuotationToOrderMutation();
-
   const [voidTarget, setVoidTarget] = useState<IReceipt | null>(null);
   const [voidReason, setVoidReason] = useState("");
 
-  // ── Add Payment Form State ───────────────────────────────────────────────
+  // ── Add Payment dialog target ────────────────────────────────────────────
   const [paymentTarget, setPaymentTarget] = useState<IReceipt | null>(null);
-  const [paymentType, setPaymentType] = useState<"full" | "partial" | "milestone">("partial");
-  const [milestoneLabel, setMilestoneLabel] = useState("");
-  const [amount, setAmount] = useState("");
-  const [paymentDate, setPaymentDate] = useState<Date>(new Date());
-  const [method, setMethod] = useState("bkash");
-  const [note, setNote] = useState("");
-  const [autoCreateOrder, setAutoCreateOrder] = useState(false);
-
-  // Fetch the financial summary for the currently targeted quotation
-  const { data: summaryData } = useGetPaymentSummaryQuery(
-    paymentTarget?.quotationGroupId || "",
-    { skip: !paymentTarget }
-  );
 
   const receipts = qData?.items || [];
 
@@ -138,85 +102,10 @@ export default function ReceiptsPage() {
 
   const handleOpenAddPayment = (receipt: IReceipt) => {
     setPaymentTarget(receipt);
-    setPaymentType("partial");
-    setMilestoneLabel("");
-    setAmount("");
-    setPaymentDate(new Date());
-    setMethod("bkash");
-    setNote("");
-    setAutoCreateOrder(false);
   };
 
   const handleCloseAddPayment = () => {
     setPaymentTarget(null);
-  };
-
-  const handleAddPaymentSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!paymentTarget) return;
-    
-    if (!amount.trim()) {
-      toast.error("Amount is required");
-      return;
-    }
-
-    const parsedAmount = parseFloat(amount);
-    const formattedDateString = format(paymentDate, "yyyy-MM-dd");
-
-    // Zod validation check
-    const validation = paymentFormSchema.safeParse({
-      amount: isNaN(parsedAmount) ? undefined : parsedAmount,
-      paymentDate: formattedDateString,
-      milestoneLabel: paymentType === "milestone" ? milestoneLabel : undefined,
-    });
-
-    if (!validation.success) {
-      const errorMsg = validation.error.issues[0]?.message || "Validation failed";
-      toast.error(errorMsg);
-      return;
-    }
-
-    if (paymentType === "milestone" && !milestoneLabel.trim()) {
-      toast.error("Milestone label is required for milestone payment type");
-      return;
-    }
-
-    const toastId = toast.loading("Recording payment...");
-    try {
-      // Use the receipt's own _id to add a payment to it
-      await addPayment({
-        receiptId: paymentTarget._id,
-        paymentType,
-        amount: parsedAmount,
-        paymentDate: formattedDateString,
-        method: method || undefined,
-        note: note || undefined,
-        milestoneLabel: paymentType === "milestone" ? milestoneLabel : undefined,
-      }).unwrap();
-
-      toast.success("Payment recorded successfully", { id: toastId });
-
-      // Conditionally convert to order automatically
-      if (autoCreateOrder) {
-        const orderToastId = toast.loading("Converting quotation to order...");
-        try {
-          await convertQuotationToOrder({
-            quotationGroupId: paymentTarget.quotationGroupId,
-          }).unwrap();
-          toast.success("Order automatically generated", { id: orderToastId });
-        } catch (orderErr: any) {
-          toast.error(
-            orderErr?.data?.message || orderErr?.message || "Payment recorded but failed to create order.",
-            { id: orderToastId }
-          );
-        }
-      }
-
-      handleCloseAddPayment();
-      refetch();
-    } catch (err: any) {
-      toast.error(err?.data?.message || err?.message || "Failed to record payment", { id: toastId });
-    }
   };
 
   const columns = useMemo<ColumnDef<IReceipt, any>[]>(
@@ -407,19 +296,6 @@ export default function ReceiptsPage() {
     { label: "Void", value: "void" },
   ];
 
-  const paymentTypeOptions = [
-    { label: "Partial Payment", value: "partial" },
-    { label: "Full Payment", value: "full" },
-    { label: "Milestone", value: "milestone" },
-  ];
-
-  const methodOptions = [
-    { label: "bKash", value: "bkash" },
-    { label: "Nagad", value: "nagad" },
-    { label: "Bank Transfer", value: "bank_transfer" },
-    { label: "Cash", value: "cash" },
-  ];
-
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
       {/* Header */}
@@ -519,194 +395,12 @@ export default function ReceiptsPage() {
       </Card>
 
       {/* Add Payment Dialog */}
-      <DialogContent
-        isOpen={!!paymentTarget}
+      <AddPaymentDialog
+        quotationGroupId={paymentTarget?.quotationGroupId ?? null}
+        quotationNumber={paymentTarget?.quotationNumber}
         onClose={handleCloseAddPayment}
-        title="Record Payment"
-        description={paymentTarget ? `Record payment receipt for ${paymentTarget.quotationNumber}` : undefined}
-        footer={
-          <>
-            <button
-              type="button"
-              onClick={handleCloseAddPayment}
-              className="rounded-2xl border border-slate-200 dark:border-slate-800 text-xs font-bold px-4 py-2 hover:bg-slate-50 dark:hover:bg-slate-900 cursor-pointer"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleAddPaymentSubmit}
-              disabled={isAddingPayment || isConvertingOrder}
-              className="rounded-2xl bg-brand-primary text-white text-xs font-bold px-4 py-2 hover:bg-brand-primary/90 flex items-center gap-1.5 cursor-pointer"
-            >
-              {isAddingPayment || isConvertingOrder ? (
-                <>
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                "Save Payment"
-              )}
-            </button>
-          </>
-        }
-      >
-        <form onSubmit={handleAddPaymentSubmit} className="space-y-4">
-          {/* Branded Financial Overview */}
-          {summaryData && (() => {
-            const grandTotal = summaryData.quotation?.grandTotal || 0;
-            const alreadyPaid = summaryData.totalPaid || 0;
-            const todayAmt = amount && !isNaN(parseFloat(amount)) && parseFloat(amount) > 0 ? parseFloat(amount) : 0;
-            const remainingAfter = Math.max(0, (summaryData.remaining || 0) - todayAmt);
-            const paidPercent = grandTotal > 0 ? Math.min(100, (alreadyPaid / grandTotal) * 100) : 0;
-            const todayPercent = grandTotal > 0 ? Math.min(100 - paidPercent, (todayAmt / grandTotal) * 100) : 0;
-            const currency = paymentTarget?.currency || "৳";
-            return (
-              <div className="rounded-2xl overflow-hidden border border-brand-primary/15 dark:border-brand-primary/25 animate-in fade-in duration-200 shadow-sm">
-                {/* Gradient header */}
-                <div className="bg-gradient-to-br from-[#4E12D4]/8 via-[#C850FA]/5 to-[#4E12D4]/4 dark:from-[#4E12D4]/20 dark:via-[#C850FA]/10 dark:to-[#4E12D4]/15 px-4 pt-3.5 pb-3.5">
-                  <div className="flex justify-between items-center mb-2.5">
-                    <span className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Quotation Total</span>
-                    <span className="text-sm font-black text-slate-900 dark:text-white tracking-tight">
-                      {formatMoney(grandTotal, currency)}
-                    </span>
-                  </div>
-                  {/* Segmented progress bar */}
-                  <div className="h-1.5 w-full rounded-full bg-slate-200/60 dark:bg-slate-800/80 overflow-hidden">
-                    <div className="h-full flex">
-                      <div className="h-full bg-emerald-500 transition-all duration-500 ease-out rounded-l-full" style={{ width: `${paidPercent}%` }} />
-                      <div className="h-full bg-brand-accent/70 transition-all duration-500 ease-out" style={{ width: `${todayPercent}%` }} />
-                    </div>
-                  </div>
-                  {/* Legend */}
-                  <div className="flex items-center gap-3 mt-1.5">
-                    <span className="flex items-center gap-1 text-[9px] font-bold text-slate-400">
-                      <span className="h-1.5 w-2.5 rounded-full bg-emerald-500 inline-block" />
-                      Already paid
-                    </span>
-                    {todayAmt > 0 && (
-                      <span className="flex items-center gap-1 text-[9px] font-bold text-slate-400">
-                        <span className="h-1.5 w-2.5 rounded-full bg-brand-accent/70 inline-block" />
-                        This payment
-                      </span>
-                    )}
-                  </div>
-                </div>
-                {/* Two stat cells */}
-                <div className="grid grid-cols-2 divide-x divide-slate-100 dark:divide-slate-800/80 bg-white/70 dark:bg-slate-900/30">
-                  <div className="px-4 py-3">
-                    <p className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-600 dark:text-emerald-500 mb-0.5">Today's Payment</p>
-                    <p className="text-base font-black text-emerald-600 dark:text-emerald-400 leading-none">
-                      {todayAmt > 0 ? formatMoney(todayAmt, currency) : <span className="text-slate-300 dark:text-slate-600 text-sm font-semibold">—</span>}
-                    </p>
-                  </div>
-                  <div className="px-4 py-3">
-                    <p className="text-[10px] font-extrabold uppercase tracking-wider text-brand-primary dark:text-purple-400 mb-0.5">Remaining After</p>
-                    <p className="text-base font-black text-brand-primary dark:text-purple-300 leading-none">
-                      {formatMoney(remainingAfter, currency)}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            );
-          })()}
-
-          <div className="grid grid-cols-2 gap-4">
-            {/* Payment Type */}
-            <div className="flex flex-col gap-1.5 col-span-2 sm:col-span-1">
-              <label className="text-xs font-bold text-slate-500 dark:text-slate-400">
-                Payment Type
-              </label>
-              <SelectContent
-                value={paymentType}
-                onChange={(val) => setPaymentType(val as any)}
-                options={paymentTypeOptions}
-                align={summaryData ? "down" : "up"}
-              />
-            </div>
-
-            {/* Payment Method */}
-            <div className="flex flex-col gap-1.5 col-span-2 sm:col-span-1">
-              <label className="text-xs font-bold text-slate-500 dark:text-slate-400">
-                Payment Method
-              </label>
-              <SelectContent
-                value={method}
-                onChange={setMethod}
-                options={methodOptions}
-                align={summaryData ? "down" : "up"}
-              />
-            </div>
-
-            {/* Milestone Label */}
-            {paymentType === "milestone" && (
-              <div className="flex flex-col gap-1.5 col-span-2 animate-in slide-in-from-top-2 duration-200">
-                <label className="text-xs font-bold text-slate-500 dark:text-slate-400">
-                  Milestone Label <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. 50% Advance, Delivery Stage..."
-                  value={milestoneLabel}
-                  onChange={(e) => setMilestoneLabel(e.target.value)}
-                  className="w-full h-10 px-3.5 py-2 rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white/70 dark:bg-slate-900/50 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary transition-all text-slate-800 dark:text-slate-100"
-                />
-              </div>
-            )}
-
-            {/* Amount */}
-            <div className="flex flex-col gap-1.5 col-span-2 sm:col-span-1">
-              <label className="text-xs font-bold text-slate-500 dark:text-slate-400">
-                Amount ({paymentTarget?.currency || "৳"}) <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="number"
-                step="0.01"
-                required
-                min="0.01"
-                placeholder="0.00"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                className="w-full h-10 px-3.5 py-2 rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white/70 dark:bg-slate-900/50 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary transition-all text-slate-800 dark:text-slate-100"
-              />
-            </div>
-
-            {/* Payment Date */}
-            <div className="flex flex-col gap-1.5 col-span-2 sm:col-span-1">
-              <label className="text-xs font-bold text-slate-500 dark:text-slate-400">
-                Payment Date <span className="text-red-500">*</span>
-              </label>
-              <CalendarContent
-                value={paymentDate}
-                onChange={setPaymentDate}
-                align={summaryData ? "down" : "up"}
-              />
-            </div>
-          </div>
-
-          {/* Note */}
-          <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-bold text-slate-500 dark:text-slate-400">
-              Note (optional)
-            </label>
-            <Textarea
-              placeholder="Add payment transaction note..."
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              className="min-h-[70px] rounded-2xl border border-slate-200/85 dark:border-slate-800 focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary placeholder:text-slate-450 p-3 text-sm focus:outline-none bg-white/70 dark:bg-slate-900/50"
-            />
-          </div>
-
-          {/* Auto Create Order Checkbox */}
-          <div className="pt-2">
-            <CheckboxContent
-              checked={autoCreateOrder}
-              onChange={setAutoCreateOrder}
-              label="Automatically create associated Order in system?"
-            />
-          </div>
-        </form>
-      </DialogContent>
+        onRecorded={refetch}
+      />
 
       {/* Void confirmation */}
       <AlertDialog open={!!voidTarget} onOpenChange={(open) => !open && setVoidTarget(null)}>

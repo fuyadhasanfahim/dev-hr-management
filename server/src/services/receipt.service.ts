@@ -246,7 +246,9 @@ export class ReceiptService {
                 .populate('quotationId', 'totals')
                 .populate({
                     path: 'paymentHistory',
-                    options: { sort: { paymentDate: -1 } },
+                    // Same-day payments share an identical paymentDate, so tie-break on
+                // createdAt (true insertion order) for a stable "most recent first" list.
+                options: { sort: { paymentDate: -1, createdAt: -1 } },
                 })
                 .sort(sort)
                 .skip(skip)
@@ -264,7 +266,9 @@ export class ReceiptService {
             .populate('quotationId', 'totals quotationNumber quotationGroupId details paymentMilestones')
             .populate({
                 path: 'paymentHistory',
-                options: { sort: { paymentDate: -1 } },
+                // Same-day payments share an identical paymentDate, so tie-break on
+                // createdAt (true insertion order) for a stable "most recent first" list.
+                options: { sort: { paymentDate: -1, createdAt: -1 } },
             })
             .lean();
 
@@ -285,7 +289,9 @@ export class ReceiptService {
         const receipt = await ReceiptModel.findOne({ quotationGroupId })
             .populate({
                 path: 'paymentHistory',
-                options: { sort: { paymentDate: -1 } },
+                // Same-day payments share an identical paymentDate, so tie-break on
+                // createdAt (true insertion order) for a stable "most recent first" list.
+                options: { sort: { paymentDate: -1, createdAt: -1 } },
             })
             .lean();
 
@@ -304,6 +310,7 @@ export class ReceiptService {
                 grandTotal,
                 paymentMilestones: quotation.paymentMilestones || [],
                 clientId: quotation.clientId,
+                orderId: quotation.orderId ?? null,
             },
             receipt: receipt ?? null,
             payments: (receipt?.paymentHistory ?? []) as unknown as IReceiptPayment[],

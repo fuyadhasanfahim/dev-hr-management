@@ -95,12 +95,14 @@ import {
   Briefcase,
   Hash,
   ArrowRight,
+  Receipt,
 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import Link from "next/link";
 import { toast } from "sonner";
 import { OrderForm, type OrderFormData } from "@/components/order/OrderForm";
 import { OrderTimeline } from "@/components/order/OrderTimeline";
+import { AddPaymentDialog } from "@/components/receipt/AddPaymentDialog";
 import { Badge } from "@/components/ui/badge";
 import {
   Tooltip,
@@ -118,22 +120,12 @@ import { TableContent } from "@/components/shared/table-content";
 import { ColumnDef } from "@tanstack/react-table";
 import { SelectContent as StatusPicker } from "@/components/shared/select-content";
 
-// Status workflow: defines which statuses can transition to which
-// Key = current status, Value = array of allowed next statuses
-const statusWorkflow: Record<OrderStatus, OrderStatus[]> = {
-  pending: ["in_progress", "cancelled"],
-  in_progress: ["completed", "revision", "cancelled"],
-  revision: ["in_progress", "cancelled"],
-  completed: ["delivered", "revision"],
-  delivered: ["revision"],
-  cancelled: [],
-};
+// No workflow restriction — staff can set any status directly.
+const ALL_ORDER_STATUSES = Object.keys(ORDER_STATUS_LABELS) as OrderStatus[];
 
-// Returns the valid next-step statuses for an order, excluding its current status
+// Returns every other status an order can be switched to, excluding its current one.
 const getFilteredStatusOptions = (order: IOrder): OrderStatus[] => {
-  return (statusWorkflow[order.status] || []).filter(
-    (opt) => opt !== order.status,
-  );
+  return ALL_ORDER_STATUSES.filter((opt) => opt !== order.status);
 };
 
 const safeFormat = (
@@ -192,6 +184,9 @@ export default function OrdersPage() {
     new Set(),
   );
 
+  // ── Create Receipt dialog state ─────────────────────────────────────────
+  const [receiptTarget, setReceiptTarget] = useState<IOrder | null>(null);
+
   const [serverErrors, setServerErrors] = useState<
     Record<string, string[]> | undefined
   >(undefined);
@@ -241,7 +236,7 @@ export default function OrdersPage() {
   // Fetch everything up-front (like receipts/quotations) and filter/paginate
   // client-side via TableContent — the backend doesn't apply month/year/priority
   // filters server-side anyway, so this also fixes those being silent no-ops.
-  const { data: orderData, isLoading } = useGetOrdersQuery({ limit: 1000 });
+  const { data: orderData, isLoading, refetch: refetchOrders } = useGetOrdersQuery({ limit: 1000 });
   const { data: statsData } = useGetOrderStatsQuery();
   const { data: clientsData } = useGetClientsQuery({ limit: 100 });
 
@@ -803,6 +798,24 @@ export default function OrdersPage() {
                     <p>View Details</p>
                   </TooltipContent>
                 </Tooltip>
+
+                {order.quotationGroupId && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={() => setReceiptTarget(order)}
+                      >
+                        <Receipt className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Record a payment / create receipt</p>
+                    </TooltipContent>
+                  </Tooltip>
+                )}
 
                 {(!isTelemarketer ||
                   (isTelemarketer &&
@@ -1705,6 +1718,13 @@ export default function OrdersPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <AddPaymentDialog
+        quotationGroupId={receiptTarget?.quotationGroupId ?? null}
+        quotationNumber={receiptTarget?.quotationSnapshot?.quotationNumber}
+        onClose={() => setReceiptTarget(null)}
+        onRecorded={refetchOrders}
+      />
     </div>
   );
 }

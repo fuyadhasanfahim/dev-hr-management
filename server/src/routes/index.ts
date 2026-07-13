@@ -29,6 +29,7 @@ import payrollBankSettingsRoute from "./payroll-bank-settings.route.js";
 import { policyRoute } from "./policy.route.js";
 import { quotationRoute } from "./quotation.route.js";
 import { receiptRoute } from "./receipt.route.js";
+import { earningRoute } from "./earning.route.js";
 import { meetingRoute } from "./meeting.route.js";
 import { leadRoute } from "./lead.route.js";
 import { leadSettingRoute } from "./lead-setting.route.js";
@@ -157,6 +158,10 @@ const moduleRoutes = [
     {
         path: "/receipts",
         route: receiptRoute,
+    },
+    {
+        path: "/earnings",
+        route: earningRoute,
     },
     {
         path: "/meetings",
