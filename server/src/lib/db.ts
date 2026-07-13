@@ -20,6 +20,20 @@ export async function client(): Promise<MongoClient> {
                     socketTimeoutMS: 45000,
                 });
                 console.log('🟢 MongoDB & Mongoose Client Connected');
+
+                // Programmatically drop the legacy unique index on earnings to prevent payment sync issues
+                try {
+                    const db = mongoose.connection.db;
+                    if (db) {
+                        await db.collection('earnings').dropIndex('clientId_1_month_1_year_1');
+                        console.log('🗑️ Legacy unique index on earnings dropped successfully');
+                    }
+                } catch (err: any) {
+                    // Ignore error if index doesn't exist
+                    if (err.code !== 27 && err.codeName !== 'IndexNotFound') {
+                        console.warn('⚠️ Non-critical failure dropping legacy earnings index:', err.message);
+                    }
+                }
             } else if (mongoose.connection.readyState === 2) {
                 await new Promise<void>((resolve, reject) => {
                     mongoose.connection.once('open', resolve);
