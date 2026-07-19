@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useGetQuotationByIdQuery } from '@/redux/features/quotation/quotationApi';
 import { useQuotationStore } from '@/store/useQuotationStore';
@@ -15,6 +15,8 @@ export default function EditQuotationPage() {
   const router = useRouter();
   const isLoadedRef = useRef(false);
 
+  const [sanitizedData, setSanitizedData] = useState<any>(null);
+
   useEffect(() => {
     isLoadedRef.current = false;
   }, [id]);
@@ -22,7 +24,7 @@ export default function EditQuotationPage() {
   useEffect(() => {
     if (data && !isLoadedRef.current) {
       isLoadedRef.current = true;
-      const sanitizedData = {
+      const sanitized = {
         ...data,
         clientId:
           typeof data.clientId === 'object'
@@ -38,7 +40,8 @@ export default function EditQuotationPage() {
             : '',
         },
       };
-      setData(sanitizedData);
+      setSanitizedData(sanitized);
+      setData(sanitized);
     }
   }, [data, setData]);
 
@@ -87,6 +90,7 @@ export default function EditQuotationPage() {
         pageTitle="Edit Quotation"
         pageSubtitle={`${data?.details?.title || 'Untitled'} • #${data?.quotationNumber || '—'}`}
         backUrl={`/quotations/${id}`}
+        initialData={sanitizedData || data}
       />
     </div>
   );

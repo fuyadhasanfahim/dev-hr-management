@@ -71,26 +71,22 @@ export function NavMain() {
         }).filter(group => group.items.length > 0);
     }, [userRole, staff, searchQuery]);
 
-    // Find the group that contains the active route
-    const activeGroup = React.useMemo(() => {
-        return sidebarGroups.find(g =>
-            g.items.some(item => !item.external && pathname.startsWith(item.url))
-        )?.groupLabel ?? null;
-    }, [pathname]);
-
-    // Accordion expanded values — only active group open by default
-    const [expandedItems, setExpandedItems] = React.useState<string[]>(
-        activeGroup ? [activeGroup] : []
+    const allGroupLabels = React.useMemo(
+        () => sidebarGroups.map((g) => g.groupLabel),
+        []
     );
 
-    // Auto-expand all matching categories when searching; collapse back to active when cleared
+    // Accordion expanded values — all groups open by default
+    const [expandedItems, setExpandedItems] = React.useState<string[]>(allGroupLabels);
+
+    // Auto-expand all matching categories when searching; reset to all groups open when cleared
     React.useEffect(() => {
         if (searchQuery.trim() !== "") {
             setExpandedItems(filteredGroups.map(g => g.groupLabel));
         } else {
-            setExpandedItems(activeGroup ? [activeGroup] : []);
+            setExpandedItems(allGroupLabels);
         }
-    }, [searchQuery, filteredGroups, activeGroup]);
+    }, [searchQuery, filteredGroups, allGroupLabels]);
 
     const isLoading =
         isSessionPending || isMeLoading || (isRefetching && !session);

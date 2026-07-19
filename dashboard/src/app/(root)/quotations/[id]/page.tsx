@@ -59,6 +59,172 @@ import { CATEGORY_CONFIG } from '@/constants/quotation-templates';
 import { computeQuotationTotals } from '@/lib/quotation-totals';
 import type { QuotationCategory } from '@/types/quotation.type';
 
+function extractNameRoutePrice(rawText: string): { name: string; route: string; price: string } {
+    let text = rawText.trim().replace(/^[-*•◦▪+]\s*/, '').trim();
+    let route = '';
+    let price = '';
+
+    // Extract price from end: e.g. " - 3000" or " - ৳3,000" or " - 10000"
+    const priceMatch = text.match(/\s*-\s*([৳$]?\d[\d,.]*)$/);
+    if (priceMatch) {
+        price = priceMatch[1].replace(/[^0-9.]/g, '');
+        text = text.substring(0, priceMatch.index).trim();
+    }
+
+    // Extract route from parentheses at end: e.g. " (/services/...)" or " (http...)"
+    const routeMatch = text.match(/\s*\(([^)]+)\)$/);
+    if (routeMatch) {
+        const potentialRoute = routeMatch[1].trim();
+        if (potentialRoute.startsWith('/') || potentialRoute.startsWith('http')) {
+            route = potentialRoute;
+            text = text.substring(0, routeMatch.index).trim();
+        }
+    }
+
+    return {
+        name: text,
+        route,
+        price,
+    };
+}
+
+function convertJsonToFeature(rawObj: any, idx: number = 0): any {
+    if (!rawObj || typeof rawObj !== 'object') return null;
+    let name = String(rawObj.name || rawObj.title || rawObj.label || rawObj.featureName || '').trim();
+    if (!name) return null;
+    let route = rawObj.route || rawObj.path || rawObj.url || '';
+    let price = rawObj.price !== undefined ? String(rawObj.price) : '';
+
+    if ((name.includes('(') && name.includes(')')) || name.includes(' - ')) {
+        const extracted = extractNameRoutePrice(name);
+        name = extracted.name;
+        if (!route && extracted.route) route = extracted.route;
+        if (!price && extracted.price) price = extracted.price;
+    }
+
+    const rawChildren = Array.isArray(rawObj.children)
+        ? rawObj.children
+        : Array.isArray(rawObj.subFeatures)
+        ? rawObj.subFeatures
+        : Array.isArray(rawObj.items)
+        ? rawObj.items
+        : [];
+    const children: any[] = [];
+    rawChildren.forEach((child: any, childIdx: number) => {
+        const converted = convertJsonToFeature(child, childIdx);
+        if (converted) children.push(converted);
+    });
+    return {
+        id: idx + 1,
+        name,
+        route: String(route),
+        price: String(price),
+        children: children.length > 0 ? children : undefined,
+    };
+}
+
+function parseBulkFeatures(text: string): any[] {
+    if (!text || text.trim() === '') return [];
+    const trimmed = text.trim();
+    if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
+        try {
+            const cleanText = trimmed.replace(/```json/g, '').replace(/```/g, '').trim();
+            const parsed = JSON.parse(cleanText);
+            const items = Array.isArray(parsed) ? parsed : [parsed];
+            const result: any[] = [];
+            items.forEach((rawItem, idx) => {
+                const feature = convertJsonToFeature(rawItem, idx);
+                if (feature) result.push(feature);
+            });
+            if (result.length > 0) return result;
+        } catch {}
+    }
+    const lines = text.split('\n').filter((line) => line.trim() !== '');
+    const result: any[] = [];
+    const stack: { level: number; feature: any }[] = [];
+    lines.forEach((line, index) => {
+        const match = line.match(/^(\s*)/);
+        const indentStr = match ? match[0] : '';
+        const level = indentStr.replace(/\t/g, '    ').length;
+        const parsed = extractNameRoutePrice(line);
+        const newFeature: any = {
+            id: index + 1,
+            name: parsed.name,
+            route: parsed.route,
+            price: parsed.price,
+            children: [],
+        };
+        while (stack.length > 0 && stack[stack.length - 1].level >= level) {
+            stack.pop();
+        }
+        if (stack.length === 0) {
+            result.push(newFeature);
+        } else {
+            stack[stack.length - 1].feature.children.push(newFeature);
+        }
+        stack.push({ level, feature: newFeature });
+    });
+    return result;
+}
+
+function DisplayFeatureNode({
+    feature,
+    level = 0,
+    currency,
+}: {
+    feature: any;
+    level?: number;
+    currency: string;
+}) {
+    const hasChildren = feature.children && feature.children.length > 0;
+    return (
+        <div className="space-y-1 my-1">
+            <div
+                className="flex items-center justify-between p-3 rounded-2xl bg-slate-50/80 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800/80 transition-colors text-sm hover:bg-slate-100/70 gap-3"
+                style={{ marginLeft: `${Math.min(level, 4) * 20}px` }}
+            >
+                <div className="flex flex-col min-w-0 flex-1">
+                    <div className="flex items-center gap-2.5">
+                        <span
+                            className={`size-2 rounded-full shrink-0 ${
+                                level === 0 ? 'bg-[#4E12D4]' : 'bg-muted-foreground/40'
+                            }`}
+                        />
+                        <span className="font-bold text-slate-900 dark:text-slate-100 text-sm">
+                            {feature.name}
+                        </span>
+                    </div>
+                    {feature.route && (
+                        <div className="mt-1 pl-4">
+                            <span className="font-mono text-[11px] text-slate-500 dark:text-slate-400 bg-slate-200/50 dark:bg-slate-800/80 px-2 py-0.5 rounded border border-slate-200/60 dark:border-slate-700 inline-block truncate max-w-lg">
+                                {feature.route}
+                            </span>
+                        </div>
+                    )}
+                </div>
+                {feature.price && Number(feature.price) > 0 && (
+                    <span className="font-extrabold text-xs text-[#4E12D4] dark:text-purple-400 shrink-0 ml-auto bg-[#4E12D4]/10 dark:bg-purple-400/10 px-3 py-1 rounded-xl border border-[#4E12D4]/20">
+                        {currency}
+                        {Number(feature.price).toLocaleString('en-IN')}
+                    </span>
+                )}
+            </div>
+            {hasChildren && (
+                <div className="space-y-1">
+                    {feature.children.map((child: any, idx: number) => (
+                        <DisplayFeatureNode
+                            key={child.id || idx}
+                            feature={child}
+                            level={level + 1}
+                            currency={currency}
+                        />
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+}
+
 export default function ViewQuotationPage() {
     const router = useRouter();
     const { id } = useParams();
@@ -263,12 +429,28 @@ export default function ViewQuotationPage() {
     // quantity-aware). Never re-derive this from basePrice/additionalTotal locally.
     const discountAmount = totals.discountAmount ?? 0;
 
+    const SERVICE_RANK_ORDER: Record<string, number> = {
+        'web-development': 1,
+        'marketing': 2,
+        'video-editing': 3,
+        'photo-editing': 4,
+    };
+
+    const sortedServices = useMemo(() => {
+        if (!data?.services) return [];
+        return [...data.services].sort((a, b) => {
+            const orderA = SERVICE_RANK_ORDER[a.category] ?? 99;
+            const orderB = SERVICE_RANK_ORDER[b.category] ?? 99;
+            return orderA - orderB;
+        });
+    }, [data?.services]);
+
     // ── Category-aware presentation (mirrors CATEGORY_CONFIG used by the builder) ──
-    const proposalLabel = (data.services || [])
+    const proposalLabel = sortedServices
         .map((s) => CATEGORY_CONFIG[s.category as QuotationCategory]?.label || s.category)
         .join(' + ') || 'Agency Proposal';
-    const webDevService = (data.services || []).find((s) => s.category === 'web-development');
-    const showPhases = Boolean(data.services && data.services.length > 0);
+    const webDevService = sortedServices.find((s) => s.category === 'web-development');
+    const showPhases = Boolean(sortedServices.length > 0);
     const showTech = Boolean(
         webDevService?.techStack &&
             ((webDevService.techStack.frontend?.length ?? 0) > 0 ||
@@ -572,28 +754,30 @@ export default function ViewQuotationPage() {
                         </div>
                     </div>
 
-                    {/* Multi-Service Deliverables Scope */}
-                    {showPhases && (
-                    <div className="space-y-6">
-                        <div className="flex items-center gap-3 pt-2">
-                            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#4E12D4] to-[#C850FA] text-white flex items-center justify-center shadow-md shadow-[#4E12D4]/20">
-                                <Layers className="h-5 w-5 stroke-[2.5]" />
+                    {/* Multi-Service Deliverables Scope & Features */}
+                    {sortedServices.length > 0 && (
+                        <div className="space-y-6">
+                            <div className="flex items-center gap-3 pt-2">
+                                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#4E12D4] to-[#C850FA] text-white flex items-center justify-center shadow-md shadow-[#4E12D4]/20">
+                                    <Layers className="h-5 w-5 stroke-[2.5]" />
+                                </div>
+                                <div>
+                                    <h3 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">
+                                        Deliverables Scope & Features
+                                    </h3>
+                                    <p className="text-xs text-slate-500 dark:text-slate-400">Detailed breakdown of included services, modules, and project deliverables</p>
+                                </div>
                             </div>
-                            <div>
-                                <h3 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">
-                                    Deliverables Scope & Features
-                                </h3>
-                                <p className="text-xs text-slate-500 dark:text-slate-400">Detailed breakdown of included services and project deliverables</p>
-                            </div>
-                        </div>
 
-                        {displayPhases.length ? (
                             <div className="space-y-5">
-                                {displayPhases.map((p, idx) => {
-                                    const style = getCategoryBadgeStyle(p.title);
+                                {sortedServices.map((svc: any, idx: number) => {
+                                    const categoryLabel = CATEGORY_CONFIG[svc.category as QuotationCategory]?.label || svc.category;
+                                    const style = getCategoryBadgeStyle(categoryLabel);
+                                    const featureNodes = parseBulkFeatures((svc.scopeItems || []).join('\n'));
+
                                     return (
                                         <div
-                                            key={`${p.title}-${idx}`}
+                                            key={`${svc.category}-${idx}`}
                                             className="rounded-3xl border border-slate-200/80 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 shadow-sm overflow-hidden backdrop-blur-xl transition-all duration-300 hover:shadow-md"
                                         >
                                             <div className={`p-5 border-b border-slate-100 dark:border-slate-800/80 bg-gradient-to-r ${style.gradient} flex items-center justify-between gap-4`}>
@@ -602,87 +786,74 @@ export default function ViewQuotationPage() {
                                                         {style.icon}
                                                     </div>
                                                     <div>
-                                                        <div className="flex flex-wrap items-center gap-2">
-                                                            <h4 className="text-base font-extrabold tracking-tight text-slate-900 dark:text-white">
-                                                                {p.title || `Service Scope #${idx + 1}`}
-                                                            </h4>
-                                                        </div>
-                                                        {p.description && (
-                                                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{p.description}</p>
+                                                        <h4 className="text-base font-extrabold tracking-tight text-slate-900 dark:text-white">
+                                                            {categoryLabel}
+                                                        </h4>
+                                                        {svc.scopeDescription && (
+                                                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{svc.scopeDescription}</p>
                                                         )}
                                                     </div>
                                                 </div>
                                                 <Badge variant="outline" className={`rounded-full px-3 py-1 text-xs font-bold ${style.text} ${style.border} ${style.bg}`}>
-                                                    {p.items?.length ?? 0} Deliverables
+                                                    {featureNodes.length > 0 ? `${featureNodes.length} Modules` : `${svc.lineItems?.length || 0} Pricing Items`}
                                                 </Badge>
                                             </div>
-                                            <div className="p-5">
-                                                {p.items?.length ? (
-                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
-                                                        {(() => {
-                                                             let runningIndex = 1;
-                                                             return p.items.map((it, i) => {
-                                                                 const trimmed = String(it || '').trim();
-                                                                 if (!trimmed) return null;
 
-                                                                 const isHeading = trimmed.startsWith('### ');
-                                                                 const leadingSpaces = it.match(/^\s*/)?.[0].length || 0;
-                                                                 const isSub = leadingSpaces >= 2 || it.startsWith('\t');
-                                                                 const cleanText = trimmed.replace(/^[-*•◦▪+]\s*/, '').trim();
-
-                                                                 if (isHeading) {
-                                                                     const headingText = trimmed.replace(/^###\s*/, '');
-                                                                     return (
-                                                                         <div key={`${idx}-${i}`} className="col-span-full mt-4 first:mt-0 mb-1 pb-1 border-b border-purple-500/20">
-                                                                             <h5 className="text-sm font-extrabold tracking-tight text-[#4E12D4] dark:text-purple-400 uppercase select-none">
-                                                                                 {headingText}
-                                                                             </h5>
-                                                                         </div>
-                                                                     );
-                                                                 }
-
-                                                                 if (isSub) {
-                                                                     return (
-                                                                         <div key={`${idx}-${i}`} className="col-span-full flex items-start gap-2.5 pl-6 py-1 select-none">
-                                                                             <span className="w-1.5 h-1.5 rounded-full bg-[#4E12D4] dark:bg-purple-400 shrink-0 mt-2"></span>
-                                                                             <span className="text-xs font-semibold text-slate-600 dark:text-slate-400 leading-snug">
-                                                                                 {cleanText}
-                                                                             </span>
-                                                                         </div>
-                                                                     );
-                                                                 }
-
-                                                                 const startsWithBullet = /^[-*•◦▪+]\s*/.test(trimmed);
-
-                                                                 if (startsWithBullet) {
-                                                                     return (
-                                                                         <div key={`${idx}-${i}`} className="col-span-full md:col-span-1 flex items-start gap-3 p-3 rounded-2xl bg-white dark:bg-slate-900/60 border border-slate-100 dark:border-slate-800/80 transition-all duration-200">
-                                                                             <span className="w-2.5 h-2.5 rounded-full bg-gradient-to-br from-[#4E12D4] to-[#C850FA] shrink-0 mt-1.5 border border-[#4E12D4]/20 shadow-sm"></span>
-                                                                             <span className="text-sm font-bold text-slate-800 dark:text-slate-200 leading-snug">
-                                                                                 {cleanText}
-                                                                             </span>
-                                                                         </div>
-                                                                     );
-                                                                 }
-
-                                                                 const standardIndex = runningIndex++;
-
-                                                                 return (
-                                                                     <div key={`${idx}-${i}`} className="flex items-start gap-3 p-3.5 rounded-2xl bg-slate-50/80 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800/80 transition-all duration-200 hover:bg-slate-100/80 dark:hover:bg-slate-800/70 hover:border-slate-200/80">
-                                                                         <span className={`w-6 h-6 rounded-xl ${style.bg} ${style.text} font-bold text-xs flex items-center justify-center shrink-0 mt-0.5 border ${style.border}`}>
-                                                                             {standardIndex}
-                                                                         </span>
-                                                                         <span className="text-sm font-medium text-slate-700 dark:text-slate-300 leading-snug">
-                                                                             {cleanText}
-                                                                         </span>
-                                                                     </div>
-                                                                 );
-                                                             });
-                                                         })()}
+                                            <div className="p-5 space-y-4">
+                                                {/* Feature Tree Rendering */}
+                                                {featureNodes.length > 0 && (
+                                                    <div className="space-y-1">
+                                                        <h5 className="text-xs font-extrabold uppercase tracking-wider text-slate-500 mb-2">Scope Modules & Features</h5>
+                                                        {featureNodes.map((feat: any, fIdx: number) => (
+                                                            <DisplayFeatureNode key={feat.id || fIdx} feature={feat} currency={currency} />
+                                                        ))}
                                                     </div>
-                                                ) : (
+                                                )}
+
+                                                {/* Quantity based Services (Photo & Video) */}
+                                                {svc.quantity && svc.rate && (
+                                                    <div className="p-4 rounded-2xl bg-slate-50/80 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 flex items-center justify-between text-sm">
+                                                        <div>
+                                                            <span className="font-semibold text-slate-700 dark:text-slate-300">Quantity: </span>
+                                                            <span className="font-bold text-slate-900 dark:text-white">{svc.quantity}</span>
+                                                            <span className="text-slate-500 text-xs ml-2">({currency}{svc.rate}/unit)</span>
+                                                        </div>
+                                                        <div className="font-extrabold text-[#4E12D4] dark:text-purple-400">
+                                                            {currency}{(svc.quantity * svc.rate).toLocaleString('en-IN')}
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {/* Project Pricing Line Items */}
+                                                {svc.lineItems && svc.lineItems.length > 0 && (
+                                                    <div className="pt-2 space-y-2">
+                                                        <h5 className="text-xs font-extrabold uppercase tracking-wider text-slate-500">Pricing Items</h5>
+                                                        <div className="space-y-2">
+                                                            {svc.lineItems.map((item: any, lIdx: number) => (
+                                                                <div key={lIdx} className="flex items-center justify-between p-3.5 rounded-2xl bg-slate-50/80 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800">
+                                                                    <div className="min-w-0 flex-1 pr-3">
+                                                                        <h6 className="text-sm font-bold text-slate-900 dark:text-white">{item.title}</h6>
+                                                                        {item.description && (
+                                                                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{item.description}</p>
+                                                                        )}
+                                                                    </div>
+                                                                    <div className="flex items-center gap-3 shrink-0">
+                                                                        <Badge variant="secondary" className="capitalize text-[11px]">
+                                                                            {item.billingCycle === 'monthly' ? 'Monthly' : item.billingCycle === 'yearly' ? 'Yearly' : 'One-Time'}
+                                                                        </Badge>
+                                                                        <span className="text-sm font-extrabold text-slate-900 dark:text-white">
+                                                                            {currency}{item.price?.toLocaleString('en-IN')}
+                                                                        </span>
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {featureNodes.length === 0 && (!svc.lineItems || svc.lineItems.length === 0) && !svc.quantity && (
                                                     <div className="text-sm text-slate-400 italic py-2">
-                                                        No deliverables listed for this service scope.
+                                                        No deliverables or pricing items defined for this service.
                                                     </div>
                                                 )}
                                             </div>
@@ -690,10 +861,7 @@ export default function ViewQuotationPage() {
                                     );
                                 })}
                             </div>
-                        ) : (
-                            <div className="text-sm text-slate-400 italic">No deliverables defined.</div>
-                        )}
-                    </div>
+                        </div>
                     )}
 
                     {/* Exclusions: Not Included in This Price */}
