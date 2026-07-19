@@ -21,11 +21,17 @@ export type BillingCycle =
   | "monthly"
   | "yearly"
   | "per-image"
-  | "per-video";
+  | "per-video"
+  | "per-second"
+  | "per-10s";
 
 /** true for billing cycles paid upfront (once, or per delivered unit); false for ongoing/recurring cycles. */
 export const isUpfrontBillingCycle = (cycle: BillingCycle): boolean =>
-  cycle === "one-time" || cycle === "per-image" || cycle === "per-video";
+  cycle === "one-time" ||
+  cycle === "per-image" ||
+  cycle === "per-video" ||
+  cycle === "per-second" ||
+  cycle === "per-10s";
 
 export interface IQuotationLineItem {
   title: string;

@@ -43,7 +43,7 @@ dotenv.config({ path: path.join(__dirname, '../../.env') });
 import { connect, disconnect } from 'mongoose';
 import QuotationModel from '../models/quotation.model.js';
 
-const UPFRONT_CYCLES = new Set(['one-time', 'per-image', 'per-video']);
+const UPFRONT_CYCLES = new Set(['one-time', 'per-image', 'per-video', 'per-second', 'per-10s']);
 
 // Matches documents that haven't been migrated to the services[] shape yet.
 const NOT_MIGRATED_FILTER = {

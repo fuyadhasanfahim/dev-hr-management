@@ -73,7 +73,7 @@ export interface IStatusHistory {
 export interface IQuotationSnapshotLineItem {
     title: string;
     price: number;
-    billingCycle: 'one-time' | 'monthly' | 'yearly' | 'per-image' | 'per-video';
+    billingCycle: 'one-time' | 'monthly' | 'yearly' | 'per-image' | 'per-video' | 'per-second' | 'per-10s';
     quantity?: number;
     description?: string | undefined;
 }
@@ -178,7 +178,7 @@ const milestoneSchema = new Schema<IOrderMilestone>(
 const snapshotLineItemSchema = {
     title: String,
     price: Number,
-    billingCycle: { type: String, enum: ['one-time', 'monthly', 'yearly', 'per-image', 'per-video'] },
+    billingCycle: { type: String, enum: ['one-time', 'monthly', 'yearly', 'per-image', 'per-video', 'per-second', 'per-10s'] },
     quantity: { type: Number },
     description: String,
     _id: false,

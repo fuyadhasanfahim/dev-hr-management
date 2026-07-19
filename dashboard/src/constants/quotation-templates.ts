@@ -9,6 +9,8 @@ export const BILLING_CYCLE_LABELS: Record<BillingCycle, string> = {
   yearly: "Yearly",
   "per-image": "Per image",
   "per-video": "Per video",
+  "per-second": "Per second",
+  "per-10s": "Per 10 seconds",
 };
 
 /**
@@ -73,7 +75,7 @@ export const CATEGORY_CONFIG: Record<QuotationCategory, CategoryDefinition> = {
     label: "Video Editing",
     sections: ["overview", "services", "pricing"],
     phasesEnabled: false,
-    billingOptions: ["per-video"],
+    billingOptions: ["per-video", "per-second", "per-10s"],
     unitBased: true,
     unitLabel: "video",
   },

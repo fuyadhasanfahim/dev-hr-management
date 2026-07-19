@@ -6,7 +6,7 @@ const lineItemSchema = new Schema({
     price: { type: Number, required: true },
     billingCycle: {
         type: String,
-        enum: ['one-time', 'monthly', 'yearly', 'per-image', 'per-video'],
+        enum: ['one-time', 'monthly', 'yearly', 'per-image', 'per-video', 'per-second', 'per-10s'],
         default: 'one-time',
     },
     // Units for unit-based line items (per-image / per-video). Absent ⇒ treated

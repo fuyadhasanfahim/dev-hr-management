@@ -18,6 +18,8 @@ const BILLING_LABELS: Record<string, string> = {
     yearly: 'Yearly',
     'per-image': 'Per image',
     'per-video': 'Per video',
+    'per-second': 'Per second',
+    'per-10s': 'Per 10 seconds',
 };
 
 /** Matches client `QuotationPDF` + `formatMoney` (BDT / ISO / symbol). */
