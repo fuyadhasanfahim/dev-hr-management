@@ -734,6 +734,7 @@ function buildPrintHtml(
       font-size: 11.5px;
       color: var(--slate700);
       line-height: 1.6;
+      white-space: pre-line;
     }
 
     /* Section Styling */

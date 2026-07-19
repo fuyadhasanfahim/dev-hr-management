@@ -59,6 +59,13 @@ import { CATEGORY_CONFIG } from '@/constants/quotation-templates';
 import { computeQuotationTotals } from '@/lib/quotation-totals';
 import type { QuotationCategory } from '@/types/quotation.type';
 
+const SERVICE_RANK_ORDER: Record<string, number> = {
+    'web-development': 1,
+    'marketing': 2,
+    'video-editing': 3,
+    'photo-editing': 4,
+};
+
 function extractNameRoutePrice(rawText: string): { name: string; route: string; price: string } {
     let text = rawText.trim().replace(/^[-*•◦▪+]\s*/, '').trim();
     let route = '';
@@ -267,6 +274,15 @@ export default function ViewQuotationPage() {
 
     const liveTotals = useMemo(() => computeQuotationTotals(data?.services || []), [data?.services]);
 
+    const sortedServices = useMemo(() => {
+        if (!data?.services) return [];
+        return [...data.services].sort((a, b) => {
+            const orderA = SERVICE_RANK_ORDER[a.category] ?? 99;
+            const orderB = SERVICE_RANK_ORDER[b.category] ?? 99;
+            return orderA - orderB;
+        });
+    }, [data?.services]);
+
     const openSendPicker = () => {
         if (!dialogClientId) {
             toast.error(
@@ -428,22 +444,6 @@ export default function ViewQuotationPage() {
     // Authoritative — computed once by calculateTotals() on save (category- and
     // quantity-aware). Never re-derive this from basePrice/additionalTotal locally.
     const discountAmount = totals.discountAmount ?? 0;
-
-    const SERVICE_RANK_ORDER: Record<string, number> = {
-        'web-development': 1,
-        'marketing': 2,
-        'video-editing': 3,
-        'photo-editing': 4,
-    };
-
-    const sortedServices = useMemo(() => {
-        if (!data?.services) return [];
-        return [...data.services].sort((a, b) => {
-            const orderA = SERVICE_RANK_ORDER[a.category] ?? 99;
-            const orderB = SERVICE_RANK_ORDER[b.category] ?? 99;
-            return orderA - orderB;
-        });
-    }, [data?.services]);
 
     // ── Category-aware presentation (mirrors CATEGORY_CONFIG used by the builder) ──
     const proposalLabel = sortedServices
@@ -747,7 +747,7 @@ export default function ViewQuotationPage() {
                                 <div className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500">
                                     Executive Summary
                                 </div>
-                                <div className="text-sm leading-relaxed text-slate-700 dark:text-slate-300 bg-slate-50/50 dark:bg-slate-800/20 p-5 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 font-medium">
+                                <div className="text-sm leading-relaxed text-slate-700 dark:text-slate-300 bg-slate-50/50 dark:bg-slate-800/20 p-5 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 font-medium whitespace-pre-line">
                                     {data.overview?.trim() ? data.overview : 'No executive summary provided for this quotation.'}
                                 </div>
                             </div>

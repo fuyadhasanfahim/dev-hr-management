@@ -816,6 +816,11 @@ type QuotationContextType = {
     setPaymentMilestones: React.Dispatch<React.SetStateAction<any[]>>;
     paymentPreset: "50-50" | "30-40-30" | "100-upfront" | "custom";
     setPaymentPreset: React.Dispatch<React.SetStateAction<"50-50" | "30-40-30" | "100-upfront" | "custom">>;
+
+    discountPercentage: number;
+    setDiscountPercentage: React.Dispatch<React.SetStateAction<number>>;
+    taxPercentage: number;
+    setTaxPercentage: React.Dispatch<React.SetStateAction<number>>;
 };
 
 const QuotationContext = createContext<QuotationContextType | undefined>(
@@ -938,6 +943,8 @@ Please review the details below. Should you have any questions or require custom
         { label: "50% Upfront Deposit (Project Kickoff)", percentage: 50 },
         { label: "50% Final Delivery & Handover", percentage: 50 },
     ]);
+    const [discountPercentage, setDiscountPercentage] = useState<number>(0);
+    const [taxPercentage, setTaxPercentage] = useState<number>(0);
 
     const [draggedId, setDraggedId] = useState<number | null>(null);
     const [draggedServiceIndex, setDraggedServiceIndex] = useState<number | null>(null);
@@ -1007,6 +1014,15 @@ Please review the details below. Should you have any questions or require custom
                     { label: "50% Upfront Deposit (Project Kickoff)", percentage: 50 },
                     { label: "50% Final Delivery & Handover", percentage: 50 },
                 ]);
+            }
+
+            if (initialData.services && initialData.services[0]) {
+                if (initialData.services[0].discount !== undefined) {
+                    setDiscountPercentage(Number(initialData.services[0].discount) || 0);
+                }
+                if (initialData.services[0].taxRate !== undefined) {
+                    setTaxPercentage(Number(initialData.services[0].taxRate) || 0);
+                }
             }
 
             const activeServices: string[] = [];
@@ -1278,6 +1294,8 @@ Please review the details below. Should you have any questions or require custom
                 scopeItems: flattenedWebDev,
                 lineItems,
                 basePrice: featuresTotal + webDevPricing.reduce((acc, i) => acc + i.price, 0),
+                discount: discountPercentage,
+                taxRate: taxPercentage,
             });
         }
 
@@ -1476,6 +1494,10 @@ Please review the details below. Should you have any questions or require custom
                 setPaymentMilestones,
                 paymentPreset,
                 setPaymentPreset,
+                discountPercentage,
+                setDiscountPercentage,
+                taxPercentage,
+                setTaxPercentage,
             }}
         >
             <div className="flex flex-col gap-4 p-0 md:gap-6 md:p-0 font-sans">
@@ -1528,7 +1550,7 @@ Please review the details below. Should you have any questions or require custom
                                                 });
                                                 setOverviewText((prev) => {
                                                     if (prev && /^Dear [^,\n]+,/.test(prev)) {
-                                                        return prev.replace(/^Dear [^,\n]+,/, `Dear ${clientName},`);
+                                                        return prev.replace(/^Dear [^,\n]+,(\s*)?/, `Dear ${clientName},\n\n`);
                                                     }
                                                     return prev;
                                                 });
@@ -3242,6 +3264,10 @@ function QuotationSummary({
         marketingPricing,
         marketingAdBudget,
         selectedCurrency,
+        discountPercentage,
+        setDiscountPercentage,
+        taxPercentage,
+        setTaxPercentage,
     } = useQuotation();
 
     const currencySymbol = getCurrencySymbol(selectedCurrency);
@@ -3283,6 +3309,11 @@ function QuotationSummary({
 
     const totalOneTime = webDevFixed + photoTotal + videoFixed + marketingFixed;
     const totalRecurring = webDevMonthly + videoMonthly + marketingMonthly;
+
+    const discountAmount = (totalOneTime * (discountPercentage || 0)) / 100;
+    const subtotalAfterDiscount = totalOneTime - discountAmount;
+    const taxAmount = (subtotalAfterDiscount * (taxPercentage || 0)) / 100;
+    const grandTotalOneTime = subtotalAfterDiscount + taxAmount;
 
     return (
         <Card className="shadow-md border border-border/80">
@@ -3336,28 +3367,89 @@ function QuotationSummary({
 
                 <Separator />
 
-                <div className="space-y-2">
+                <div className="space-y-2.5">
                     <div className="flex justify-between items-center text-sm font-semibold">
                         <span>Total Setup / One-time</span>
-                        <span className="text-[#4E12D4] font-bold">
+                        <span className="text-[#4E12D4] font-bold font-mono">
                             {currencySymbol}
                             {totalOneTime.toLocaleString("en-IN")}
                         </span>
                     </div>
 
-                    <div className="flex justify-between items-center text-sm font-semibold">
-                        <span>Total Recurring / Mo</span>
-                        <span className="text-purple-600 font-bold">
-                            {currencySymbol}
-                            {totalRecurring.toLocaleString("en-IN")}
-                            /mo
-                        </span>
+                    {totalRecurring > 0 && (
+                        <div className="flex justify-between items-center text-sm font-semibold">
+                            <span>Total Recurring / Mo</span>
+                            <span className="text-purple-600 font-bold font-mono">
+                                {currencySymbol}
+                                {totalRecurring.toLocaleString("en-IN")}
+                                /mo
+                            </span>
+                        </div>
+                    )}
+
+                    {/* Discount & VAT / Tax Input Controls */}
+                    <div className="grid grid-cols-2 gap-3 pt-2 border-t border-dashed">
+                        <div className="space-y-1.5">
+                            <Label className="text-[11px] font-semibold flex items-center justify-between">
+                                <span>Discount (%)</span>
+                                {discountPercentage > 0 && (
+                                    <span className="text-[10px] font-bold text-rose-500 font-mono">
+                                        -{currencySymbol}{discountAmount.toLocaleString("en-IN")}
+                                    </span>
+                                )}
+                            </Label>
+                            <Input
+                                type="number"
+                                min={0}
+                                max={100}
+                                value={discountPercentage === 0 ? "" : discountPercentage}
+                                onChange={(e) => {
+                                    const val = Number(e.target.value) || 0;
+                                    setDiscountPercentage(Math.min(100, Math.max(0, val)));
+                                }}
+                                placeholder="0%"
+                                className="h-8 text-xs bg-background font-mono font-bold"
+                            />
+                        </div>
+
+                        <div className="space-y-1.5">
+                            <Label className="text-[11px] font-semibold flex items-center justify-between">
+                                <span>VAT / Tax (%)</span>
+                                {taxPercentage > 0 && (
+                                    <span className="text-[10px] font-bold text-indigo-500 font-mono">
+                                        +{currencySymbol}{taxAmount.toLocaleString("en-IN")}
+                                    </span>
+                                )}
+                            </Label>
+                            <Input
+                                type="number"
+                                min={0}
+                                max={100}
+                                value={taxPercentage === 0 ? "" : taxPercentage}
+                                onChange={(e) => {
+                                    const val = Number(e.target.value) || 0;
+                                    setTaxPercentage(Math.min(100, Math.max(0, val)));
+                                }}
+                                placeholder="0%"
+                                className="h-8 text-xs bg-background font-mono font-bold"
+                            />
+                        </div>
                     </div>
+
+                    {(discountPercentage > 0 || taxPercentage > 0) && (
+                        <div className="flex justify-between items-center text-sm font-extrabold border-t pt-2 mt-1">
+                            <span>Grand Total (Initial)</span>
+                            <span className="text-primary font-mono text-base font-bold">
+                                {currencySymbol}
+                                {grandTotalOneTime.toLocaleString("en-IN")}
+                            </span>
+                        </div>
+                    )}
 
                     {showMarketing && marketingAdBudget > 0 && (
                         <div className="flex justify-between items-center text-xs font-semibold text-muted-foreground border-t border-dashed pt-2 mt-2">
                             <span>Marketing Ad Budget (Ad Spend)</span>
-                            <span>
+                            <span className="font-mono">
                                 {currencySymbol}
                                 {marketingAdBudget}
                                 /mo
@@ -3383,16 +3475,18 @@ function QuotationSummary({
                             ? "Update Quotation"
                             : "Save Draft"}
                     </Button>
-                    <Button
-                        size="lg"
-                        className="w-full font-bold h-11 bg-purple-600 hover:bg-purple-700 text-white shadow-xs"
-                        onClick={handleExportPDF}
-                        disabled={isExporting || !initialData?._id}
-                        title={!initialData?._id ? "Please save the quotation first" : "Export to PDF"}
-                    >
-                        <IconDownload className="h-5 w-5" />
-                        {isExporting ? "Exporting..." : "Export PDF"}
-                    </Button>
+                    {initialData?._id && (
+                        <Button
+                            size="lg"
+                            className="w-full font-bold h-11 bg-purple-600 hover:bg-purple-700 text-white shadow-xs"
+                            onClick={handleExportPDF}
+                            disabled={isExporting}
+                            title="Export to PDF"
+                        >
+                            <IconDownload className="h-5 w-5" />
+                            {isExporting ? "Exporting..." : "Export PDF"}
+                        </Button>
+                    )}
                 </div>
             </CardContent>
         </Card>
