@@ -162,6 +162,66 @@ const addNode = (
     });
 };
 
+const addNodesWithDuplicateCheck = (
+    nodes: Feature[],
+    parentId: number | undefined,
+    newNodes: Feature[],
+): { updatedNodes: Feature[]; addedCount: number; duplicateCount: number } => {
+    let addedCount = 0;
+    let duplicateCount = 0;
+
+    const filterDuplicates = (existingList: Feature[], incomingList: Feature[]): Feature[] => {
+        const existingNames = new Set(existingList.map((item) => item.name.trim().toLowerCase()));
+        const uniqueIncoming: Feature[] = [];
+
+        for (const item of incomingList) {
+            const normalized = item.name.trim().toLowerCase();
+            if (normalized && existingNames.has(normalized)) {
+                duplicateCount++;
+            } else {
+                if (normalized) existingNames.add(normalized);
+                const cleanedChildren =
+                    item.children && item.children.length > 0
+                        ? filterDuplicates([], item.children)
+                        : item.children;
+                uniqueIncoming.push({
+                    ...item,
+                    children: cleanedChildren,
+                });
+                addedCount++;
+            }
+        }
+        return uniqueIncoming;
+    };
+
+    if (parentId === undefined) {
+        const uniqueNew = filterDuplicates(nodes, newNodes);
+        return { updatedNodes: [...nodes, ...uniqueNew], addedCount, duplicateCount };
+    }
+
+    const appendRecursive = (list: Feature[]): Feature[] => {
+        return list.map((node) => {
+            if (node.id === parentId) {
+                const currentChildren = node.children || [];
+                const uniqueNew = filterDuplicates(currentChildren, newNodes);
+                return {
+                    ...node,
+                    children: [...currentChildren, ...uniqueNew],
+                };
+            }
+            if (node.children && node.children.length > 0) {
+                return {
+                    ...node,
+                    children: appendRecursive(node.children),
+                };
+            }
+            return node;
+        });
+    };
+
+    return { updatedNodes: appendRecursive(nodes), addedCount, duplicateCount };
+};
+
 const updateNode = (
     nodes: Feature[],
     id: number,
@@ -767,7 +827,7 @@ type QuotationContextType = {
     makeMainFeature: (service: "web-dev" | "marketing", id: number) => void;
     moveFeatureUp: (service: "web-dev" | "marketing", id: number) => void;
     moveFeatureDown: (service: "web-dev" | "marketing", id: number) => void;
-    bulkPasteFeatures: (service: "web-dev" | "marketing", text: string) => void;
+    bulkPasteFeatures: (service: "web-dev" | "marketing", text: string, parentId?: number) => void;
 
     draggedId: number | null;
     setDraggedId: (id: number | null) => void;
@@ -1148,10 +1208,32 @@ Please review the details below. Should you have any questions or require custom
         setter((prev) => moveNodeDown(prev, id));
     };
 
-    const bulkPasteFeatures = (service: "web-dev" | "marketing", text: string) => {
+    const bulkPasteFeatures = (
+        service: "web-dev" | "marketing",
+        text: string,
+        parentId?: number,
+    ) => {
         const newFeatures = parseBulkFeatures(text);
+        if (newFeatures.length === 0) {
+            toast.error("No valid features found in pasted text/JSON!");
+            return;
+        }
         const setter = service === "marketing" ? setMarketingFeatures : setFeatures;
-        setter((prev) => [...prev, ...newFeatures]);
+        setter((prev) => {
+            const { updatedNodes, addedCount, duplicateCount } = addNodesWithDuplicateCheck(
+                prev,
+                parentId,
+                newFeatures,
+            );
+            if (addedCount > 0 && duplicateCount > 0) {
+                toast.success(`${addedCount} feature(s) imported (${duplicateCount} duplicate(s) skipped).`);
+            } else if (addedCount > 0) {
+                toast.success(`${addedCount} feature(s) imported successfully!`);
+            } else if (duplicateCount > 0) {
+                toast.warning(`All ${duplicateCount} feature(s) already exist in this list!`);
+            }
+            return updatedNodes;
+        });
     };
 
     const moveFeatureDnd = (
@@ -1290,10 +1372,10 @@ Please review the details below. Should you have any questions or require custom
 
             services.push({
                 category: "web-development",
-                scopeDescription: overviewText || "Standard web design and development specifications.",
+                scopeDescription: "Standard web design and development specifications.",
                 scopeItems: flattenedWebDev,
                 lineItems,
-                basePrice: featuresTotal + webDevPricing.reduce((acc, i) => acc + i.price, 0),
+                basePrice: featuresTotal,
                 discount: discountPercentage,
                 taxRate: taxPercentage,
             });
@@ -2875,6 +2957,13 @@ function FeatureItem({
                             >
                                 <IconPlus className="size-4 text-primary" />
                             </Button>
+                            <BulkPasteDialog
+                                service={service}
+                                parentId={feature.id}
+                                buttonText="Bulk Paste Subfeatures"
+                                buttonSize="icon"
+                                buttonVariant="ghost"
+                            />
                             <Button
                                 size="icon"
                                 variant="ghost"
@@ -3175,7 +3264,19 @@ function PricingRow({
     );
 }
 
-function BulkPasteDialog({ service = "web-dev" }: { service?: "web-dev" | "marketing" }) {
+function BulkPasteDialog({
+    service = "web-dev",
+    parentId,
+    buttonText = "Bulk Paste",
+    buttonVariant = "outline",
+    buttonSize = "sm",
+}: {
+    service?: "web-dev" | "marketing";
+    parentId?: number;
+    buttonText?: string;
+    buttonVariant?: "outline" | "ghost" | "default" | "secondary";
+    buttonSize?: "sm" | "icon" | "default";
+}) {
     const { bulkPasteFeatures } = useQuotation();
     const [open, setOpen] = useState(false);
     const [text, setText] = useState("");
@@ -3185,22 +3286,32 @@ function BulkPasteDialog({ service = "web-dev" }: { service?: "web-dev" | "marke
             toast.error("Please paste JSON or text features first!");
             return;
         }
-        bulkPasteFeatures(service, text);
+        bulkPasteFeatures(service, text, parentId);
         setText("");
         setOpen(false);
-        toast.success("Features imported successfully!");
     };
 
     return (
         <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-                <Button variant="outline" size="sm">Bulk Paste</Button>
+                {buttonSize === "icon" ? (
+                    <Button variant={buttonVariant} size="icon" className="size-8" title={buttonText}>
+                        <IconCopy className="size-4 text-primary" />
+                    </Button>
+                ) : (
+                    <Button variant={buttonVariant} size={buttonSize}>
+                        <IconCopy className="size-4 mr-1.5" />
+                        {buttonText}
+                    </Button>
+                )}
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[550px]">
+            <DialogContent className="sm:max-w-[550px]" onClick={(e) => e.stopPropagation()}>
                 <DialogHeader>
-                    <DialogTitle>Bulk Paste Features (JSON or Text)</DialogTitle>
+                    <DialogTitle>
+                        {parentId ? "Bulk Paste Subfeatures (JSON or Text)" : "Bulk Paste Features (JSON or Text)"}
+                    </DialogTitle>
                     <DialogDescription>
-                        Paste JSON generated by AI or indented text lines. Both JSON tree arrays and indented lists will be automatically parsed with full routes and pricing.
+                        Paste JSON generated by AI or indented text lines. Both JSON tree arrays and indented lists will be automatically parsed with full routes and pricing. Duplicate entries will be automatically filtered.
                     </DialogDescription>
                 </DialogHeader>
                 <div className="py-4">
