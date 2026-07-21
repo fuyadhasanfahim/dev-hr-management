@@ -20,27 +20,22 @@ import StaffHeaderSkeleton from './staff-header-skeleton';
 import { useGetMyShiftQuery } from '@/redux/features/shift/shiftApi';
 
 export default function StaffHeader() {
-    const { data: session, isPending, isRefetching } = useSession();
+    const { data: session, isPending } = useSession();
     const {
         data: staffData,
         isLoading: isStaffLoading,
-        isFetching,
     } = useGetMeQuery({}, { skip: !session });
     const {
         data: myShiftData,
         isLoading: isMyShiftLoading,
-        isFetching: isMyShiftFetching,
     } = useGetMyShiftQuery({}, { skip: !session });
 
     const [currentTime, setCurrentTime] = useState(new Date());
 
     const isLoading =
         isPending ||
-        isRefetching ||
-        isStaffLoading ||
-        isFetching ||
-        isMyShiftLoading ||
-        isMyShiftFetching;
+        (isStaffLoading && !staffData) ||
+        (isMyShiftLoading && !myShiftData);
 
     useEffect(() => {
         const timer = setInterval(() => setCurrentTime(new Date()), 1000);

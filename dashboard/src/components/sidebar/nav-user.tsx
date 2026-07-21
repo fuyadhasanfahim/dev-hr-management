@@ -30,9 +30,9 @@ import { Button } from '../ui/button';
 
 export function NavUser() {
     const { theme, setTheme, systemTheme } = useTheme();
-    const { data, isPending, isRefetching } = useSession();
+    const { data, isPending } = useSession();
     const [signingOut, setSigningOut] = useState(false);
-    const isLoading = isPending || isRefetching;
+    const isLoading = isPending;
 
     const handleSignout = async () => {
         if (signingOut) return;

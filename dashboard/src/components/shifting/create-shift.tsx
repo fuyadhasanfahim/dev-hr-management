@@ -66,7 +66,7 @@ const createShiftSchema = z.object({
 type CreateShiftFormData = z.infer<typeof createShiftSchema>;
 
 export default function CreateShift() {
-    const { data: session, isPending, isRefetching } = useSession();
+    const { data: session, isPending } = useSession();
 
     const { data: branchData, isLoading: isBranchLoading } =
         useGetAllBranchesQuery(undefined);
@@ -100,7 +100,7 @@ export default function CreateShift() {
     } = form;
 
     const isLoading =
-        isPending || isRefetching || isCreating || isBranchLoading;
+        isPending || isCreating || (isBranchLoading && !branchData);
 
     const canCreate = session && session.user.role !== Role.TEAM_LEADER;
 

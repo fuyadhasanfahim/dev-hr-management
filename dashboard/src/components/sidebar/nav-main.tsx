@@ -25,7 +25,6 @@ export function NavMain() {
     const {
         data: session,
         isPending: isSessionPending,
-        isRefetching,
     } = useSession();
     const { data: meData, isLoading: isMeLoading } = useGetMeQuery({});
     const pathname = usePathname();
@@ -88,8 +87,7 @@ export function NavMain() {
         }
     }, [searchQuery, filteredGroups, allGroupLabels]);
 
-    const isLoading =
-        isSessionPending || isMeLoading || (isRefetching && !session);
+    const isLoading = isSessionPending || isMeLoading;
 
     if (isLoading) {
         return (

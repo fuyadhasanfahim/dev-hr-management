@@ -1013,6 +1013,18 @@ Please review the details below. Should you have any questions or require custom
 
     const hasLoadedRef = useRef(false);
 
+    // Recommendation 1: Prompt user before navigating away with unsaved changes
+    useEffect(() => {
+        const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+            if (projectTitle.trim() !== "" || features.length > 0 || marketingFeatures.length > 0) {
+                e.preventDefault();
+                e.returnValue = "";
+            }
+        };
+        window.addEventListener("beforeunload", handleBeforeUnload);
+        return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+    }, [projectTitle, features, marketingFeatures]);
+
     // Map database currency symbols to readable text
     useEffect(() => {
         if (initialData && !hasLoadedRef.current) {
@@ -1242,6 +1254,13 @@ Please review the details below. Should you have any questions or require custom
         targetId: number,
         position: "before" | "after" | "inside",
     ) => {
+        const featuresList = service === "marketing" ? marketingFeatures : features;
+        // Fix Bug #7: Guard against moving a parent feature into or near its own descendant
+        if (isDescendant(featuresList, draggedId, targetId)) {
+            toast.error("Cannot move a parent feature into its own sub-feature!");
+            return;
+        }
+
         const setter = service === "marketing" ? setMarketingFeatures : setFeatures;
         if (position === "inside") {
             setter((prev) => moveNode(prev, draggedId, targetId));
@@ -1256,7 +1275,7 @@ Please review the details below. Should you have any questions or require custom
         service: "web-dev" | "video-editing" | "marketing",
     ) => {
         const newItem: PricingItem = {
-            id: Date.now(),
+            id: generateUniqueFeatureId(), // Fix Bug #5: Replaced Date.now() with unique ID generator
             name: "",
             description: "",
             price: 0,
@@ -1338,6 +1357,13 @@ Please review the details below. Should you have any questions or require custom
         quotationDate: z.string().min(1, "Quotation Date is required"),
         validUntilDate: z.string().min(1, "Valid Until Date is required"),
         selectedServices: z.array(z.string()).min(1, "Please select at least one active service"),
+    }).refine((data) => {
+        const qDate = new Date(data.quotationDate);
+        const vDate = new Date(data.validUntilDate);
+        return vDate >= qDate;
+    }, {
+        message: "Valid Until Date cannot be earlier than Quotation Date",
+        path: ["validUntilDate"],
     });
 
     const handleSaveDraft = async () => {
@@ -1354,6 +1380,15 @@ Please review the details below. Should you have any questions or require custom
             const firstError = validation.error.issues[0]?.message || "Please fill in all required fields";
             toast.error(firstError);
             return;
+        }
+
+        // Fix Bug #6: Enforce 100% milestone total when custom payment preset is active
+        if (paymentPreset === "custom") {
+            const totalMs = paymentMilestones.reduce((acc, m) => acc + (Number(m.percentage) || 0), 0);
+            if (totalMs !== 100) {
+                toast.error(`Custom payment milestones must sum to 100% (currently ${totalMs}%).`);
+                return;
+            }
         }
 
         const flattenedWebDev = flattenFeatureTree(features, 0, false);
@@ -1393,6 +1428,8 @@ Please review the details below. Should you have any questions or require custom
                     quantity: photoEditingQty,
                     description: "Standard photo editing rate",
                 }],
+                discount: discountPercentage,
+                taxRate: taxPercentage,
             });
         }
 
@@ -1414,6 +1451,8 @@ Please review the details below. Should you have any questions or require custom
                     quantity: videoEditingQty,
                     description: "Standard video editing rate",
                 }],
+                discount: discountPercentage,
+                taxRate: taxPercentage,
             });
         }
 
@@ -1440,8 +1479,16 @@ Please review the details below. Should you have any questions or require custom
                 scopeDescription: "Digital marketing and advertising campaign services.",
                 scopeItems: flattenedMarketing,
                 lineItems: lineItems,
+                discount: discountPercentage,
+                taxRate: taxPercentage,
             });
         }
+
+        // Fix Bug #2: Ensure discount and taxRate are attached to all active service items in payload
+        services.forEach((s) => {
+            s.discount = discountPercentage || 0;
+            s.taxRate = taxPercentage || 0;
+        });
 
         const payload = {
             serviceType: "web-development" as const,
@@ -2259,9 +2306,13 @@ function PhotoEditingService({
                             <Input
                                 id="photo-qty"
                                 type="number"
+                                min={0}
                                 placeholder="0"
                                 value={photoEditingQty === 0 ? "" : photoEditingQty}
-                                onChange={(e) => setPhotoEditingQty(e.target.value === "" ? 0 : Number(e.target.value))}
+                                onChange={(e) => {
+                                    const val = e.target.value === "" ? 0 : Number(e.target.value);
+                                    setPhotoEditingQty(isNaN(val) ? 0 : Math.max(0, val));
+                                }}
                             />
                         </div>
                         <div className="space-y-2">
@@ -2269,9 +2320,13 @@ function PhotoEditingService({
                             <Input
                                 id="photo-rate"
                                 type="number"
+                                min={0}
                                 placeholder="0"
                                 value={photoEditingRate === 0 ? "" : photoEditingRate}
-                                onChange={(e) => setPhotoEditingRate(e.target.value === "" ? 0 : Number(e.target.value))}
+                                onChange={(e) => {
+                                    const val = e.target.value === "" ? 0 : Number(e.target.value);
+                                    setPhotoEditingRate(isNaN(val) ? 0 : Math.max(0, val));
+                                }}
                             />
                         </div>
                     </CardContent>
@@ -2411,9 +2466,13 @@ function VideoEditingService({
                             <Input
                                 id="video-qty"
                                 type="number"
+                                min={0}
                                 placeholder="0"
                                 value={videoEditingQty === 0 ? "" : videoEditingQty}
-                                onChange={(e) => setVideoEditingQty(e.target.value === "" ? 0 : Number(e.target.value))}
+                                onChange={(e) => {
+                                    const val = e.target.value === "" ? 0 : Number(e.target.value);
+                                    setVideoEditingQty(isNaN(val) ? 0 : Math.max(0, val));
+                                }}
                             />
                         </div>
                         <div className="space-y-2">
@@ -2421,9 +2480,13 @@ function VideoEditingService({
                             <Input
                                 id="video-rate"
                                 type="number"
+                                min={0}
                                 placeholder="0"
                                 value={videoEditingRate === 0 ? "" : videoEditingRate}
-                                onChange={(e) => setVideoEditingRate(e.target.value === "" ? 0 : Number(e.target.value))}
+                                onChange={(e) => {
+                                    const val = e.target.value === "" ? 0 : Number(e.target.value);
+                                    setVideoEditingRate(isNaN(val) ? 0 : Math.max(0, val));
+                                }}
                             />
                         </div>
                     </CardContent>
@@ -2507,8 +2570,8 @@ Requirements for AI:
     };
 
     const handleRemoveMarketing = () => {
-        setSelectedServices((current) => current.filter((item) => item !== "Marketing & Growth"));
-        toast.success("Marketing & Growth service removed!");
+        setSelectedServices((current) => current.filter((item) => item !== "Marketing"));
+        toast.success("Marketing service removed!");
     };
 
     return (
@@ -2843,9 +2906,15 @@ function FeatureItem({
                                 <Label className="text-xs font-semibold">Feature Name <span className="text-destructive">*</span></Label>
                                 <Input
                                     value={editName}
-                                    onChange={(e) => setEditName(e.target.value)}
+                                    onChange={(e) => {
+                                        const val = e.target.value;
+                                        setEditName(val);
+                                        updateFeature(service, feature.id, { name: val, route: editRoute, price: editPrice });
+                                    }}
+                                    onKeyDown={(e) => { if (e.key === "Enter") handleSave(); }}
                                     className="h-8 text-sm font-medium w-full bg-background"
                                     placeholder="Feature name"
+                                    aria-label="Feature name"
                                     autoFocus
                                 />
                             </div>
@@ -2856,9 +2925,15 @@ function FeatureItem({
                                     </Label>
                                     <Input
                                         value={editRoute}
-                                        onChange={(e) => setEditRoute(e.target.value)}
+                                        onChange={(e) => {
+                                            const val = e.target.value;
+                                            setEditRoute(val);
+                                            updateFeature(service, feature.id, { name: editName, route: val, price: editPrice });
+                                        }}
+                                        onKeyDown={(e) => { if (e.key === "Enter") handleSave(); }}
                                         className="h-8 text-xs w-full bg-background"
                                         placeholder="/route"
+                                        aria-label="Feature route"
                                     />
                                 </div>
                             )}
@@ -2870,10 +2945,14 @@ function FeatureItem({
                                     value={editPrice === "0" ? "" : editPrice}
                                     onChange={(e) => {
                                         const val = e.target.value;
-                                        setEditPrice(val.length > 1 && val.startsWith("0") ? val.replace(/^0+/, "") : val);
+                                        const cleanVal = val.length > 1 && val.startsWith("0") ? val.replace(/^0+/, "") : val;
+                                        setEditPrice(cleanVal);
+                                        updateFeature(service, feature.id, { name: editName, route: editRoute, price: cleanVal });
                                     }}
+                                    onKeyDown={(e) => { if (e.key === "Enter") handleSave(); }}
                                     className="h-8 text-xs w-full bg-background"
                                     placeholder="0"
+                                    aria-label="Feature price"
                                 />
                             </div>
                         </div>
@@ -3152,8 +3231,14 @@ function PricingRow({
                             <Input
                                 placeholder="Enter item name..."
                                 value={editName}
-                                onChange={(e) => setEditName(e.target.value)}
+                                onChange={(e) => {
+                                    const val = e.target.value;
+                                    setEditName(val);
+                                    updatePricingItem(service, item.id, { name: val, description: editDesc, price: Number(editPrice) || 0, billingType: editBilling });
+                                }}
+                                onKeyDown={(e) => { if (e.key === "Enter") handleSave(); }}
                                 className="h-9"
+                                aria-label="Item name"
                                 autoFocus
                             />
                         </div>
@@ -3161,9 +3246,13 @@ function PricingRow({
                             <Label className="text-xs font-semibold">Billing Type <span className="text-destructive">*</span></Label>
                             <ShadcnSelect
                                 value={editBilling}
-                                onValueChange={(val) => setEditBilling(val as "fixed" | "monthly" | "yearly")}
+                                onValueChange={(val) => {
+                                    const bType = val as "fixed" | "monthly" | "yearly";
+                                    setEditBilling(bType);
+                                    updatePricingItem(service, item.id, { name: editName, description: editDesc, price: Number(editPrice) || 0, billingType: bType });
+                                }}
                             >
-                                <SelectTrigger className="h-9 w-full bg-background border-input font-medium text-xs">
+                                <SelectTrigger className="h-9 w-full bg-background border-input font-medium text-xs" aria-label="Billing type">
                                     <SelectValue placeholder="Select billing type" />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -3177,10 +3266,17 @@ function PricingRow({
                             <Label className="text-xs font-semibold">Price ({currencySymbol}) <span className="text-destructive">*</span></Label>
                             <Input
                                 type="number"
+                                min={0}
                                 placeholder="0"
                                 value={editPrice === 0 ? "" : editPrice}
-                                onChange={(e) => setEditPrice(e.target.value === "" ? 0 : Number(e.target.value))}
+                                onChange={(e) => {
+                                    const val = e.target.value === "" ? 0 : Math.max(0, Number(e.target.value));
+                                    setEditPrice(val);
+                                    updatePricingItem(service, item.id, { name: editName, description: editDesc, price: val, billingType: editBilling });
+                                }}
+                                onKeyDown={(e) => { if (e.key === "Enter") handleSave(); }}
                                 className="h-9"
+                                aria-label="Pricing item price"
                             />
                         </div>
                         <div className="space-y-1 sm:col-span-2 md:col-span-4">
@@ -3190,8 +3286,14 @@ function PricingRow({
                             <Input
                                 placeholder="Enter description..."
                                 value={editDesc}
-                                onChange={(e) => setEditDesc(e.target.value)}
+                                onChange={(e) => {
+                                    const val = e.target.value;
+                                    setEditDesc(val);
+                                    updatePricingItem(service, item.id, { name: editName, description: val, price: Number(editPrice) || 0, billingType: editBilling });
+                                }}
+                                onKeyDown={(e) => { if (e.key === "Enter") handleSave(); }}
                                 className="h-9"
+                                aria-label="Pricing item description"
                             />
                         </div>
                     </div>

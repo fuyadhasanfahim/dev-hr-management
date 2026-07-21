@@ -35,11 +35,10 @@ import {
 import { cn } from "@/lib/utils";
 
 export default function EditProfile() {
-    const { data: session, isPending, isRefetching } = useSession();
+    const { data: session, isPending } = useSession();
     const {
         data,
         isLoading: isStaffLoading,
-        isFetching: isStaffFetching,
     } = useGetMeQuery(
         {},
         {
@@ -136,14 +135,12 @@ export default function EditProfile() {
         if (data.staff.joinDate) {
             form.setValue("joinDate", new Date(data.staff.joinDate));
         }
-    }, [session, form, isPending, isRefetching, data]);
+    }, [session, form, isPending, data]);
 
     const isLoading =
         form.formState.isSubmitting ||
         isPending ||
-        isRefetching ||
-        isStaffLoading ||
-        isStaffFetching;
+        (isStaffLoading && !data);
 
     const onSubmit = async (values: ProfileFormValues) => {
         const currentName = session?.user?.name;

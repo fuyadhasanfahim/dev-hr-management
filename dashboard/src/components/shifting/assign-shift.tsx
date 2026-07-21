@@ -56,7 +56,7 @@ const shiftAssignSchema = z.object({
 type FormData = z.infer<typeof shiftAssignSchema>;
 
 export default function AssignShift() {
-  const { data: session, isPending, isRefetching } = useSession();
+  const { data: session, isPending } = useSession();
 
   const [open, setOpen] = useState(false);
   const [staffSelectOpen, setStaffSelectOpen] = useState(false);
@@ -67,7 +67,6 @@ export default function AssignShift() {
   const {
     data: staffsData,
     isLoading: isStaffsLoading,
-    isFetching: isStaffsFetching,
   } = useGetStaffsQuery(
     { limit: 1000, status: "active" },
     { skip: !session || session.user.role === Role.STAFF },
@@ -76,7 +75,6 @@ export default function AssignShift() {
   const {
     data: shiftsData,
     isLoading: isShiftsLoading,
-    isFetching: isShiftsFetching,
   } = useGetAllShiftsQuery(
     {},
     { skip: !session || session.user.role === Role.STAFF },
@@ -100,11 +98,8 @@ export default function AssignShift() {
 
   const isLoading =
     isPending ||
-    isRefetching ||
-    isStaffsLoading ||
-    isStaffsFetching ||
-    isShiftsLoading ||
-    isShiftsFetching;
+    (isStaffsLoading && !staffsData) ||
+    (isShiftsLoading && !shiftsData);
 
   const canCreate = session && session.user.role !== Role.STAFF;
 
