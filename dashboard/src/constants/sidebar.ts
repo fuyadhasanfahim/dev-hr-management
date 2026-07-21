@@ -68,7 +68,7 @@ export const sidebarGroups: SidebarGroup[] = [
                 ],
             },
             {
-                title: "My Tasks",
+                title: "Tasks & Kanban",
                 url: "/tasks",
                 icon: IconClipboardList,
                 access: [

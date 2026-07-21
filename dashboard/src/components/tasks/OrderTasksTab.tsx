@@ -46,6 +46,7 @@ import {
 import { toast } from 'sonner';
 import { AssignTaskModal } from './AssignTaskModal';
 import { EditTaskModal } from './EditTaskModal';
+import { KanbanBoard } from './kanban/KanbanBoard';
 import {
     ClipboardList,
     UserCog,
@@ -69,6 +70,8 @@ import {
     History,
     Edit3,
     ChevronRight,
+    LayoutGrid,
+    List,
 } from 'lucide-react';
 import {
     Dialog,
@@ -89,6 +92,7 @@ interface OrderTasksTabProps {
 }
 
 export function OrderTasksTab({ order, canManage }: OrderTasksTabProps) {
+    const [viewMode, setViewMode] = useState<'kanban' | 'list'>('kanban');
     const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
     const [editTaskData, setEditTaskData] = useState<any>(null);
     const [submitModalTask, setSubmitModalTask] = useState<any>(null);
@@ -333,34 +337,75 @@ export function OrderTasksTab({ order, canManage }: OrderTasksTabProps) {
             >
                 <Card className="border-border/50 shadow-xl bg-card overflow-hidden ring-1 ring-black/5">
                     <div className="h-1.5 bg-gradient-to-r from-indigo-500 via-primary to-indigo-500 w-full" />
-                    <CardHeader className="flex flex-row items-center justify-between bg-muted/5 py-5 px-6 border-b border-border/40">
-                        <div>
+                    <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-muted/5 py-4 px-6 border-b border-border/40">
+                        <div className="flex items-center gap-3">
                             <CardTitle className="text-lg font-black flex items-center gap-2.5 text-foreground tracking-tight">
                                 <div className="p-1.5 bg-primary text-primary-foreground rounded shadow-md">
                                     <ClipboardList className="h-4 w-4" />
                                 </div>
-                                Pipeline Chronology
+                                Pipeline Execution
                             </CardTitle>
                         </div>
-                        {canManage && (
-                            <Button
-                                onClick={() => setIsAssignModalOpen(true)}
-                                size="sm"
-                                className="font-bold shadow-md gap-2 h-9 px-5 bg-foreground hover:bg-foreground/90 text-background"
-                            >
-                                <PlusCircle className="h-3.5 w-3.5" />
-                                Add Node
-                            </Button>
-                        )}
+
+                        <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
+                            {/* View Switcher Toggle */}
+                            <div className="inline-flex items-center p-1 bg-muted/80 rounded-lg border border-border/40 shadow-xs">
+                                <Button
+                                    type="button"
+                                    variant={viewMode === 'kanban' ? 'default' : 'ghost'}
+                                    size="sm"
+                                    onClick={() => setViewMode('kanban')}
+                                    className={cn(
+                                        'h-7 px-3 text-xs font-bold gap-1.5 transition-all',
+                                        viewMode === 'kanban' && 'shadow-xs bg-background text-foreground hover:bg-background'
+                                    )}
+                                >
+                                    <LayoutGrid className="h-3.5 w-3.5" />
+                                    Kanban
+                                </Button>
+                                <Button
+                                    type="button"
+                                    variant={viewMode === 'list' ? 'default' : 'ghost'}
+                                    size="sm"
+                                    onClick={() => setViewMode('list')}
+                                    className={cn(
+                                        'h-7 px-3 text-xs font-bold gap-1.5 transition-all',
+                                        viewMode === 'list' && 'shadow-xs bg-background text-foreground hover:bg-background'
+                                    )}
+                                >
+                                    <List className="h-3.5 w-3.5" />
+                                    List
+                                </Button>
+                            </div>
+
+                            {canManage && (
+                                <Button
+                                    onClick={() => setIsAssignModalOpen(true)}
+                                    size="sm"
+                                    className="font-bold shadow-md gap-2 h-9 px-5 bg-foreground hover:bg-foreground/90 text-background"
+                                >
+                                    <PlusCircle className="h-3.5 w-3.5" />
+                                    Add Task
+                                </Button>
+                            )}
+                        </div>
                     </CardHeader>
 
-                    <CardContent className="p-0">
+                    <CardContent className="p-4">
                         {isTasksLoading ? (
                             <div className="p-6 space-y-4">
                                 {[1, 2, 3].map((i) => (
                                     <Skeleton key={i} className="h-20 w-full rounded-xl" />
                                 ))}
                             </div>
+                        ) : viewMode === 'kanban' ? (
+                            <KanbanBoard
+                                tasks={tasks}
+                                canManage={canManage}
+                                onEditTask={setEditTaskData}
+                                onSubmitTask={setSubmitModalTask}
+                                staffs={staffs}
+                            />
                         ) : tasks.length === 0 ? (
                             <div className="py-24 text-center flex flex-col items-center justify-center bg-muted/10">
                                 <div className="p-6 bg-background rounded-full shadow-inner mb-4 border border-dashed">

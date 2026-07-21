@@ -27,6 +27,7 @@ import {
 } from '@/components/ui/dialog';
 import { format, formatDistanceToNow, isPast } from 'date-fns';
 import { toast } from 'sonner';
+import { KanbanBoard } from '@/components/tasks/kanban/KanbanBoard';
 import {
     ClipboardList,
     Calendar,
@@ -36,14 +37,18 @@ import {
     CheckCircle,
     Timer,
     AlertTriangle,
+    LayoutGrid,
+    List,
 } from 'lucide-react';
 import Link from 'next/link';
 import { Label } from '@/components/ui/label';
+import { cn } from '@/lib/utils';
 
 export default function MyTasksPage() {
     const { data: tasksRes, isLoading } = useGetMyTasksQuery(undefined);
     const [submitTask, { isLoading: isSubmitting }] = useSubmitTaskMutation();
 
+    const [viewMode, setViewMode] = useState<'kanban' | 'list'>('kanban');
     const [isSubmitModalOpen, setIsSubmitModalOpen] = useState(false);
     const [selectedTask, setSelectedTask] = useState<any>(null);
     const [submissionLink, setSubmissionLink] = useState('');
@@ -113,15 +118,54 @@ export default function MyTasksPage() {
                         across all active orders.
                     </p>
                 </div>
-                <Badge
-                    className="px-4 py-1.5 text-sm font-bold"
-                    variant="secondary"
-                >
-                    {tasks.filter((t: any) => ['pending', 'in_progress', 'rejected'].includes(t.status)).length} Pending Action
-                </Badge>
+
+                <div className="flex items-center gap-3">
+                    {/* View Mode Toggle */}
+                    <div className="inline-flex items-center p-1 bg-muted/80 rounded-lg border border-border/40 shadow-xs">
+                        <Button
+                            type="button"
+                            variant={viewMode === 'kanban' ? 'default' : 'ghost'}
+                            size="sm"
+                            onClick={() => setViewMode('kanban')}
+                            className={cn(
+                                'h-8 px-3 text-xs font-bold gap-1.5 transition-all',
+                                viewMode === 'kanban' && 'shadow-xs bg-background text-foreground hover:bg-background'
+                            )}
+                        >
+                            <LayoutGrid className="h-3.5 w-3.5" />
+                            Kanban
+                        </Button>
+                        <Button
+                            type="button"
+                            variant={viewMode === 'list' ? 'default' : 'ghost'}
+                            size="sm"
+                            onClick={() => setViewMode('list')}
+                            className={cn(
+                                'h-8 px-3 text-xs font-bold gap-1.5 transition-all',
+                                viewMode === 'list' && 'shadow-xs bg-background text-foreground hover:bg-background'
+                            )}
+                        >
+                            <List className="h-3.5 w-3.5" />
+                            List
+                        </Button>
+                    </div>
+
+                    <Badge
+                        className="px-4 py-1.5 text-sm font-bold"
+                        variant="secondary"
+                    >
+                        {tasks.filter((t: any) => ['pending', 'in_progress', 'rejected'].includes(t.status)).length} Pending Action
+                    </Badge>
+                </div>
             </div>
 
-            {tasks.length === 0 ? (
+            {viewMode === 'kanban' ? (
+                <KanbanBoard
+                    tasks={tasks}
+                    canManage={false}
+                    onSubmitTask={handleOpenSubmit}
+                />
+            ) : tasks.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-20 text-center space-y-4 bg-card border border-dashed rounded-2xl">
                     <div className="p-4 bg-muted rounded-full">
                         <CheckCircle className="h-12 w-12 text-muted-foreground opacity-30" />
