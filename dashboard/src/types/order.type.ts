@@ -88,22 +88,63 @@ export interface IOrderAsset {
     isLocked: boolean;
 }
 
+export interface IQuotationSnapshotLineItem {
+    title: string;
+    price: number;
+    billingCycle: 'one-time' | 'monthly' | 'yearly' | 'per-image' | 'per-video' | 'per-second' | 'per-10s';
+    quantity?: number;
+    description?: string;
+}
+
+export interface IQuotationSnapshotService {
+    category: string;
+    scopeDescription?: string;
+    scopeItems: string[];
+    basePrice: number;
+    lineItems: IQuotationSnapshotLineItem[];
+    discount: number;
+    taxRate: number;
+}
+
+export interface IQuotationSnapshotMilestone {
+    label: string;
+    percentage: number;
+    note?: string;
+}
+
 export interface IQuotationSnapshot {
     quotationId: string;
     quotationGroupId: string;
     version: number;
     quotationNumber: string;
     serviceType: string;
-    templateName: string;
+    templateName?: string;
     clientId: string;
     clientName: string;
     clientEmail: string;
     overview?: string;
+    details?: {
+        title: string;
+        date: string;
+        validUntil: string;
+    };
     scopeOfWork: Array<{ title: string; description: string; items: string[] }>;
+    services?: IQuotationSnapshotService[];
+    recurringCharges?: IQuotationSnapshotLineItem[];
+    paymentMilestones?: IQuotationSnapshotMilestone[];
+    notIncluded?: string[];
+    clientRequirements?: string[];
+    workflow?: string[];
     currency: string;
     grandTotal: number;
     discountAmount: number;
     taxAmount: number;
+    totals?: {
+        subtotal: number;
+        discountAmount: number;
+        taxAmount: number;
+        grandTotal: number;
+    };
 }
 
 export interface IOrder {

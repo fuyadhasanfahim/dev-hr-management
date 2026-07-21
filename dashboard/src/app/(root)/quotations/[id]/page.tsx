@@ -775,6 +775,15 @@ export default function ViewQuotationPage() {
                                     const style = getCategoryBadgeStyle(categoryLabel);
                                     const featureNodes = parseBulkFeatures((svc.scopeItems || []).join('\n'));
 
+                                    const overviewText = (data.overview || '').trim().toLowerCase();
+                                    const rawScopeDesc = String(svc.scopeDescription || '').trim();
+                                    const isDuplicateOverview = rawScopeDesc && overviewText && (
+                                        rawScopeDesc.toLowerCase() === overviewText ||
+                                        overviewText.includes(rawScopeDesc.toLowerCase()) ||
+                                        rawScopeDesc.toLowerCase().includes(overviewText)
+                                    );
+                                    const displayDesc = isDuplicateOverview ? '' : rawScopeDesc;
+
                                     return (
                                         <div
                                             key={`${svc.category}-${idx}`}
@@ -789,8 +798,8 @@ export default function ViewQuotationPage() {
                                                         <h4 className="text-base font-extrabold tracking-tight text-slate-900 dark:text-white">
                                                             {categoryLabel}
                                                         </h4>
-                                                        {svc.scopeDescription && (
-                                                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{svc.scopeDescription}</p>
+                                                        {displayDesc && (
+                                                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{displayDesc}</p>
                                                         )}
                                                     </div>
                                                 </div>

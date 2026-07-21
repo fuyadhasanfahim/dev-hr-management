@@ -89,6 +89,12 @@ export interface IQuotationSnapshotService {
     taxRate: number; // Percentage
 }
 
+export interface IQuotationSnapshotMilestone {
+    label: string;
+    percentage: number;
+    note?: string;
+}
+
 /**
  * Immutable snapshot of the quotation at the time the order was created.
  * Once written, this sub-document MUST NOT be mutated.
@@ -100,21 +106,38 @@ export interface IQuotationSnapshot {
     version: number;
     quotationNumber: string;
     serviceType: string;
-    templateName: string;
+    templateName?: string;
     clientId: Types.ObjectId;
     clientName: string;
     clientEmail: string;
     overview?: string;
+    /** Details (title, date, validUntil) */
+    details?: {
+        title: string;
+        date: Date | string;
+        validUntil: Date | string;
+    };
     /** One entry per selected service — title/description/items, for the order UI's scope-of-work display. */
     scopeOfWork: Array<{ title: string; description: string; items: string[] }>;
     /** Full per-service pricing breakdown (audit trail for finance). */
     services: IQuotationSnapshotService[];
     /** Monthly/yearly line items billed separately, excluded from grandTotal. */
     recurringCharges: IQuotationSnapshotLineItem[];
+    /** Custom payment milestones (e.g. 50/50, 40/30/30) */
+    paymentMilestones?: IQuotationSnapshotMilestone[];
+    notIncluded?: string[];
+    clientRequirements?: string[];
+    workflow?: string[];
     currency: string;
     grandTotal: number;       // in original currency unit (not cents)
     discountAmount: number;
     taxAmount: number;
+    totals?: {
+        subtotal: number;
+        discountAmount: number;
+        taxAmount: number;
+        grandTotal: number;
+    };
 }
 
 export interface IOrder extends Document {
@@ -184,6 +207,13 @@ const snapshotLineItemSchema = {
     _id: false,
 };
 
+const snapshotMilestoneSchema = {
+    label: { type: String, required: true },
+    percentage: { type: Number, required: true },
+    note: String,
+    _id: false,
+};
+
 const snapshotSchema = new Schema<IQuotationSnapshot>(
     {
         quotationId: { type: Schema.Types.ObjectId, required: true },
@@ -191,11 +221,17 @@ const snapshotSchema = new Schema<IQuotationSnapshot>(
         version: { type: Number, required: true },
         quotationNumber: { type: String, required: true },
         serviceType: { type: String, required: true },
-        templateName: { type: String, required: true },
+        templateName: { type: String, required: false },
         clientId: { type: Schema.Types.ObjectId, required: true },
         clientName: { type: String, required: true },
         clientEmail: { type: String, required: true },
         overview: { type: String },
+        details: {
+            title: String,
+            date: Date,
+            validUntil: Date,
+            _id: false,
+        },
         scopeOfWork: [
             {
                 title: String,
@@ -217,10 +253,21 @@ const snapshotSchema = new Schema<IQuotationSnapshot>(
             },
         ],
         recurringCharges: [snapshotLineItemSchema],
+        paymentMilestones: [snapshotMilestoneSchema],
+        notIncluded: [String],
+        clientRequirements: [String],
+        workflow: [String],
         currency: { type: String, required: true },
         grandTotal: { type: Number, required: true },
         discountAmount: { type: Number, required: true },
         taxAmount: { type: Number, required: true },
+        totals: {
+            subtotal: Number,
+            discountAmount: Number,
+            taxAmount: Number,
+            grandTotal: Number,
+            _id: false,
+        },
     },
     { _id: false },
 );

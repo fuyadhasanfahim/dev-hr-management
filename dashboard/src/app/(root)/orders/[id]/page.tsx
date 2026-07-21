@@ -67,18 +67,7 @@ const getFilteredStatusOptions = (order: IOrder): OrderStatus[] => {
 export default function OrderDetailsPage() {
     const params = useParams();
     const router = useRouter();
-    const searchParams = useSearchParams();
     const id = params.id as string;
-    
-    const [activeTab, setActiveTab] = useState("overview");
-    
-    // Sync tab state with URL query params when URL changes or on hydration
-    useEffect(() => {
-        const t = searchParams.get("tab");
-        if (t && (t === "overview" || t === "tasks")) {
-            setActiveTab(t);
-        }
-    }, [searchParams]);
 
     const { data: session } = useSession();
     const canSeeFinancials = useMemo(() => {
@@ -231,73 +220,158 @@ export default function OrderDetailsPage() {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                {/* Left Column: Tabbed Sections */}
+                {/* Left Column: Project Details & Scope */}
                 <div className="lg:col-span-2 space-y-6">
-                    <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                        <TabsList className="grid w-full grid-cols-2 bg-muted/50 border h-12 p-1 rounded-xl mb-6">
-                            <TabsTrigger value="overview" className="font-bold rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm gap-2">
-                                <LayoutDashboard className="h-4 w-4" />
-                                Overview
-                            </TabsTrigger>
-                            <TabsTrigger value="tasks" className="font-bold rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm gap-2">
-                                <LayoutList className="h-4 w-4" />
-                                Tasks & Team
-                            </TabsTrigger>
-                        </TabsList>
-
-                        <TabsContent value="overview" className="space-y-6 mt-0 animate-in slide-in-from-left-4 duration-300">
-                            <Card className="shadow-md border-muted/60">
-                                <CardHeader className="border-b bg-muted/10">
+                    <Card className="shadow-md border-muted/60">
+                        <CardHeader className="border-b bg-muted/10">
                                     <CardTitle className="text-xl flex items-center gap-2">
                                         <FileText className="h-5 w-5 text-primary" />
-                                        Project Overview
+                                        Project Overview & Services Breakdown
                                     </CardTitle>
                                 </CardHeader>
                                 <CardContent className="pt-6 space-y-6">
                                     <div>
-                                        <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Description</h3>
-                                        <div className="mt-2 text-foreground/90 leading-relaxed bg-muted/20 p-4 rounded-lg border border-dashed">
+                                        <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Overview / Abstract</h3>
+                                        <div className="mt-2 text-foreground/90 leading-relaxed bg-muted/20 p-4 rounded-lg border border-dashed text-sm">
                                             {order.quotationSnapshot?.overview || "No detailed description provided for this order."}
                                         </div>
                                     </div>
                                     
+                                    {/* Services Breakdown */}
                                     <div>
-                                        <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4">Service Breakdown (Scope of Work)</h3>
-                                        <div className="grid gap-4">
-                                            {order.quotationSnapshot?.scopeOfWork?.map((item: any, index: number) => (
-                                                <div key={index} className="flex flex-col md:flex-row justify-between items-start md:items-center p-5 rounded-xl border bg-card hover:shadow-md transition-shadow">
-                                                    <div className="flex items-start gap-4">
-                                                        <div className="p-3 bg-primary/5 rounded-lg">
-                                                            <Package className="h-6 w-6 text-primary" />
+                                        <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-4">Service Scope & Deliverables</h3>
+                                        <div className="grid gap-5">
+                                            {/* Services list if present */}
+                                            {Array.isArray(order.quotationSnapshot?.services) && order.quotationSnapshot.services.length > 0 ? (
+                                                order.quotationSnapshot.services.map((svc: any, idx: number) => {
+                                                    const CATEGORY_NAMES: Record<string, string> = {
+                                                        'web-development': 'Web Design & Development',
+                                                        'marketing': 'Marketing & Growth',
+                                                        'photo-editing': 'Photo Editing',
+                                                        'video-editing': 'Video Editing',
+                                                    };
+
+                                                    const overviewText = (order.quotationSnapshot?.overview || "").trim().toLowerCase();
+                                                    const rawScopeDesc = String(svc.scopeDescription || "").trim();
+                                                    const isDuplicateOverview = rawScopeDesc && overviewText && (
+                                                        rawScopeDesc.toLowerCase() === overviewText ||
+                                                        overviewText.includes(rawScopeDesc.toLowerCase()) ||
+                                                        rawScopeDesc.toLowerCase().includes(overviewText)
+                                                    );
+                                                    const displayDesc = isDuplicateOverview ? "" : rawScopeDesc;
+
+                                                    return (
+                                                        <div key={idx} className="p-5 rounded-xl border bg-card shadow-xs space-y-3">
+                                                            <div className="flex items-center justify-between border-b pb-3">
+                                                                <div className="flex items-center gap-3">
+                                                                    <div className="p-2 bg-primary/10 rounded-lg text-primary">
+                                                                        <Package className="h-5 w-5" />
+                                                                    </div>
+                                                                    <div>
+                                                                        <h4 className="font-bold text-base">{CATEGORY_NAMES[svc.category] || svc.category}</h4>
+                                                                        {displayDesc && (
+                                                                            <p className="text-xs text-muted-foreground">{displayDesc}</p>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                                {canSeeFinancials && (
+                                                                    <span className="font-black text-sm text-primary">
+                                                                        {order.quotationSnapshot?.currency || "৳"}
+                                                                        {(svc.basePrice || 0).toLocaleString()}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+
+                                                            {/* Scope Items */}
+                                                            {Array.isArray(svc.scopeItems) && svc.scopeItems.length > 0 && (
+                                                                <div className="space-y-1.5 pt-1">
+                                                                    <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Features & Deliverables:</span>
+                                                                    <div className="flex flex-wrap gap-2">
+                                                                        {svc.scopeItems.map((item: string, i: number) => (
+                                                                            <Badge key={i} variant="secondary" className="text-xs font-medium px-2.5 py-1">
+                                                                                ✓ {item}
+                                                                            </Badge>
+                                                                        ))}
+                                                                    </div>
+                                                                </div>
+                                                            )}
+
+                                                            {/* Line Items */}
+                                                            {Array.isArray(svc.lineItems) && svc.lineItems.length > 0 && (
+                                                                <div className="space-y-2 pt-2 border-t border-dashed">
+                                                                    <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Included Pricing Items:</span>
+                                                                    <div className="grid gap-2">
+                                                                        {svc.lineItems.map((item: any, i: number) => (
+                                                                            <div key={i} className="flex justify-between items-center text-xs p-2 bg-muted/30 rounded border">
+                                                                                <div className="flex flex-col">
+                                                                                    <span className="font-bold text-foreground">{item.title}</span>
+                                                                                    {item.description && <span className="text-muted-foreground text-[11px]">{item.description}</span>}
+                                                                                </div>
+                                                                                {canSeeFinancials && (
+                                                                                    <span className="font-bold">
+                                                                                        {order.quotationSnapshot?.currency || "৳"}{(item.price || 0).toLocaleString()}
+                                                                                    </span>
+                                                                                )}
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                </div>
+                                                            )}
                                                         </div>
-                                                        <div>
-                                                            <p className="font-bold text-lg">{item.title}</p>
-                                                            <div className="flex items-center gap-2 mt-1">
-                                                                <span className="text-sm text-muted-foreground line-clamp-2">{item.description}</span>
+                                                    );
+                                                })
+                                            ) : (
+                                                /* Fallback to ScopeOfWork */
+                                                order.quotationSnapshot?.scopeOfWork?.map((item: any, index: number) => (
+                                                    <div key={index} className="flex flex-col md:flex-row justify-between items-start md:items-center p-5 rounded-xl border bg-card hover:shadow-md transition-shadow">
+                                                        <div className="flex items-start gap-4">
+                                                            <div className="p-3 bg-primary/5 rounded-lg">
+                                                                <Package className="h-6 w-6 text-primary" />
+                                                            </div>
+                                                            <div>
+                                                                <p className="font-bold text-lg">{item.title}</p>
+                                                                <div className="flex items-center gap-2 mt-1">
+                                                                    <span className="text-sm text-muted-foreground line-clamp-2">{item.description}</span>
+                                                                </div>
                                                             </div>
                                                         </div>
                                                     </div>
-                                                </div>
-                                            ))}
-                                            {(!order.quotationSnapshot?.scopeOfWork || order.quotationSnapshot.scopeOfWork.length === 0) && (
-                                                <div className="text-muted-foreground text-sm italic">No specific scope of work items found.</div>
+                                                ))
                                             )}
                                         </div>
                                     </div>
+
+                                    {/* Custom Payment Milestones */}
+                                    {Array.isArray(order.quotationSnapshot?.paymentMilestones) && order.quotationSnapshot.paymentMilestones.length > 0 && (
+                                        <div className="border-t pt-5">
+                                            <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-3">Payment Terms & Milestones</h3>
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                                                {order.quotationSnapshot.paymentMilestones.map((m: any, idx: number) => {
+                                                    const amount = ((order.quotationSnapshot?.grandTotal || 0) * (m.percentage || 0)) / 100;
+                                                    return (
+                                                        <div key={idx} className="p-3 bg-muted/20 rounded-lg border flex flex-col justify-between">
+                                                            <div className="flex items-center justify-between">
+                                                                <span className="font-bold text-xs">{m.label}</span>
+                                                                <Badge variant="outline" className="text-[10px] font-black text-primary bg-primary/10 border-primary/20">
+                                                                    {m.percentage}%
+                                                                </Badge>
+                                                            </div>
+                                                            {canSeeFinancials && (
+                                                                <span className="text-lg font-black text-foreground mt-2">
+                                                                    {order.quotationSnapshot?.currency || "৳"}{amount.toLocaleString()}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    )}
                                 </CardContent>
                             </Card>
-                        </TabsContent>
-
-                        <TabsContent value="tasks" className="space-y-6 mt-0 animate-in slide-in-from-right-4 duration-300">
-                            <OrderTasksTab 
-                                order={order} 
-                                canManage={canSeeFinancials || session?.user?.role === Role.TEAM_LEADER} 
-                            />
-                        </TabsContent>
-                    </Tabs>
                 </div>
 
-                {/* Right Column: Metadata & Stats */}
+                {/* Right Column: Metadata & Financial Summary */}
                 <div className="space-y-6">
                     <Card className="shadow-md border-muted/60 overflow-hidden">
                         <CardHeader className="bg-primary/5 border-b">
@@ -309,7 +383,7 @@ export default function OrderDetailsPage() {
                                 <h2 className={cn("text-4xl font-black text-primary mt-1 tracking-tight", !canSeeFinancials && "blur-[3px] opacity-50 select-none")}>
                                     {canSeeFinancials ? (
                                         <>
-                                            {order.quotationSnapshot?.currency === "USD" ? "$" : order.quotationSnapshot?.currency || "$"}
+                                            {order.quotationSnapshot?.currency || "৳"}
                                             {(order.quotationSnapshot?.grandTotal || 0).toLocaleString()}
                                         </>
                                     ) : (
@@ -319,6 +393,27 @@ export default function OrderDetailsPage() {
                             </div>
 
                             <div className="space-y-3 pt-4">
+                                {canSeeFinancials && order.quotationSnapshot?.totals && (
+                                    <>
+                                        <div className="flex justify-between items-center text-xs py-1 border-b border-dashed">
+                                            <span className="text-muted-foreground">Subtotal</span>
+                                            <span className="font-bold">{order.quotationSnapshot?.currency || "৳"}{(order.quotationSnapshot.totals.subtotal || 0).toLocaleString()}</span>
+                                        </div>
+                                        {order.quotationSnapshot.totals.discountAmount > 0 && (
+                                            <div className="flex justify-between items-center text-xs py-1 border-b border-dashed text-emerald-600">
+                                                <span>Discount</span>
+                                                <span className="font-bold">-{order.quotationSnapshot?.currency || "৳"}{order.quotationSnapshot.totals.discountAmount.toLocaleString()}</span>
+                                            </div>
+                                        )}
+                                        {order.quotationSnapshot.totals.taxAmount > 0 && (
+                                            <div className="flex justify-between items-center text-xs py-1 border-b border-dashed">
+                                                <span className="text-muted-foreground">Tax</span>
+                                                <span className="font-bold">+{order.quotationSnapshot?.currency || "৳"}{order.quotationSnapshot.totals.taxAmount.toLocaleString()}</span>
+                                            </div>
+                                        )}
+                                    </>
+                                )}
+
                                 <div className="flex justify-between items-center py-2 border-b border-dashed">
                                     <span className="text-muted-foreground text-sm">Client</span>
                                     <span className="font-bold text-sm">

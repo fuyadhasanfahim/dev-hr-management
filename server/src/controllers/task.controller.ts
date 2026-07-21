@@ -54,18 +54,21 @@ async function getMyTasks(req: Request, res: Response, next: NextFunction): Prom
         }
 
         const isManager = ['admin', 'super_admin', 'hr_manager', 'team_leader'].includes(user.role as string);
-        const staff = await StaffModel.findOne({ userId: user.id });
 
-        // Managers without a Staff record (pure admin accounts) have no personal task queue
-        if (!staff) {
-            if (isManager) {
-                res.status(200).json({ success: true, message: 'Your tasks fetched successfully', data: [] });
-                return;
-            }
-            throw new AppError('Staff record not found for logged user', 404);
+        if (isManager) {
+            // Managers see all tasks across all active orders so they can manage the Kanban board
+            const result = await TaskService.getAllTasks();
+            res.status(200).json({
+                success: true,
+                message: 'All tasks fetched successfully',
+                data: result,
+            });
+            return;
         }
 
-        const result = await TaskService.getTasksByStaff(staff._id.toString());
+        const staff = await StaffModel.findOne({ userId: user.id });
+
+        const result = await TaskService.getTasksByStaff(staff?._id?.toString(), user.id);
 
         res.status(200).json({
             success: true,

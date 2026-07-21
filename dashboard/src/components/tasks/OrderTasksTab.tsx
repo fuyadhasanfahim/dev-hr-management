@@ -624,6 +624,7 @@ export function OrderTasksTab({ order, canManage }: OrderTasksTabProps) {
                 open={isAssignModalOpen}
                 onOpenChange={setIsAssignModalOpen}
                 orderId={order._id}
+                order={order}
                 phases={order.quotationSnapshot?.scopeOfWork}
                 existingTasks={tasks}
             />

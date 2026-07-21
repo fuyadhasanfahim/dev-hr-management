@@ -49,11 +49,50 @@ const getTasksByOrder = async (orderId: string) => {
         .sort({ dueDate: 1 });
 };
 
-const getTasksByStaff = async (staffId: string) => {
-    return await OrderTaskModel.find({
-        assignedTo: staffId,
-        status: { $ne: TaskStatus.COMPLETED },
-    })
+const getAllTasks = async () => {
+    return await OrderTaskModel.find({})
+        .populate({
+            path: 'assignedTo',
+            select: 'userId designation avatar',
+            populate: {
+                path: 'userId',
+                model: 'User',
+                select: 'name email image',
+            },
+        })
+        .populate('orderId', 'orderNumber status quotationSnapshot.clientName')
+        .sort({ dueDate: 1 });
+};
+
+const getTasksByStaff = async (staffId?: string, userId?: string) => {
+    const orConditions: any[] = [];
+
+    if (staffId) {
+        orConditions.push({ assignedTo: staffId });
+        if (Types.ObjectId.isValid(staffId)) {
+            orConditions.push({ assignedTo: new Types.ObjectId(staffId) });
+        }
+    }
+
+    if (userId) {
+        orConditions.push({ assignedTo: userId });
+        if (Types.ObjectId.isValid(userId)) {
+            orConditions.push({ assignedTo: new Types.ObjectId(userId) });
+        }
+    }
+
+    const filter = orConditions.length > 0 ? { $or: orConditions } : {};
+
+    return await OrderTaskModel.find(filter)
+        .populate({
+            path: 'assignedTo',
+            select: 'userId designation avatar',
+            populate: {
+                path: 'userId',
+                model: 'User',
+                select: 'name email image',
+            },
+        })
         .populate('orderId', 'orderNumber status quotationSnapshot.clientName')
         .sort({ dueDate: 1 });
 };
@@ -260,6 +299,7 @@ const updateTask = async (taskId: string, payload: any, actorId?: string) => {
 
 const TaskService = {
     createTask,
+    getAllTasks,
     getTasksByOrder,
     getTasksByStaff,
     updateTask,

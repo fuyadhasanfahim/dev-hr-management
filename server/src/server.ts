@@ -8,6 +8,8 @@ import { initSocket } from "./socket.js";
 import { logger } from "./lib/logger.js";
 import { initSentry } from "./lib/sentry.js";
 
+import { cleanupDuplicateOverviewInDB } from './utils/cleanupDuplicateOverview.js';
+
 const { port } = envConfig;
 
 async function Server() {
@@ -16,6 +18,9 @@ async function Server() {
         await client();
 
         logger.info("db.connected");
+
+        // Run database overview deduplication
+        await cleanupDuplicateOverviewInDB();
 
         const server = createServer(app);
 

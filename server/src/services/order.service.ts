@@ -142,21 +142,33 @@ function buildQuotationSnapshot(
         items: Array.isArray(s.scopeItems) ? [...s.scopeItems] : [],
     }));
 
-    const snapshotServices = services.map((s) => ({
-        category: s.category,
-        ...(s.scopeDescription ? { scopeDescription: String(s.scopeDescription) } : {}),
-        scopeItems: Array.isArray(s.scopeItems) ? [...s.scopeItems] : [],
-        basePrice: Number(s.basePrice) || 0,
-        lineItems: (s.lineItems ?? []).map((item) => ({
-            title: String(item.title || ''),
-            price: Number(item.price) || 0,
-            billingCycle: item.billingCycle || 'one-time',
-            ...(typeof item.quantity === 'number' ? { quantity: item.quantity } : {}),
-            ...(item.description ? { description: String(item.description) } : {}),
-        })),
-        discount: Number(s.discount) || 0,
-        taxRate: Number(s.taxRate) || 0,
-    }));
+    const overviewText = typeof quotation.overview === 'string' ? quotation.overview.trim().toLowerCase() : '';
+
+    const snapshotServices = services.map((s) => {
+        const rawDesc = typeof s.scopeDescription === 'string' ? s.scopeDescription.trim() : '';
+        const isDuplicateOverview = rawDesc && overviewText && (
+            rawDesc.toLowerCase() === overviewText ||
+            overviewText.includes(rawDesc.toLowerCase()) ||
+            rawDesc.toLowerCase().includes(overviewText)
+        );
+        const scopeDescription = isDuplicateOverview ? '' : rawDesc;
+
+        return {
+            category: s.category,
+            ...(scopeDescription ? { scopeDescription } : {}),
+            scopeItems: Array.isArray(s.scopeItems) ? [...s.scopeItems] : [],
+            basePrice: Number(s.basePrice) || 0,
+            lineItems: (s.lineItems ?? []).map((item) => ({
+                title: String(item.title || ''),
+                price: Number(item.price) || 0,
+                billingCycle: item.billingCycle || 'one-time',
+                ...(typeof item.quantity === 'number' ? { quantity: item.quantity } : {}),
+                ...(item.description ? { description: String(item.description) } : {}),
+            })),
+            discount: Number(s.discount) || 0,
+            taxRate: Number(s.taxRate) || 0,
+        };
+    });
 
     const recurringCharges = (quotation.recurringCharges ?? []).map((item) => ({
         title: String(item.title || ''),
@@ -167,6 +179,14 @@ function buildQuotationSnapshot(
     }));
 
     // ── Currency: trim → uppercase → fallback USD ─────────────────────────────
+    const paymentMilestones = Array.isArray(quotation.paymentMilestones)
+        ? quotation.paymentMilestones.map((m) => ({
+              label: String(m.label || ''),
+              percentage: Number(m.percentage) || 0,
+              ...(m.note ? { note: String(m.note) } : {}),
+          }))
+        : [];
+
     const rawCurrency =
         typeof quotation.currency === 'string' ? quotation.currency.trim() : '';
     const currency = rawCurrency !== '' ? rawCurrency.toUpperCase() : 'USD';
@@ -177,20 +197,26 @@ function buildQuotationSnapshot(
         version: quotation.version,
         quotationNumber: quotation.quotationNumber,
         serviceType: quotation.serviceType,
-        templateName: quotation.details.title,
+        templateName: quotation.details?.title || 'Quotation Project',
         clientId: quotation.clientId,
-        clientName: quotation.client.contactName,
-        clientEmail: quotation.client.email,
+        clientName: quotation.client?.contactName || 'Client',
+        clientEmail: quotation.client?.email || '',
+        ...(quotation.details ? { details: quotation.details } : {}),
         ...(typeof quotation.overview === 'string'
             ? { overview: quotation.overview }
             : {}),
         scopeOfWork,
         services: snapshotServices,
         recurringCharges,
+        paymentMilestones,
+        notIncluded: Array.isArray(quotation.notIncluded) ? [...quotation.notIncluded] : [],
+        clientRequirements: Array.isArray(quotation.clientRequirements) ? [...quotation.clientRequirements] : [],
+        workflow: Array.isArray(quotation.workflow) ? [...quotation.workflow] : [],
         currency,
-        grandTotal: quotation.totals.grandTotal,
-        discountAmount: quotation.totals.discountAmount,
-        taxAmount: quotation.totals.taxAmount,
+        grandTotal: quotation.totals?.grandTotal || 0,
+        discountAmount: quotation.totals?.discountAmount || 0,
+        taxAmount: quotation.totals?.taxAmount || 0,
+        totals: quotation.totals ? { ...quotation.totals } : undefined,
     });
 }
 

@@ -1,16 +1,18 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
+import { useSession } from '@/lib/auth-client';
+import { Role } from '@/constants/role';
 import {
     useGetMyTasksQuery,
     useSubmitTaskMutation,
 } from '@/redux/features/task/taskApi';
+import { useGetStaffsQuery } from '@/redux/features/staff/staffApi';
 import {
     Card,
     CardContent,
     CardHeader,
     CardTitle,
-    CardDescription,
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -25,9 +27,10 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
-import { format, formatDistanceToNow, isPast } from 'date-fns';
+import { format, isPast } from 'date-fns';
 import { toast } from 'sonner';
 import { KanbanBoard } from '@/components/tasks/kanban/KanbanBoard';
+import { AssignTaskModal } from '@/components/tasks/AssignTaskModal';
 import {
     ClipboardList,
     Calendar,
@@ -39,16 +42,27 @@ import {
     AlertTriangle,
     LayoutGrid,
     List,
+    Plus,
 } from 'lucide-react';
 import Link from 'next/link';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 
 export default function MyTasksPage() {
+    const { data: session } = useSession();
+    const role = session?.user?.role;
+    const canManage = useMemo(() => {
+        return role === Role.SUPER_ADMIN || role === Role.ADMIN || role === Role.HR_MANAGER || role === Role.TEAM_LEADER;
+    }, [role]);
+
     const { data: tasksRes, isLoading } = useGetMyTasksQuery(undefined);
+    const { data: staffsData } = useGetStaffsQuery({ limit: 100 });
+    const staffs = staffsData?.staffs || [];
+
     const [submitTask, { isLoading: isSubmitting }] = useSubmitTaskMutation();
 
     const [viewMode, setViewMode] = useState<'kanban' | 'list'>('kanban');
+    const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
     const [isSubmitModalOpen, setIsSubmitModalOpen] = useState(false);
     const [selectedTask, setSelectedTask] = useState<any>(null);
     const [submissionLink, setSubmissionLink] = useState('');
@@ -95,42 +109,47 @@ export default function MyTasksPage() {
     const getPriorityIcon = (p: string) => {
         switch (p) {
             case 'urgent':
-                return <AlertTriangle className="h-4 w-4 text-red-500" />;
+                return <AlertTriangle className="h-4 w-4 text-destructive" />;
             case 'high':
-                return <Timer className="h-4 w-4 text-orange-500" />;
+                return <Timer className="h-4 w-4 text-secondary-foreground" />;
             default:
                 return <ClipboardList className="h-4 w-4 opacity-50" />;
         }
     };
 
     return (
-        <div className="container mx-auto p-6 space-y-8 animate-in fade-in duration-500">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b pb-6">
+        <div className="container mx-auto p-6 space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b">
                 <div className="space-y-1">
-                    <h1 className="text-3xl font-black tracking-tight text-foreground flex items-center gap-3">
-                        <div className="p-2 bg-primary/10 rounded-lg text-primary">
-                            <ClipboardList className="h-6 w-6" />
-                        </div>
-                        My Active Tasks
+                    <h1 className="text-2xl font-bold tracking-tight text-foreground flex items-center gap-2">
+                        <ClipboardList className="h-6 w-6 text-primary" />
+                        Tasks & Board
                     </h1>
-                    <p className="text-muted-foreground">
-                        View your personal mission queue and submit outcomes
-                        across all active orders.
+                    <p className="text-xs text-muted-foreground">
+                        Manage task assignments, feature checklists, and track completion across active orders.
                     </p>
                 </div>
 
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 flex-wrap">
+                    {canManage && (
+                        <Button
+                            onClick={() => setIsAssignModalOpen(true)}
+                            size="sm"
+                            className="font-semibold gap-1.5 shadow-xs"
+                        >
+                            <Plus className="h-4 w-4" />
+                            Assign Task
+                        </Button>
+                    )}
+
                     {/* View Mode Toggle */}
-                    <div className="inline-flex items-center p-1 bg-muted/80 rounded-lg border border-border/40 shadow-xs">
+                    <div className="inline-flex items-center p-1 bg-muted rounded-lg border shadow-xs">
                         <Button
                             type="button"
                             variant={viewMode === 'kanban' ? 'default' : 'ghost'}
                             size="sm"
                             onClick={() => setViewMode('kanban')}
-                            className={cn(
-                                'h-8 px-3 text-xs font-bold gap-1.5 transition-all',
-                                viewMode === 'kanban' && 'shadow-xs bg-background text-foreground hover:bg-background'
-                            )}
+                            className="h-7 px-3 text-xs font-medium gap-1.5"
                         >
                             <LayoutGrid className="h-3.5 w-3.5" />
                             Kanban
@@ -140,21 +159,15 @@ export default function MyTasksPage() {
                             variant={viewMode === 'list' ? 'default' : 'ghost'}
                             size="sm"
                             onClick={() => setViewMode('list')}
-                            className={cn(
-                                'h-8 px-3 text-xs font-bold gap-1.5 transition-all',
-                                viewMode === 'list' && 'shadow-xs bg-background text-foreground hover:bg-background'
-                            )}
+                            className="h-7 px-3 text-xs font-medium gap-1.5"
                         >
                             <List className="h-3.5 w-3.5" />
                             List
                         </Button>
                     </div>
 
-                    <Badge
-                        className="px-4 py-1.5 text-sm font-bold"
-                        variant="secondary"
-                    >
-                        {tasks.filter((t: any) => ['pending', 'in_progress', 'rejected'].includes(t.status)).length} Pending Action
+                    <Badge variant="outline" className="text-xs px-3 py-1 font-semibold">
+                        {tasks.filter((t: any) => ['pending', 'in_progress', 'rejected'].includes(t.status)).length} Active Tasks
                     </Badge>
                 </div>
             </div>
@@ -162,8 +175,9 @@ export default function MyTasksPage() {
             {viewMode === 'kanban' ? (
                 <KanbanBoard
                     tasks={tasks}
-                    canManage={false}
+                    canManage={canManage}
                     onSubmitTask={handleOpenSubmit}
+                    staffs={staffs}
                 />
             ) : tasks.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-20 text-center space-y-4 bg-card border border-dashed rounded-2xl">
@@ -358,6 +372,13 @@ export default function MyTasksPage() {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            {/* Assign Task Modal */}
+            <AssignTaskModal
+                open={isAssignModalOpen}
+                onOpenChange={setIsAssignModalOpen}
+                existingTasks={tasks}
+            />
         </div>
     );
 }

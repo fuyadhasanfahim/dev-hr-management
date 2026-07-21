@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/select";
 import { useGetStaffsQuery } from "@/redux/features/staff/staffApi";
 import { useUpdateTaskMutation } from "@/redux/features/task/taskApi";
+import { DateTimePicker } from "@/components/shared/DateTimePicker";
 import { toast } from "sonner";
 import { Loader2, CalendarClock, Edit3 } from "lucide-react";
 
@@ -39,7 +40,7 @@ export function EditTaskModal({
     const [title, setTitle] = useState("");
     const [description, setDescription] = useState("");
     const [assignedTo, setAssignedTo] = useState("");
-    const [dueDate, setDueDate] = useState("");
+    const [dueDate, setDueDate] = useState<Date | undefined>(undefined);
     const [priority, setPriority] = useState("");
 
     const { data: staffsData, isLoading: isStaffLoading } = useGetStaffsQuery({ limit: 100 });
@@ -56,11 +57,9 @@ export function EditTaskModal({
             
             if (task.dueDate) {
                 try {
-                    const d = new Date(task.dueDate);
-                    const offset = d.getTimezoneOffset() * 60000;
-                    setDueDate(new Date(d.getTime() - offset).toISOString().slice(0, 16));
+                    setDueDate(new Date(task.dueDate));
                 } catch {
-                    setDueDate("");
+                    setDueDate(undefined);
                 }
             }
         }
@@ -78,7 +77,7 @@ export function EditTaskModal({
                     title,
                     description,
                     assignedTo,
-                    dueDate: new Date(dueDate).toISOString(),
+                    dueDate: dueDate.toISOString(),
                     priority
                 },
             }).unwrap();
@@ -160,16 +159,14 @@ export function EditTaskModal({
 
                     {/* Deadline */}
                     <div className="space-y-2">
-                        <Label htmlFor="edit-due" className="font-bold flex items-center gap-1.5 text-foreground">
+                        <Label className="font-bold flex items-center gap-1.5 text-foreground">
                             <CalendarClock className="h-4 w-4 text-muted-foreground" />
                             New Deadline <span className="text-destructive">*</span>
                         </Label>
-                        <Input
-                            id="edit-due"
-                            type="datetime-local"
+                        <DateTimePicker
                             value={dueDate}
-                            onChange={(e) => setDueDate(e.target.value)}
-                            className="font-mono text-sm h-11"
+                            onChange={setDueDate}
+                            placeholder="Select new deadline and time..."
                         />
                     </div>
 
