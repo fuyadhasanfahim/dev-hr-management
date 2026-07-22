@@ -21,5 +21,6 @@ router.get('/order/:orderId', authorize(...ALL_STAFF_ROLES), TaskController.getO
 router.get('/mine', authorize(...ALL_STAFF_ROLES), TaskController.getMyTasks);
 router.patch('/:taskId/submit', authorize(...ALL_STAFF_ROLES), TaskController.submitTask);
 router.patch('/:taskId/status', authorize(...ALL_STAFF_ROLES), TaskController.updateTaskStatus);
+router.patch('/:taskId/subtasks/:subtaskId/toggle', authorize(...ALL_STAFF_ROLES), TaskController.toggleSubtask);
 
 export const TaskRoutes = router;

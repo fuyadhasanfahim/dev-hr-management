@@ -15,6 +15,15 @@ export enum TaskPriority {
     URGENT = 'urgent',
 }
 
+export interface ISubTask {
+    _id?: Types.ObjectId | string;
+    title: string;
+    completed: boolean;
+    completedAt?: Date;
+    isSubFeature?: boolean;
+    parentName?: string;
+}
+
 export interface IOrderTask extends Document {
     orderId: Types.ObjectId;
     assignedTo: Types.ObjectId; // Ref: Staff
@@ -22,6 +31,7 @@ export interface IOrderTask extends Document {
     
     title: string;
     description?: string;
+    subtasks?: ISubTask[];
     status: TaskStatus;
     priority: TaskPriority;
     
@@ -42,6 +52,30 @@ export interface IOrderTask extends Document {
     createdAt: Date;
     updatedAt: Date;
 }
+
+const subtaskSchema = new Schema<ISubTask>(
+    {
+        title: {
+            type: String,
+            required: true,
+            trim: true,
+        },
+        completed: {
+            type: Boolean,
+            default: false,
+        },
+        completedAt: Date,
+        isSubFeature: {
+            type: Boolean,
+            default: false,
+        },
+        parentName: {
+            type: String,
+            trim: true,
+        },
+    },
+    { _id: true }
+);
 
 const taskSchema = new Schema<IOrderTask>(
     {
@@ -71,6 +105,7 @@ const taskSchema = new Schema<IOrderTask>(
             type: String,
             trim: true,
         },
+        subtasks: [subtaskSchema],
         status: {
             type: String,
             enum: Object.values(TaskStatus),

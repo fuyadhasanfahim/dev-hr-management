@@ -25,7 +25,7 @@ import {
 } from "@/components/ui/select";
 import { useGetStaffsQuery } from "@/redux/features/staff/staffApi";
 import { useGetOrdersQuery, useGetOrderByIdQuery } from "@/redux/features/order/orderApi";
-import { useCreateTaskMutation } from "@/redux/features/task/taskApi";
+import { useCreateTaskMutation, useGetOrderTasksQuery } from "@/redux/features/task/taskApi";
 import { DateTimePicker } from "@/components/shared/DateTimePicker";
 import { toast } from "sonner";
 import { Loader2, CalendarClock, UserPlus, Layers, Sparkles, CheckSquare, Square, Link2 } from "lucide-react";
@@ -173,6 +173,43 @@ function parseOrderScopeFeatures(rawItems: string[]): ScopeFeatureNode[] {
     return nodes;
 }
 
+export function getFeatureAssignmentInfo(
+    featureName: string, 
+    existingTasks: any[], 
+    currentTaskId?: string
+): { isAssigned: boolean; taskTitle?: string; assignedStaffName?: string } {
+    if (!existingTasks || existingTasks.length === 0 || !featureName) {
+        return { isAssigned: false };
+    }
+
+    const normName = featureName.toLowerCase().trim();
+
+    for (const t of existingTasks) {
+        if (currentTaskId && (t._id === currentTaskId || t.id === currentTaskId)) {
+            continue;
+        }
+
+        if (t.subtasks && Array.isArray(t.subtasks)) {
+            const hasMatch = t.subtasks.some((st: any) => {
+                const stTitle = (st.title || '').toLowerCase().trim();
+                return stTitle === normName || (normName.length > 5 && stTitle.includes(normName));
+            });
+            if (hasMatch) {
+                const staffName = t.assignedTo?.userId?.name || t.assignedTo?.name || 'Staff Member';
+                return { isAssigned: true, taskTitle: t.title, assignedStaffName: staffName };
+            }
+        }
+
+        const desc = (t.description || '').toLowerCase();
+        if (desc.includes(normName)) {
+            const staffName = t.assignedTo?.userId?.name || t.assignedTo?.name || 'Staff Member';
+            return { isAssigned: true, taskTitle: t.title, assignedStaffName: staffName };
+        }
+    }
+
+    return { isAssigned: false };
+}
+
 function FeatureItemRow({
     node,
     selectedFeatures,
@@ -187,45 +224,68 @@ function FeatureItemRow({
     isChild?: boolean;
 }) {
     const isChecked = selectedFeatures.includes(node.name);
-    const isTaskAssigned = existingTasks.some((t: any) => t.title?.includes(node.name));
+    const assignInfo = useMemo(
+        () => getFeatureAssignmentInfo(node.name, existingTasks),
+        [node.name, existingTasks]
+    );
+
+    const isAlreadyAssigned = assignInfo.isAssigned;
 
     return (
         <div className="space-y-1.5">
             <div
-                onClick={() => onToggle(node, !isChecked)}
+                onClick={() => {
+                    if (!isAlreadyAssigned) {
+                        onToggle(node, !isChecked);
+                    }
+                }}
                 className={cn(
-                    "flex items-start space-x-2.5 p-2.5 rounded-lg transition-colors cursor-pointer border hover:bg-accent/40",
+                    "flex items-start space-x-2.5 p-2.5 rounded-lg transition-colors border select-none",
                     isChild ? "ml-5 bg-muted/20 border-dashed" : "bg-card border-border shadow-2xs",
-                    isChecked && "border-primary/60 bg-primary/5"
+                    isChecked && !isAlreadyAssigned && "border-primary/60 bg-primary/5",
+                    isAlreadyAssigned 
+                        ? "opacity-60 bg-muted/40 cursor-not-allowed border-muted" 
+                        : "cursor-pointer hover:bg-accent/40"
                 )}
             >
                 <Checkbox
                     id={`feat-${node.id}`}
-                    checked={isChecked}
-                    onCheckedChange={(checked) => onToggle(node, !!checked)}
+                    checked={isChecked || isAlreadyAssigned}
+                    disabled={isAlreadyAssigned}
+                    onCheckedChange={(checked) => {
+                        if (!isAlreadyAssigned) {
+                            onToggle(node, !!checked);
+                        }
+                    }}
                     className="mt-0.5"
                 />
                 <div className="flex-1 space-y-1 leading-none">
                     <div className="flex items-center justify-between gap-2 flex-wrap">
-                        <span className={cn("text-xs font-semibold text-foreground", isChild && "font-medium")}>
+                        <span className={cn(
+                            "text-xs font-semibold", 
+                            isAlreadyAssigned ? "text-muted-foreground line-through" : "text-foreground",
+                            isChild && "font-medium"
+                        )}>
                             {node.name}
                         </span>
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1.5 flex-wrap">
                             <Badge
                                 variant={node.isSubFeature ? "outline" : "secondary"}
                                 className="text-[9px] font-extrabold uppercase px-1.5 py-0 tracking-wider"
                             >
                                 {node.isSubFeature ? "Sub-Feature" : "Main Feature"}
                             </Badge>
-                            {isTaskAssigned && (
-                                <Badge variant="outline" className="text-[9px] text-muted-foreground px-1.5 py-0">
-                                    Assigned
+                            {isAlreadyAssigned && (
+                                <Badge 
+                                    variant="outline" 
+                                    className="text-[9px] font-semibold px-1.5 py-0 bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30 flex items-center gap-1"
+                                >
+                                    🔒 Assigned ({assignInfo.assignedStaffName})
                                 </Badge>
                             )}
                         </div>
                     </div>
 
-                    {/* Route display if available */}
                     {node.route && (
                         <div className="flex items-center gap-1.5 text-[10px] font-mono text-muted-foreground pt-1">
                             <Link2 className="h-3 w-3 text-primary shrink-0" />
@@ -288,6 +348,15 @@ export function AssignTaskModal({
     const { data: fetchedOrderRes } = useGetOrderByIdQuery(selectedOrderId, {
         skip: !selectedOrderId || !!initialOrder,
     });
+
+    const { data: orderTasksRes } = useGetOrderTasksQuery(selectedOrderId, {
+        skip: !selectedOrderId || !open,
+    });
+
+    const activeOrderTasks = useMemo(() => {
+        if (orderTasksRes?.data && Array.isArray(orderTasksRes.data)) return orderTasksRes.data;
+        return existingTasks || [];
+    }, [orderTasksRes, existingTasks]);
 
     const activeOrder = useMemo(() => {
         if (initialOrder) return initialOrder;
@@ -430,11 +499,22 @@ export function AssignTaskModal({
             description ? `\nInstructions:\n${description}` : "",
         ].filter(Boolean).join("\n\n");
 
+        const subtasks = selectedFeatures.map((f) => {
+            const matchedNode = allFeatureNodes.find((n) => n.name === f);
+            return {
+                title: f,
+                isSubFeature: matchedNode ? matchedNode.isSubFeature : false,
+                parentName: matchedNode?.parentName,
+                completed: false,
+            };
+        });
+
         try {
             await createTask({
                 orderId: targetOrderId,
                 title: finalTitle,
                 description: formattedDescription,
+                subtasks,
                 assignedTo,
                 dueDate: dueDate.toISOString(),
                 priority,
@@ -536,7 +616,7 @@ export function AssignTaskModal({
                                                     node={node}
                                                     selectedFeatures={selectedFeatures}
                                                     onToggle={handleFeatureToggle}
-                                                    existingTasks={existingTasks}
+                                                    existingTasks={activeOrderTasks}
                                                 />
                                             ))}
                                         </CardContent>

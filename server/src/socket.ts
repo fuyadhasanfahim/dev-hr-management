@@ -24,10 +24,11 @@ export const initSocket = (server: HttpServer) => {
 
         socket.on('authenticate', (userId: string) => {
             if (userId) {
-                socket.data.userId = userId;
-                const existingSockets = userSockets.get(userId) || [];
-                userSockets.set(userId, [...existingSockets, socket.id]);
-                console.log(`User ${userId} authenticated on socket ${socket.id}`);
+                const uid = userId.toString();
+                socket.data.userId = uid;
+                const existingSockets = userSockets.get(uid) || [];
+                userSockets.set(uid, [...existingSockets, socket.id]);
+                console.log(`User ${uid} authenticated on socket ${socket.id}`);
             }
         });
 
@@ -35,12 +36,13 @@ export const initSocket = (server: HttpServer) => {
             console.log(`Socket disconnected: ${socket.id}`);
             const userId = socket.data.userId;
             if (userId) {
-                const existingSockets = userSockets.get(userId) || [];
+                const uid = userId.toString();
+                const existingSockets = userSockets.get(uid) || [];
                 const updatedSockets = existingSockets.filter((id) => id !== socket.id);
                 if (updatedSockets.length > 0) {
-                    userSockets.set(userId, updatedSockets);
+                    userSockets.set(uid, updatedSockets);
                 } else {
-                    userSockets.delete(userId);
+                    userSockets.delete(uid);
                 }
             }
         });
@@ -57,17 +59,23 @@ export const getIO = () => {
 };
 
 export const getUserSockets = (userId: string): string[] => {
-    return userSockets.get(userId) || [];
+    return userSockets.get(userId?.toString()) || [];
 };
 
 export const emitToUser = (userId: string, event: string, data: any) => {
-    if (!io) return;
-    const sockets = userSockets.get(userId);
+    if (!io || !userId) return;
+    const uid = userId.toString();
+    const sockets = userSockets.get(uid);
     if (sockets && sockets.length > 0) {
         sockets.forEach((socketId) => {
             io.to(socketId).emit(event, data);
         });
     }
+};
+
+export const broadcastEvent = (event: string, data: any) => {
+    if (!io) return;
+    io.emit(event, data);
 };
 
 export const broadcastPolicyPrompt = (targetUserIds: string[], policyData: any) => {

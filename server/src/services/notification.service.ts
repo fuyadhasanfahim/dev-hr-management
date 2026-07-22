@@ -1,5 +1,6 @@
 import NotificationModel from "../models/notification.model.js";
 import { Types } from "mongoose";
+import { emitToUser } from "../socket.js";
 
 // Create a notification for a single user
 const createNotification = async (data: {
@@ -47,6 +48,9 @@ const createNotification = async (data: {
     if (data.createdBy) payload.createdBy = new Types.ObjectId(data.createdBy);
 
     const notification = await NotificationModel.create(payload);
+    if (data.userId) {
+        emitToUser(data.userId.toString(), "notification:new", notification);
+    }
 
     return notification;
 };
@@ -285,7 +289,12 @@ const notifyAdminsLeaveRequest = async (data: {
     }));
 
     if (notifications.length > 0) {
-        await NotificationModel.insertMany(notifications);
+        const createdDocs = await NotificationModel.insertMany(notifications);
+        createdDocs.forEach((doc: any) => {
+            if (doc.userId) {
+                emitToUser(doc.userId.toString(), "notification:new", doc);
+            }
+        });
     }
 };
 
@@ -317,7 +326,12 @@ const notifyAdminsPaymentReceived = async (data: {
     }));
 
     if (notifications.length > 0) {
-        await NotificationModel.insertMany(notifications);
+        const createdDocs = await NotificationModel.insertMany(notifications);
+        createdDocs.forEach((doc: any) => {
+            if (doc.userId) {
+                emitToUser(doc.userId.toString(), "notification:new", doc);
+            }
+        });
     }
 };
 
@@ -377,7 +391,12 @@ const notifyAdminsTaskReview = async (data: {
     }));
 
     if (notifications.length > 0) {
-        await NotificationModel.insertMany(notifications);
+        const createdDocs = await NotificationModel.insertMany(notifications);
+        createdDocs.forEach((doc: any) => {
+            if (doc.userId) {
+                emitToUser(doc.userId.toString(), "notification:new", doc);
+            }
+        });
     }
 };
 

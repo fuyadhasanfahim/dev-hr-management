@@ -297,6 +297,43 @@ const updateTask = async (taskId: string, payload: any, actorId?: string) => {
     return updatedTask;
 };
 
+const toggleSubtask = async (taskId: string, subtaskId: string, completed?: boolean, _actorId?: string) => {
+    const task = await OrderTaskModel.findById(taskId);
+    if (!task) {
+        throw new AppError('Task not found.', 404);
+    }
+
+    const subtask = (task.subtasks as any)?.id(subtaskId) || task.subtasks?.find((s: any) => s._id?.toString() === subtaskId);
+    if (!subtask) {
+        throw new AppError('Subtask not found.', 404);
+    }
+
+    subtask.completed = completed !== undefined ? completed : !subtask.completed;
+    if (subtask.completed) {
+        subtask.completedAt = new Date();
+    } else {
+        subtask.completedAt = undefined;
+    }
+
+    // Auto transition to in_progress if task was pending and subtasks are being completed
+    if (subtask.completed && task.status === TaskStatus.PENDING) {
+        task.status = TaskStatus.IN_PROGRESS;
+    }
+
+    // Auto transition to COMPLETED if ALL subtasks are completed, or back to IN_PROGRESS if unchecked
+    if (task.subtasks && task.subtasks.length > 0) {
+        const allDone = task.subtasks.every((s: any) => s.completed);
+        if (allDone && task.status !== TaskStatus.COMPLETED) {
+            task.status = TaskStatus.COMPLETED;
+        } else if (!allDone && task.status === TaskStatus.COMPLETED) {
+            task.status = TaskStatus.IN_PROGRESS;
+        }
+    }
+
+    await task.save();
+    return task;
+};
+
 const TaskService = {
     createTask,
     getAllTasks,
@@ -307,6 +344,7 @@ const TaskService = {
     submitTask,
     reviewTask,
     deleteTask,
+    toggleSubtask,
 };
 
 export default TaskService;
