@@ -147,7 +147,7 @@ try {
         LOCAL_LOGO_BASE64 = `data:image/png;base64,${fileBuf.toString('base64')}`;
     }
 } catch (e) {
-    logger.error('Failed to load local logo.png', e);
+    logger.error({ err: e }, 'Failed to load local logo.png');
 }
 
 const DEFAULT_SIGNATURE =
