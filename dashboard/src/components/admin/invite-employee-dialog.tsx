@@ -194,57 +194,34 @@ export default function InviteEmployeeDialog() {
                         {/* Designation */}
                         <div className="grid gap-2">
                             <Label htmlFor="designation">Designation *</Label>
-                            <Select
+                            <Input
+                                id="designation"
+                                placeholder="e.g. Software Engineer, Telemarketer"
                                 value={formData.designation}
-                                onValueChange={(value) =>
+                                onChange={(e) =>
                                     setFormData({
                                         ...formData,
-                                        designation: value,
+                                        designation: e.target.value,
                                     })
                                 }
-                            >
-                                <SelectTrigger className="w-full">
-                                    <SelectValue placeholder="Select designation" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {DESIGNATIONS.map((d) => (
-                                        <SelectItem
-                                            key={d.value}
-                                            value={d.value}
-                                        >
-                                            {d.label}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
+                                required
+                            />
                         </div>
 
                         {/* Department */}
                         <div className="grid gap-2">
                             <Label htmlFor="department">Department</Label>
-                            <Select
+                            <Input
+                                id="department"
+                                placeholder="e.g. Information Technology, Sales"
                                 value={formData.department}
-                                onValueChange={(value) =>
+                                onChange={(e) =>
                                     setFormData({
                                         ...formData,
-                                        department: value,
+                                        department: e.target.value,
                                     })
                                 }
-                            >
-                                <SelectTrigger className="w-full">
-                                    <SelectValue placeholder="Select department" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {DEPARTMENTS.map((d) => (
-                                        <SelectItem
-                                            key={d.value}
-                                            value={d.value}
-                                        >
-                                            {d.label}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
+                            />
                         </div>
 
                         {/* Salary */}
