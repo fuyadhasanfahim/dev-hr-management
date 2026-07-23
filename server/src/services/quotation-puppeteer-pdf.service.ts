@@ -1,9 +1,25 @@
 import { format } from 'date-fns';
 import puppeteer from 'puppeteer';
+import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import QuotationModel from '../models/quotation.model.js';
 import { AppError } from '../utils/AppError.js';
 import { logger } from '../lib/logger.js';
 import { isUpfrontBillingCycle } from '../types/quotation.type.js';
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * WebBriks Quotation PDF — "Scope Ledger" edition.
+ *
+ * Rebuilt per the redesign brief: an engineering scope-of-work document rather
+ * than a marketing brochure. Page architecture: full-bleed cover → contents +
+ * scope-at-a-glance → executive summary → section dividers → two-column module
+ * pages → a dedicated pricing page → a two-column terms page with the
+ * authorization block at its foot. A running ledger rail counts deliverables.
+ *
+ * Typography is self-contained: the three-face system (Bricolage Grotesque /
+ * Inter / Geist Mono, plus Hind Siliguri for Bangla) is fetched once, filtered
+ * to the latin + bengali subsets, and embedded as base64 @font-face rules so a
+ * cold Puppeteer container never falls back to a system font mid-render.
+ * ──────────────────────────────────────────────────────────────────────────── */
 
 const CATEGORY_LABELS: Record<string, string> = {
     'web-development': 'Web Design & Development',
@@ -14,19 +30,16 @@ const CATEGORY_LABELS: Record<string, string> = {
 
 const CATEGORY_KICKERS: Record<string, string> = {
     'web-development': 'Engineering & Product',
-    marketing: 'Growth & Creative',
+    marketing: 'Growth & Analytics',
     'photo-editing': 'Visual Production',
     'video-editing': 'Motion & Post-Production',
 };
 
-const BILLING_LABELS: Record<string, string> = {
-    'one-time': 'One-Time',
-    monthly: 'Monthly',
-    yearly: 'Yearly',
-    'per-image': 'Per Image',
-    'per-video': 'Per Video',
-    'per-second': 'Per Second',
-    'per-10s': 'Per 10 Seconds',
+const SERVICE_RANK_ORDER: Record<string, number> = {
+    'web-development': 1,
+    marketing: 2,
+    'video-editing': 3,
+    'photo-editing': 4,
 };
 
 /** Formats currency amounts cleanly without unnecessary trailing zeros (e.g., "Tk 15,000" or "$1,500"). */
@@ -75,6 +88,47 @@ function esc(s: unknown): string {
         .replace(/>/g, '&gt;');
 }
 
+/**
+ * Normalizes typography on ingest: fixes the wrong modifier-letter apostrophe
+ * (U+02BC / U+2018 / U+201B) to a proper right single quote, straightens smart
+ * double quotes, and collapses whitespace.
+ */
+function normalizeText(input: unknown): string {
+    return String(input ?? '')
+        .replace(/[ʼ‘‛]/g, '’')
+        .replace(/[“”]/g, '"')
+        .replace(/ /g, ' ')
+        .replace(/[ \t]+/g, ' ')
+        .trimEnd();
+}
+
+/* ── Data hygiene ─────────────────────────────────────────────────────────── */
+
+// Unambiguous placeholder markers that must never reach a client. Kept narrow
+// on purpose: substrings like "new feature" appear inside legitimate copy
+// ("New features requested after final scope approval"), so those are handled
+// by exact-match row filtering below — not by this render-blocking gate.
+const PLACEHOLDER_BLOCK_RE = /temp@|@temp\.|@example\.|example\.com|lorem ipsum|test@|@test\.|placeholder/i;
+
+// Exact leftover-row values dropped from any scope list (case-insensitive, whole
+// value only — never a substring match).
+const EXACT_PLACEHOLDER_ROWS = new Set([
+    'new feature',
+    'new features',
+    'lorem ipsum',
+    'placeholder',
+    'sample',
+    'test',
+    'untitled',
+    'n/a',
+    '-',
+]);
+
+function isPlaceholderRow(text: string): boolean {
+    const t = text.trim().toLowerCase();
+    return t.length === 0 || EXACT_PLACEHOLDER_ROWS.has(t);
+}
+
 const DEFAULT_LOGO =
     'https://res.cloudinary.com/dny7zfbg9/image/upload/v1777996436/q83auvamwih8u8ftw5zu.png';
 
@@ -113,6 +167,99 @@ async function fetchImageAsDataUrl(url: string): Promise<string | null> {
     }
 }
 
+/* ── Self-hosted font pipeline ────────────────────────────────────────────── */
+
+const BROWSER_UA =
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+
+// Google Fonts family specs. Only the latin (and, for Hind Siliguri, bengali)
+// subsets are embedded to keep the payload lean.
+const FONT_FAMILIES: Array<{ spec: string; subsets: string[] }> = [
+    { spec: 'Inter:wght@400;500;600;700', subsets: ['latin'] },
+    { spec: 'Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700', subsets: ['latin'] },
+    { spec: 'Geist+Mono:wght@400;500;600', subsets: ['latin'] },
+    { spec: 'Hind+Siliguri:wght@400;600', subsets: ['bengali', 'latin'] },
+];
+
+let embeddedFontCss: string | null = null;
+
+async function fetchText(url: string): Promise<string | null> {
+    try {
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), 15_000);
+        const res = await fetch(url, { signal: ctrl.signal, headers: { 'User-Agent': BROWSER_UA } });
+        clearTimeout(timer);
+        if (!res.ok) return null;
+        return await res.text();
+    } catch {
+        return null;
+    }
+}
+
+async function fetchWoff2AsDataUrl(url: string): Promise<string | null> {
+    try {
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), 15_000);
+        const res = await fetch(url, { signal: ctrl.signal, headers: { 'User-Agent': BROWSER_UA } });
+        clearTimeout(timer);
+        if (!res.ok) return null;
+        const buf = Buffer.from(await res.arrayBuffer());
+        if (buf.length === 0) return null;
+        return `data:font/woff2;base64,${buf.toString('base64')}`;
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * Builds a block of @font-face rules with the woff2 payloads inlined as base64.
+ * Returns '' on any failure so the CSS font stacks fall back to system fonts —
+ * the document still renders, it just loses the custom faces.
+ */
+async function buildEmbeddedFontCss(): Promise<string> {
+    if (embeddedFontCss !== null) return embeddedFontCss;
+
+    const cssParts: string[] = [];
+
+    for (const family of FONT_FAMILIES) {
+        try {
+            const css = await fetchText(
+                `https://fonts.googleapis.com/css2?family=${family.spec}&display=swap`,
+            );
+            if (!css) continue;
+
+            // Split into per-face blocks, each preceded by a `/* subset */` comment.
+            const blocks = css.split('@font-face').slice(1);
+            let precedingComment = '';
+            const commentMatches = [...css.matchAll(/\/\*\s*([a-z0-9-]+)\s*\*\//gi)];
+            const commentQueue = commentMatches.map((m) => m[1]?.toLowerCase() ?? '');
+
+            for (let i = 0; i < blocks.length; i++) {
+                const block = blocks[i] ?? '';
+                const subset = commentQueue[i] ?? precedingComment;
+                precedingComment = subset;
+                if (!family.subsets.includes(subset)) continue;
+
+                const urlMatch = block.match(/url\((https:[^)]+\.woff2)\)/);
+                if (!urlMatch || !urlMatch[1]) continue;
+
+                const dataUrl = await fetchWoff2AsDataUrl(urlMatch[1]);
+                if (!dataUrl) continue;
+
+                const rebuilt = `@font-face${block.replace(urlMatch[0], `url(${dataUrl})`)}`;
+                cssParts.push(rebuilt);
+            }
+        } catch (e) {
+            logger.warn({ err: e, family: family.spec }, 'quotation.font_embed_failed');
+        }
+    }
+
+    embeddedFontCss = cssParts.join('\n');
+    return embeddedFontCss;
+}
+
+/* ── Scope tree parsing & counting ────────────────────────────────────────── */
+
 interface ParsedFeatureNode {
     name: string;
     route?: string;
@@ -122,46 +269,43 @@ interface ParsedFeatureNode {
     children: ParsedFeatureNode[];
 }
 
-/** Parses flat indented scope strings into a structured feature tree. */
+/** Parses flat indented scope strings into a structured feature tree. Placeholder
+ *  and empty rows are filtered out here so they never reach the layout. */
 function parseScopeTree(rawItems: string[]): ParsedFeatureNode[] {
     const nodes: ParsedFeatureNode[] = [];
 
-    const parsedList = rawItems.map((rawText) => {
-        const match = rawText.match(/^(\s*)/);
-        const indentStr = match ? match[0] : '';
-        const level = Math.min(Math.floor(indentStr.replace(/\t/g, '    ').length / 2), 4);
+    const parsedList = rawItems
+        .map((rawText) => {
+            const match = rawText.match(/^(\s*)/);
+            const indentStr = match ? match[0] : '';
+            const level = Math.min(Math.floor(indentStr.replace(/\t/g, '    ').length / 2), 4);
 
-        let text = rawText.trim().replace(/^[-*•◦▪+]\s*/, '').trim();
-        let route = '';
-        let priceNum: number | undefined = undefined;
-        let priceStr = '';
+            let text = normalizeText(rawText.trim().replace(/^[-*•◦▪+]\s*/, '').trim());
+            let route = '';
+            let priceNum: number | undefined = undefined;
+            let priceStr = '';
 
-        const priceMatch = text.match(/\s*-\s*([৳$]?\d[\d,.]*)$/);
-        if (priceMatch && priceMatch[1] && priceMatch.index !== undefined) {
-            priceStr = priceMatch[1].trim();
-            const cleanDigits = priceStr.replace(/[^0-9.]/g, '');
-            if (cleanDigits) priceNum = Number(cleanDigits);
-            text = text.substring(0, priceMatch.index).trim();
-        }
-
-        const routeMatch = text.match(/\s*\(([^)]+)\)$/);
-        if (routeMatch && routeMatch[1] && routeMatch.index !== undefined) {
-            const potentialRoute = routeMatch[1].trim();
-            if (potentialRoute.startsWith('/') || potentialRoute.startsWith('http')) {
-                route = potentialRoute;
-                text = text.substring(0, routeMatch.index).trim();
+            const priceMatch = text.match(/\s*-\s*([৳$]?\d[\d,.]*)$/);
+            if (priceMatch && priceMatch[1] && priceMatch.index !== undefined) {
+                priceStr = priceMatch[1].trim();
+                const cleanDigits = priceStr.replace(/[^0-9.]/g, '');
+                if (cleanDigits) priceNum = Number(cleanDigits);
+                text = text.substring(0, priceMatch.index).trim();
             }
-        }
 
-        return {
-            name: text,
-            route: route || undefined,
-            price: priceNum,
-            priceStr: priceStr || undefined,
-            level,
-            children: [],
-        };
-    });
+            const routeMatch = text.match(/\s*\(([^)]+)\)$/);
+            if (routeMatch && routeMatch[1] && routeMatch.index !== undefined) {
+                const potentialRoute = routeMatch[1].trim();
+                if (potentialRoute.startsWith('/') || potentialRoute.startsWith('http')) {
+                    route = potentialRoute;
+                    text = text.substring(0, routeMatch.index).trim();
+                }
+            }
+
+            return { name: text, route: route || undefined, price: priceNum, priceStr: priceStr || undefined, level };
+        })
+        // Drop leftover placeholder rows (e.g. a stray "New Feature").
+        .filter((item) => !isPlaceholderRow(item.name));
 
     const stack: { node: ParsedFeatureNode; level: number }[] = [];
 
@@ -192,129 +336,168 @@ function parseScopeTree(rawItems: string[]): ParsedFeatureNode[] {
     return nodes;
 }
 
-/** Renders Grouped Module Cards for Web Development and technical scopes. */
-function renderGroupedScopeCards(nodes: ParsedFeatureNode[], currency: string): string {
-    if (nodes.length === 0) return '';
-
-    return nodes.map((moduleNode, idx) => {
-        const moduleNum = String(idx + 1).padStart(2, '0');
-        const hasModulePrice = moduleNode.price && moduleNode.price > 0;
-        const modulePriceHtml = hasModulePrice
-            ? `<div class="module-price-tag">${formatMoneyPdf(moduleNode.price, currency)}</div>`
-            : '';
-
-        const renderChildrenList = (children: ParsedFeatureNode[], depth = 1): string => {
-            if (children.length === 0) return '';
-            const itemsHtml = children.map((child) => {
-                const hasChildPrice = child.price && child.price > 0;
-                const childPriceHtml = hasChildPrice
-                    ? `<span class="child-price">${formatMoneyPdf(child.price, currency)}</span>`
-                    : '';
-
-                const routeHtml = child.route
-                    ? `<div class="child-route-tag">
-                        <span class="route-icon">↳</span>
-                        <code>${esc(child.route)}</code>
-                      </div>`
-                    : '';
-
-                const nestedHtml = child.children && child.children.length > 0
-                    ? renderChildrenList(child.children, depth + 1)
-                    : '';
-
-                return `
-                  <li class="child-feature-item level-${depth}">
-                    <div class="child-feature-main">
-                      <div class="child-feature-left">
-                        <span class="bullet-dot"></span>
-                        <span class="child-feature-name">${esc(child.name)}</span>
-                      </div>
-                      ${childPriceHtml}
-                    </div>
-                    ${routeHtml}
-                    ${nestedHtml}
-                  </li>`;
-            }).join('');
-
-            return `<ul class="child-features-list level-${depth}">${itemsHtml}</ul>`;
-        };
-
-        const childrenContent = renderChildrenList(moduleNode.children);
-
-        return `
-          <div class="module-card">
-            <div class="module-card-header">
-              <div class="module-header-left">
-                <span class="module-num">${moduleNum}</span>
-                <h3 class="module-title">${esc(moduleNode.name)}</h3>
-              </div>
-              ${modulePriceHtml}
-            </div>
-            ${moduleNode.route ? `<div class="module-route-bar"><code>${esc(moduleNode.route)}</code></div>` : ''}
-            ${childrenContent ? `<div class="module-card-body">${childrenContent}</div>` : ''}
-          </div>`;
-    }).join('');
+/** Counts every descendant of a node (i.e. all deliverables beneath a module). */
+function countDescendants(node: ParsedFeatureNode): number {
+    let c = 0;
+    for (const child of node.children) c += 1 + countDescendants(child);
+    return c;
 }
 
-/** Renders Deliverables Cards for Marketing & Creative services. */
-function renderDeliverablesScopeCards(nodes: ParsedFeatureNode[], currency: string): string {
-    if (nodes.length === 0) return '';
+/* ── Section model ────────────────────────────────────────────────────────── */
 
-    return nodes.map((categoryNode) => {
-        const hasPrice = categoryNode.price && categoryNode.price > 0;
-        const priceHtml = hasPrice
-            ? `<div class="deliverable-price-badge">${formatMoneyPdf(categoryNode.price, currency)}</div>`
+interface SectionModel {
+    category: string;
+    label: string;
+    kicker: string;
+    scopeDescription: string;
+    modules: ParsedFeatureNode[];
+    deliverableCount: number;
+    techStack?: any;
+    basePrice: number;
+    lineItems: any[];
+    recurringMonthly: number;
+    isMarketing: boolean;
+}
+
+function buildSections(services: any[]): SectionModel[] {
+    const sorted = [...services].sort((a, b) => {
+        const oa = SERVICE_RANK_ORDER[a?.category] ?? 99;
+        const ob = SERVICE_RANK_ORDER[b?.category] ?? 99;
+        return oa - ob;
+    });
+
+    return sorted
+        .map((service) => {
+            const category = String(service?.category || '');
+            const rawItems = Array.isArray(service?.scopeItems)
+                ? service.scopeItems.map((x: any) => String(x || '').replace(/\s+$/, ''))
+                : [];
+            const tree = parseScopeTree(rawItems);
+            // Drop modules that ended up empty AND carry no price of their own.
+            const modules = tree.filter(
+                (m) => m.children.length > 0 || (m.price && m.price > 0),
+            );
+            const deliverableCount = modules.reduce((sum, m) => sum + countDescendants(m), 0);
+
+            const lineItems: any[] = Array.isArray(service?.lineItems) ? service.lineItems : [];
+            let recurringMonthly = 0;
+            for (const item of lineItems) {
+                const qty = item.quantity ?? 1;
+                const lineTotal = (Number(item.price) || 0) * qty;
+                if (!isUpfrontBillingCycle(item.billingCycle || 'one-time') && item.billingCycle === 'monthly') {
+                    recurringMonthly += lineTotal;
+                }
+            }
+
+            const rawDesc = normalizeText(service?.scopeDescription || '');
+            const isLorem = rawDesc.toLowerCase().includes('lorem ipsum');
+
+            return {
+                category,
+                label: CATEGORY_LABELS[category] || category || 'Service',
+                kicker: CATEGORY_KICKERS[category] || 'Service Scope',
+                scopeDescription: isLorem ? '' : rawDesc,
+                modules,
+                deliverableCount,
+                techStack: service?.techStack,
+                basePrice: Number(service?.basePrice) || 0,
+                lineItems,
+                recurringMonthly,
+                isMarketing: category === 'marketing',
+            } as SectionModel;
+        })
+        .filter((s) => s.modules.length > 0 || s.basePrice > 0);
+}
+
+/* ── Render helpers ───────────────────────────────────────────────────────── */
+
+function renderDeliverable(node: ParsedFeatureNode, currency: string): string {
+    const price =
+        node.price && node.price > 0
+            ? `<span class="deliv-price">${formatMoneyPdf(node.price, currency)}</span>`
+            : '';
+    const route = node.route ? `<span class="deliv-route">${esc(node.route)}</span>` : '';
+    const nested =
+        node.children && node.children.length > 0
+            ? `<div class="deliv-sub">${node.children
+                  .map(
+                      (c) =>
+                          `<div class="deliv-sub-item"><span class="deliv-sub-mark"></span><span>${esc(
+                              c.name,
+                          )}</span></div>`,
+                  )
+                  .join('')}</div>`
             : '';
 
-        const deliverablesList = categoryNode.children.length > 0 ? categoryNode.children : [];
-        const itemsHtml = deliverablesList.map((deliv) => {
-            const itemPrice = deliv.price && deliv.price > 0
-                ? `<span class="deliv-item-price">${formatMoneyPdf(deliv.price, currency)}</span>`
-                : '';
-            return `
-              <div class="deliverable-item">
-                <span class="check-icon">✓</span>
-                <span class="deliverable-name">${esc(deliv.name)}</span>
-                ${itemPrice}
-              </div>`;
-        }).join('');
+    return `<div class="deliv">
+      <span class="deliv-mark"></span>
+      <span class="deliv-body">
+        <span class="deliv-name">${esc(node.name)}${price}</span>
+        ${route}
+        ${nested}
+      </span>
+    </div>`;
+}
 
-        return `
-          <div class="deliverable-card">
-            <div class="deliverable-card-header">
-              <div class="deliverable-title-box">
-                <h3 class="deliverable-category-title">${esc(categoryNode.name)}</h3>
-              </div>
-              ${priceHtml}
-            </div>
-            ${itemsHtml ? `
-              <div class="deliverable-card-body">
-                <div class="deliverables-sublabel">Included Deliverables</div>
-                <div class="deliverables-grid">
-                  ${itemsHtml}
-                </div>
-              </div>` : ''}
-          </div>`;
-    }).join('');
+function renderModule(module: ParsedFeatureNode, index: number, currency: string): string {
+    const idx = String(index).padStart(2, '0');
+    const count = countDescendants(module);
+    const priceTag =
+        module.price && module.price > 0
+            ? `<span class="module-price">${formatMoneyPdf(module.price, currency)}</span>`
+            : '';
+    const countTag = count > 0 ? `<span class="module-count">${count}</span>` : '';
+
+    const deliverables = module.children.map((c) => renderDeliverable(c, currency)).join('');
+
+    return `<div class="module">
+      <div class="module-head">
+        <span class="module-idx">${idx}</span>
+        <h3 class="module-name">${esc(module.name)}</h3>
+        <span class="module-meta">${priceTag}${countTag}</span>
+      </div>
+      ${deliverables ? `<div class="deliverables">${deliverables}</div>` : ''}
+    </div>`;
+}
+
+function renderTechStack(tech: any): string {
+    if (!tech) return '';
+    const rows: Array<[string, string[]]> = (
+        [
+            ['Frontend', tech.frontend],
+            ['Backend', tech.backend],
+            ['Database', tech.database],
+            ['Tools', tech.tools],
+        ] as Array<[string, unknown]>
+    ).filter(([, l]) => Array.isArray(l) && (l as string[]).length > 0) as Array<[string, string[]]>;
+    if (rows.length === 0) return '';
+
+    const body = rows
+        .map(
+            ([layer, list]) => `<div class="tech-row">
+        <div class="tech-layer">${esc(layer)}</div>
+        <div class="tech-chips">${list.map((t) => `<span class="tech-chip">${esc(t)}</span>`).join('')}</div>
+      </div>`,
+        )
+        .join('');
+
+    return `<div class="tech-block">
+      <div class="block-eyebrow">Technology Stack</div>
+      ${body}
+    </div>`;
 }
 
 export function buildPrintHtml(
     q: Record<string, any>,
-    ctx: {
-        logoSrc: string;
-        signatureSrc: string;
-    },
+    ctx: { logoSrc: string; signatureSrc: string; fontCss: string },
 ): string {
     const client = q.client || {};
     const details = q.details || {};
     const totals = q.totals || {};
-    const services: any[] = Array.isArray(q.services) ? q.services : [];
-    const notIncludedRaw = Array.isArray(q.notIncluded) ? q.notIncluded : [];
-    const clientReqRaw = Array.isArray(q.clientRequirements) ? q.clientRequirements : [];
-
     const currency = q.currency || 'BDT';
 
-    const quotationNo = String(q.quotationNumber || 'DRAFT-001').replace(/^#/, '').trim() || 'DRAFT-001';
+    const quotationNo =
+        String(q.quotationNumber || 'DRAFT-001').replace(/^#/, '').trim() || 'DRAFT-001';
     const issueDate = details?.date
         ? format(new Date(details.date), 'MMMM dd, yyyy')
         : format(new Date(), 'MMMM dd, yyyy');
@@ -322,968 +505,917 @@ export function buildPrintHtml(
         ? format(new Date(details.validUntil), 'MMMM dd, yyyy')
         : '—';
 
-    const clientName = client.contactName || client.companyName || 'Valued Client';
-    const clientCompany = client.companyName && client.contactName ? client.companyName : '';
-    const clientEmail = client.email || '';
-    const clientPhone = client.phone || '';
-    const proposalTitle = details?.title || 'Digital Agency Proposal';
-    const globalOverview = String(q.overview || details?.overview || '').trim();
+    const companyName = normalizeText(q.company?.name || 'WebBriks');
+    const companyWebsite = normalizeText(q.company?.website || '');
 
-    const notIncludedItems = notIncludedRaw.length > 0 ? notIncludedRaw : [
-        'Domain Registration & Premium Web Hosting (Billed Separately)',
-        'Third-party Paid API Licenses, Plugins, or Premium Fonts',
-        'Paid Ad Spend for Facebook, Google, or LinkedIn Campaigns',
-        'Raw Unedited Studio Footage or Source Design Files',
-    ];
+    const clientContact = normalizeText(client.contactName || '');
+    const clientCompany = normalizeText(client.companyName || '');
+    // Dedupe: only show the contact line when it differs from the company name.
+    const clientPrimary = clientCompany || clientContact || 'Valued Client';
+    const clientSecondary =
+        clientContact && clientContact.toLowerCase() !== clientPrimary.toLowerCase()
+            ? clientContact
+            : '';
 
-    const clientRequirements = clientReqRaw.length > 0 ? clientReqRaw : [
-        'High-resolution Brand Logo, Color Palette & Typography Guidelines',
-        'Admin Access / Credentials to Hosting, Domain, or CMS Platform',
-        'Final Approved Text Content, Copywriting & Product Photography',
-        'Dedicated Point of Contact for Prompt Feedback and Approvals',
-    ];
+    const proposalTitle = normalizeText(details?.title || 'Digital Agency Proposal');
+    const rawOverview = normalizeText(q.overview || details?.overview || '');
+    const overview =
+        rawOverview && !rawOverview.toLowerCase().includes('lorem ipsum') ? rawOverview : '';
 
-    const companyName = q.company?.name || 'WebBriks';
-    const companyEmail = q.company?.email || '';
-    const companyPhone = q.company?.phone || '';
-    const companyWebsite = q.company?.website || '';
+    const sections = buildSections(Array.isArray(q.services) ? q.services : []);
 
-    // Sort services in standard rank order
-    const SERVICE_RANK_ORDER: Record<string, number> = {
-        'web-development': 1,
-        marketing: 2,
-        'video-editing': 3,
-        'photo-editing': 4,
-    };
+    const totalModules = sections.reduce((s, sec) => s + sec.modules.length, 0);
+    const totalDeliverables = sections.reduce((s, sec) => s + sec.deliverableCount, 0);
+    const totalSections = sections.length;
+    const recurringMonthly = sections.reduce((s, sec) => s + sec.recurringMonthly, 0);
 
-    const sortedServices = [...services].sort((a, b) => {
-        const orderA = SERVICE_RANK_ORDER[a.category] ?? 99;
-        const orderB = SERVICE_RANK_ORDER[b.category] ?? 99;
-        return orderA - orderB;
-    });
-
-    let overallUpfrontTotal = 0;
-    let overallRecurringMonthly = 0;
-
-    // Render individual service modules
-    const modulesHtml = sortedServices.map((service, idx) => {
-        const categoryKey = String(service?.category || '');
-        const label = CATEGORY_LABELS[categoryKey] || String(service?.category || 'Service');
-        const kicker = CATEGORY_KICKERS[categoryKey] || 'Service Scope';
-        const isWebDev = categoryKey === 'web-development';
-        const isMarketing = categoryKey === 'marketing';
-
-        const rawScopeDesc = String(service?.scopeDescription || '').trim();
-        const isLorem = rawScopeDesc.toLowerCase().includes('lorem ipsum');
-        const isDuplicateOverview = rawScopeDesc === globalOverview;
-        const scopeDescription = (rawScopeDesc && !isLorem && !isDuplicateOverview) ? rawScopeDesc : '';
-
-        const rawItems = Array.isArray(service?.scopeItems)
-            ? service.scopeItems.map((x: any) => String(x || '').replace(/\s+$/, '')).filter(Boolean)
-            : [];
-
-        const parsedTree = parseScopeTree(rawItems);
-
-        let scopeHtml = '';
-        if (isMarketing) {
-            scopeHtml = renderDeliverablesScopeCards(parsedTree, currency);
-        } else {
-            scopeHtml = renderGroupedScopeCards(parsedTree, currency);
-        }
-
-        // Tech stack table (web-development only)
-        let techHtml = '';
-        const tech = service?.techStack;
-        if (tech && isWebDev) {
-            const rows: Array<[string, string[]]> = (
-                [
-                    ['Frontend', tech.frontend],
-                    ['Backend', tech.backend],
-                    ['Database', tech.database],
-                    ['Tools', tech.tools],
-                ] as Array<[string, unknown]>
-            ).filter(([, list]) => Array.isArray(list) && (list as string[]).length > 0) as Array<[string, string[]]>;
-
-            if (rows.length > 0) {
-                const techRows = rows.map(([layer, list]) => `
-                    <tr>
-                      <td class="tech-layer-cell">${esc(layer)}</td>
-                      <td class="tech-list-cell">${list.map((t) => `<span class="tech-chip">${esc(t)}</span>`).join('')}</td>
-                    </tr>`).join('');
-
-                techHtml = `
-                    <div class="tech-stack-card">
-                      <div class="card-section-title"><span class="title-tick"></span>Technology Stack</div>
-                      <table class="styled-table tech-table">
-                        <tbody>${techRows}</tbody>
-                      </table>
-                    </div>`;
-            }
-        }
-
-        // Line item pricing breakdown table
-        const basePrice = Number(service?.basePrice) || 0;
-        const lineItems: any[] = Array.isArray(service?.lineItems) ? service.lineItems : [];
-        let serviceUpfrontTotal = basePrice;
-        let serviceRecurringTotal = 0;
-        const lineRows: string[] = [];
-
-        if (basePrice > 0) {
-            lineRows.push(`
-              <tr>
-                <td class="item-name-cell">Base Project Fee</td>
-                <td><span class="billing-badge upfront">One-Time</span></td>
-                <td class="num">1</td>
-                <td class="num">${formatMoneyPdf(basePrice, currency)}</td>
-                <td class="num font-bold">${formatMoneyPdf(basePrice, currency)}</td>
-              </tr>`);
-        }
-
-        let hasQty = false;
-        let hasUnitPrice = false;
-
-        lineItems.forEach((item) => {
-            const qty = item.quantity ?? 1;
-            if (qty > 1) hasQty = true;
-            const itemPrice = Number(item.price) || 0;
-            if (itemPrice > 0 && qty > 1) hasUnitPrice = true;
-            const lineTotal = itemPrice * qty;
-
-            const upfront = isUpfrontBillingCycle(item.billingCycle || 'one-time');
-            if (upfront) {
-                serviceUpfrontTotal += lineTotal;
-            } else if (item.billingCycle === 'monthly') {
-                serviceRecurringTotal += lineTotal;
-            }
-
-            lineRows.push(`
-              <tr>
-                <td class="item-name-cell">
-                  <div class="item-title">${esc(item.title)}</div>
-                  ${item.description ? `<div class="item-desc">${esc(item.description)}</div>` : ''}
-                </td>
-                <td><span class="billing-badge ${upfront ? 'upfront' : 'recurring'}">${esc(BILLING_LABELS[item.billingCycle] || item.billingCycle)}</span></td>
-                ${hasQty ? `<td class="num">${qty}</td>` : ''}
-                ${hasUnitPrice ? `<td class="num">${formatMoneyPdf(itemPrice, currency)}</td>` : ''}
-                <td class="num font-bold">${formatMoneyPdf(lineTotal, currency)}</td>
-              </tr>`);
-        });
-
-        overallUpfrontTotal += serviceUpfrontTotal;
-        overallRecurringMonthly += serviceRecurringTotal;
-
-        let pricingHtml = '';
-        if (lineRows.length > 0) {
-            pricingHtml = `
-              <div class="pricing-card">
-                <div class="card-section-title"><span class="title-tick"></span>Pricing Breakdown</div>
-                <table class="styled-table pricing-table">
-                  <thead>
-                    <tr>
-                      <th>Item &amp; Description</th>
-                      <th>Billing</th>
-                      ${hasQty ? `<th class="num">Qty</th>` : ''}
-                      ${hasUnitPrice ? `<th class="num">Unit Price</th>` : ''}
-                      <th class="num">Amount</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    ${lineRows.join('')}
-                  </tbody>
-                </table>
-              </div>`;
-        }
-
-        const sectionNum = String(idx + 1).padStart(2, '0');
-
-        return `
-          <div class="service-section">
-            <div class="section-header">
-              <div class="section-index">${sectionNum}</div>
-              <div class="section-heading-wrap">
-                <span class="section-kicker">${esc(kicker)}</span>
-                <h2 class="section-title">${esc(label)}</h2>
-              </div>
-            </div>
-            ${scopeDescription ? `<p class="section-description">${esc(scopeDescription)}</p>` : ''}
-            ${scopeHtml}
-            ${techHtml}
-            ${pricingHtml}
-          </div>`;
-    }).join('');
-
-    // Financial Summary calculation
-    const grandTotalVal = Number(totals.grandTotal || overallUpfrontTotal);
-    const subtotalVal = Number(totals.subtotal || overallUpfrontTotal);
+    const grandTotalVal = Number(
+        totals.grandTotal || sections.reduce((s, sec) => s + sec.basePrice, 0),
+    );
+    const subtotalVal = Number(
+        totals.subtotal || sections.reduce((s, sec) => s + sec.basePrice, 0),
+    );
     const discountVal = Number(totals.discountAmount || 0);
     const taxVal = Number(totals.taxAmount || 0);
+    const perDeliverable =
+        totalDeliverables > 0 && grandTotalVal > 0 ? grandTotalVal / totalDeliverables : 0;
 
-    const summaryRows = `
-        <tr>
-          <td class="summary-label">One-Time Project Investment</td>
-          <td class="num summary-value">${formatMoneyPdf(subtotalVal, currency)}</td>
-        </tr>
-        ${discountVal > 0 ? `
-        <tr>
-          <td class="summary-label text-rose">Applied Discount</td>
-          <td class="num summary-value text-rose">− ${formatMoneyPdf(discountVal, currency)}</td>
-        </tr>` : ''}
-        ${taxVal > 0 ? `
-        <tr>
-          <td class="summary-label">Tax / VAT</td>
-          <td class="num summary-value">${formatMoneyPdf(taxVal, currency)}</td>
-        </tr>` : ''}`;
+    const notIncludedItems = (Array.isArray(q.notIncluded) ? q.notIncluded : [])
+        .map((s: any) => normalizeText(s))
+        .filter((s: string) => s && !isPlaceholderRow(s));
+    const clientRequirements = (Array.isArray(q.clientRequirements) ? q.clientRequirements : [])
+        .map((s: any) => normalizeText(s))
+        .filter((s: string) => s && !isPlaceholderRow(s));
 
-    const investmentSummaryHtml = `
-      <div class="financial-summary-card">
-        <div class="financial-summary-header">
-          <div class="summary-header-left">
-            <div class="summary-kicker">Investment</div>
-            <h3 class="summary-card-title">Financial Summary</h3>
-          </div>
-          <span class="currency-tag">${esc(currency)}</span>
-        </div>
-        <table class="summary-table">
-          <tbody>
-            ${summaryRows}
-          </tbody>
-        </table>
-        <div class="grand-total-panel">
-          <div class="grand-total-left">
-            <div class="grand-total-label">Total Initial Investment</div>
-            <div class="grand-total-sub">One-time · due per milestone schedule</div>
-          </div>
-          <div class="grand-total-amount">${formatMoneyPdf(grandTotalVal, currency)}</div>
-        </div>
-        ${overallRecurringMonthly > 0 ? `
-        <div class="recurring-panel">
-          <div class="recurring-left">
-            <span class="recurring-dot"></span>
-            <span class="recurring-text">Recurring Monthly Costs</span>
-          </div>
-          <div class="recurring-amount">${formatMoneyPdf(overallRecurringMonthly, currency)} <span class="recurring-per">/ mo</span></div>
-        </div>` : ''}
-      </div>`;
-
-    const notIncludedHtml = notIncludedItems.map((item: string) => `
-        <li class="info-list-item">
-          <span class="info-icon red">✕</span>
-          <span class="info-text">${esc(item)}</span>
-        </li>`).join('');
-
-    const clientReqHtml = clientRequirements.map((item: string) => `
-        <li class="info-list-item">
-          <span class="info-icon indigo">✓</span>
-          <span class="info-text">${esc(item)}</span>
-        </li>`).join('');
+    const notIncludedFinal = notIncludedItems.length
+        ? notIncludedItems
+        : [
+              'Domain registration & premium hosting (billed separately)',
+              'Third-party paid API licences, plugins, or premium fonts',
+              'Paid advertising budget for Meta, Google, or LinkedIn',
+              'Raw unedited footage or source design files',
+          ];
+    const clientReqFinal = clientRequirements.length
+        ? clientRequirements
+        : [
+              'Brand logo, colour palette & typography guidelines',
+              'Admin access / credentials for hosting, domain, or CMS',
+              'Final approved copy, content & product photography',
+              'A dedicated point of contact for feedback and approvals',
+          ];
 
     const paymentMilestones = Array.isArray(q.paymentMilestones) ? q.paymentMilestones : [];
-    const defaultMilestones = [
-        { label: '50% Upfront Deposit (Project Kickoff)', percentage: 50 },
-        { label: '50% Final Delivery & Handover', percentage: 50 },
-    ];
-    const milestonesToUse = paymentMilestones.length > 0 ? paymentMilestones : defaultMilestones;
+    const milestonesToUse = paymentMilestones.length
+        ? paymentMilestones
+        : [
+              { label: 'Upfront deposit — project kickoff', percentage: 50 },
+              { label: 'Final delivery & handover', percentage: 50 },
+          ];
 
-    const paymentMilestonesHtml = milestonesToUse.map((m: any) => `
-        <li class="info-list-item">
-          <span class="info-icon purple">◆</span>
-          <span class="info-text">
-            <strong>${esc(m.label)}</strong>
-            ${m.percentage ? `<span class="milestone-badge">${m.percentage}%</span>` : ''}
-          </span>
-        </li>`).join('');
+    /* ── Page: cover ─────────────────────────────────────────────────────── */
+    const metaStrip = `
+      <div class="cover-meta">
+        <div class="cover-meta-cell">
+          <div class="cover-meta-k">Prepared For</div>
+          <div class="cover-meta-v">${esc(clientPrimary)}</div>
+          ${clientSecondary ? `<div class="cover-meta-sub">Attn: ${esc(clientSecondary)}</div>` : ''}
+        </div>
+        <div class="cover-meta-cell">
+          <div class="cover-meta-k">Issue Date</div>
+          <div class="cover-meta-v">${esc(issueDate)}</div>
+        </div>
+        <div class="cover-meta-cell">
+          <div class="cover-meta-k">Valid Until</div>
+          <div class="cover-meta-v">${esc(validUntilStr)}</div>
+        </div>
+      </div>`;
 
-    // Company contact line for the hero footer strip.
-    const heroContactBits = [companyEmail, companyPhone, companyWebsite]
-        .filter(Boolean)
-        .map((v) => `<span class="hero-contact-bit">${esc(v)}</span>`)
-        .join('<span class="hero-contact-sep">•</span>');
+    const coverHtml = `
+      <section class="cover">
+        <div class="cover-top">
+          <img src="${esc(ctx.logoSrc)}" alt="${esc(companyName)}" class="cover-logo" />
+          <div class="cover-eyebrow">Official Quotation</div>
+        </div>
+        <div class="cover-number">#${esc(quotationNo)}</div>
+        <div class="cover-mid">
+          <div class="cover-kicker">Scope of Work &amp; Investment</div>
+          <h1 class="cover-title">${esc(proposalTitle)}</h1>
+          <div class="cover-rule"></div>
+          ${metaStrip}
+        </div>
+        <div class="cover-foot">
+          <span>${esc(companyName)}</span>
+          ${companyWebsite ? `<span>${esc(companyWebsite)}</span>` : ''}
+        </div>
+      </section>`;
+
+    /* ── Page: contents + scope at a glance ──────────────────────────────── */
+    const contentsRows = [
+        { name: 'Executive Summary', meta: `${totalSections} section${totalSections === 1 ? '' : 's'}` },
+        ...sections.map((sec, i) => ({
+            name: `Section ${String(i + 1).padStart(2, '0')} · ${sec.label}`,
+            meta: `${sec.deliverableCount} deliverables`,
+        })),
+        { name: 'Investment', meta: formatMoneyPdf(grandTotalVal, currency) },
+        { name: 'Terms & Authorization', meta: `${milestonesToUse.length} milestones` },
+    ]
+        .map(
+            (r) =>
+                `<div class="toc-row"><span class="toc-name">${esc(r.name)}</span><span class="toc-dot"></span><span class="toc-meta">${esc(
+                    r.meta,
+                )}</span></div>`,
+        )
+        .join('');
+
+    const scopeGlanceGroups = sections
+        .map((sec, si) => {
+            const rows = sec.modules
+                .map((m, mi) => {
+                    const idx = String(mi + 1).padStart(2, '0');
+                    const count = countDescendants(m);
+                    return `<div class="glance-row">
+              <span class="glance-idx">${idx}</span>
+              <span class="glance-name">${esc(m.name)}</span>
+              <span class="glance-count">${count || ''}</span>
+            </div>`;
+                })
+                .join('');
+            return `<div class="glance-group">
+          <div class="glance-group-head">Section ${String(si + 1).padStart(2, '0')} · ${esc(
+              sec.label,
+          )}<span class="glance-group-total">${sec.deliverableCount} deliverables</span></div>
+          <div class="glance-grid">${rows}</div>
+        </div>`;
+        })
+        .join('');
+
+    const contentsHtml = `
+      <section class="sheet break-before">
+        <div class="page-title-block">
+          <div class="page-eyebrow">Contents</div>
+          <h2 class="page-title">What&rsquo;s inside</h2>
+        </div>
+        <div class="toc">${contentsRows}</div>
+
+        <div class="glance-header">
+          <div class="page-eyebrow">Scope at a glance</div>
+          <div class="glance-total">
+            <span class="glance-total-num">${totalDeliverables}</span>
+            <span class="glance-total-lab">deliverables across ${totalModules} modules</span>
+          </div>
+        </div>
+        ${scopeGlanceGroups}
+      </section>`;
+
+    /* ── Page: executive summary ─────────────────────────────────────────── */
+    const summaryLead = overview
+        ? overview
+        : `This quotation covers ${totalDeliverables} deliverables across ${totalModules} modules${
+              totalSections > 1 ? ` in ${totalSections} sections` : ''
+          }, from design through delivery and handover.`;
+
+    const timelineHtml = milestonesToUse.length
+        ? `<div class="timeline">
+        <div class="block-eyebrow">Delivery Milestones</div>
+        ${milestonesToUse
+            .map(
+                (m: any, i: number) => `<div class="timeline-row">
+          <span class="timeline-idx">${String(i + 1).padStart(2, '0')}</span>
+          <span class="timeline-label">${esc(normalizeText(m.label))}</span>
+          ${m.percentage ? `<span class="timeline-pct">${m.percentage}%</span>` : ''}
+        </div>`,
+            )
+            .join('')}
+      </div>`
+        : '';
+
+    const summaryHtml = `
+      <section class="sheet break-before">
+        <div class="page-title-block">
+          <div class="page-eyebrow">Executive Summary</div>
+          <h2 class="page-title">${esc(proposalTitle)}</h2>
+        </div>
+        <p class="summary-lead">${esc(summaryLead)}</p>
+
+        <div class="stat-row">
+          <div class="stat-cell">
+            <div class="stat-num">${totalDeliverables}</div>
+            <div class="stat-lab">Deliverables</div>
+          </div>
+          <div class="stat-cell">
+            <div class="stat-num">${totalModules}</div>
+            <div class="stat-lab">Modules</div>
+          </div>
+          <div class="stat-cell">
+            <div class="stat-num">${totalSections}</div>
+            <div class="stat-lab">Section${totalSections === 1 ? '' : 's'}</div>
+          </div>
+        </div>
+
+        ${timelineHtml}
+      </section>`;
+
+    /* ── Pages: section dividers + modules ───────────────────────────────── */
+    const sectionsHtml = sections
+        .map((sec, si) => {
+            const secNo = String(si + 1).padStart(2, '0');
+            const divider = `
+        <section class="section-divider">
+          <div class="divider-inner">
+            <div class="divider-no">Section ${secNo}</div>
+            <h2 class="divider-title">${esc(sec.label)}</h2>
+            <div class="divider-summary">${esc(sec.kicker)} · ${sec.modules.length} module${
+                sec.modules.length === 1 ? '' : 's'
+            } · ${sec.deliverableCount} deliverables</div>
+          </div>
+        </section>`;
+
+            const desc = sec.scopeDescription
+                ? `<p class="section-desc">${esc(sec.scopeDescription)}</p>`
+                : '';
+
+            const modulesHtml = sec.modules
+                .map((m, mi) => renderModule(m, mi + 1, currency))
+                .join('');
+
+            const tech = renderTechStack(sec.techStack);
+
+            return `${divider}<div class="section-body">${desc}${modulesHtml}${tech}</div>`;
+        })
+        .join('');
+
+    /* ── Page: pricing ───────────────────────────────────────────────────── */
+    const summaryAdjustments = `
+      ${
+          discountVal > 0 || taxVal > 0
+              ? `<div class="price-adjustments">
+        <div class="adj-row"><span>One-time project investment</span><span>${formatMoneyPdf(
+            subtotalVal,
+            currency,
+        )}</span></div>
+        ${
+            discountVal > 0
+                ? `<div class="adj-row adj-neg"><span>Applied discount</span><span>− ${formatMoneyPdf(
+                      discountVal,
+                      currency,
+                  )}</span></div>`
+                : ''
+        }
+        ${
+            taxVal > 0
+                ? `<div class="adj-row"><span>Tax / VAT</span><span>${formatMoneyPdf(
+                      taxVal,
+                      currency,
+                  )}</span></div>`
+                : ''
+        }
+      </div>`
+              : ''
+      }`;
+
+    const recurringNote =
+        recurringMonthly > 0
+            ? `<div class="price-recurring">Plus recurring costs of <strong>${formatMoneyPdf(
+                  recurringMonthly,
+                  currency,
+              )} / month</strong>, billed separately from the one-time total above.</div>`
+            : '';
+
+    const milestoneRows = milestonesToUse
+        .map(
+            (m: any) => `<div class="milestone-row">
+        ${m.percentage ? `<span class="milestone-pct">${m.percentage}%</span>` : '<span class="milestone-pct">—</span>'}
+        <span class="milestone-label">${esc(normalizeText(m.label))}</span>
+      </div>`,
+        )
+        .join('');
+
+    const pricingHtml = `
+      <section class="sheet break-before pricing">
+        <div class="page-title-block">
+          <div class="page-eyebrow">Investment</div>
+          <h2 class="page-title">One-time project investment</h2>
+        </div>
+
+        <div class="price-hero">
+          <div class="price-figure">${formatMoneyPdf(grandTotalVal, currency)}</div>
+          <div class="price-rule"></div>
+          <div class="price-ledger">
+            <span>${totalDeliverables} deliverables</span>
+            <span class="price-ledger-sep">·</span>
+            <span>${totalModules} modules</span>
+            ${
+                perDeliverable > 0
+                    ? `<span class="price-ledger-sep">·</span><span class="price-ledger-em">${formatMoneyPdf(
+                          Math.round(perDeliverable),
+                          currency,
+                      )} per deliverable</span>`
+                    : ''
+            }
+          </div>
+        </div>
+
+        ${summaryAdjustments}
+
+        <div class="price-milestones">
+          <div class="block-eyebrow">Payment Terms</div>
+          ${milestoneRows}
+        </div>
+
+        ${recurringNote}
+
+        <div class="price-note">
+          This one-time price covers the scope defined in this document through delivery and
+          handover. Third-party subscriptions, ad budgets, and post-launch changes outside the
+          agreed scope are billed separately — see the terms overleaf.
+        </div>
+      </section>`;
+
+    /* ── Page: terms + authorization ─────────────────────────────────────── */
+    const notIncludedHtml = notIncludedFinal
+        .map(
+            (item: string) =>
+                `<div class="terms-item"><span class="terms-mark excl">–</span><span>${esc(item)}</span></div>`,
+        )
+        .join('');
+    const clientReqHtml = clientReqFinal
+        .map(
+            (item: string) =>
+                `<div class="terms-item"><span class="terms-mark incl">+</span><span>${esc(item)}</span></div>`,
+        )
+        .join('');
+
+    const termsHtml = `
+      <section class="sheet break-before terms">
+        <div class="page-title-block">
+          <div class="page-eyebrow">Terms</div>
+          <h2 class="page-title">Scope boundaries</h2>
+        </div>
+
+        <div class="terms-cols">
+          <div class="terms-col">
+            <div class="terms-col-head excl">Not included in price</div>
+            ${notIncludedHtml}
+          </div>
+          <div class="terms-col">
+            <div class="terms-col-head incl">Client needs to provide</div>
+            ${clientReqHtml}
+          </div>
+        </div>
+
+        <div class="auth">
+          <div class="auth-left">
+            <div class="block-eyebrow light">Authorization</div>
+            <div class="auth-desc">
+              This quotation is valid until <strong>${esc(validUntilStr)}</strong>. On acceptance,
+              formal execution begins per the agreed milestone schedule.
+            </div>
+          </div>
+          <div class="auth-right">
+            ${
+                ctx.signatureSrc
+                    ? `<img src="${esc(ctx.signatureSrc)}" alt="Signature" class="auth-sig" />`
+                    : '<div class="auth-sig-gap"></div>'
+            }
+            <div class="auth-sig-line">
+              <div class="auth-sig-label">Authorized Signature</div>
+              <div class="auth-sig-org">${esc(companyName)}</div>
+            </div>
+          </div>
+        </div>
+      </section>`;
+
+    const ledgerRail = `<div class="ledger-rail"><span>#${esc(
+        quotationNo,
+    )} &nbsp;·&nbsp; ${totalDeliverables} DELIVERABLES</span></div>`;
 
     return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Quotation #${esc(quotationNo)} - ${esc(proposalTitle)}</title>
+  <title>Quotation #${esc(quotationNo)} — ${esc(proposalTitle)}</title>
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap');
+    ${ctx.fontCss}
 
     :root {
-      --brand: #4e12d4;
-      --brand-2: #7b2ff7;
-      --accent: #c850fa;
-      --brand-soft: rgba(78, 18, 212, 0.06);
-      --brand-softer: rgba(78, 18, 212, 0.035);
-      --brand-border: rgba(78, 18, 212, 0.16);
-      --accent-soft: rgba(200, 80, 250, 0.10);
-      --accent-border: rgba(200, 80, 250, 0.22);
-      --grad: linear-gradient(120deg, #4e12d4 0%, #7b2ff7 52%, #c850fa 100%);
+      --ink-900: #101220;
+      --ink-700: #2B2F42;
+      --ink-500: #5C6275;
+      --ink-300: #9AA0B1;
+      --paper: #FFFFFF;
+      --paper-alt: #F5F5F8;
+      --rule: #E4E5EC;
+      --rule-strong: #C9CBD6;
+      --accent: #4B21D9;
+      --accent-deep: #1E1146;
+      --accent-tint: #F0ECFE;
+      --incl: #14705A;
+      --excl: #8E3350;
+      --incl-bg: #F1F7F4;
+      --excl-bg: #FBF2F5;
 
-      --ink: #0b0a1f;
-      --slate900: #0f172a;
-      --slate800: #1e293b;
-      --slate700: #334155;
-      --slate600: #475569;
-      --slate500: #64748b;
-      --slate400: #94a3b8;
-      --slate300: #cbd5e1;
-      --slate200: #e2e8f0;
-      --slate100: #f1f5f9;
-      --slate50: #f8fafc;
-      --paper-tint: #fbfaff;
-      --rose: #e11d48;
-      --emerald: #059669;
+      --font-display: 'Bricolage Grotesque', 'Inter Tight', 'Inter', system-ui, sans-serif;
+      --font-body: 'Inter', 'Hind Siliguri', system-ui, -apple-system, sans-serif;
+      --font-mono: 'Geist Mono', ui-monospace, 'JetBrains Mono', monospace;
     }
+
+    @page { size: A4; margin: 18mm 16mm 16mm; }
+    @page :first { margin: 0; }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
+    html, body { background: var(--paper); }
     body {
-      font-family: 'Inter', system-ui, -apple-system, sans-serif;
-      color: var(--slate800);
-      background-color: #ffffff;
-      font-size: 11px;
-      line-height: 1.5;
+      font-family: var(--font-body);
+      color: var(--ink-700);
+      font-size: 9.5pt;
+      line-height: 1.55;
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
       -webkit-font-smoothing: antialiased;
+      font-variant-numeric: tabular-nums;
     }
 
-    .container { width: 100%; padding: 0; }
+    .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+    strong { font-weight: 600; color: var(--ink-900); }
 
-    .mono { font-family: 'JetBrains Mono', monospace; }
+    /* Pagination */
+    .break-before { break-before: page; }
+    .section-divider { break-before: page; break-inside: avoid; }
+    .module-head, .stat-cell, .price-hero, .milestone-row,
+    .deliv, .toc-row, .glance-row, .timeline-row, .tech-row { break-inside: avoid; }
+    h1, h2, h3, .module-head, .divider-title, .page-title { break-after: avoid; }
+    .auth, .terms-col-head, .price-milestones { break-inside: avoid; }
+    p, .deliv, .terms-item { orphans: 3; widows: 3; }
 
-    /* ── Masthead ─────────────────────────────────────────── */
-    .masthead {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      padding-bottom: 16px;
-      margin-bottom: 20px;
-      position: relative;
-    }
-    .masthead::after {
-      content: '';
-      position: absolute;
-      left: 0; right: 0; bottom: 0;
-      height: 2px;
-      background: var(--grad);
-      border-radius: 2px;
-    }
-    .brand-lockup { display: flex; align-items: center; gap: 12px; }
-    .logo-img { height: 42px; width: auto; object-fit: contain; }
-    .brand-name-block { display: flex; flex-direction: column; }
-    .brand-name {
-      font-size: 14px; font-weight: 800; color: var(--slate900);
-      letter-spacing: -0.01em; line-height: 1.1;
-    }
-    .brand-tag {
-      font-size: 8.5px; font-weight: 700; letter-spacing: 0.16em;
-      text-transform: uppercase; color: var(--slate400); margin-top: 2px;
-    }
-    .meta-box { text-align: right; }
-    .official-badge {
-      display: inline-flex; align-items: center; gap: 5px;
-      font-size: 8.5px; font-weight: 800; letter-spacing: 0.14em;
-      text-transform: uppercase; color: var(--brand);
-      background: var(--brand-soft); border: 1px solid var(--brand-border);
-      padding: 3px 10px; border-radius: 9999px; margin-bottom: 7px;
-    }
-    .badge-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--grad); }
-    .qtn-number {
-      font-size: 19px; font-weight: 700; color: var(--slate900);
-      font-family: 'JetBrains Mono', monospace; letter-spacing: -0.02em;
-    }
-    .meta-dates { font-size: 10px; color: var(--slate500); margin-top: 5px; }
-    .meta-dates strong { color: var(--slate700); font-weight: 600; }
-    .valid-until { color: var(--rose) !important; font-weight: 700; }
-
-    /* ── Hero ─────────────────────────────────────────────── */
-    .hero {
-      position: relative;
-      overflow: hidden;
-      border-radius: 18px;
-      padding: 30px 34px;
-      margin-bottom: 26px;
-      color: #ffffff;
-      background:
-        radial-gradient(115% 130% at 100% 0%, rgba(200, 80, 250, 0.28) 0%, rgba(200,80,250,0) 46%),
-        radial-gradient(120% 140% at 0% 100%, rgba(78, 18, 212, 0.42) 0%, rgba(78,18,212,0) 52%),
-        linear-gradient(135deg, #0b0a1f 0%, #1a1145 58%, #241063 100%);
-      box-shadow: 0 18px 40px -14px rgba(15, 10, 45, 0.5);
-    }
-    .hero-glow {
-      position: absolute; top: -60px; right: -40px;
-      width: 220px; height: 220px; border-radius: 50%;
-      background: radial-gradient(circle, rgba(200,80,250,0.35) 0%, rgba(200,80,250,0) 70%);
-    }
-    .hero-top {
-      display: flex; justify-content: space-between;
-      align-items: flex-start; gap: 24px; position: relative;
-    }
-    .hero-left { flex: 1; min-width: 0; }
-    .hero-kicker {
-      display: inline-block;
-      font-size: 9px; font-weight: 800; letter-spacing: 0.2em;
-      text-transform: uppercase;
-      background: linear-gradient(90deg, #d8b4fe, #f0abfc);
-      -webkit-background-clip: text; background-clip: text;
-      -webkit-text-fill-color: transparent;
-      margin-bottom: 10px;
-    }
-    .hero-title {
-      font-size: 27px; font-weight: 900; line-height: 1.18;
-      letter-spacing: -0.025em; color: #ffffff;
-      max-width: 380px;
-    }
-    .hero-underline {
-      width: 56px; height: 3px; border-radius: 3px; margin-top: 14px;
-      background: linear-gradient(90deg, #c850fa, #7b2ff7);
-    }
-    .client-card {
-      flex-shrink: 0;
-      background: rgba(255, 255, 255, 0.07);
-      border: 1px solid rgba(255, 255, 255, 0.16);
-      border-radius: 14px;
-      padding: 16px 18px;
-      min-width: 210px;
-      max-width: 240px;
-    }
-    .client-label {
-      font-size: 8.5px; font-weight: 800; letter-spacing: 0.16em;
-      text-transform: uppercase; color: #c4b5fd; margin-bottom: 8px;
-    }
-    .client-name { font-size: 15px; font-weight: 800; color: #ffffff; letter-spacing: -0.01em; }
-    .client-company { font-size: 11px; color: #cbd5e1; margin-top: 3px; }
-    .client-contact {
-      font-size: 9.5px; color: #a5b4cf; margin-top: 8px;
-      padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.12);
-      font-family: 'JetBrains Mono', monospace; word-break: break-all;
-    }
-    .client-contact div { margin-top: 2px; }
-    .hero-footer {
-      position: relative;
-      margin-top: 22px; padding-top: 14px;
-      border-top: 1px solid rgba(255, 255, 255, 0.12);
-      display: flex; justify-content: space-between; align-items: center;
-      font-size: 9.5px; color: #b9b4d6;
-    }
-    .hero-contact-strip { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-    .hero-contact-bit { color: #d6d2ef; font-weight: 500; }
-    .hero-contact-sep { color: rgba(255,255,255,0.28); }
-    .hero-prepared-by { color: #9d97c2; }
-    .hero-prepared-by strong { color: #e6e3f7; font-weight: 700; }
-
-    /* ── Executive Overview ───────────────────────────────── */
-    .overview-card {
-      position: relative;
-      background: linear-gradient(180deg, var(--paper-tint), #ffffff);
-      border: 1px solid var(--slate200);
-      border-radius: 14px;
-      padding: 18px 22px 18px 26px;
-      margin-bottom: 30px;
-    }
-    .overview-card::before {
-      content: '';
-      position: absolute; left: 0; top: 14px; bottom: 14px;
-      width: 4px; border-radius: 4px; background: var(--grad);
-    }
-    .overview-title {
-      font-size: 10px; font-weight: 800; letter-spacing: 0.12em;
-      text-transform: uppercase; color: var(--brand);
-      margin-bottom: 8px; display: flex; align-items: center; gap: 7px;
-    }
-    .overview-title .quote-mark {
-      font-family: 'JetBrains Mono', monospace; font-size: 14px;
-      color: var(--accent); line-height: 1;
-    }
-    .overview-text {
-      font-size: 11.5px; color: var(--slate700); line-height: 1.65;
-      white-space: pre-line;
-    }
-
-    /* ── Section Header ───────────────────────────────────── */
-    .service-section { margin-bottom: 34px; page-break-inside: auto; }
-    .section-header {
-      display: flex; align-items: center; gap: 14px;
-      margin-bottom: 16px; padding-bottom: 12px;
-      border-bottom: 1px solid var(--slate200);
-    }
-    .section-index {
-      flex-shrink: 0;
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 26px; font-weight: 700; line-height: 1;
-      color: transparent;
-      background: var(--grad);
-      -webkit-background-clip: text; background-clip: text;
-      -webkit-text-fill-color: transparent;
-    }
-    .section-heading-wrap { display: flex; flex-direction: column; }
-    .section-kicker {
-      font-size: 8.5px; font-weight: 800; letter-spacing: 0.16em;
-      text-transform: uppercase; color: var(--slate400); margin-bottom: 2px;
-    }
-    .section-title {
-      font-size: 17px; font-weight: 800; color: var(--slate900);
-      letter-spacing: -0.015em; line-height: 1.15;
-    }
-    .section-description {
-      font-size: 11.5px; color: var(--slate600);
-      margin-bottom: 16px; line-height: 1.65;
-    }
-
-    /* ── Module Cards ─────────────────────────────────────── */
-    .module-card {
-      background: #ffffff;
-      border: 1px solid var(--slate200);
-      border-radius: 13px;
-      overflow: hidden;
-      margin-bottom: 13px;
-      box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
-      page-break-inside: auto; break-inside: auto;
-    }
-    .module-card-header {
-      page-break-after: avoid; break-after: avoid;
-      background: linear-gradient(180deg, #ffffff 0%, var(--slate50) 100%);
-      padding: 12px 18px;
-      display: flex; justify-content: space-between; align-items: center;
-      border-bottom: 1px solid var(--slate200);
-    }
-    .module-header-left { display: flex; align-items: center; gap: 11px; }
-    .module-num {
+    /* ── Ledger rail (repeats on every page; hidden beneath the cover) ── */
+    /* Fixed elements position relative to the page CONTENT box in print, so a
+       negative offset is what pushes the rail out into the outer paper margin. */
+    .ledger-rail {
+      position: fixed;
+      left: -11mm; top: 0; bottom: 0;
+      width: 7mm;
       display: flex; align-items: center; justify-content: center;
-      width: 24px; height: 24px; border-radius: 7px;
-      background: var(--grad); color: #ffffff;
-      font-size: 10px; font-weight: 800;
-      font-family: 'JetBrains Mono', monospace;
-      box-shadow: 0 2px 6px -1px rgba(78, 18, 212, 0.4);
+      z-index: 1;
     }
-    .module-title { font-size: 13.5px; font-weight: 700; color: var(--slate900); letter-spacing: -0.01em; }
-    .module-price-tag {
-      font-size: 12px; font-weight: 800; color: var(--brand);
-      background: var(--brand-soft); border: 1px solid var(--brand-border);
-      padding: 4px 11px; border-radius: 9999px;
-      font-family: 'JetBrains Mono', monospace;
-    }
-    .module-route-bar {
-      background: var(--slate50);
-      padding: 6px 18px; border-bottom: 1px solid var(--slate200);
-      font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--slate600);
-    }
-    .module-card-body { padding: 13px 18px; }
-
-    /* ── Feature Hierarchy ────────────────────────────────── */
-    .child-features-list { list-style: none; padding-left: 0; margin: 0; }
-    .child-features-list.level-2 {
-      border-left: 1.5px solid var(--slate200);
-      margin-left: 2.25px; padding-left: 14px;
-      margin-top: 5px; margin-bottom: 5px;
-    }
-    .child-features-list.level-3,
-    .child-features-list.level-4 {
-      border-left: 1.5px solid var(--slate200);
-      margin-left: 1.75px; padding-left: 12px;
-      margin-top: 4px; margin-bottom: 4px;
-    }
-    .child-feature-item {
-      list-style: none; position: relative;
-      page-break-inside: avoid; break-inside: avoid;
-    }
-    .child-feature-item.level-1 {
-      padding: 8px 0; border-bottom: 1px dashed var(--slate200);
-    }
-    .child-feature-item.level-1:last-child { border-bottom: none; }
-    .child-feature-item.level-2 { padding: 4px 0; }
-    .child-feature-item.level-3,
-    .child-feature-item.level-4 { padding: 3px 0; }
-    .child-feature-main { display: flex; justify-content: space-between; align-items: center; }
-    .child-feature-left { display: flex; align-items: center; gap: 9px; }
-    .bullet-dot {
-      width: 6px; height: 6px; border-radius: 50%;
-      background: var(--grad); flex-shrink: 0;
-    }
-    .child-feature-item.level-2 > .child-feature-main .bullet-dot {
-      width: 5px; height: 5px; background: transparent; border: 1.2px solid var(--accent);
-    }
-    .child-feature-item.level-3 > .child-feature-main .bullet-dot,
-    .child-feature-item.level-4 > .child-feature-main .bullet-dot {
-      width: 4px; height: 4px; background: var(--slate400); border: none;
-    }
-    .child-feature-item.level-1 > .child-feature-main .child-feature-name {
-      font-size: 11.5px; font-weight: 600; color: var(--slate800);
-    }
-    .child-feature-item.level-2 > .child-feature-main .child-feature-name {
-      font-size: 11px; font-weight: 500; color: var(--slate700);
-    }
-    .child-feature-item.level-3 > .child-feature-main .child-feature-name,
-    .child-feature-item.level-4 > .child-feature-main .child-feature-name {
-      font-size: 10px; font-weight: 400; color: var(--slate600);
-    }
-    .child-price {
-      font-size: 11px; font-weight: 700; color: var(--slate700);
-      font-family: 'JetBrains Mono', monospace;
-    }
-    .child-route-tag {
-      display: inline-flex; align-items: center; gap: 4px;
-      margin-top: 4px; margin-left: 15px;
-      font-size: 9.5px; color: var(--slate500);
-      font-family: 'JetBrains Mono', monospace;
-      background: var(--slate100); padding: 2px 7px;
-      border-radius: 5px; width: fit-content; word-break: break-all;
-    }
-    .child-route-tag .route-icon { color: var(--accent); font-weight: 700; }
-
-    /* ── Deliverable Cards ────────────────────────────────── */
-    .deliverable-card {
-      background: #ffffff; border: 1px solid var(--slate200);
-      border-radius: 13px; overflow: hidden; margin-bottom: 13px;
-      box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
-      page-break-inside: auto; break-inside: auto;
-    }
-    .deliverable-card-header {
-      page-break-after: avoid; break-after: avoid;
-      padding: 12px 18px;
-      background: linear-gradient(180deg, #ffffff 0%, var(--slate50) 100%);
-      border-bottom: 1px solid var(--slate200);
-      display: flex; justify-content: space-between; align-items: center;
-    }
-    .deliverable-category-title { font-size: 13px; font-weight: 700; color: var(--slate900); letter-spacing: -0.01em; }
-    .deliverable-price-badge {
-      font-size: 12px; font-weight: 800; color: var(--brand);
-      background: var(--brand-soft); border: 1px solid var(--brand-border);
-      padding: 4px 11px; border-radius: 9999px;
-      font-family: 'JetBrains Mono', monospace;
-    }
-    .deliverable-card-body { padding: 14px 18px; }
-    .deliverables-sublabel {
-      font-size: 8.5px; font-weight: 800; letter-spacing: 0.12em;
-      text-transform: uppercase; color: var(--slate400); margin-bottom: 11px;
-    }
-    .deliverables-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
-    .deliverable-item {
-      display: flex; align-items: center; gap: 8px;
-      font-size: 11px; color: var(--slate700);
-    }
-    .deliverable-name { flex: 1; }
-    .deliv-item-price {
-      font-family: 'JetBrains Mono', monospace; font-weight: 700;
-      font-size: 10.5px; color: var(--slate700);
-    }
-    .check-icon {
-      display: inline-flex; align-items: center; justify-content: center;
-      width: 15px; height: 15px; border-radius: 50%; flex-shrink: 0;
-      background: rgba(5, 150, 105, 0.12); color: var(--emerald);
-      font-weight: 800; font-size: 9px;
+    .ledger-rail span {
+      writing-mode: vertical-rl;
+      transform: rotate(180deg);
+      font-family: var(--font-mono);
+      font-size: 6pt; font-weight: 500;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--ink-300);
+      white-space: nowrap;
     }
 
-    /* ── Tech Stack ───────────────────────────────────────── */
-    .tech-stack-card {
-      background: #ffffff; border: 1px solid var(--slate200);
-      border-radius: 13px; padding: 14px 18px;
-      margin-top: 13px; margin-bottom: 13px;
-      page-break-inside: avoid !important; break-inside: avoid !important;
+    /* ── Cover (full bleed, page 1) ── */
+    .cover {
+      position: relative;
+      z-index: 2;
+      width: 210mm; height: 297mm;
+      background: linear-gradient(180deg, var(--accent-deep) 0%, #160C36 100%);
+      color: #fff;
+      padding: 20mm;
+      display: flex; flex-direction: column;
+      overflow: hidden;
     }
-    .card-section-title {
-      font-size: 9.5px; font-weight: 800; letter-spacing: 0.12em;
-      text-transform: uppercase; color: var(--brand);
-      margin-bottom: 11px; display: flex; align-items: center; gap: 7px;
+    .cover-top {
+      display: flex; justify-content: space-between; align-items: flex-start;
     }
-    .title-tick {
-      display: inline-block; width: 12px; height: 2px;
-      border-radius: 2px; background: var(--grad);
+    .cover-logo { height: 12mm; width: auto; object-fit: contain; filter: brightness(0) invert(1); }
+    .cover-eyebrow {
+      font-family: var(--font-mono);
+      font-size: 7.5pt; font-weight: 500; letter-spacing: 0.18em;
+      text-transform: uppercase; color: var(--ink-300);
     }
-    .styled-table { width: 100%; border-collapse: collapse; }
-    .tech-table td { padding: 7px 0; border-bottom: 1px solid var(--slate100); vertical-align: top; }
-    .tech-table tr:last-child td { border-bottom: none; }
-    .tech-layer-cell { font-weight: 700; color: var(--slate800); width: 110px; font-size: 11px; }
+    .cover-number {
+      font-family: var(--font-mono);
+      font-size: 22pt; font-weight: 500; letter-spacing: -0.01em;
+      color: #C9BFF2; margin-top: 6mm;
+    }
+    .cover-mid { margin-top: auto; margin-bottom: auto; }
+    .cover-kicker {
+      font-family: var(--font-mono);
+      font-size: 8pt; font-weight: 500; letter-spacing: 0.16em;
+      text-transform: uppercase; color: #A99FD6; margin-bottom: 8mm;
+    }
+    .cover-title {
+      font-family: var(--font-display);
+      font-weight: 600; font-size: 46pt; line-height: 0.98;
+      letter-spacing: -0.03em; color: #fff;
+      max-width: 150mm;
+    }
+    .cover-rule {
+      height: 0.5pt; width: 100%; background: rgba(255,255,255,0.28);
+      margin: 12mm 0 7mm;
+    }
+    .cover-meta { display: flex; gap: 16mm; }
+    .cover-meta-k {
+      font-family: var(--font-mono);
+      font-size: 7pt; font-weight: 500; letter-spacing: 0.14em;
+      text-transform: uppercase; color: #A99FD6; margin-bottom: 2mm;
+    }
+    .cover-meta-v { font-size: 10pt; color: #ECEAF6; font-weight: 500; }
+    .cover-meta-sub { font-size: 8pt; color: #A99FD6; margin-top: 1mm; }
+    .cover-foot {
+      display: flex; justify-content: space-between;
+      font-family: var(--font-mono);
+      font-size: 7.5pt; letter-spacing: 0.06em; color: var(--ink-300);
+    }
+
+    /* ── Generic sheet / page-title ── */
+    .sheet { position: relative; }
+    .page-title-block { margin-bottom: 8mm; }
+    .page-eyebrow {
+      font-family: var(--font-mono);
+      font-size: 7.5pt; font-weight: 500; letter-spacing: 0.14em;
+      text-transform: uppercase; color: var(--accent); margin-bottom: 2mm;
+    }
+    .page-title {
+      font-family: var(--font-display);
+      font-weight: 600; font-size: 26pt; line-height: 1.02;
+      letter-spacing: -0.02em; color: var(--ink-900);
+    }
+    .block-eyebrow {
+      font-family: var(--font-mono);
+      font-size: 7.5pt; font-weight: 500; letter-spacing: 0.14em;
+      text-transform: uppercase; color: var(--accent); margin-bottom: 4mm;
+    }
+    .block-eyebrow.light { color: #A99FD6; }
+
+    /* ── Contents ── */
+    .toc { margin-bottom: 12mm; }
+    .toc-row {
+      display: flex; align-items: baseline; gap: 3mm;
+      padding: 3mm 0; border-bottom: 0.5pt solid var(--rule);
+    }
+    .toc-name { font-size: 10pt; font-weight: 500; color: var(--ink-900); }
+    .toc-dot { flex: 1; }
+    .toc-meta {
+      font-family: var(--font-mono);
+      font-size: 8pt; color: var(--ink-300); letter-spacing: 0.02em;
+    }
+
+    /* ── Scope at a glance ── */
+    .glance-header {
+      display: flex; justify-content: space-between; align-items: flex-end;
+      padding-bottom: 3mm; margin-bottom: 5mm;
+      border-bottom: 0.5pt solid var(--rule-strong);
+    }
+    .glance-total { text-align: right; }
+    .glance-total-num {
+      font-family: var(--font-mono); font-size: 15pt; font-weight: 500;
+      color: var(--accent); margin-right: 2mm;
+    }
+    .glance-total-lab { font-size: 8.5pt; color: var(--ink-500); }
+    .glance-group { margin-bottom: 6mm; }
+    .glance-group-head {
+      font-family: var(--font-display);
+      font-size: 11pt; font-weight: 600; color: var(--ink-900);
+      margin-bottom: 3mm; padding-bottom: 2mm;
+      border-bottom: 0.5pt solid var(--rule);
+      display: flex; justify-content: space-between; align-items: baseline;
+    }
+    .glance-group-total {
+      font-family: var(--font-mono); font-size: 7.5pt;
+      color: var(--ink-300); font-weight: 400; letter-spacing: 0.04em;
+    }
+    .glance-grid {
+      display: grid; grid-template-columns: 1fr 1fr 1fr;
+      column-gap: 8mm; row-gap: 1.6mm;
+    }
+    .glance-row { display: flex; align-items: baseline; gap: 2mm; font-size: 8.25pt; }
+    .glance-idx {
+      font-family: var(--font-mono); font-size: 7pt; font-weight: 500;
+      color: var(--accent); width: 6mm; flex-shrink: 0;
+    }
+    .glance-name { flex: 1; color: var(--ink-700); }
+    .glance-count {
+      font-family: var(--font-mono); font-size: 7pt; color: var(--ink-300);
+      flex-shrink: 0;
+    }
+
+    /* ── Executive summary ── */
+    .summary-lead {
+      font-size: 11pt; line-height: 1.6; color: var(--ink-700);
+      max-width: 155mm; margin-bottom: 10mm;
+    }
+    .stat-row { display: flex; gap: 4mm; margin-bottom: 10mm; }
+    .stat-cell {
+      flex: 1; border: 0.5pt solid var(--rule-strong); border-radius: 3px;
+      padding: 6mm 5mm;
+    }
+    .stat-num {
+      font-family: var(--font-mono); font-size: 24pt; font-weight: 500;
+      color: var(--ink-900); line-height: 1; letter-spacing: -0.02em;
+    }
+    .stat-lab {
+      font-family: var(--font-mono); font-size: 7.5pt; font-weight: 500;
+      letter-spacing: 0.12em; text-transform: uppercase;
+      color: var(--ink-500); margin-top: 3mm;
+    }
+    .timeline { border-top: 0.5pt solid var(--rule-strong); padding-top: 5mm; }
+    .timeline-row {
+      display: flex; align-items: baseline; gap: 4mm;
+      padding: 2.5mm 0; border-bottom: 0.5pt solid var(--rule);
+    }
+    .timeline-idx {
+      font-family: var(--font-mono); font-size: 8pt; color: var(--accent);
+      font-weight: 500; width: 7mm;
+    }
+    .timeline-label { flex: 1; font-size: 9.5pt; color: var(--ink-700); }
+    .timeline-pct {
+      font-family: var(--font-mono); font-size: 9pt; font-weight: 500;
+      color: var(--ink-900);
+    }
+
+    /* ── Section divider (half page ink) ── */
+    .section-divider {
+      width: 100%;
+      background: linear-gradient(180deg, var(--accent-deep) 0%, #160C36 100%);
+      color: #fff;
+      /* pull into the page margins so it reads as a full-width band */
+      margin: -18mm -16mm 8mm;
+      padding: 26mm 16mm 20mm;
+    }
+    .divider-no {
+      font-family: var(--font-mono); font-size: 8pt; font-weight: 500;
+      letter-spacing: 0.16em; text-transform: uppercase; color: #A99FD6;
+      margin-bottom: 5mm;
+    }
+    .divider-title {
+      font-family: var(--font-display); font-weight: 600; font-size: 30pt;
+      line-height: 1.02; letter-spacing: -0.02em; color: #fff;
+    }
+    .divider-summary {
+      font-family: var(--font-mono); font-size: 8.5pt; color: #C9BFF2;
+      letter-spacing: 0.02em; margin-top: 5mm;
+    }
+    .section-body { }
+    .section-desc {
+      font-size: 10pt; color: var(--ink-500); margin-bottom: 7mm; max-width: 150mm;
+    }
+
+    /* ── Module ── */
+    .module { margin-bottom: 7mm; }
+    .module-head {
+      display: flex; align-items: baseline; gap: 3mm;
+      border-top: 0.5pt solid var(--rule-strong);
+      padding-top: 2.5mm; margin-bottom: 3mm;
+    }
+    .module-idx {
+      font-family: var(--font-mono); font-size: 9pt; font-weight: 500;
+      color: var(--accent); flex-shrink: 0;
+    }
+    .module-name {
+      font-family: var(--font-display); font-weight: 600; font-size: 13pt;
+      color: var(--ink-900); letter-spacing: -0.01em; line-height: 1.2; flex: 1;
+    }
+    .module-meta { display: flex; align-items: baseline; gap: 3mm; flex-shrink: 0; }
+    .module-price {
+      font-family: var(--font-mono); font-size: 9pt; font-weight: 500;
+      color: var(--accent);
+    }
+    .module-count {
+      font-family: var(--font-mono); font-size: 8pt; color: var(--ink-300);
+      min-width: 6mm; text-align: right;
+    }
+    .deliverables {
+      display: grid; grid-template-columns: 1fr 1fr;
+      column-gap: 8mm; row-gap: 1.6mm;
+      padding-left: 6mm;
+    }
+    .deliv { display: flex; gap: 2.5mm; align-items: baseline; }
+    .deliv-mark {
+      width: 3px; height: 3px; background: var(--accent); opacity: 0.6;
+      flex-shrink: 0; margin-top: 1.6mm; border-radius: 0;
+    }
+    .deliv-body { flex: 1; }
+    .deliv-name { font-size: 8.75pt; color: var(--ink-700); line-height: 1.45; }
+    .deliv-price {
+      font-family: var(--font-mono); font-size: 8pt; color: var(--accent);
+      margin-left: 2mm;
+    }
+    .deliv-route {
+      display: block; font-family: var(--font-mono); font-size: 7pt;
+      color: var(--ink-300); margin-top: 0.5mm;
+    }
+    .deliv-sub { margin-top: 1mm; padding-left: 3mm; }
+    .deliv-sub-item {
+      display: flex; gap: 2mm; align-items: baseline;
+      font-size: 8pt; color: var(--ink-500); line-height: 1.4;
+    }
+    .deliv-sub-mark {
+      width: 2.5px; height: 2.5px; border: 0.5pt solid var(--ink-300);
+      flex-shrink: 0; margin-top: 1.4mm;
+    }
+
+    /* ── Tech stack ── */
+    .tech-block {
+      margin-top: 8mm; padding-top: 5mm;
+      border-top: 0.5pt solid var(--rule-strong);
+    }
+    .tech-row {
+      display: flex; gap: 5mm; padding: 2mm 0;
+      border-bottom: 0.5pt solid var(--rule);
+    }
+    .tech-row:last-child { border-bottom: none; }
+    .tech-layer {
+      width: 28mm; flex-shrink: 0; font-weight: 600; font-size: 9pt;
+      color: var(--ink-900);
+    }
+    .tech-chips { flex: 1; }
     .tech-chip {
-      display: inline-block; background: var(--slate100); color: var(--slate700);
-      font-size: 10px; font-weight: 600; padding: 3px 9px;
-      border-radius: 7px; margin-right: 5px; margin-bottom: 3px;
-      border: 1px solid var(--slate200);
+      display: inline-block; font-size: 8pt; color: var(--ink-700);
+      background: var(--paper-alt); border: 0.5pt solid var(--rule);
+      padding: 0.6mm 2.4mm; border-radius: 3px; margin: 0 1.5mm 1.5mm 0;
     }
 
-    /* ── Pricing Table ────────────────────────────────────── */
-    .pricing-card {
-      background: #ffffff; border: 1px solid var(--slate200);
-      border-radius: 13px; padding: 14px 18px;
-      margin-top: 13px; margin-bottom: 18px;
-      page-break-inside: avoid !important; break-inside: avoid !important;
+    /* ── Pricing page ── */
+    .pricing .price-hero { margin: 4mm 0 8mm; }
+    .price-figure {
+      font-family: var(--font-mono); font-weight: 500; font-size: 44pt;
+      line-height: 1; letter-spacing: -0.02em; color: var(--ink-900);
+      white-space: nowrap;
     }
-    .pricing-table th {
-      text-align: left; font-size: 8.5px; font-weight: 800;
-      text-transform: uppercase; letter-spacing: 0.08em; color: var(--slate500);
-      padding: 8px 10px; background: var(--slate50);
-      border-bottom: 1px solid var(--slate200);
+    .price-rule {
+      height: 0.5pt; background: var(--rule-strong); margin: 5mm 0 3mm;
     }
-    .pricing-table th:first-child { border-top-left-radius: 8px; }
-    .pricing-table th:last-child { border-top-right-radius: 8px; }
-    .pricing-table td { padding: 9px 10px; border-bottom: 1px solid var(--slate100); font-size: 11px; }
-    .pricing-table tbody tr:last-child td { border-bottom: none; }
-    .pricing-table th.num, .pricing-table td.num {
-      text-align: right; font-family: 'JetBrains Mono', monospace;
+    .price-ledger {
+      font-family: var(--font-mono); font-size: 9.5pt; color: var(--ink-500);
+      letter-spacing: 0.01em;
     }
-    .item-title { font-weight: 600; color: var(--slate800); }
-    .item-desc { font-size: 10px; color: var(--slate500); margin-top: 2px; }
-    .font-bold { font-weight: 800 !important; color: var(--slate900); }
-    .billing-badge {
-      display: inline-block; padding: 2px 9px; border-radius: 9999px;
-      font-size: 8.5px; font-weight: 800; text-transform: uppercase;
-      letter-spacing: 0.04em;
-    }
-    .billing-badge.upfront { background: var(--brand-soft); color: var(--brand); border: 1px solid var(--brand-border); }
-    .billing-badge.recurring { background: var(--accent-soft); color: var(--accent); border: 1px solid var(--accent-border); }
+    .price-ledger-sep { color: var(--ink-300); margin: 0 2mm; }
+    .price-ledger-em { color: var(--accent); font-weight: 500; }
 
-    /* ── Financial Summary ────────────────────────────────── */
-    .financial-summary-card {
-      background: #ffffff;
-      border: 1px solid var(--brand-border);
-      border-radius: 16px; overflow: hidden;
-      margin-bottom: 26px;
-      page-break-inside: avoid !important; break-inside: avoid !important;
-      box-shadow: 0 8px 24px -10px rgba(78, 18, 212, 0.22);
+    .price-adjustments {
+      border: 0.5pt solid var(--rule); border-radius: 3px;
+      padding: 2mm 5mm; margin-bottom: 8mm;
     }
-    .financial-summary-header {
-      background: linear-gradient(135deg, var(--brand-softer) 0%, var(--accent-soft) 100%);
-      padding: 14px 22px;
-      display: flex; justify-content: space-between; align-items: center;
-      border-bottom: 1px solid var(--brand-border);
+    .adj-row {
+      display: flex; justify-content: space-between;
+      padding: 2.5mm 0; border-bottom: 0.5pt solid var(--rule);
+      font-size: 9.5pt; color: var(--ink-700);
     }
-    .summary-kicker {
-      font-size: 8.5px; font-weight: 800; letter-spacing: 0.16em;
-      text-transform: uppercase; color: var(--accent); margin-bottom: 3px;
-    }
-    .summary-card-title { font-size: 14px; font-weight: 800; color: var(--slate900); letter-spacing: -0.01em; }
-    .currency-tag {
-      font-size: 10px; font-weight: 700; color: var(--slate600);
-      background: #ffffff; padding: 4px 11px; border-radius: 8px;
-      border: 1px solid var(--slate200);
-      font-family: 'JetBrains Mono', monospace;
-    }
-    .summary-table { width: 100%; border-collapse: collapse; }
-    .summary-table td { padding: 11px 22px; border-bottom: 1px solid var(--slate100); font-size: 11.5px; }
-    .summary-table tr:last-child td { border-bottom: none; }
-    .summary-label { font-weight: 600; color: var(--slate600); }
-    .summary-value { font-weight: 700; color: var(--slate900); font-family: 'JetBrains Mono', monospace; text-align: right; }
-    .text-rose { color: var(--rose) !important; }
+    .adj-row:last-child { border-bottom: none; }
+    .adj-row span:last-child { font-family: var(--font-mono); font-weight: 500; color: var(--ink-900); }
+    .adj-neg span { color: var(--excl) !important; }
 
-    .grand-total-panel {
-      display: flex; justify-content: space-between; align-items: center;
-      padding: 16px 22px; color: #ffffff;
-      background:
-        radial-gradient(120% 180% at 100% 0%, rgba(200,80,250,0.35) 0%, rgba(200,80,250,0) 55%),
-        linear-gradient(120deg, #4e12d4 0%, #6d28d9 55%, #7b2ff7 100%);
+    .price-milestones { margin-bottom: 7mm; }
+    .milestone-row {
+      display: flex; align-items: baseline; gap: 4mm;
+      padding: 2.5mm 0; border-bottom: 0.5pt solid var(--rule);
     }
-    .grand-total-label {
-      font-size: 12.5px; font-weight: 800; color: #ffffff; letter-spacing: -0.01em;
+    .milestone-row:last-child { border-bottom: none; }
+    .milestone-pct {
+      font-family: var(--font-mono); font-size: 11pt; font-weight: 500;
+      color: var(--accent); width: 14mm; flex-shrink: 0;
     }
-    .grand-total-sub { font-size: 9px; color: #d8ccff; margin-top: 3px; letter-spacing: 0.02em; }
-    .grand-total-amount {
-      font-size: 22px; font-weight: 900; color: #ffffff;
-      font-family: 'JetBrains Mono', monospace; letter-spacing: -0.02em;
+    .milestone-label { font-size: 10pt; color: var(--ink-700); }
+    .price-recurring {
+      background: var(--accent-tint); border-radius: 3px;
+      padding: 4mm 5mm; font-size: 9pt; color: var(--ink-700); margin-bottom: 7mm;
     }
-    .recurring-panel {
-      display: flex; justify-content: space-between; align-items: center;
-      padding: 11px 22px;
-      background: var(--accent-soft);
-      border-top: 1px solid var(--accent-border);
-    }
-    .recurring-left { display: flex; align-items: center; gap: 8px; }
-    .recurring-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
-    .recurring-text { font-size: 11px; font-weight: 700; color: var(--accent); }
-    .recurring-amount {
-      font-size: 13px; font-weight: 800; color: var(--accent);
-      font-family: 'JetBrains Mono', monospace;
-    }
-    .recurring-per { font-size: 10px; font-weight: 600; }
-
-    /* ── Three Info Cards ─────────────────────────────────── */
-    .three-cards-grid {
-      display: grid; grid-template-columns: repeat(3, 1fr); gap: 13px;
-      margin-bottom: 26px;
-      page-break-inside: avoid !important; break-inside: avoid !important;
-    }
-    .info-card { border-radius: 13px; padding: 16px 15px; }
-    .info-card.rose { background: linear-gradient(180deg, #fff5f6, #fff1f2); border: 1px solid #fecdd3; }
-    .info-card.indigo { background: linear-gradient(180deg, #f3fdf6, #f0fdf4); border: 1px solid #bbf7d0; }
-    .info-card.purple { background: linear-gradient(180deg, var(--paper-tint), var(--brand-soft)); border: 1px solid var(--brand-border); }
-    .card-heading {
-      font-size: 9.5px; font-weight: 800; letter-spacing: 0.1em;
-      text-transform: uppercase; margin-bottom: 11px; padding-bottom: 9px;
-      display: flex; align-items: center; gap: 7px;
-    }
-    .card-heading.rose { color: var(--rose); border-bottom: 1px solid #fecdd3; }
-    .card-heading.indigo { color: #16a34a; border-bottom: 1px solid #bbf7d0; }
-    .card-heading.purple { color: var(--brand); border-bottom: 1px solid var(--brand-border); }
-    .card-heading .head-glyph {
-      display: inline-flex; align-items: center; justify-content: center;
-      width: 16px; height: 16px; border-radius: 5px; font-size: 9px;
-    }
-    .card-heading.rose .head-glyph { background: rgba(225,29,72,0.12); }
-    .card-heading.indigo .head-glyph { background: rgba(22,163,74,0.12); }
-    .card-heading.purple .head-glyph { background: var(--brand-soft); }
-    .info-list { list-style: none; }
-    .info-list-item {
-      display: flex; align-items: flex-start; gap: 7px;
-      font-size: 10.5px; color: var(--slate700);
-      margin-bottom: 8px; line-height: 1.45;
-    }
-    .info-list-item:last-child { margin-bottom: 0; }
-    .info-icon { font-weight: 800; flex-shrink: 0; margin-top: 0.5px; }
-    .info-icon.red { color: var(--rose); }
-    .info-icon.indigo { color: #16a34a; }
-    .info-icon.purple { color: var(--brand); }
-    .milestone-badge {
-      display: inline-block; font-size: 8.5px; font-weight: 800;
-      background: #ffffff; color: var(--brand); border: 1px solid var(--brand-border);
-      padding: 1px 7px; border-radius: 5px; margin-left: 5px;
-      font-family: 'JetBrains Mono', monospace;
+    .price-note {
+      font-size: 8.5pt; color: var(--ink-500); line-height: 1.55;
+      max-width: 155mm; padding-top: 5mm;
+      border-top: 0.5pt solid var(--rule);
     }
 
-    /* ── Authorization ────────────────────────────────────── */
-    .auth-card {
-      position: relative; overflow: hidden;
-      background: linear-gradient(135deg, #0b0a1f 0%, #1a1145 100%);
-      color: #ffffff; border-radius: 16px;
-      padding: 20px 26px;
-      display: flex; justify-content: space-between; align-items: flex-end; gap: 24px;
-      page-break-inside: avoid !important; break-inside: avoid !important;
+    /* ── Terms ── */
+    .terms-cols {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 10mm;
+      margin-bottom: 8mm;
     }
-    .auth-glow {
-      position: absolute; bottom: -50px; left: -30px;
-      width: 180px; height: 180px; border-radius: 50%;
-      background: radial-gradient(circle, rgba(78,18,212,0.4) 0%, rgba(78,18,212,0) 70%);
+    .terms-col-head {
+      font-family: var(--font-mono); font-size: 8pt; font-weight: 500;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      padding-bottom: 2.5mm; margin-bottom: 3mm;
     }
-    .auth-left { position: relative; max-width: 320px; }
-    .auth-title {
-      font-size: 9.5px; font-weight: 800; letter-spacing: 0.14em;
-      text-transform: uppercase; color: #c4b5fd;
-      margin-bottom: 8px; display: flex; align-items: center; gap: 6px;
+    .terms-col-head.excl { color: var(--excl); border-top: 0.5pt solid var(--excl); padding-top: 2.5mm; }
+    .terms-col-head.incl { color: var(--incl); border-top: 0.5pt solid var(--incl); padding-top: 2.5mm; }
+    .terms-item {
+      display: flex; gap: 2.5mm; align-items: baseline;
+      font-size: 8.25pt; color: var(--ink-700); line-height: 1.3;
+      padding: 0.35mm 0;
     }
-    .auth-desc { font-size: 10.5px; color: #cbd5e1; line-height: 1.55; }
-    .auth-desc strong { color: #ffffff; font-weight: 700; }
-    .auth-right { position: relative; }
-    .sig-container { text-align: center; }
-    .sig-img { height: 46px; width: auto; object-fit: contain; margin-bottom: 4px; filter: brightness(0) invert(1); opacity: 0.92; }
-    .sig-line { width: 180px; border-top: 1.5px solid rgba(255,255,255,0.55); padding-top: 7px; }
-    .sig-label {
-      font-size: 10px; font-weight: 800; text-transform: uppercase;
-      letter-spacing: 0.06em;
-      background: linear-gradient(90deg, #d8b4fe, #f0abfc);
-      -webkit-background-clip: text; background-clip: text;
-      -webkit-text-fill-color: transparent;
-    }
-    .sig-company-name { font-size: 10px; color: #a5b4cf; margin-top: 1px; }
+    .terms-mark { font-family: var(--font-mono); font-weight: 600; flex-shrink: 0; }
+    .terms-mark.excl { color: var(--excl); }
+    .terms-mark.incl { color: var(--incl); }
 
-    /* ── Thank-you strip ──────────────────────────────────── */
-    .thankyou-strip {
-      text-align: center; margin-top: 20px;
-      font-size: 10px; color: var(--slate400); letter-spacing: 0.02em;
+    /* ── Authorization (foot of terms) ── */
+    .auth {
+      background: linear-gradient(180deg, var(--accent-deep) 0%, #160C36 100%);
+      color: #fff; border-radius: 3px;
+      padding: 6mm 8mm;
+      display: flex; justify-content: space-between; align-items: flex-end; gap: 12mm;
     }
-    .thankyou-strip strong { color: var(--brand); font-weight: 700; }
+    .auth-left { max-width: 95mm; }
+    .auth-desc { font-size: 8.5pt; color: #C9BFF2; line-height: 1.5; }
+    .auth-desc strong { color: #fff; }
+    .auth-sig { height: 11mm; width: auto; object-fit: contain; filter: brightness(0) invert(1); opacity: 0.92; display: block; margin: 0 auto 1mm; }
+    .auth-sig-gap { height: 11mm; }
+    .auth-sig-line { border-top: 0.5pt solid rgba(255,255,255,0.5); padding-top: 2mm; width: 55mm; text-align: center; }
+    .auth-sig-label {
+      font-family: var(--font-mono); font-size: 8pt; font-weight: 500;
+      letter-spacing: 0.06em; text-transform: uppercase; color: #C9BFF2;
+    }
+    .auth-sig-org { font-size: 8.5pt; color: #A99FD6; margin-top: 0.5mm; }
   </style>
 </head>
 <body>
-  <div class="container">
-
-    <!-- Masthead -->
-    <div class="masthead">
-      <div class="brand-lockup">
-        <img src="${esc(ctx.logoSrc)}" alt="Company Logo" class="logo-img" />
-        <div class="brand-name-block">
-          <span class="brand-name">${esc(companyName)}</span>
-          <span class="brand-tag">Digital Solutions</span>
-        </div>
-      </div>
-      <div class="meta-box">
-        <div class="official-badge"><span class="badge-dot"></span>Official Quotation</div>
-        <div class="qtn-number">#${esc(quotationNo)}</div>
-        <div class="meta-dates">Issued <strong>${esc(issueDate)}</strong></div>
-        <div class="meta-dates">Valid Until <strong class="valid-until">${esc(validUntilStr)}</strong></div>
-      </div>
-    </div>
-
-    <!-- Hero -->
-    <div class="hero">
-      <div class="hero-glow"></div>
-      <div class="hero-top">
-        <div class="hero-left">
-          <span class="hero-kicker">Proposal Package</span>
-          <h1 class="hero-title">${esc(proposalTitle)}</h1>
-          <div class="hero-underline"></div>
-        </div>
-        <div class="client-card">
-          <div class="client-label">Prepared For</div>
-          <div class="client-name">${esc(clientName)}</div>
-          ${clientCompany ? `<div class="client-company">${esc(clientCompany)}</div>` : ''}
-          ${(clientEmail || clientPhone) ? `<div class="client-contact">
-            ${clientEmail ? `<div>${esc(clientEmail)}</div>` : ''}
-            ${clientPhone ? `<div>${esc(clientPhone)}</div>` : ''}
-          </div>` : ''}
-        </div>
-      </div>
-      <div class="hero-footer">
-        <div class="hero-contact-strip">${heroContactBits || `<span class="hero-contact-bit">${esc(companyName)}</span>`}</div>
-        <div class="hero-prepared-by">Prepared by <strong>${esc(companyName)}</strong></div>
-      </div>
-    </div>
-
-    <!-- Executive Overview -->
-    ${globalOverview ? `
-    <div class="overview-card">
-      <div class="overview-title"><span class="quote-mark">&ldquo;</span>Executive Summary &amp; Overview</div>
-      <div class="overview-text">${esc(globalOverview)}</div>
-    </div>` : ''}
-
-    <!-- Service Sections -->
-    <div class="sections-container">
-      ${modulesHtml}
-    </div>
-
-    <!-- Financial Summary -->
-    ${investmentSummaryHtml}
-
-    <!-- Three Info Cards -->
-    <div class="three-cards-grid">
-      <div class="info-card rose">
-        <div class="card-heading rose"><span class="head-glyph">✕</span>Not Included in Price</div>
-        <ul class="info-list">${notIncludedHtml}</ul>
-      </div>
-      <div class="info-card indigo">
-        <div class="card-heading indigo"><span class="head-glyph">✓</span>Client Needs to Provide</div>
-        <ul class="info-list">${clientReqHtml}</ul>
-      </div>
-      <div class="info-card purple">
-        <div class="card-heading purple"><span class="head-glyph">◆</span>Payment Terms &amp; Milestones</div>
-        <ul class="info-list">${paymentMilestonesHtml}</ul>
-      </div>
-    </div>
-
-    <!-- Authorization & Signature -->
-    <div class="auth-card">
-      <div class="auth-glow"></div>
-      <div class="auth-left">
-        <div class="auth-title">🛡 Authorization &amp; Validity</div>
-        <div class="auth-desc">
-          This quotation is valid until <strong>${esc(validUntilStr)}</strong>. Upon acceptance, formal project execution will commence as per the agreed milestone schedule.
-        </div>
-      </div>
-      <div class="auth-right">
-        <div class="sig-container">
-          ${ctx.signatureSrc ? `<img src="${esc(ctx.signatureSrc)}" alt="Authorized Signature" class="sig-img" />` : '<div style="height: 46px;"></div>'}
-          <div class="sig-line">
-            <div class="sig-label">Authorized Signature</div>
-            <div class="sig-company-name">${esc(companyName)}</div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div class="thankyou-strip">
-      Thank you for the opportunity to partner with you. — <strong>${esc(companyName)}</strong>
-    </div>
-
-  </div>
+  ${ledgerRail}
+  ${coverHtml}
+  ${contentsHtml}
+  ${summaryHtml}
+  ${sectionsHtml}
+  ${pricingHtml}
+  ${termsHtml}
 </body>
 </html>`;
+}
+
+/* ── Validation gate ──────────────────────────────────────────────────────── */
+
+/** Blocks a render when client-facing identity data is missing or is an obvious
+ *  placeholder. Throws AppError(422) with a human-readable list of problems so
+ *  the admin fixes the data instead of shipping garbage to a client. */
+export function assertRenderable(q: Record<string, any>): void {
+    const problems: string[] = [];
+    const client = q.client || {};
+    const details = q.details || {};
+
+    const email = String(client.email || '').trim();
+    const contact = String(client.contactName || '').trim();
+    const company = String(client.companyName || '').trim();
+    const number = String(q.quotationNumber || '').trim();
+    const title = String(details.title || '').trim();
+
+    if (!number) problems.push('quotation number is empty');
+    if (!contact && !company) problems.push('client name is empty');
+    if (!email) problems.push('client email is empty');
+    if (!title) problems.push('project title is empty');
+
+    for (const [field, value] of Object.entries({ email, contact, company, title })) {
+        if (value && PLACEHOLDER_BLOCK_RE.test(value)) {
+            problems.push(`${field} still contains placeholder text ("${value}")`);
+        }
+    }
+
+    if (details.date && details.validUntil) {
+        const issued = new Date(details.date).getTime();
+        const valid = new Date(details.validUntil).getTime();
+        if (Number.isFinite(issued) && Number.isFinite(valid) && valid <= issued) {
+            problems.push('"valid until" date is not after the issue date');
+        }
+    }
+
+    if (problems.length > 0) {
+        throw new AppError(
+            `Quotation is not ready to export — please fix: ${problems.join('; ')}.`,
+            422,
+        );
+    }
+}
+
+const PT_PER_MM = 2.834645669;
+
+/** Stamps a subtle footer (wordmark + "n / total") onto every page except the
+ *  cover, using pdf-lib's built-in Courier so no font embedding is needed. Falls
+ *  back to the unstamped buffer rather than failing the whole export. */
+export async function stampFooters(buf: Buffer, wordmark: string): Promise<Buffer> {
+    try {
+        const doc = await PDFDocument.load(buf);
+        const font = await doc.embedFont(StandardFonts.Courier);
+        const pages = doc.getPages();
+        const total = pages.length;
+        // Courier is WinAnsi-only; keep the wordmark ASCII-safe.
+        const mark = (wordmark.replace(/[^\x20-\x7E]/g, '').trim() || 'WebBriks').toUpperCase();
+        const y = 9 * PT_PER_MM;
+        const size = 7;
+        const gray = rgb(0.6, 0.63, 0.69);
+        const ink = rgb(0.17, 0.18, 0.26);
+
+        for (let i = 1; i < pages.length; i++) {
+            const p = pages[i]!;
+            const { width } = p.getSize();
+            p.drawText(mark, { x: 16 * PT_PER_MM, y, size, font, color: gray });
+
+            const cur = String(i + 1);
+            const rest = ` / ${total}`;
+            const curW = font.widthOfTextAtSize(cur, size);
+            const restW = font.widthOfTextAtSize(rest, size);
+            const rightX = width - 16 * PT_PER_MM - curW - restW;
+            p.drawText(cur, { x: rightX, y, size, font, color: ink });
+            p.drawText(rest, { x: rightX + curW, y, size, font, color: gray });
+        }
+
+        return Buffer.from(await doc.save());
+    } catch (e) {
+        logger.warn({ err: e }, 'quotation.footer_stamp_failed');
+        return buf;
+    }
 }
 
 let browserSingleton: Awaited<ReturnType<typeof puppeteer.launch>> | null = null;
@@ -1315,43 +1447,42 @@ export class QuotationPuppeteerPdfService {
             .lean();
         if (!q) throw new AppError('Quotation not found', 404);
 
+        // Data hygiene gate — never ship placeholder identity data to a client.
+        assertRenderable(q as Record<string, any>);
+
         const signatureUrl = process.env.COMPANY_SIGNATURE_URL || DEFAULT_SIGNATURE;
         const companyLogoRemote = ((q as any).company?.logo as string) || DEFAULT_LOGO;
 
-        let logoSrc = (await fetchImageAsDataUrl(companyLogoRemote)) || (await fetchImageAsDataUrl(DEFAULT_LOGO));
+        let logoSrc =
+            (await fetchImageAsDataUrl(companyLogoRemote)) || (await fetchImageAsDataUrl(DEFAULT_LOGO));
         if (!logoSrc) logoSrc = FALLBACK_PIXEL_PNG;
 
-        let signatureSrc = (await fetchImageAsDataUrl(signatureUrl)) || '';
+        const signatureSrc = (await fetchImageAsDataUrl(signatureUrl)) || '';
+        const fontCss = await buildEmbeddedFontCss();
+        const companyName = String((q as any).company?.name || 'WebBriks').trim();
 
-        const html = buildPrintHtml(q as Record<string, any>, {
-            logoSrc,
-            signatureSrc,
-        });
+        const html = buildPrintHtml(q as Record<string, any>, { logoSrc, signatureSrc, fontCss });
 
         const browser = await getBrowserInstance();
         const page = await browser.newPage();
         try {
             await page.setContent(html, { waitUntil: 'load' });
+            // Ensure the embedded faces are parsed before laying out for print.
+            await page.evaluateHandle('document.fonts.ready');
             await page.emulateMediaType('print');
 
-            const pdf = await page.pdf({
+            // Header/footer are NOT delegated to Chrome: its templates render in
+            // every page's margin, including the full-bleed cover, and cannot be
+            // suppressed per page. Instead we render clean pages and stamp the
+            // footer with pdf-lib afterwards, skipping the cover.
+            const rawPdf = await page.pdf({
                 format: 'A4',
                 printBackground: true,
-                displayHeaderFooter: true,
-                headerTemplate: '<span></span>',
-                footerTemplate: `
-                    <div style="font-family: 'Inter', Arial, sans-serif; font-size: 8.5px; color: #64748b; width: 100%; padding: 0 10mm; display: flex; justify-content: space-between; align-items: center; box-sizing: border-box; border-top: 1px solid #e2e8f0; padding-top: 5px;">
-                        <div>This is a computer-generated quotation document. No signature required.</div>
-                        <div style="font-weight: 600;">Page <span class="pageNumber"></span> of <span class="totalPages"></span></div>
-                    </div>
-                `,
-                margin: {
-                    top: '12mm',
-                    bottom: '22mm',
-                    left: '10mm',
-                    right: '10mm',
-                },
+                preferCSSPageSize: true,
+                displayHeaderFooter: false,
             });
+
+            const pdf = await stampFooters(Buffer.from(rawPdf), companyName);
 
             const qn = String((q as any).quotationNumber || '').trim();
             const title = String((q as any).details?.title || '').trim();
@@ -1361,14 +1492,8 @@ export class QuotationPuppeteerPdfService {
             return { buffer: Buffer.from(pdf), filename };
         } catch (e: unknown) {
             const err = e as { message?: string };
-            logger.error(
-                { err: e, quotationId },
-                'quotation.puppeteer_pdf_failed',
-            );
-            throw new AppError(
-                err?.message || 'Failed to generate PDF with Puppeteer',
-                500,
-            );
+            logger.error({ err: e, quotationId }, 'quotation.puppeteer_pdf_failed');
+            throw new AppError(err?.message || 'Failed to generate PDF with Puppeteer', 500);
         } finally {
             await page.close().catch(() => {});
         }
