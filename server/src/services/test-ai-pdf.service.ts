@@ -1,11 +1,29 @@
 import axios from 'axios';
 import puppeteer from 'puppeteer';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import envConfig from '../config/env.config.js';
 import { AppError } from '../utils/AppError.js';
 import { logger } from '../lib/logger.js';
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 const DEFAULT_LOGO =
     'https://res.cloudinary.com/dny7zfbg9/image/upload/v1777996436/q83auvamwih8u8ftw5zu.png';
+
+// Read the local logo as a fallback base64 string
+let LOCAL_LOGO_BASE64 = '';
+try {
+    const localLogoPath = path.join(__dirname, '../assets/logo.png');
+    if (fs.existsSync(localLogoPath)) {
+        const fileBuf = fs.readFileSync(localLogoPath);
+        LOCAL_LOGO_BASE64 = `data:image/png;base64,${fileBuf.toString('base64')}`;
+    }
+} catch (e) {
+    logger.error('Failed to load local logo.png', e);
+}
 
 /** Tiny transparent PNG — last-resort if the remote logo fails to fetch. */
 const FALLBACK_PIXEL_PNG =
@@ -356,7 +374,7 @@ export class TestAiPdfService {
         if (text.length > 20_000) throw new AppError('Text is too long (max 20,000 characters)', 400);
 
         const doc = await structureWithOpenAI(text);
-        const logoSrc = (await fetchImageAsDataUrl(DEFAULT_LOGO)) || FALLBACK_PIXEL_PNG;
+        const logoSrc = LOCAL_LOGO_BASE64 || (await fetchImageAsDataUrl(DEFAULT_LOGO)) || FALLBACK_PIXEL_PNG;
         const html = buildHtml(doc, logoSrc);
 
         let browser: Awaited<ReturnType<typeof puppeteer.launch>> | undefined;

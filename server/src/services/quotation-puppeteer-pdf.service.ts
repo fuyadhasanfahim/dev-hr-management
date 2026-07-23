@@ -1,10 +1,16 @@
 import { format } from 'date-fns';
 import puppeteer from 'puppeteer';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import QuotationModel from '../models/quotation.model.js';
 import { AppError } from '../utils/AppError.js';
 import { logger } from '../lib/logger.js';
 import { isUpfrontBillingCycle } from '../types/quotation.type.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 /* ────────────────────────────────────────────────────────────────────────────
  * WebBriks Quotation PDF — "Scope Ledger" edition.
@@ -131,6 +137,18 @@ function isPlaceholderRow(text: string): boolean {
 
 const DEFAULT_LOGO =
     'https://res.cloudinary.com/dny7zfbg9/image/upload/v1777996436/q83auvamwih8u8ftw5zu.png';
+
+// Read the local logo as a fallback base64 string
+let LOCAL_LOGO_BASE64 = '';
+try {
+    const localLogoPath = path.join(__dirname, '../assets/logo.png');
+    if (fs.existsSync(localLogoPath)) {
+        const fileBuf = fs.readFileSync(localLogoPath);
+        LOCAL_LOGO_BASE64 = `data:image/png;base64,${fileBuf.toString('base64')}`;
+    }
+} catch (e) {
+    logger.error('Failed to load local logo.png', e);
+}
 
 const DEFAULT_SIGNATURE =
     'https://res.cloudinary.com/dny7zfbg9/image/upload/v1776961131/ouvycul8e7xskhrioca4.png';
@@ -1454,9 +1472,13 @@ export class QuotationPuppeteerPdfService {
         const signatureUrl = process.env.COMPANY_SIGNATURE_URL || DEFAULT_SIGNATURE;
         const companyLogoRemote = ((q as any).company?.logo as string) || DEFAULT_LOGO;
 
-        let logoSrc =
-            (await fetchImageAsDataUrl(companyLogoRemote)) || (await fetchImageAsDataUrl(DEFAULT_LOGO));
-        if (!logoSrc) logoSrc = FALLBACK_PIXEL_PNG;
+        let logoSrc = null;
+        if (companyLogoRemote !== DEFAULT_LOGO) {
+            logoSrc = await fetchImageAsDataUrl(companyLogoRemote);
+        }
+        if (!logoSrc) {
+            logoSrc = LOCAL_LOGO_BASE64 || (await fetchImageAsDataUrl(DEFAULT_LOGO)) || FALLBACK_PIXEL_PNG;
+        }
 
         const signatureSrc = (await fetchImageAsDataUrl(signatureUrl)) || '';
         const fontCss = await buildEmbeddedFontCss();
