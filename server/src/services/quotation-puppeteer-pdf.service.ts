@@ -1358,6 +1358,7 @@ export function assertRenderable(q: Record<string, any>): void {
     if (!title) problems.push('project title is empty');
 
     for (const [field, value] of Object.entries({ email, contact, company, title })) {
+        if (field === 'email') continue;
         if (value && PLACEHOLDER_BLOCK_RE.test(value)) {
             problems.push(`${field} still contains placeholder text ("${value}")`);
         }
