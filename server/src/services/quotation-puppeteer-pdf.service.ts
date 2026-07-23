@@ -141,10 +141,17 @@ const DEFAULT_LOGO =
 // Read the local logo as a fallback base64 string
 let LOCAL_LOGO_BASE64 = '';
 try {
-    const localLogoPath = path.join(__dirname, '../assets/logo.png');
-    if (fs.existsSync(localLogoPath)) {
-        const fileBuf = fs.readFileSync(localLogoPath);
-        LOCAL_LOGO_BASE64 = `data:image/png;base64,${fileBuf.toString('base64')}`;
+    const pathsToTry = [
+        path.join(__dirname, '../assets/logo.png'),
+        path.join(process.cwd(), 'src/assets/logo.png'),
+        path.join(process.cwd(), 'server/src/assets/logo.png'),
+    ];
+    for (const p of pathsToTry) {
+        if (fs.existsSync(p)) {
+            const fileBuf = fs.readFileSync(p);
+            LOCAL_LOGO_BASE64 = `data:image/png;base64,${fileBuf.toString('base64')}`;
+            break;
+        }
     }
 } catch (e) {
     logger.error({ err: e }, 'Failed to load local logo.png');
