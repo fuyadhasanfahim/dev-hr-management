@@ -562,8 +562,6 @@ export function buildPrintHtml(
     );
     const discountVal = Number(totals.discountAmount || 0);
     const taxVal = Number(totals.taxAmount || 0);
-    const perDeliverable =
-        totalDeliverables > 0 && grandTotalVal > 0 ? grandTotalVal / totalDeliverables : 0;
 
     const notIncludedItems = (Array.isArray(q.notIncluded) ? q.notIncluded : [])
         .map((s: any) => normalizeText(s))
