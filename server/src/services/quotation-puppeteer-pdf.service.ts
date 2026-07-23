@@ -618,7 +618,9 @@ export function buildPrintHtml(
     const coverHtml = `
       <section class="cover">
         <div class="cover-top">
-          <img src="${esc(ctx.logoSrc)}" alt="${esc(companyName)}" class="cover-logo" />
+          <div class="cover-logo-plate">
+            <img src="${esc(ctx.logoSrc)}" alt="${esc(companyName)}" class="cover-logo" />
+          </div>
           <div class="cover-eyebrow">Official Quotation</div>
         </div>
         <div class="cover-number">#${esc(quotationNo)}</div>
@@ -693,11 +695,20 @@ export function buildPrintHtml(
       </section>`;
 
     /* ── Page: executive summary ─────────────────────────────────────────── */
-    const summaryLead = overview
+    const summaryLeadText = overview
         ? overview
         : `This quotation covers ${totalDeliverables} deliverables across ${totalModules} modules${
               totalSections > 1 ? ` in ${totalSections} sections` : ''
           }, from design through delivery and handover.`;
+    // Preserve authored paragraph breaks: `normalizeText` keeps newlines, so any
+    // run of them marks a paragraph boundary. Each paragraph gets its own <p> so
+    // the summary no longer collapses into one wall of text.
+    const summaryLeadHtml = summaryLeadText
+        .split(/\n+/)
+        .map((p) => p.trim())
+        .filter(Boolean)
+        .map((p) => `<p>${esc(p)}</p>`)
+        .join('');
 
     const timelineHtml = milestonesToUse.length
         ? `<div class="timeline">
@@ -720,7 +731,7 @@ export function buildPrintHtml(
           <div class="page-eyebrow">Executive Summary</div>
           <h2 class="page-title">${esc(proposalTitle)}</h2>
         </div>
-        <p class="summary-lead">${esc(summaryLead)}</p>
+        <div class="summary-lead">${summaryLeadHtml}</div>
 
         <div class="stat-row">
           <div class="stat-cell">
@@ -1006,9 +1017,19 @@ export function buildPrintHtml(
       overflow: hidden;
     }
     .cover-top {
-      display: flex; justify-content: space-between; align-items: flex-start;
+      display: flex; justify-content: space-between; align-items: center;
     }
-    .cover-logo { height: 12mm; width: auto; object-fit: contain; filter: brightness(0) invert(1); }
+    /* The mark is a full-colour raster lockup (purple badge + wordmark). On the
+       deep-violet ground it is set on a white plate rather than knocked out with
+       brightness(0) invert(1) — that filter flattens the whole PNG into a solid
+       white square and erases the WB monogram. */
+    .cover-logo-plate {
+      background: #FFFFFF;
+      border-radius: 3mm;
+      padding: 2.5mm 4mm;
+      display: inline-flex; align-items: center;
+    }
+    .cover-logo { height: 9mm; width: auto; object-fit: contain; display: block; }
     .cover-eyebrow {
       font-family: var(--font-mono);
       font-size: 7.5pt; font-weight: 500; letter-spacing: 0.18em;
@@ -1122,10 +1143,9 @@ export function buildPrintHtml(
     }
 
     /* ── Executive summary ── */
-    .summary-lead {
-      font-size: 11pt; line-height: 1.6; color: var(--ink-700);
-      max-width: 155mm; margin-bottom: 10mm;
-    }
+    .summary-lead { max-width: 155mm; margin-bottom: 10mm; }
+    .summary-lead p { font-size: 11pt; line-height: 1.6; color: var(--ink-700); }
+    .summary-lead p + p { margin-top: 4mm; }
     .stat-row { display: flex; gap: 4mm; margin-bottom: 10mm; }
     .stat-cell {
       flex: 1; border: 0.5pt solid var(--rule-strong); border-radius: 3px;
