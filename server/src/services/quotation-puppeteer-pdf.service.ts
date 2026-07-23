@@ -840,14 +840,6 @@ export function buildPrintHtml(
             <span>${totalDeliverables} deliverables</span>
             <span class="price-ledger-sep">·</span>
             <span>${totalModules} modules</span>
-            ${
-                perDeliverable > 0
-                    ? `<span class="price-ledger-sep">·</span><span class="price-ledger-em">${formatMoneyPdf(
-                          Math.round(perDeliverable),
-                          currency,
-                      )} per deliverable</span>`
-                    : ''
-            }
           </div>
         </div>
 
