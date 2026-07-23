@@ -44,10 +44,22 @@ export const auth = betterAuth({
         requireEmailVerification: true,
         async sendResetPassword(data) {
             try {
+                let resetPasswordUrl = data.url;
+                try {
+                    const parsedUrl = new URL(data.url);
+                    const token = parsedUrl.searchParams.get('token');
+                    if (token) {
+                        const baseUrl = envConfig.auth_app_url || envConfig.client_url;
+                        resetPasswordUrl = `${baseUrl}/reset-password?token=${token}`;
+                    }
+                } catch (e) {
+                    console.error('[Auth] Error formatting reset password URL:', e);
+                }
+
                 await emailService.sendResetPasswordEmail({
                     to: data.user.email,
                     userName: data.user.name || 'User',
-                    resetPasswordUrl: data.url,
+                    resetPasswordUrl,
                 });
             } catch (error) {
                 console.error(

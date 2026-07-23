@@ -70,7 +70,8 @@ const createInvitation = async (data: IInvitationCreate) => {
     });
 
     // Send email
-    const signupUrl = `${envConfig.client_url}/sign-up/${token}`;
+    const baseUrl = envConfig.auth_app_url || envConfig.client_url;
+    const signupUrl = `${baseUrl}/sign-up/${token}`;
     await emailService.sendInvitationEmail({
         to: data.email,
         designation: data.designation,
@@ -299,7 +300,8 @@ const resendInvitation = async (invitationId: string) => {
     await invitation.save();
 
     // Resend email
-    const signupUrl = `${envConfig.client_url}/sign-up/${invitation.token}`;
+    const baseUrl = envConfig.auth_app_url || envConfig.client_url;
+    const signupUrl = `${baseUrl}/sign-up/${invitation.token}`;
     await emailService.sendInvitationEmail({
         to: invitation.email,
         designation: invitation.designation,

@@ -52,6 +52,7 @@ const envConfig = {
 
     // client
     client_url: process.env.CLIENT_URL || 'http://localhost:3000',
+    auth_app_url: process.env.AUTH_APP_URL || process.env.CLIENT_URL || 'http://localhost:3000',
 
     // nodemailer
     smtp_user: process.env.SMTP_USER!,

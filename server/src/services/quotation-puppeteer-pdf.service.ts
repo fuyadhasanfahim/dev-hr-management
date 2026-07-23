@@ -12,6 +12,13 @@ const CATEGORY_LABELS: Record<string, string> = {
     'video-editing': 'Video Editing',
 };
 
+const CATEGORY_KICKERS: Record<string, string> = {
+    'web-development': 'Engineering & Product',
+    marketing: 'Growth & Creative',
+    'photo-editing': 'Visual Production',
+    'video-editing': 'Motion & Post-Production',
+};
+
 const BILLING_LABELS: Record<string, string> = {
     'one-time': 'One-Time',
     monthly: 'Monthly',
@@ -206,7 +213,7 @@ function renderGroupedScopeCards(nodes: ParsedFeatureNode[], currency: string): 
 
                 const routeHtml = child.route
                     ? `<div class="child-route-tag">
-                        <span class="route-icon">⚡</span>
+                        <span class="route-icon">↳</span>
                         <code>${esc(child.route)}</code>
                       </div>`
                     : '';
@@ -291,7 +298,7 @@ function renderDeliverablesScopeCards(nodes: ParsedFeatureNode[], currency: stri
     }).join('');
 }
 
-function buildPrintHtml(
+export function buildPrintHtml(
     q: Record<string, any>,
     ctx: {
         logoSrc: string;
@@ -318,6 +325,7 @@ function buildPrintHtml(
     const clientName = client.contactName || client.companyName || 'Valued Client';
     const clientCompany = client.companyName && client.contactName ? client.companyName : '';
     const clientEmail = client.email || '';
+    const clientPhone = client.phone || '';
     const proposalTitle = details?.title || 'Digital Agency Proposal';
     const globalOverview = String(q.overview || details?.overview || '').trim();
 
@@ -336,6 +344,9 @@ function buildPrintHtml(
     ];
 
     const companyName = q.company?.name || 'WebBriks';
+    const companyEmail = q.company?.email || '';
+    const companyPhone = q.company?.phone || '';
+    const companyWebsite = q.company?.website || '';
 
     // Sort services in standard rank order
     const SERVICE_RANK_ORDER: Record<string, number> = {
@@ -358,6 +369,7 @@ function buildPrintHtml(
     const modulesHtml = sortedServices.map((service, idx) => {
         const categoryKey = String(service?.category || '');
         const label = CATEGORY_LABELS[categoryKey] || String(service?.category || 'Service');
+        const kicker = CATEGORY_KICKERS[categoryKey] || 'Service Scope';
         const isWebDev = categoryKey === 'web-development';
         const isMarketing = categoryKey === 'marketing';
 
@@ -367,7 +379,7 @@ function buildPrintHtml(
         const scopeDescription = (rawScopeDesc && !isLorem && !isDuplicateOverview) ? rawScopeDesc : '';
 
         const rawItems = Array.isArray(service?.scopeItems)
-            ? service.scopeItems.map((x: any) => String(x || '').trim()).filter(Boolean)
+            ? service.scopeItems.map((x: any) => String(x || '').replace(/\s+$/, '')).filter(Boolean)
             : [];
 
         const parsedTree = parseScopeTree(rawItems);
@@ -401,7 +413,7 @@ function buildPrintHtml(
 
                 techHtml = `
                     <div class="tech-stack-card">
-                      <div class="card-section-title">Technology Stack</div>
+                      <div class="card-section-title"><span class="title-tick"></span>Technology Stack</div>
                       <table class="styled-table tech-table">
                         <tbody>${techRows}</tbody>
                       </table>
@@ -464,11 +476,11 @@ function buildPrintHtml(
         if (lineRows.length > 0) {
             pricingHtml = `
               <div class="pricing-card">
-                <div class="card-section-title">Pricing Breakdown</div>
+                <div class="card-section-title"><span class="title-tick"></span>Pricing Breakdown</div>
                 <table class="styled-table pricing-table">
                   <thead>
                     <tr>
-                      <th>Item & Description</th>
+                      <th>Item &amp; Description</th>
                       <th>Billing</th>
                       ${hasQty ? `<th class="num">Qty</th>` : ''}
                       ${hasUnitPrice ? `<th class="num">Unit Price</th>` : ''}
@@ -487,8 +499,11 @@ function buildPrintHtml(
         return `
           <div class="service-section">
             <div class="section-header">
-              <span class="section-badge">SECTION ${sectionNum}</span>
-              <h2 class="section-title">${esc(label)}</h2>
+              <div class="section-index">${sectionNum}</div>
+              <div class="section-heading-wrap">
+                <span class="section-kicker">${esc(kicker)}</span>
+                <h2 class="section-title">${esc(label)}</h2>
+              </div>
             </div>
             ${scopeDescription ? `<p class="section-description">${esc(scopeDescription)}</p>` : ''}
             ${scopeHtml}
@@ -503,39 +518,51 @@ function buildPrintHtml(
     const discountVal = Number(totals.discountAmount || 0);
     const taxVal = Number(totals.taxAmount || 0);
 
+    const summaryRows = `
+        <tr>
+          <td class="summary-label">One-Time Project Investment</td>
+          <td class="num summary-value">${formatMoneyPdf(subtotalVal, currency)}</td>
+        </tr>
+        ${discountVal > 0 ? `
+        <tr>
+          <td class="summary-label text-rose">Applied Discount</td>
+          <td class="num summary-value text-rose">− ${formatMoneyPdf(discountVal, currency)}</td>
+        </tr>` : ''}
+        ${taxVal > 0 ? `
+        <tr>
+          <td class="summary-label">Tax / VAT</td>
+          <td class="num summary-value">${formatMoneyPdf(taxVal, currency)}</td>
+        </tr>` : ''}`;
+
     const investmentSummaryHtml = `
       <div class="financial-summary-card">
         <div class="financial-summary-header">
-          <h3 class="summary-card-title">Financial Investment Summary</h3>
+          <div class="summary-header-left">
+            <div class="summary-kicker">Investment</div>
+            <h3 class="summary-card-title">Financial Summary</h3>
+          </div>
           <span class="currency-tag">${esc(currency)}</span>
         </div>
         <table class="summary-table">
           <tbody>
-            <tr>
-              <td class="summary-label">One-Time Project Investment</td>
-              <td class="num summary-value">${formatMoneyPdf(subtotalVal, currency)}</td>
-            </tr>
-            ${discountVal > 0 ? `
-            <tr>
-              <td class="summary-label text-rose">Applied Discount</td>
-              <td class="num summary-value text-rose">− ${formatMoneyPdf(discountVal, currency)}</td>
-            </tr>` : ''}
-            ${taxVal > 0 ? `
-            <tr>
-              <td class="summary-label">Tax / VAT</td>
-              <td class="num summary-value">${formatMoneyPdf(taxVal, currency)}</td>
-            </tr>` : ''}
-            <tr class="grand-total-row">
-              <td class="summary-label grand-label">Total Initial Investment</td>
-              <td class="num summary-value grand-value">${formatMoneyPdf(grandTotalVal, currency)}</td>
-            </tr>
-            ${overallRecurringMonthly > 0 ? `
-            <tr class="recurring-row">
-              <td class="summary-label recurring-label">Recurring Monthly Costs</td>
-              <td class="num summary-value recurring-value">${formatMoneyPdf(overallRecurringMonthly, currency)} / mo</td>
-            </tr>` : ''}
+            ${summaryRows}
           </tbody>
         </table>
+        <div class="grand-total-panel">
+          <div class="grand-total-left">
+            <div class="grand-total-label">Total Initial Investment</div>
+            <div class="grand-total-sub">One-time · due per milestone schedule</div>
+          </div>
+          <div class="grand-total-amount">${formatMoneyPdf(grandTotalVal, currency)}</div>
+        </div>
+        ${overallRecurringMonthly > 0 ? `
+        <div class="recurring-panel">
+          <div class="recurring-left">
+            <span class="recurring-dot"></span>
+            <span class="recurring-text">Recurring Monthly Costs</span>
+          </div>
+          <div class="recurring-amount">${formatMoneyPdf(overallRecurringMonthly, currency)} <span class="recurring-per">/ mo</span></div>
+        </div>` : ''}
       </div>`;
 
     const notIncludedHtml = notIncludedItems.map((item: string) => `
@@ -566,28 +593,45 @@ function buildPrintHtml(
           </span>
         </li>`).join('');
 
+    // Company contact line for the hero footer strip.
+    const heroContactBits = [companyEmail, companyPhone, companyWebsite]
+        .filter(Boolean)
+        .map((v) => `<span class="hero-contact-bit">${esc(v)}</span>`)
+        .join('<span class="hero-contact-sep">•</span>');
+
     return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <title>Quotation #${esc(quotationNo)} - ${esc(proposalTitle)}</title>
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
     :root {
-      --primary: #4e12d4;
-      --primary-light: rgba(78, 18, 212, 0.05);
-      --primary-border: rgba(78, 18, 212, 0.18);
+      --brand: #4e12d4;
+      --brand-2: #7b2ff7;
       --accent: #c850fa;
+      --brand-soft: rgba(78, 18, 212, 0.06);
+      --brand-softer: rgba(78, 18, 212, 0.035);
+      --brand-border: rgba(78, 18, 212, 0.16);
+      --accent-soft: rgba(200, 80, 250, 0.10);
+      --accent-border: rgba(200, 80, 250, 0.22);
+      --grad: linear-gradient(120deg, #4e12d4 0%, #7b2ff7 52%, #c850fa 100%);
+
+      --ink: #0b0a1f;
       --slate900: #0f172a;
       --slate800: #1e293b;
       --slate700: #334155;
       --slate600: #475569;
       --slate500: #64748b;
       --slate400: #94a3b8;
+      --slate300: #cbd5e1;
       --slate200: #e2e8f0;
       --slate100: #f1f5f9;
       --slate50: #f8fafc;
+      --paper-tint: #fbfaff;
+      --rose: #e11d48;
+      --emerald: #059669;
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -599,687 +643,632 @@ function buildPrintHtml(
       font-size: 11px;
       line-height: 1.5;
       -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+      -webkit-font-smoothing: antialiased;
     }
 
-    .container {
-      width: 100%;
-      padding: 0;
-    }
+    .container { width: 100%; padding: 0; }
 
-    /* First Page Cover Header */
-    .cover-header {
+    .mono { font-family: 'JetBrains Mono', monospace; }
+
+    /* ── Masthead ─────────────────────────────────────────── */
+    .masthead {
       display: flex;
       justify-content: space-between;
       align-items: flex-start;
-      padding-bottom: 20px;
-      border-bottom: 2px solid var(--slate100);
-      margin-bottom: 24px;
+      padding-bottom: 16px;
+      margin-bottom: 20px;
+      position: relative;
     }
-    .logo-img {
-      height: 40px;
-      width: auto;
-      object-fit: contain;
+    .masthead::after {
+      content: '';
+      position: absolute;
+      left: 0; right: 0; bottom: 0;
+      height: 2px;
+      background: var(--grad);
+      border-radius: 2px;
     }
-    .meta-box {
-      text-align: right;
+    .brand-lockup { display: flex; align-items: center; gap: 12px; }
+    .logo-img { height: 42px; width: auto; object-fit: contain; }
+    .brand-name-block { display: flex; flex-direction: column; }
+    .brand-name {
+      font-size: 14px; font-weight: 800; color: var(--slate900);
+      letter-spacing: -0.01em; line-height: 1.1;
     }
+    .brand-tag {
+      font-size: 8.5px; font-weight: 700; letter-spacing: 0.16em;
+      text-transform: uppercase; color: var(--slate400); margin-top: 2px;
+    }
+    .meta-box { text-align: right; }
     .official-badge {
-      display: inline-block;
-      font-size: 9px;
-      font-weight: 800;
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
-      color: var(--primary);
-      background: var(--primary-light);
-      border: 1px solid var(--primary-border);
-      padding: 3px 10px;
-      border-radius: 9999px;
-      margin-bottom: 6px;
+      display: inline-flex; align-items: center; gap: 5px;
+      font-size: 8.5px; font-weight: 800; letter-spacing: 0.14em;
+      text-transform: uppercase; color: var(--brand);
+      background: var(--brand-soft); border: 1px solid var(--brand-border);
+      padding: 3px 10px; border-radius: 9999px; margin-bottom: 7px;
     }
+    .badge-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--grad); }
     .qtn-number {
-      font-size: 18px;
-      font-weight: 800;
-      color: var(--slate900);
-      font-family: 'JetBrains Mono', monospace;
+      font-size: 19px; font-weight: 700; color: var(--slate900);
+      font-family: 'JetBrains Mono', monospace; letter-spacing: -0.02em;
     }
-    .meta-dates {
-      font-size: 10.5px;
-      color: var(--slate500);
-      margin-top: 4px;
-    }
-    .valid-until {
-      color: #e11d48;
-      font-weight: 600;
-    }
+    .meta-dates { font-size: 10px; color: var(--slate500); margin-top: 5px; }
+    .meta-dates strong { color: var(--slate700); font-weight: 600; }
+    .valid-until { color: var(--rose) !important; font-weight: 700; }
 
-    /* Main Proposal Card */
-    .proposal-card {
-      background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
+    /* ── Hero ─────────────────────────────────────────────── */
+    .hero {
+      position: relative;
+      overflow: hidden;
+      border-radius: 18px;
+      padding: 30px 34px;
+      margin-bottom: 26px;
       color: #ffffff;
-      border-radius: 16px;
-      padding: 24px 28px;
-      margin-bottom: 24px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.2);
+      background:
+        radial-gradient(115% 130% at 100% 0%, rgba(200, 80, 250, 0.28) 0%, rgba(200,80,250,0) 46%),
+        radial-gradient(120% 140% at 0% 100%, rgba(78, 18, 212, 0.42) 0%, rgba(78,18,212,0) 52%),
+        linear-gradient(135deg, #0b0a1f 0%, #1a1145 58%, #241063 100%);
+      box-shadow: 0 18px 40px -14px rgba(15, 10, 45, 0.5);
     }
-    .proposal-title-label {
-      font-size: 9.5px;
-      font-weight: 800;
-      letter-spacing: 0.1em;
+    .hero-glow {
+      position: absolute; top: -60px; right: -40px;
+      width: 220px; height: 220px; border-radius: 50%;
+      background: radial-gradient(circle, rgba(200,80,250,0.35) 0%, rgba(200,80,250,0) 70%);
+    }
+    .hero-top {
+      display: flex; justify-content: space-between;
+      align-items: flex-start; gap: 24px; position: relative;
+    }
+    .hero-left { flex: 1; min-width: 0; }
+    .hero-kicker {
+      display: inline-block;
+      font-size: 9px; font-weight: 800; letter-spacing: 0.2em;
       text-transform: uppercase;
-      color: var(--accent);
-      margin-bottom: 6px;
+      background: linear-gradient(90deg, #d8b4fe, #f0abfc);
+      -webkit-background-clip: text; background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 10px;
     }
-    .proposal-title {
-      font-size: 22px;
-      font-weight: 800;
-      letter-spacing: -0.02em;
-      color: #ffffff;
-      line-height: 1.25;
+    .hero-title {
+      font-size: 27px; font-weight: 900; line-height: 1.18;
+      letter-spacing: -0.025em; color: #ffffff;
+      max-width: 380px;
     }
-    .client-card-box {
-      background: rgba(255, 255, 255, 0.08);
-      backdrop-filter: blur(12px);
-      border: 1px solid rgba(255, 255, 255, 0.15);
-      border-radius: 12px;
-      padding: 14px 18px;
-      min-width: 220px;
-      text-align: right;
+    .hero-underline {
+      width: 56px; height: 3px; border-radius: 3px; margin-top: 14px;
+      background: linear-gradient(90deg, #c850fa, #7b2ff7);
+    }
+    .client-card {
+      flex-shrink: 0;
+      background: rgba(255, 255, 255, 0.07);
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      border-radius: 14px;
+      padding: 16px 18px;
+      min-width: 210px;
+      max-width: 240px;
     }
     .client-label {
-      font-size: 9px;
-      font-weight: 800;
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
-      color: #93c5fd;
-      margin-bottom: 4px;
+      font-size: 8.5px; font-weight: 800; letter-spacing: 0.16em;
+      text-transform: uppercase; color: #c4b5fd; margin-bottom: 8px;
     }
-    .client-name {
-      font-size: 14px;
-      font-weight: 700;
-      color: #ffffff;
+    .client-name { font-size: 15px; font-weight: 800; color: #ffffff; letter-spacing: -0.01em; }
+    .client-company { font-size: 11px; color: #cbd5e1; margin-top: 3px; }
+    .client-contact {
+      font-size: 9.5px; color: #a5b4cf; margin-top: 8px;
+      padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.12);
+      font-family: 'JetBrains Mono', monospace; word-break: break-all;
     }
-    .client-company {
-      font-size: 11px;
-      color: #cbd5e1;
-      margin-top: 2px;
+    .client-contact div { margin-top: 2px; }
+    .hero-footer {
+      position: relative;
+      margin-top: 22px; padding-top: 14px;
+      border-top: 1px solid rgba(255, 255, 255, 0.12);
+      display: flex; justify-content: space-between; align-items: center;
+      font-size: 9.5px; color: #b9b4d6;
     }
-    .client-email {
-      font-size: 10px;
-      color: #94a3b8;
-      margin-top: 2px;
-      font-family: 'JetBrains Mono', monospace;
-    }
+    .hero-contact-strip { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .hero-contact-bit { color: #d6d2ef; font-weight: 500; }
+    .hero-contact-sep { color: rgba(255,255,255,0.28); }
+    .hero-prepared-by { color: #9d97c2; }
+    .hero-prepared-by strong { color: #e6e3f7; font-weight: 700; }
 
-    /* Executive Overview Block */
+    /* ── Executive Overview ───────────────────────────────── */
     .overview-card {
-      background-color: var(--slate50);
+      position: relative;
+      background: linear-gradient(180deg, var(--paper-tint), #ffffff);
       border: 1px solid var(--slate200);
-      border-left: 4px solid var(--primary);
-      border-radius: 10px;
-      padding: 16px 20px;
-      margin-bottom: 28px;
+      border-radius: 14px;
+      padding: 18px 22px 18px 26px;
+      margin-bottom: 30px;
+    }
+    .overview-card::before {
+      content: '';
+      position: absolute; left: 0; top: 14px; bottom: 14px;
+      width: 4px; border-radius: 4px; background: var(--grad);
     }
     .overview-title {
-      font-size: 11px;
-      font-weight: 800;
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
-      color: var(--primary);
-      margin-bottom: 6px;
+      font-size: 10px; font-weight: 800; letter-spacing: 0.12em;
+      text-transform: uppercase; color: var(--brand);
+      margin-bottom: 8px; display: flex; align-items: center; gap: 7px;
+    }
+    .overview-title .quote-mark {
+      font-family: 'JetBrains Mono', monospace; font-size: 14px;
+      color: var(--accent); line-height: 1;
     }
     .overview-text {
-      font-size: 11.5px;
-      color: var(--slate700);
-      line-height: 1.6;
+      font-size: 11.5px; color: var(--slate700); line-height: 1.65;
       white-space: pre-line;
     }
 
-    /* Section Styling */
-    .service-section {
-      margin-bottom: 32px;
-      page-break-inside: auto;
-    }
+    /* ── Section Header ───────────────────────────────────── */
+    .service-section { margin-bottom: 34px; page-break-inside: auto; }
     .section-header {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      margin-bottom: 12px;
-      border-bottom: 2px solid var(--slate100);
-      padding-bottom: 8px;
+      display: flex; align-items: center; gap: 14px;
+      margin-bottom: 16px; padding-bottom: 12px;
+      border-bottom: 1px solid var(--slate200);
     }
-    .section-badge {
-      font-size: 9px;
-      font-weight: 800;
-      letter-spacing: 0.08em;
-      background: var(--primary);
-      color: #ffffff;
-      padding: 3px 8px;
-      border-radius: 6px;
+    .section-index {
+      flex-shrink: 0;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 26px; font-weight: 700; line-height: 1;
+      color: transparent;
+      background: var(--grad);
+      -webkit-background-clip: text; background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .section-heading-wrap { display: flex; flex-direction: column; }
+    .section-kicker {
+      font-size: 8.5px; font-weight: 800; letter-spacing: 0.16em;
+      text-transform: uppercase; color: var(--slate400); margin-bottom: 2px;
     }
     .section-title {
-      font-size: 16px;
-      font-weight: 800;
-      color: var(--slate900);
-      letter-spacing: -0.01em;
+      font-size: 17px; font-weight: 800; color: var(--slate900);
+      letter-spacing: -0.015em; line-height: 1.15;
     }
     .section-description {
-      font-size: 11.5px;
-      color: var(--slate600);
-      margin-bottom: 16px;
-      line-height: 1.6;
+      font-size: 11.5px; color: var(--slate600);
+      margin-bottom: 16px; line-height: 1.65;
     }
 
-    /* Level 1 Grouped Module Cards */
+    /* ── Module Cards ─────────────────────────────────────── */
     .module-card {
       background: #ffffff;
       border: 1px solid var(--slate200);
-      border-radius: 12px;
+      border-radius: 13px;
       overflow: hidden;
-      margin-bottom: 14px;
-      box-shadow: 0 2px 6px rgba(15, 23, 42, 0.02);
-      page-break-inside: avoid !important;
-      break-inside: avoid !important;
+      margin-bottom: 13px;
+      box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+      page-break-inside: auto; break-inside: auto;
     }
     .module-card-header {
-      background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+      page-break-after: avoid; break-after: avoid;
+      background: linear-gradient(180deg, #ffffff 0%, var(--slate50) 100%);
       padding: 12px 18px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
+      display: flex; justify-content: space-between; align-items: center;
       border-bottom: 1px solid var(--slate200);
     }
-    .module-header-left {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
+    .module-header-left { display: flex; align-items: center; gap: 11px; }
     .module-num {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      size: 22px;
-      width: 22px;
-      height: 22px;
-      border-radius: 6px;
-      background: var(--primary);
-      color: #ffffff;
-      font-size: 10px;
-      font-weight: 800;
+      display: flex; align-items: center; justify-content: center;
+      width: 24px; height: 24px; border-radius: 7px;
+      background: var(--grad); color: #ffffff;
+      font-size: 10px; font-weight: 800;
       font-family: 'JetBrains Mono', monospace;
+      box-shadow: 0 2px 6px -1px rgba(78, 18, 212, 0.4);
     }
-    .module-title {
-      font-size: 13.5px;
-      font-weight: 700;
-      color: var(--slate900);
-    }
+    .module-title { font-size: 13.5px; font-weight: 700; color: var(--slate900); letter-spacing: -0.01em; }
     .module-price-tag {
-      font-size: 12px;
-      font-weight: 800;
-      color: var(--primary);
-      background: var(--primary-light);
-      border: 1px solid var(--primary-border);
-      padding: 3px 10px;
-      border-radius: 9999px;
+      font-size: 12px; font-weight: 800; color: var(--brand);
+      background: var(--brand-soft); border: 1px solid var(--brand-border);
+      padding: 4px 11px; border-radius: 9999px;
       font-family: 'JetBrains Mono', monospace;
     }
     .module-route-bar {
       background: var(--slate50);
-      padding: 6px 18px;
-      border-bottom: 1px solid var(--slate200);
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 10px;
-      color: var(--slate600);
+      padding: 6px 18px; border-bottom: 1px solid var(--slate200);
+      font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--slate600);
     }
-    .module-card-body {
-      padding: 12px 18px;
-    }
+    .module-card-body { padding: 13px 18px; }
 
-    /* Child Features Hierarchy */
-    .child-features-list {
-      list-style: none;
+    /* ── Feature Hierarchy ────────────────────────────────── */
+    .child-features-list { list-style: none; padding-left: 0; margin: 0; }
+    .child-features-list.level-2 {
+      border-left: 1.5px solid var(--slate200);
+      margin-left: 2.25px; padding-left: 14px;
+      margin-top: 5px; margin-bottom: 5px;
+    }
+    .child-features-list.level-3,
+    .child-features-list.level-4 {
+      border-left: 1.5px solid var(--slate200);
+      margin-left: 1.75px; padding-left: 12px;
+      margin-top: 4px; margin-bottom: 4px;
     }
     .child-feature-item {
-      padding: 7px 0;
-      border-bottom: 1px border-dashed var(--slate100);
+      list-style: none; position: relative;
+      page-break-inside: avoid; break-inside: avoid;
     }
-    .child-feature-item:last-child {
-      border-bottom: none;
+    .child-feature-item.level-1 {
+      padding: 8px 0; border-bottom: 1px dashed var(--slate200);
     }
-    .child-feature-main {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-    .child-feature-left {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
+    .child-feature-item.level-1:last-child { border-bottom: none; }
+    .child-feature-item.level-2 { padding: 4px 0; }
+    .child-feature-item.level-3,
+    .child-feature-item.level-4 { padding: 3px 0; }
+    .child-feature-main { display: flex; justify-content: space-between; align-items: center; }
+    .child-feature-left { display: flex; align-items: center; gap: 9px; }
     .bullet-dot {
-      width: 5px;
-      height: 5px;
-      border-radius: 50%;
-      background: var(--accent);
-      flex-shrink: 0;
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--grad); flex-shrink: 0;
     }
-    .child-feature-name {
-      font-size: 11.5px;
-      font-weight: 600;
-      color: var(--slate800);
+    .child-feature-item.level-2 > .child-feature-main .bullet-dot {
+      width: 5px; height: 5px; background: transparent; border: 1.2px solid var(--accent);
+    }
+    .child-feature-item.level-3 > .child-feature-main .bullet-dot,
+    .child-feature-item.level-4 > .child-feature-main .bullet-dot {
+      width: 4px; height: 4px; background: var(--slate400); border: none;
+    }
+    .child-feature-item.level-1 > .child-feature-main .child-feature-name {
+      font-size: 11.5px; font-weight: 600; color: var(--slate800);
+    }
+    .child-feature-item.level-2 > .child-feature-main .child-feature-name {
+      font-size: 11px; font-weight: 500; color: var(--slate700);
+    }
+    .child-feature-item.level-3 > .child-feature-main .child-feature-name,
+    .child-feature-item.level-4 > .child-feature-main .child-feature-name {
+      font-size: 10px; font-weight: 400; color: var(--slate600);
     }
     .child-price {
-      font-size: 11px;
-      font-weight: 700;
-      color: var(--slate700);
+      font-size: 11px; font-weight: 700; color: var(--slate700);
       font-family: 'JetBrains Mono', monospace;
     }
     .child-route-tag {
-      margin-top: 3px;
-      margin-left: 13px;
-      font-size: 9.5px;
-      color: var(--slate500);
+      display: inline-flex; align-items: center; gap: 4px;
+      margin-top: 4px; margin-left: 15px;
+      font-size: 9.5px; color: var(--slate500);
       font-family: 'JetBrains Mono', monospace;
-      background: var(--slate100);
-      padding: 2px 6px;
-      border-radius: 4px;
-      width: fit-content;
-      word-break: break-all;
+      background: var(--slate100); padding: 2px 7px;
+      border-radius: 5px; width: fit-content; word-break: break-all;
     }
+    .child-route-tag .route-icon { color: var(--accent); font-weight: 700; }
 
-    /* Deliverable Cards (Marketing / Creative) */
+    /* ── Deliverable Cards ────────────────────────────────── */
     .deliverable-card {
-      background: #ffffff;
-      border: 1px solid var(--slate200);
-      border-radius: 12px;
-      overflow: hidden;
-      margin-bottom: 14px;
-      page-break-inside: avoid !important;
-      break-inside: avoid !important;
+      background: #ffffff; border: 1px solid var(--slate200);
+      border-radius: 13px; overflow: hidden; margin-bottom: 13px;
+      box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+      page-break-inside: auto; break-inside: auto;
     }
     .deliverable-card-header {
+      page-break-after: avoid; break-after: avoid;
       padding: 12px 18px;
-      background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+      background: linear-gradient(180deg, #ffffff 0%, var(--slate50) 100%);
       border-bottom: 1px solid var(--slate200);
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
+      display: flex; justify-content: space-between; align-items: center;
     }
-    .deliverable-category-title {
-      font-size: 13px;
-      font-weight: 700;
-      color: var(--slate900);
-    }
+    .deliverable-category-title { font-size: 13px; font-weight: 700; color: var(--slate900); letter-spacing: -0.01em; }
     .deliverable-price-badge {
-      font-size: 12px;
-      font-weight: 800;
-      color: var(--primary);
-      background: var(--primary-light);
-      border: 1px solid var(--primary-border);
-      padding: 3px 10px;
-      border-radius: 9999px;
+      font-size: 12px; font-weight: 800; color: var(--brand);
+      background: var(--brand-soft); border: 1px solid var(--brand-border);
+      padding: 4px 11px; border-radius: 9999px;
       font-family: 'JetBrains Mono', monospace;
     }
-    .deliverable-card-body {
-      padding: 14px 18px;
-    }
+    .deliverable-card-body { padding: 14px 18px; }
     .deliverables-sublabel {
-      font-size: 9px;
-      font-weight: 800;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      color: var(--slate400);
-      margin-bottom: 10px;
+      font-size: 8.5px; font-weight: 800; letter-spacing: 0.12em;
+      text-transform: uppercase; color: var(--slate400); margin-bottom: 11px;
     }
-    .deliverables-grid {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 10px;
-    }
+    .deliverables-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
     .deliverable-item {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-size: 11px;
-      color: var(--slate700);
+      display: flex; align-items: center; gap: 8px;
+      font-size: 11px; color: var(--slate700);
+    }
+    .deliverable-name { flex: 1; }
+    .deliv-item-price {
+      font-family: 'JetBrains Mono', monospace; font-weight: 700;
+      font-size: 10.5px; color: var(--slate700);
     }
     .check-icon {
-      color: #10b981;
-      font-weight: 800;
-      font-size: 12px;
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 15px; height: 15px; border-radius: 50%; flex-shrink: 0;
+      background: rgba(5, 150, 105, 0.12); color: var(--emerald);
+      font-weight: 800; font-size: 9px;
     }
 
-    /* Technology Stack Card */
+    /* ── Tech Stack ───────────────────────────────────────── */
     .tech-stack-card {
-      background: #ffffff;
-      border: 1px solid var(--slate200);
-      border-radius: 12px;
-      padding: 14px 18px;
-      margin-top: 14px;
-      margin-bottom: 14px;
-      page-break-inside: avoid !important;
-      break-inside: avoid !important;
+      background: #ffffff; border: 1px solid var(--slate200);
+      border-radius: 13px; padding: 14px 18px;
+      margin-top: 13px; margin-bottom: 13px;
+      page-break-inside: avoid !important; break-inside: avoid !important;
     }
     .card-section-title {
-      font-size: 10px;
-      font-weight: 800;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      color: var(--primary);
-      margin-bottom: 10px;
+      font-size: 9.5px; font-weight: 800; letter-spacing: 0.12em;
+      text-transform: uppercase; color: var(--brand);
+      margin-bottom: 11px; display: flex; align-items: center; gap: 7px;
     }
-    .styled-table {
-      width: 100%;
-      border-collapse: collapse;
+    .title-tick {
+      display: inline-block; width: 12px; height: 2px;
+      border-radius: 2px; background: var(--grad);
     }
-    .tech-table td {
-      padding: 6px 0;
-      border-bottom: 1px solid var(--slate100);
-    }
+    .styled-table { width: 100%; border-collapse: collapse; }
+    .tech-table td { padding: 7px 0; border-bottom: 1px solid var(--slate100); vertical-align: top; }
     .tech-table tr:last-child td { border-bottom: none; }
-    .tech-layer-cell {
-      font-weight: 700;
-      color: var(--slate800);
-      width: 120px;
-    }
+    .tech-layer-cell { font-weight: 700; color: var(--slate800); width: 110px; font-size: 11px; }
     .tech-chip {
-      display: inline-block;
-      background: var(--slate100);
-      color: var(--slate700);
-      font-size: 10px;
-      font-weight: 600;
-      padding: 2px 8px;
-      border-radius: 6px;
-      margin-right: 4px;
-      margin-bottom: 2px;
+      display: inline-block; background: var(--slate100); color: var(--slate700);
+      font-size: 10px; font-weight: 600; padding: 3px 9px;
+      border-radius: 7px; margin-right: 5px; margin-bottom: 3px;
+      border: 1px solid var(--slate200);
     }
 
-    /* Pricing Table */
+    /* ── Pricing Table ────────────────────────────────────── */
     .pricing-card {
-      background: #ffffff;
-      border: 1px solid var(--slate200);
-      border-radius: 12px;
-      padding: 14px 18px;
-      margin-top: 14px;
-      margin-bottom: 18px;
-      page-break-inside: avoid !important;
-      break-inside: avoid !important;
+      background: #ffffff; border: 1px solid var(--slate200);
+      border-radius: 13px; padding: 14px 18px;
+      margin-top: 13px; margin-bottom: 18px;
+      page-break-inside: avoid !important; break-inside: avoid !important;
     }
     .pricing-table th {
-      text-align: left;
-      font-size: 9px;
-      font-weight: 800;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-      color: var(--slate500);
-      padding: 8px 10px;
-      background: var(--slate50);
+      text-align: left; font-size: 8.5px; font-weight: 800;
+      text-transform: uppercase; letter-spacing: 0.08em; color: var(--slate500);
+      padding: 8px 10px; background: var(--slate50);
       border-bottom: 1px solid var(--slate200);
     }
-    .pricing-table td {
-      padding: 9px 10px;
-      border-bottom: 1px solid var(--slate100);
-      font-size: 11px;
-    }
-    .pricing-table tr:last-child td { border-bottom: none; }
+    .pricing-table th:first-child { border-top-left-radius: 8px; }
+    .pricing-table th:last-child { border-top-right-radius: 8px; }
+    .pricing-table td { padding: 9px 10px; border-bottom: 1px solid var(--slate100); font-size: 11px; }
+    .pricing-table tbody tr:last-child td { border-bottom: none; }
     .pricing-table th.num, .pricing-table td.num {
-      text-align: right;
-      font-family: 'JetBrains Mono', monospace;
+      text-align: right; font-family: 'JetBrains Mono', monospace;
     }
+    .item-title { font-weight: 600; color: var(--slate800); }
+    .item-desc { font-size: 10px; color: var(--slate500); margin-top: 2px; }
+    .font-bold { font-weight: 800 !important; color: var(--slate900); }
     .billing-badge {
-      display: inline-block;
-      padding: 2px 8px;
-      border-radius: 9999px;
-      font-size: 9px;
-      font-weight: 800;
-      text-transform: uppercase;
+      display: inline-block; padding: 2px 9px; border-radius: 9999px;
+      font-size: 8.5px; font-weight: 800; text-transform: uppercase;
+      letter-spacing: 0.04em;
     }
-    .billing-badge.upfront { background: rgba(78, 18, 212, 0.08); color: var(--primary); }
-    .billing-badge.recurring { background: rgba(200, 80, 250, 0.12); color: var(--accent); }
+    .billing-badge.upfront { background: var(--brand-soft); color: var(--brand); border: 1px solid var(--brand-border); }
+    .billing-badge.recurring { background: var(--accent-soft); color: var(--accent); border: 1px solid var(--accent-border); }
 
-    /* Financial Summary Card */
+    /* ── Financial Summary ────────────────────────────────── */
     .financial-summary-card {
       background: #ffffff;
-      border: 2px solid var(--primary-border);
-      border-radius: 14px;
-      overflow: hidden;
-      margin-bottom: 24px;
-      page-break-inside: avoid !important;
-      break-inside: avoid !important;
-      box-shadow: 0 4px 12px rgba(78, 18, 212, 0.05);
+      border: 1px solid var(--brand-border);
+      border-radius: 16px; overflow: hidden;
+      margin-bottom: 26px;
+      page-break-inside: avoid !important; break-inside: avoid !important;
+      box-shadow: 0 8px 24px -10px rgba(78, 18, 212, 0.22);
     }
     .financial-summary-header {
-      background: linear-gradient(135deg, rgba(30,0,120,0.06) 0%, rgba(78,18,212,0.04) 100%);
-      padding: 12px 20px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      border-bottom: 1.5px solid var(--primary-border);
+      background: linear-gradient(135deg, var(--brand-softer) 0%, var(--accent-soft) 100%);
+      padding: 14px 22px;
+      display: flex; justify-content: space-between; align-items: center;
+      border-bottom: 1px solid var(--brand-border);
     }
-    .summary-card-title {
-      font-size: 12px;
-      font-weight: 800;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      color: var(--primary);
+    .summary-kicker {
+      font-size: 8.5px; font-weight: 800; letter-spacing: 0.16em;
+      text-transform: uppercase; color: var(--accent); margin-bottom: 3px;
     }
+    .summary-card-title { font-size: 14px; font-weight: 800; color: var(--slate900); letter-spacing: -0.01em; }
     .currency-tag {
-      font-size: 10px;
-      font-weight: 700;
-      color: var(--slate600);
-      background: #ffffff;
-      padding: 2px 8px;
-      border-radius: 6px;
+      font-size: 10px; font-weight: 700; color: var(--slate600);
+      background: #ffffff; padding: 4px 11px; border-radius: 8px;
       border: 1px solid var(--slate200);
+      font-family: 'JetBrains Mono', monospace;
     }
-    .summary-table {
-      width: 100%;
-      border-collapse: collapse;
-    }
-    .summary-table td {
-      padding: 10px 20px;
-      border-bottom: 1px solid var(--slate100);
-      font-size: 11.5px;
-    }
-    .summary-label { font-weight: 600; color: var(--slate700); }
-    .summary-value { font-weight: 700; color: var(--slate900); font-family: 'JetBrains Mono', monospace; }
-    .grand-total-row td {
-      background: var(--primary-light);
-      border-top: 1.5px solid var(--primary-border);
-      border-bottom: none;
-    }
-    .grand-label { font-size: 12.5px; font-weight: 800; color: var(--primary); }
-    .grand-value { font-size: 15px; font-weight: 800; color: var(--primary); }
-    .recurring-row td {
-      background: rgba(200, 80, 250, 0.05);
-      border-top: 1px solid rgba(200, 80, 250, 0.15);
-    }
-    .recurring-label { font-weight: 700; color: var(--accent); }
-    .recurring-value { font-size: 13px; font-weight: 800; color: var(--accent); }
+    .summary-table { width: 100%; border-collapse: collapse; }
+    .summary-table td { padding: 11px 22px; border-bottom: 1px solid var(--slate100); font-size: 11.5px; }
+    .summary-table tr:last-child td { border-bottom: none; }
+    .summary-label { font-weight: 600; color: var(--slate600); }
+    .summary-value { font-weight: 700; color: var(--slate900); font-family: 'JetBrains Mono', monospace; text-align: right; }
+    .text-rose { color: var(--rose) !important; }
 
-    /* Three Executive Cards Grid */
+    .grand-total-panel {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 16px 22px; color: #ffffff;
+      background:
+        radial-gradient(120% 180% at 100% 0%, rgba(200,80,250,0.35) 0%, rgba(200,80,250,0) 55%),
+        linear-gradient(120deg, #4e12d4 0%, #6d28d9 55%, #7b2ff7 100%);
+    }
+    .grand-total-label {
+      font-size: 12.5px; font-weight: 800; color: #ffffff; letter-spacing: -0.01em;
+    }
+    .grand-total-sub { font-size: 9px; color: #d8ccff; margin-top: 3px; letter-spacing: 0.02em; }
+    .grand-total-amount {
+      font-size: 22px; font-weight: 900; color: #ffffff;
+      font-family: 'JetBrains Mono', monospace; letter-spacing: -0.02em;
+    }
+    .recurring-panel {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 11px 22px;
+      background: var(--accent-soft);
+      border-top: 1px solid var(--accent-border);
+    }
+    .recurring-left { display: flex; align-items: center; gap: 8px; }
+    .recurring-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
+    .recurring-text { font-size: 11px; font-weight: 700; color: var(--accent); }
+    .recurring-amount {
+      font-size: 13px; font-weight: 800; color: var(--accent);
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .recurring-per { font-size: 10px; font-weight: 600; }
+
+    /* ── Three Info Cards ─────────────────────────────────── */
     .three-cards-grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 14px;
-      margin-bottom: 24px;
-      page-break-inside: avoid !important;
-      break-inside: avoid !important;
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 13px;
+      margin-bottom: 26px;
+      page-break-inside: avoid !important; break-inside: avoid !important;
     }
-    .info-card {
-      border-radius: 12px;
-      padding: 16px;
-    }
-    .info-card.rose { background: #fff1f2; border: 1px solid #fecdd3; }
-    .info-card.indigo { background: #f0fdf4; border: 1px solid #bbf7d0; }
-    .info-card.purple { background: var(--primary-light); border: 1px solid var(--primary-border); }
-    
+    .info-card { border-radius: 13px; padding: 16px 15px; }
+    .info-card.rose { background: linear-gradient(180deg, #fff5f6, #fff1f2); border: 1px solid #fecdd3; }
+    .info-card.indigo { background: linear-gradient(180deg, #f3fdf6, #f0fdf4); border: 1px solid #bbf7d0; }
+    .info-card.purple { background: linear-gradient(180deg, var(--paper-tint), var(--brand-soft)); border: 1px solid var(--brand-border); }
     .card-heading {
-      font-size: 10px;
-      font-weight: 800;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      margin-bottom: 10px;
-      display: flex;
-      align-items: center;
-      gap: 6px;
+      font-size: 9.5px; font-weight: 800; letter-spacing: 0.1em;
+      text-transform: uppercase; margin-bottom: 11px; padding-bottom: 9px;
+      display: flex; align-items: center; gap: 7px;
     }
-    .card-heading.rose { color: #e11d48; }
-    .card-heading.indigo { color: #16a34a; }
-    .card-heading.purple { color: var(--primary); }
-
+    .card-heading.rose { color: var(--rose); border-bottom: 1px solid #fecdd3; }
+    .card-heading.indigo { color: #16a34a; border-bottom: 1px solid #bbf7d0; }
+    .card-heading.purple { color: var(--brand); border-bottom: 1px solid var(--brand-border); }
+    .card-heading .head-glyph {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 16px; height: 16px; border-radius: 5px; font-size: 9px;
+    }
+    .card-heading.rose .head-glyph { background: rgba(225,29,72,0.12); }
+    .card-heading.indigo .head-glyph { background: rgba(22,163,74,0.12); }
+    .card-heading.purple .head-glyph { background: var(--brand-soft); }
     .info-list { list-style: none; }
     .info-list-item {
-      display: flex;
-      align-items: flex-start;
-      gap: 6px;
-      font-size: 10.5px;
-      color: var(--slate700);
-      margin-bottom: 6px;
+      display: flex; align-items: flex-start; gap: 7px;
+      font-size: 10.5px; color: var(--slate700);
+      margin-bottom: 8px; line-height: 1.45;
     }
     .info-list-item:last-child { margin-bottom: 0; }
-    .info-icon { font-weight: 800; flex-shrink: 0; }
-    .info-icon.red { color: #e11d48; }
+    .info-icon { font-weight: 800; flex-shrink: 0; margin-top: 0.5px; }
+    .info-icon.red { color: var(--rose); }
     .info-icon.indigo { color: #16a34a; }
-    .info-icon.purple { color: var(--primary); }
+    .info-icon.purple { color: var(--brand); }
     .milestone-badge {
-      display: inline-block;
-      font-size: 9px;
-      font-weight: 800;
-      background: #ffffff;
-      color: var(--primary);
-      border: 1px solid var(--primary-border);
-      padding: 1px 6px;
-      border-radius: 4px;
-      margin-left: 4px;
+      display: inline-block; font-size: 8.5px; font-weight: 800;
+      background: #ffffff; color: var(--brand); border: 1px solid var(--brand-border);
+      padding: 1px 7px; border-radius: 5px; margin-left: 5px;
       font-family: 'JetBrains Mono', monospace;
     }
 
-    /* Authorization Block */
+    /* ── Authorization ────────────────────────────────────── */
     .auth-card {
-      background: #ffffff;
-      border: 1px solid var(--slate200);
-      border-radius: 12px;
-      padding: 18px 24px;
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-end;
-      page-break-inside: avoid !important;
-      break-inside: avoid !important;
+      position: relative; overflow: hidden;
+      background: linear-gradient(135deg, #0b0a1f 0%, #1a1145 100%);
+      color: #ffffff; border-radius: 16px;
+      padding: 20px 26px;
+      display: flex; justify-content: space-between; align-items: flex-end; gap: 24px;
+      page-break-inside: avoid !important; break-inside: avoid !important;
     }
+    .auth-glow {
+      position: absolute; bottom: -50px; left: -30px;
+      width: 180px; height: 180px; border-radius: 50%;
+      background: radial-gradient(circle, rgba(78,18,212,0.4) 0%, rgba(78,18,212,0) 70%);
+    }
+    .auth-left { position: relative; max-width: 320px; }
     .auth-title {
-      font-size: 10px;
-      font-weight: 800;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      color: var(--slate400);
-      margin-bottom: 6px;
+      font-size: 9.5px; font-weight: 800; letter-spacing: 0.14em;
+      text-transform: uppercase; color: #c4b5fd;
+      margin-bottom: 8px; display: flex; align-items: center; gap: 6px;
     }
-    .auth-desc {
-      font-size: 11px;
-      color: var(--slate600);
-      max-width: 320px;
-      line-height: 1.5;
-    }
-    .sig-container {
-      text-align: center;
-    }
-    .sig-img {
-      height: 44px;
-      width: auto;
-      object-fit: contain;
-      margin-bottom: 4px;
-    }
-    .sig-line {
-      width: 170px;
-      border-top: 1.5px solid var(--slate800);
-      padding-top: 6px;
-    }
+    .auth-desc { font-size: 10.5px; color: #cbd5e1; line-height: 1.55; }
+    .auth-desc strong { color: #ffffff; font-weight: 700; }
+    .auth-right { position: relative; }
+    .sig-container { text-align: center; }
+    .sig-img { height: 46px; width: auto; object-fit: contain; margin-bottom: 4px; filter: brightness(0) invert(1); opacity: 0.92; }
+    .sig-line { width: 180px; border-top: 1.5px solid rgba(255,255,255,0.55); padding-top: 7px; }
     .sig-label {
-      font-size: 10.5px;
-      font-weight: 800;
-      text-transform: uppercase;
-      color: var(--primary);
+      font-size: 10px; font-weight: 800; text-transform: uppercase;
+      letter-spacing: 0.06em;
+      background: linear-gradient(90deg, #d8b4fe, #f0abfc);
+      -webkit-background-clip: text; background-clip: text;
+      -webkit-text-fill-color: transparent;
     }
-    .sig-company-name {
-      font-size: 10px;
-      color: var(--slate500);
+    .sig-company-name { font-size: 10px; color: #a5b4cf; margin-top: 1px; }
+
+    /* ── Thank-you strip ──────────────────────────────────── */
+    .thankyou-strip {
+      text-align: center; margin-top: 20px;
+      font-size: 10px; color: var(--slate400); letter-spacing: 0.02em;
     }
+    .thankyou-strip strong { color: var(--brand); font-weight: 700; }
   </style>
 </head>
 <body>
   <div class="container">
-    <!-- Cover Header -->
-    <div class="cover-header">
-      <div class="logo-box">
+
+    <!-- Masthead -->
+    <div class="masthead">
+      <div class="brand-lockup">
         <img src="${esc(ctx.logoSrc)}" alt="Company Logo" class="logo-img" />
+        <div class="brand-name-block">
+          <span class="brand-name">${esc(companyName)}</span>
+          <span class="brand-tag">Digital Solutions</span>
+        </div>
       </div>
       <div class="meta-box">
-        <div class="official-badge">OFFICIAL QUOTATION</div>
+        <div class="official-badge"><span class="badge-dot"></span>Official Quotation</div>
         <div class="qtn-number">#${esc(quotationNo)}</div>
-        <div class="meta-dates">Issue Date: <strong>${esc(issueDate)}</strong></div>
-        <div class="meta-dates">Valid Until: <strong class="valid-until">${esc(validUntilStr)}</strong></div>
+        <div class="meta-dates">Issued <strong>${esc(issueDate)}</strong></div>
+        <div class="meta-dates">Valid Until <strong class="valid-until">${esc(validUntilStr)}</strong></div>
       </div>
     </div>
 
-    <!-- Main Proposal Box -->
-    <div class="proposal-card">
-      <div class="proposal-left">
-        <div class="proposal-title-label">PROPOSAL PACKAGE</div>
-        <h1 class="proposal-title">${esc(proposalTitle)}</h1>
+    <!-- Hero -->
+    <div class="hero">
+      <div class="hero-glow"></div>
+      <div class="hero-top">
+        <div class="hero-left">
+          <span class="hero-kicker">Proposal Package</span>
+          <h1 class="hero-title">${esc(proposalTitle)}</h1>
+          <div class="hero-underline"></div>
+        </div>
+        <div class="client-card">
+          <div class="client-label">Prepared For</div>
+          <div class="client-name">${esc(clientName)}</div>
+          ${clientCompany ? `<div class="client-company">${esc(clientCompany)}</div>` : ''}
+          ${(clientEmail || clientPhone) ? `<div class="client-contact">
+            ${clientEmail ? `<div>${esc(clientEmail)}</div>` : ''}
+            ${clientPhone ? `<div>${esc(clientPhone)}</div>` : ''}
+          </div>` : ''}
+        </div>
       </div>
-      <div class="client-card-box">
-        <div class="client-label">PREPARED FOR</div>
-        <div class="client-name">${esc(clientName)}</div>
-        ${clientCompany ? `<div class="client-company">${esc(clientCompany)}</div>` : ''}
-        ${clientEmail ? `<div class="client-email">${esc(clientEmail)}</div>` : ''}
+      <div class="hero-footer">
+        <div class="hero-contact-strip">${heroContactBits || `<span class="hero-contact-bit">${esc(companyName)}</span>`}</div>
+        <div class="hero-prepared-by">Prepared by <strong>${esc(companyName)}</strong></div>
       </div>
     </div>
 
-    <!-- Executive Overview Block -->
+    <!-- Executive Overview -->
     ${globalOverview ? `
     <div class="overview-card">
-      <div class="overview-title">Executive Summary & Overview</div>
+      <div class="overview-title"><span class="quote-mark">&ldquo;</span>Executive Summary &amp; Overview</div>
       <div class="overview-text">${esc(globalOverview)}</div>
     </div>` : ''}
 
-    <!-- Dynamic Service Sections -->
+    <!-- Service Sections -->
     <div class="sections-container">
       ${modulesHtml}
     </div>
 
-    <!-- Dynamic Financial Investment Summary -->
+    <!-- Financial Summary -->
     ${investmentSummaryHtml}
 
-    <!-- Three Executive Information Cards -->
+    <!-- Three Info Cards -->
     <div class="three-cards-grid">
       <div class="info-card rose">
-        <div class="card-heading rose">✕ Not Included in Price</div>
+        <div class="card-heading rose"><span class="head-glyph">✕</span>Not Included in Price</div>
         <ul class="info-list">${notIncludedHtml}</ul>
       </div>
       <div class="info-card indigo">
-        <div class="card-heading indigo">✓ Client Needs to Provide</div>
+        <div class="card-heading indigo"><span class="head-glyph">✓</span>Client Needs to Provide</div>
         <ul class="info-list">${clientReqHtml}</ul>
       </div>
       <div class="info-card purple">
-        <div class="card-heading purple">◆ Payment Terms & Milestones</div>
+        <div class="card-heading purple"><span class="head-glyph">◆</span>Payment Terms &amp; Milestones</div>
         <ul class="info-list">${paymentMilestonesHtml}</ul>
       </div>
     </div>
 
-    <!-- Authorization & Signatures Block -->
+    <!-- Authorization & Signature -->
     <div class="auth-card">
+      <div class="auth-glow"></div>
       <div class="auth-left">
-        <div class="auth-title">🛡️ Authorization Status</div>
+        <div class="auth-title">🛡 Authorization &amp; Validity</div>
         <div class="auth-desc">
-          This quotation document is valid until ${esc(validUntilStr)}. Upon acceptance, formal project execution will commence as per agreed milestones.
+          This quotation is valid until <strong>${esc(validUntilStr)}</strong>. Upon acceptance, formal project execution will commence as per the agreed milestone schedule.
         </div>
       </div>
       <div class="auth-right">
         <div class="sig-container">
-          ${ctx.signatureSrc ? `<img src="${esc(ctx.signatureSrc)}" alt="Authorized Signature" class="sig-img" />` : '<div style="height: 44px;"></div>'}
+          ${ctx.signatureSrc ? `<img src="${esc(ctx.signatureSrc)}" alt="Authorized Signature" class="sig-img" />` : '<div style="height: 46px;"></div>'}
           <div class="sig-line">
             <div class="sig-label">Authorized Signature</div>
             <div class="sig-company-name">${esc(companyName)}</div>
@@ -1287,6 +1276,11 @@ function buildPrintHtml(
         </div>
       </div>
     </div>
+
+    <div class="thankyou-strip">
+      Thank you for the opportunity to partner with you. — <strong>${esc(companyName)}</strong>
+    </div>
+
   </div>
 </body>
 </html>`;
