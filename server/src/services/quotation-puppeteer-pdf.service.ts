@@ -367,7 +367,7 @@ function buildPrintHtml(
         const scopeDescription = (rawScopeDesc && !isLorem && !isDuplicateOverview) ? rawScopeDesc : '';
 
         const rawItems = Array.isArray(service?.scopeItems)
-            ? service.scopeItems.map((x: any) => String(x || '').trim()).filter(Boolean)
+            ? service.scopeItems.map((x: any) => String(x || '').replace(/\s+$/, '')).filter(Boolean)
             : [];
 
         const parsedTree = parseScopeTree(rawItems);
@@ -772,7 +772,6 @@ function buildPrintHtml(
       line-height: 1.6;
     }
 
-    /* Level 1 Grouped Module Cards */
     .module-card {
       background: #ffffff;
       border: 1px solid var(--slate200);
@@ -780,10 +779,12 @@ function buildPrintHtml(
       overflow: hidden;
       margin-bottom: 14px;
       box-shadow: 0 2px 6px rgba(15, 23, 42, 0.02);
-      page-break-inside: avoid !important;
-      break-inside: avoid !important;
+      page-break-inside: auto;
+      break-inside: auto;
     }
     .module-card-header {
+      page-break-after: avoid;
+      break-after: avoid;
       background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
       padding: 12px 18px;
       display: flex;
@@ -840,13 +841,44 @@ function buildPrintHtml(
     /* Child Features Hierarchy */
     .child-features-list {
       list-style: none;
+      padding-left: 0;
+      margin: 0;
+    }
+    /* Draw left connecting vertical line for nested sub-features */
+    .child-features-list.level-2 {
+      border-left: 1.5px solid var(--slate200);
+      margin-left: 2.25px; /* aligns perfectly with the center of the 6px bullet dot */
+      padding-left: 14px;
+      margin-top: 4px;
+      margin-bottom: 4px;
+    }
+    .child-features-list.level-3,
+    .child-features-list.level-4 {
+      border-left: 1.5px solid var(--slate200);
+      margin-left: 1.75px; /* aligns perfectly with the center of the 5px bullet dot of level-2 */
+      padding-left: 12px;
+      margin-top: 4px;
+      margin-bottom: 4px;
     }
     .child-feature-item {
-      padding: 7px 0;
-      border-bottom: 1px border-dashed var(--slate100);
+      list-style: none;
+      position: relative;
+      page-break-inside: avoid;
+      break-inside: avoid;
     }
-    .child-feature-item:last-child {
+    .child-feature-item.level-1 {
+      padding: 8px 0;
+      border-bottom: 1px dashed var(--slate200);
+    }
+    .child-feature-item.level-1:last-child {
       border-bottom: none;
+    }
+    .child-feature-item.level-2 {
+      padding: 4px 0;
+    }
+    .child-feature-item.level-3,
+    .child-feature-item.level-4 {
+      padding: 3px 0;
     }
     .child-feature-main {
       display: flex;
@@ -859,16 +891,42 @@ function buildPrintHtml(
       gap: 8px;
     }
     .bullet-dot {
-      width: 5px;
-      height: 5px;
+      width: 6px;
+      height: 6px;
       border-radius: 50%;
-      background: var(--accent);
+      background: var(--primary);
       flex-shrink: 0;
     }
-    .child-feature-name {
+    /* Distinct bullet styles per level */
+    .child-feature-item.level-2 > .child-feature-main .bullet-dot {
+      width: 5px;
+      height: 5px;
+      background: transparent;
+      border: 1px solid var(--accent);
+    }
+    .child-feature-item.level-3 > .child-feature-main .bullet-dot,
+    .child-feature-item.level-4 > .child-feature-main .bullet-dot {
+      width: 4px;
+      height: 4px;
+      background: var(--slate400);
+      border: none;
+    }
+    /* Distinct font styles per level */
+    .child-feature-item.level-1 > .child-feature-main .child-feature-name {
       font-size: 11.5px;
       font-weight: 600;
       color: var(--slate800);
+    }
+    .child-feature-item.level-2 > .child-feature-main .child-feature-name {
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--slate700);
+    }
+    .child-feature-item.level-3 > .child-feature-main .child-feature-name,
+    .child-feature-item.level-4 > .child-feature-main .child-feature-name {
+      font-size: 10px;
+      font-weight: 400;
+      color: var(--slate600);
     }
     .child-price {
       font-size: 11px;
@@ -896,10 +954,12 @@ function buildPrintHtml(
       border-radius: 12px;
       overflow: hidden;
       margin-bottom: 14px;
-      page-break-inside: avoid !important;
-      break-inside: avoid !important;
+      page-break-inside: auto;
+      break-inside: auto;
     }
     .deliverable-card-header {
+      page-break-after: avoid;
+      break-after: avoid;
       padding: 12px 18px;
       background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
       border-bottom: 1px solid var(--slate200);

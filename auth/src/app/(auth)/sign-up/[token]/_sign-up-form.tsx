@@ -122,7 +122,8 @@ export default function SignUpForm({ token }: SignUpFormProps) {
                 return;
             }
 
-            router.replace('/sign-in?success=account-created');
+            const dashboardUrl = process.env.NEXT_PUBLIC_DASHBOARD_URL || '';
+            router.replace(`/sign-in?success=account-created&callbackUrl=${encodeURIComponent(dashboardUrl)}`);
         } catch {
             setSubmitError('Something went wrong. Please try again.');
         }
