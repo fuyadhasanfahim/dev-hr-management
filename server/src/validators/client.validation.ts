@@ -24,6 +24,7 @@ export const createClientSchema = z.object({
     status: z.enum(['active', 'inactive']).default('active'),
     teamMembers: z.array(teamMemberSchema).optional(),
     assignedServices: z.array(z.string()).optional(),
+    assignedTelemarketer: z.string().nullable().optional(),
 });
 
 export const updateClientSchema = z.object({
@@ -43,6 +44,7 @@ export const updateClientSchema = z.object({
     status: z.enum(['active', 'inactive']).optional(),
     teamMembers: z.array(teamMemberSchema).optional(),
     assignedServices: z.array(z.string()).optional(),
+    assignedTelemarketer: z.string().nullable().optional(),
 });
 
 export type CreateClientInput = z.infer<typeof createClientSchema>;

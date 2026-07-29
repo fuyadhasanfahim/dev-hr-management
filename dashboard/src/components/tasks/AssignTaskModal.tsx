@@ -25,7 +25,7 @@ import {
 } from "@/components/ui/select";
 import { useGetStaffsQuery } from "@/redux/features/staff/staffApi";
 import { useGetOrdersQuery, useGetOrderByIdQuery } from "@/redux/features/order/orderApi";
-import { useCreateTaskMutation, useGetOrderTasksQuery } from "@/redux/features/task/taskApi";
+import { useCreateTaskMutation, useGetOrderTasksQuery, useGetMyTasksQuery } from "@/redux/features/task/taskApi";
 import { DateTimePicker } from "@/components/shared/DateTimePicker";
 import { toast } from "sonner";
 import { Loader2, CalendarClock, UserPlus, Layers, Sparkles, CheckSquare, Square, Link2 } from "lucide-react";
@@ -38,6 +38,7 @@ interface AssignTaskModalProps {
     order?: any;
     phases?: any;
     existingTasks?: any[];
+    defaultStaffId?: string;
 }
 
 export interface ScopeFeatureNode {
@@ -321,16 +322,38 @@ export function AssignTaskModal({
     onOpenChange, 
     orderId: initialOrderId,
     order: initialOrder,
-    existingTasks = [] 
+    existingTasks = [],
+    defaultStaffId
 }: AssignTaskModalProps) {
     const [selectedOrderId, setSelectedOrderId] = useState<string>(initialOrderId || "");
     const [selectedFeatures, setSelectedFeatures] = useState<string[]>([]);
     const [taskTitle, setTaskTitle] = useState("");
     const [customTitle, setCustomTitle] = useState("");
     const [description, setDescription] = useState("");
-    const [assignedTo, setAssignedTo] = useState("");
+    const [assignedTo, setAssignedTo] = useState(defaultStaffId || "");
     const [dueDate, setDueDate] = useState<Date | undefined>(undefined);
     const [priority, setPriority] = useState("medium");
+
+    useEffect(() => {
+        if (defaultStaffId && open) {
+            setAssignedTo(defaultStaffId);
+        }
+    }, [defaultStaffId, open]);
+
+    // Fetch all tasks for workload calculation
+    const { data: allTasksRes } = useGetMyTasksQuery(undefined, { skip: !open });
+    const allTasks = allTasksRes?.data || existingTasks || [];
+
+    const staffWorkloadMap = useMemo(() => {
+        const map: Record<string, number> = {};
+        allTasks.forEach((t: any) => {
+            const staffId = t.assignedTo?._id || t.assignedTo;
+            if (staffId && t.status !== 'completed') {
+                map[staffId] = (map[staffId] || 0) + 1;
+            }
+        });
+        return map;
+    }, [allTasks]);
 
     // Fetch orders if no order pre-selected
     const { data: ordersRes, isLoading: isOrdersLoading } = useGetOrdersQuery({ limit: 1000 });
@@ -654,14 +677,30 @@ export function AssignTaskModal({
                                     <SelectValue placeholder={isStaffLoading ? "Loading staff..." : "Select staff..."} />
                                 </SelectTrigger>
                                 <SelectContent className="max-h-56 text-xs">
-                                    {staffs.map((staff: any) => (
-                                        <SelectItem key={staff._id} value={staff._id}>
-                                            <div className="flex flex-col text-left">
-                                                <span className="font-semibold">{staff.user?.name || staff.name || "Unknown"}</span>
-                                                <span className="text-[10px] text-muted-foreground capitalize">{staff.designation || "Developer"}</span>
-                                            </div>
-                                        </SelectItem>
-                                    ))}
+                                    {staffs.map((staff: any) => {
+                                        const activeCount = staffWorkloadMap[staff._id] || 0;
+                                        return (
+                                            <SelectItem key={staff._id} value={staff._id}>
+                                                <div className="flex items-center justify-between w-full gap-3 text-left">
+                                                    <div className="flex flex-col">
+                                                        <span className="font-semibold">{staff.user?.name || staff.name || "Unknown"}</span>
+                                                        <span className="text-[10px] text-muted-foreground capitalize">{staff.designation || "Developer"}</span>
+                                                    </div>
+                                                    <Badge 
+                                                        variant="outline" 
+                                                        className={cn(
+                                                            "text-[9px] font-bold px-1.5 py-0 shrink-0",
+                                                            activeCount === 0 
+                                                                ? "bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400"
+                                                                : "bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-950/40 dark:text-blue-400"
+                                                        )}
+                                                    >
+                                                        {activeCount === 0 ? "Free" : `${activeCount} Active`}
+                                                    </Badge>
+                                                </div>
+                                            </SelectItem>
+                                        );
+                                    })}
                                 </SelectContent>
                             </Select>
                         </div>

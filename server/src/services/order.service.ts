@@ -7,6 +7,9 @@ import OrderModel, {
     OrderType,
 } from '../models/order.model.js';
 import QuotationModel from '../models/quotation.model.js';
+import ClientModel from '../models/client.model.js';
+import { isTelemarketer } from '../utils/telemarketer.util.js';
+import { Role } from '../constants/role.js';
 import { AppError } from '../utils/AppError.js';
 import { InvoiceCounter } from '../models/invoice-counter.model.js';
 import type { IQuotation } from '../types/quotation.type.js';
@@ -466,7 +469,7 @@ async function unlockAssets(orderId: string): Promise<IOrder> {
     return updated;
 }
 
-async function getAllOrdersFromDB(query: any) {
+async function getAllOrdersFromDB(query: any, user?: { id?: string; role?: string }) {
     const { page = 1, limit = 10, search, status, orderType, clientId } = query;
     const filter: any = {};
 
@@ -478,6 +481,27 @@ async function getAllOrdersFromDB(query: any) {
     if (status) filter.status = status;
     if (orderType) filter.orderType = orderType;
     if (clientId) filter.clientId = clientId;
+
+    // Telemarketer order scope filtering:
+    // Telemarketers only see orders created by themselves OR orders belonging to clients assigned/created by them
+    if (user?.id && [Role.STAFF, Role.TEAM_LEADER].includes(user.role as Role)) {
+        const isTM = await isTelemarketer(user.id);
+        if (isTM) {
+            const tmUserObjId = new Types.ObjectId(user.id);
+            const tmClients = await ClientModel.find({
+                $or: [
+                    { createdBy: tmUserObjId },
+                    { assignedTelemarketer: tmUserObjId },
+                ],
+            }).select('_id').lean();
+            const clientIds = tmClients.map((c) => c._id);
+
+            filter.$or = [
+                { createdBy: tmUserObjId },
+                { clientId: { $in: clientIds } },
+            ];
+        }
+    }
 
     const [data, total] = await Promise.all([
         OrderModel.find(filter)
@@ -500,9 +524,28 @@ async function getAllOrdersFromDB(query: any) {
     };
 }
 
-async function getOrderByIdFromDB(id: string) {
+async function getOrderByIdFromDB(id: string, user?: { id?: string; role?: string }) {
     const order = await OrderModel.findById(id).populate('clientId');
     if (!order) return null;
+
+    if (user?.id && [Role.STAFF, Role.TEAM_LEADER].includes(user.role as Role)) {
+        const isTM = await isTelemarketer(user.id);
+        if (isTM) {
+            const isCreator = order.createdBy?.toString() === user.id;
+            const clientObj = order.clientId as any;
+            const isClientOwner =
+                clientObj &&
+                (clientObj.createdBy?.toString() === user.id ||
+                 clientObj.assignedTelemarketer?.toString() === user.id ||
+                 clientObj.createdBy?._id?.toString() === user.id ||
+                 clientObj.assignedTelemarketer?._id?.toString() === user.id);
+
+            if (!isCreator && !isClientOwner) {
+                throw new AppError('Forbidden: You do not have permission to view this order', 403);
+            }
+        }
+    }
+
     const [enriched] = await enrichOrdersWithPaymentInfo([order]);
     return enriched;
 }

@@ -14,7 +14,7 @@ import { maskOrder, maskOrders } from '../utils/masking.js';
 
 async function getAllOrders(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-        const result = await OrderService.getAllOrdersFromDB(req.query);
+        const result = await OrderService.getAllOrdersFromDB(req.query, req.user);
         
         // Inject logic masking for staff
         if (result.data && Array.isArray(result.data)) {
@@ -39,7 +39,7 @@ async function getOrderById(req: Request, res: Response, next: NextFunction): Pr
             return;
         }
 
-        const result = await OrderService.getOrderByIdFromDB(id);
+        const result = await OrderService.getOrderByIdFromDB(id, req.user);
         if (!result) {
             res.status(404).json({ success: false, message: 'Order not found' });
             return;

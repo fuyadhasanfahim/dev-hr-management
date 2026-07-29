@@ -89,6 +89,7 @@ export function ClientTable({
             <TableHead className="font-medium text-slate-500 dark:text-slate-400">Name</TableHead>
             <TableHead className="font-medium text-slate-500 dark:text-slate-400">Email</TableHead>
             <TableHead className="font-medium text-slate-500 dark:text-slate-400">Phone</TableHead>
+            <TableHead className="font-medium text-slate-500 dark:text-slate-400">Assigned Telemarketer</TableHead>
             <TableHead className="font-medium text-slate-500 dark:text-slate-400 text-center">Team Members</TableHead>
             <TableHead className="font-medium text-slate-500 dark:text-slate-400 text-center">Status</TableHead>
             <TableHead className="font-medium text-slate-500 dark:text-slate-400 text-right">Actions</TableHead>
@@ -98,7 +99,7 @@ export function ClientTable({
           {clients.length === 0 ? (
             <TableRow className="hover:bg-transparent">
               <TableCell
-                colSpan={6}
+                colSpan={7}
                 className="text-center py-16 text-muted-foreground"
               >
                 <div className="flex flex-col items-center justify-center space-y-3">
@@ -115,6 +116,7 @@ export function ClientTable({
           ) : (
             clients.map((client) => {
               const isActive = client.status === "active";
+              const tm = typeof client.assignedTelemarketer === 'object' ? client.assignedTelemarketer : null;
               return (
                 <TableRow key={client._id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/30 transition-colors">
                   <TableCell className="font-medium text-slate-900 dark:text-slate-100">
@@ -134,6 +136,15 @@ export function ClientTable({
                   </TableCell>
                   <TableCell className="text-slate-600 dark:text-slate-300">
                     {client.phone || "-"}
+                  </TableCell>
+                  <TableCell>
+                    {tm?.name ? (
+                      <Badge variant="outline" className="bg-teal-50/50 text-teal-700 border-teal-200/80 dark:bg-teal-950/30 dark:text-teal-300 dark:border-teal-900/50">
+                        {tm.name}
+                      </Badge>
+                    ) : (
+                      <span className="text-slate-400 text-xs">-</span>
+                    )}
                   </TableCell>
                   <TableCell>
                     <div className="flex justify-center">
@@ -188,16 +199,14 @@ export function ClientTable({
                           <Eye className="h-4 w-4" />
                         </Link>
                       </Button>
-                      {!isTelemarketer && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-slate-400 hover:text-teal-600 dark:hover:text-teal-400"
-                          onClick={() => onEdit(client)}
-                        >
-                          <Edit2 className="h-4 w-4" />
-                        </Button>
-                      )}
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-slate-400 hover:text-teal-600 dark:hover:text-teal-400"
+                        onClick={() => onEdit(client)}
+                      >
+                        <Edit2 className="h-4 w-4" />
+                      </Button>
                     </div>
                   </TableCell>
                 </TableRow>

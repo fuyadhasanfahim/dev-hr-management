@@ -11,26 +11,42 @@ import { escapeRegex } from '../lib/sanitize.js';
 const buildMatchStage = (
     params: ClientQueryParams,
 ): Record<string, unknown> => {
-    const match: Record<string, unknown> = {};
+    const conditions: Record<string, unknown>[] = [];
 
     if (params.search) {
         const escaped = escapeRegex(params.search);
-        match.$or = [
-            { name: { $regex: escaped, $options: 'i' } },
-            { emails: { $regex: escaped, $options: 'i' } },
-        ];
+        conditions.push({
+            $or: [
+                { name: { $regex: escaped, $options: 'i' } },
+                { emails: { $regex: escaped, $options: 'i' } },
+            ],
+        });
     }
 
     if (params.status) {
-        match.status = params.status;
+        conditions.push({ status: params.status });
     }
 
-    // Ownership filter: restrict to clients created by a specific user
+    // Ownership filter: restrict to clients created by or assigned to a specific user
     if (params.createdBy) {
-        match.createdBy = new Types.ObjectId(params.createdBy);
+        const userId = new Types.ObjectId(params.createdBy);
+        conditions.push({
+            $or: [
+                { createdBy: userId },
+                { assignedTelemarketer: userId },
+            ],
+        });
     }
 
-    return match;
+    if (params.assignedTelemarketer) {
+        conditions.push({
+            assignedTelemarketer: new Types.ObjectId(params.assignedTelemarketer),
+        });
+    }
+
+    if (conditions.length === 0) return {};
+    if (conditions.length === 1) return conditions[0] || {};
+    return { $and: conditions };
 };
 
 // Get all clients with pagination and filtering
@@ -66,8 +82,25 @@ const getAllClientsFromDB = async (params: ClientQueryParams) => {
             },
         },
         {
+            $lookup: {
+                from: 'user',
+                localField: 'assignedTelemarketer',
+                foreignField: '_id',
+                as: 'assignedTelemarketer',
+            },
+        },
+        {
+            $unwind: {
+                path: '$assignedTelemarketer',
+                preserveNullAndEmptyArrays: true,
+            },
+        },
+        {
             $project: {
                 'createdBy.password': 0,
+                'createdBy.passwordHistory': 0,
+                'assignedTelemarketer.password': 0,
+                'assignedTelemarketer.passwordHistory': 0,
             },
         },
     );
@@ -108,6 +141,20 @@ const getClientByIdFromDB = async (id: string) => {
         },
         {
             $lookup: {
+                from: 'user',
+                localField: 'assignedTelemarketer',
+                foreignField: '_id',
+                as: 'assignedTelemarketer',
+            },
+        },
+        {
+            $unwind: {
+                path: '$assignedTelemarketer',
+                preserveNullAndEmptyArrays: true,
+            },
+        },
+        {
+            $lookup: {
                 from: 'services',
                 localField: 'assignedServices',
                 foreignField: '_id',
@@ -118,15 +165,72 @@ const getClientByIdFromDB = async (id: string) => {
             $project: {
                 'createdBy.password': 0,
                 'createdBy.passwordHistory': 0,
+                'assignedTelemarketer.password': 0,
+                'assignedTelemarketer.passwordHistory': 0,
             },
         },
     ]);
     return result[0] || null;
 };
 
+// Get next auto-incremented WB-10001 series client ID
+const getNextClientIdFromDB = async (): Promise<string> => {
+    const clients = await ClientModel.find({}, { clientId: 1 }).lean();
+    let maxNum = 10000;
+
+    for (const client of clients) {
+        if (!client.clientId) continue;
+        const match = client.clientId.match(/^WB-(\d+)$/i) || client.clientId.match(/(\d+)/);
+        if (match && match[1]) {
+            const num = parseInt(match[1], 10);
+            if (num > maxNum) {
+                maxNum = num;
+            }
+        }
+    }
+
+    let nextNum = maxNum + 1;
+    let candidate = `WB-${nextNum}`;
+
+    while (await ClientModel.findOne({ clientId: candidate })) {
+        nextNum++;
+        candidate = `WB-${nextNum}`;
+    }
+
+    return candidate;
+};
+
+// Migrate all existing clients to WB-10001, WB-10002... format ordered by creation date
+const migrateClientIdsInDB = async (): Promise<{ updatedCount: number; mappings: { id: string; name: string; oldClientId: string; newClientId: string }[] }> => {
+    const clients = await ClientModel.find().sort({ createdAt: 1 });
+    let currentNum = 10001;
+    const mappings: { id: string; name: string; oldClientId: string; newClientId: string }[] = [];
+
+    for (const client of clients) {
+        const newClientId = `WB-${currentNum}`;
+        const oldClientId = client.clientId || 'unassigned';
+
+        await ClientModel.updateOne(
+            { _id: client._id },
+            { $set: { clientId: newClientId } }
+        );
+
+        mappings.push({
+            id: client._id.toString(),
+            name: client.name,
+            oldClientId,
+            newClientId,
+        });
+
+        currentNum++;
+    }
+
+    return { updatedCount: mappings.length, mappings };
+};
+
 // Create client
 const createClientInDB = async (
-    payload: CreateClientInput & { createdBy: string },
+    payload: CreateClientInput & { createdBy: string; assignedTelemarketer?: string | null },
 ) => {
     // Check if any of the emails already exist
     const emailsToMatch = payload.emails ? payload.emails.map((e) => e.toLowerCase()) : [];
@@ -141,8 +245,15 @@ const createClientInDB = async (
         }
     }
 
+    // Generate clientId if missing or empty
+    let finalClientId = (payload as any).clientId;
+    if (!finalClientId || !finalClientId.trim()) {
+        finalClientId = await getNextClientIdFromDB();
+    }
+
     // Prepare data for creation
     const clientData = {
+        clientId: finalClientId,
         name: payload.name,
         emails: emailsToMatch,
         status: payload.status,
@@ -156,6 +267,11 @@ const createClientInDB = async (
             assignedServices: payload.assignedServices.map(
                 (id) => new Types.ObjectId(id),
             ),
+        }),
+        ...(payload.assignedTelemarketer !== undefined && {
+            assignedTelemarketer: payload.assignedTelemarketer
+                ? new Types.ObjectId(payload.assignedTelemarketer)
+                : null,
         }),
     };
 
@@ -187,6 +303,12 @@ const updateClientInDB = async (id: string, payload: UpdateClientInput) => {
         updateData.assignedServices = payload.assignedServices.map(
             (id) => new Types.ObjectId(id),
         );
+    }
+
+    if (payload.assignedTelemarketer !== undefined) {
+        updateData.assignedTelemarketer = payload.assignedTelemarketer
+            ? new Types.ObjectId(payload.assignedTelemarketer)
+            : null;
     }
 
     const result = await ClientModel.findByIdAndUpdate(id, updateData, {
@@ -332,4 +454,6 @@ export default {
     updateClientInDB,
     deleteClientFromDB,
     getClientStatsFromDB,
+    getNextClientIdFromDB,
+    migrateClientIdsInDB,
 };

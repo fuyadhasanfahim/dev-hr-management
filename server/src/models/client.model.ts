@@ -28,6 +28,11 @@ const teamMemberSchema = new Schema(
 
 const ClientSchema = new Schema<IClient>(
     {
+        clientId: {
+            type: String,
+            trim: true,
+            index: true,
+        },
         name: {
             type: String,
             required: true,
@@ -75,6 +80,12 @@ const ClientSchema = new Schema<IClient>(
                 ref: 'Service',
             },
         ],
+        assignedTelemarketer: {
+            type: Schema.Types.ObjectId,
+            ref: 'User',
+            default: null,
+            index: true,
+        },
         createdBy: {
             type: Schema.Types.ObjectId,
             ref: 'User',

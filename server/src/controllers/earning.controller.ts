@@ -17,7 +17,12 @@ async function scopeToTelemarketerClients(req: Request, params: EarningQueryPara
     const isTM = await isTelemarketer(req.user.id as string);
     if (!isTM) return;
 
-    const clients = await ClientModel.find({ createdBy: req.user.id }).select("_id").lean();
+    const clients = await ClientModel.find({
+        $or: [
+            { createdBy: req.user.id },
+            { assignedTelemarketer: req.user.id },
+        ],
+    }).select("_id").lean();
     const clientIds = clients.map((c) => c._id.toString());
     // A telemarketer's own scope is a single client at a time in this API;
     // if they have no clients, force an impossible match.

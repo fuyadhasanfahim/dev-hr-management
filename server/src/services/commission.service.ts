@@ -46,9 +46,10 @@ async function processEarningCommission(earningId: string, _changedBy: string, p
             0,
         );
 
-        // 3. Find the staff member who created the client
+        // 3. Find the staff member assigned to or who created the client
+        const telemarketerUserId = client.assignedTelemarketer || client.createdBy;
         const staff = await StaffModel.findOne({
-            userId: client.createdBy,
+            userId: telemarketerUserId,
             designation: { $regex: /^telemarketer$/i },
             status: "active",
         }).session(session);

@@ -68,7 +68,11 @@ const getClientById = async (req: Request, res: Response) => {
             [Role.STAFF, Role.TEAM_LEADER].includes(req.user.role as Role)
         ) {
             const isTM = await isTelemarketer(userId);
-            if (isTM && result.createdBy?._id?.toString() !== userId) {
+            const isOwner =
+                result.createdBy?._id?.toString() === userId ||
+                result.assignedTelemarketer?._id?.toString() === userId ||
+                result.assignedTelemarketer?.toString() === userId;
+            if (isTM && !isOwner) {
                 res.status(403).json({
                     success: false,
                     message:
@@ -159,7 +163,11 @@ const updateClient = async (req: Request, res: Response) => {
             [Role.STAFF, Role.TEAM_LEADER].includes(req.user.role as Role)
         ) {
             const isTM = await isTelemarketer(userId);
-            if (isTM && existingClient.createdBy?._id?.toString() !== userId) {
+            const isOwner =
+                existingClient.createdBy?._id?.toString() === userId ||
+                existingClient.assignedTelemarketer?._id?.toString() === userId ||
+                existingClient.assignedTelemarketer?.toString() === userId;
+            if (isTM && !isOwner) {
                 res.status(403).json({
                     success: false,
                     message:
@@ -223,7 +231,11 @@ const getClientStats = async (req: Request, res: Response) => {
             [Role.STAFF, Role.TEAM_LEADER].includes(req.user.role as Role)
         ) {
             const isTM = await isTelemarketer(userId);
-            if (isTM && client.createdBy?._id?.toString() !== userId) {
+            const isOwner =
+                client.createdBy?._id?.toString() === userId ||
+                client.assignedTelemarketer?._id?.toString() === userId ||
+                client.assignedTelemarketer?.toString() === userId;
+            if (isTM && !isOwner) {
                 res.status(403).json({
                     success: false,
                     message:
@@ -351,6 +363,39 @@ const getClientEmails = async (req: Request, res: Response) => {
     }
 };
 
+const getNextClientId = async (_req: Request, res: Response) => {
+    try {
+        const nextClientId = await ClientServices.getNextClientIdFromDB();
+        res.status(200).json({
+            success: true,
+            data: { nextClientId },
+        });
+    } catch (error: unknown) {
+        const err = error as Error;
+        res.status(500).json({
+            success: false,
+            message: err.message || 'Failed to get next client ID',
+        });
+    }
+};
+
+const migrateClientIds = async (_req: Request, res: Response) => {
+    try {
+        const result = await ClientServices.migrateClientIdsInDB();
+        res.status(200).json({
+            success: true,
+            message: `Successfully migrated ${result.updatedCount} clients to new WB-10001 format`,
+            data: result,
+        });
+    } catch (error: unknown) {
+        const err = error as Error;
+        res.status(500).json({
+            success: false,
+            message: err.message || 'Failed to migrate client IDs',
+        });
+    }
+};
+
 export default {
     getAllClients,
     getClientById,
@@ -359,4 +404,6 @@ export default {
     getClientStats,
     getAssignedServices,
     getClientEmails,
+    getNextClientId,
+    migrateClientIds,
 };

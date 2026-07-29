@@ -25,8 +25,12 @@ import {
     UsersRound
 } from 'lucide-react';
 import { useGetServicesQuery } from '@/redux/features/service/serviceApi';
+import { useGetStaffsQuery } from '@/redux/features/staff/staffApi';
 import { cn } from '@/lib/utils';
 import { MultiSelect } from '@/components/ui/multi-select';
+import { Combobox } from '@/components/ui/combobox';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { useMemo } from 'react';
 
 // --- SCHEMAS & TYPES ---
 
@@ -54,6 +58,7 @@ export const clientFormSchema = z.object({
     status: z.enum(['active', 'inactive']),
     teamMembers: z.array(teamMemberSchema),
     assignedServices: z.array(z.string()),
+    assignedTelemarketer: z.string().optional(),
 });
 
 export type FormValues = z.infer<typeof clientFormSchema>;
@@ -75,6 +80,7 @@ export interface ClientFormData {
         designation?: string;
     }[];
     assignedServices: string[];
+    assignedTelemarketer?: string;
 }
 
 interface ClientFormProps {
@@ -114,6 +120,11 @@ export function ClientForm({
 }: ClientFormProps) {
     const { data: servicesData } = useGetServicesQuery({ isActive: true });
 
+    const defaultTelemarketer =
+        typeof (defaultValues as any)?.assignedTelemarketer === 'object'
+            ? (defaultValues as any)?.assignedTelemarketer?._id || ''
+            : (defaultValues as any)?.assignedTelemarketer || '';
+
     const form = useForm<FormValues>({
         resolver: zodResolver(clientFormSchema),
         defaultValues: {
@@ -127,6 +138,7 @@ export function ClientForm({
             status: defaultValues?.status || 'active',
             teamMembers: defaultValues?.teamMembers || [],
             assignedServices: defaultValues?.assignedServices || [],
+            assignedTelemarketer: defaultTelemarketer,
         },
     });
 
@@ -146,6 +158,7 @@ export function ClientForm({
             status: data.status,
             teamMembers: data.teamMembers,
             assignedServices: data.assignedServices,
+            assignedTelemarketer: data.assignedTelemarketer || undefined,
         };
         await onSubmit(formattedData);
     };
@@ -189,8 +202,9 @@ export function ClientForm({
     };
 
     return (
-        <form onSubmit={handleSubmit(handleFormSubmit)} className="flex flex-col h-full flex-1 overflow-hidden bg-white dark:bg-slate-900">
-            <div className="flex-1 overflow-y-auto p-6 space-y-10">
+        <form onSubmit={handleSubmit(handleFormSubmit)} className="flex flex-col flex-1 min-h-0 overflow-hidden bg-white dark:bg-slate-900">
+            <ScrollArea className="flex-1 w-full max-h-[calc(90vh-130px)] px-6">
+                <div className="py-6 pb-8 space-y-10">
                 
                 {/* Basic Info Section */}
                 <section className="space-y-6">
@@ -238,11 +252,11 @@ export function ClientForm({
                         form={form} 
                     />
                 </section>
-                
-            </div>
+                </div>
+            </ScrollArea>
 
             {/* Sticky Footer */}
-            <div className="p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/90 flex items-center justify-end gap-3 sticky bottom-0 z-20 shrink-0 shadow-[0_-1px_2px_rgba(0,0,0,0.02)]">
+            <div className="p-6 pb-8 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/90 flex items-center justify-end gap-3 sticky bottom-0 z-20 shrink-0 shadow-[0_-1px_2px_rgba(0,0,0,0.02)]">
                 <Button type="button" variant="outline" onClick={onCancel} className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 dark:text-slate-200 dark:hover:bg-slate-800">
                     Cancel
                 </Button>
@@ -272,6 +286,32 @@ function ClientBasicInfo({
     const { register, control, setValue } = form;
     const { fields: emailFields, append: appendEmail, remove: removeEmail } = useFieldArray({ control, name: "emails" });
     const status = useWatch({ control, name: 'status' });
+    const assignedTelemarketer = useWatch({ control, name: 'assignedTelemarketer' });
+
+    const { data: staffsData } = useGetStaffsQuery({ limit: 100 });
+    const staffs = staffsData?.staffs || staffsData?.data || [];
+    const telemarketers = useMemo(() => {
+        const filtered = staffs.filter((s: any) => {
+            const des = s.designation || s.user?.designation || s.userId?.designation || '';
+            return /telemarketer/i.test(des);
+        });
+        return filtered.length > 0 ? filtered : staffs;
+    }, [staffs]);
+
+    const telemarketerOptions = useMemo(() => {
+        const options = telemarketers.map((t: any) => {
+            const uId = t.user?._id || (typeof t.userId === 'object' ? t.userId?._id : t.userId) || t._id;
+            const name = t.user?.name || t.name || (typeof t.userId === 'object' ? t.userId?.name : '') || 'Unnamed Telemarketer';
+            const email = t.user?.email || t.email || (typeof t.userId === 'object' ? t.userId?.email : '') || '';
+            const designationStr = t.designation || t.user?.designation || '';
+            return {
+                value: uId,
+                label: name,
+                description: `${email ? email : ''}${designationStr ? ` [${designationStr}]` : ''}`.trim(),
+            };
+        });
+        return [{ value: '', label: 'Unassigned / None', description: 'No telemarketer assigned' }, ...options];
+    }, [telemarketers]);
 
     return (
         <div className="space-y-6">
@@ -335,6 +375,21 @@ function ClientBasicInfo({
                         </SelectContent>
                     </Select>
                 </div>
+            </div>
+
+            <div className="space-y-2">
+                <Label className="text-slate-700 dark:text-slate-300">Assigned Telemarketer (Handover)</Label>
+                <Combobox
+                    options={telemarketerOptions}
+                    value={assignedTelemarketer || ''}
+                    onChange={(val) => setValue('assignedTelemarketer', val)}
+                    placeholder="Select telemarketer to hand over..."
+                    searchPlaceholder="Search telemarketer by name or email..."
+                    emptyText="No telemarketer found"
+                />
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Hand over client ownership to a telemarketer. The assigned telemarketer will see all orders for this client.
+                </p>
             </div>
         </div>
     );
@@ -503,7 +558,7 @@ function ClientAdditionalDetails({
                 </div>
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-2 pb-6 mb-6">
                 <Label htmlFor="description" className="text-slate-700 dark:text-slate-300">Internal Notes</Label>
                 <Textarea
                     id="description"

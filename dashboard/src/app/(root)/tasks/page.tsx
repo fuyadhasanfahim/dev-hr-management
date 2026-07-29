@@ -20,6 +20,7 @@ import {
 import { format, isPast } from 'date-fns';
 import { toast } from 'sonner';
 import { KanbanBoard } from '@/components/tasks/kanban/KanbanBoard';
+import { DeveloperBoard } from '@/components/tasks/developer/DeveloperBoard';
 import { AssignTaskModal } from '@/components/tasks/AssignTaskModal';
 import { EditTaskModal } from '@/components/tasks/EditTaskModal';
 import {
@@ -27,12 +28,13 @@ import {
     Send,
     CheckCircle2,
     LayoutGrid,
+    Users,
     List,
     Plus,
     Edit3,
     Clock,
-    Paperclip,
-    FileText,
+    UserCheck,
+    Zap,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -49,8 +51,9 @@ export default function MyTasksPage() {
 
     const [submitTask, { isLoading: isSubmitting }] = useSubmitTaskMutation();
 
-    const [viewMode, setViewMode] = useState<'kanban' | 'list'>('kanban');
+    const [viewMode, setViewMode] = useState<'kanban' | 'developer' | 'list'>('developer');
     const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
+    const [assignDefaultStaffId, setAssignDefaultStaffId] = useState<string | undefined>(undefined);
     const [editTaskData, setEditTaskData] = useState<any>(null);
     const [isSubmitModalOpen, setIsSubmitModalOpen] = useState(false);
     const [selectedTask, setSelectedTask] = useState<any>(null);
@@ -67,8 +70,27 @@ export default function MyTasksPage() {
         const underReview = tasks.filter((t: any) => t.status === 'under_review').length;
         const completed = tasks.filter((t: any) => t.status === 'completed').length;
         const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
-        return { total, pending, inProgress, underReview, completed, pct };
-    }, [tasks]);
+
+        // Developer capacity metrics
+        const staffWorkload: Record<string, number> = {};
+        tasks.forEach((t: any) => {
+            const sId = t.assignedTo?._id || t.assignedTo;
+            if (sId && t.status !== 'completed') {
+                staffWorkload[sId] = (staffWorkload[sId] || 0) + 1;
+            }
+        });
+
+        const totalStaffCount = staffs.length;
+        const activeStaffCount = Object.keys(staffWorkload).length;
+        const freeStaffCount = Math.max(0, totalStaffCount - activeStaffCount);
+
+        return { total, pending, inProgress, underReview, completed, pct, totalStaffCount, activeStaffCount, freeStaffCount };
+    }, [tasks, staffs]);
+
+    const handleOpenAssignModalForStaff = (staffId?: string) => {
+        setAssignDefaultStaffId(staffId);
+        setIsAssignModalOpen(true);
+    };
 
     const handleOpenSubmit = (task: any) => {
         setSelectedTask(task);
@@ -118,10 +140,10 @@ export default function MyTasksPage() {
                             </div>
                             <div>
                                 <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">
-                                    Tasks & Board
+                                    Tasks & Developer Workload
                                 </h1>
                                 <p className="text-xs text-slate-500 dark:text-slate-400 font-normal">
-                                    Manage task assignments, feature checklists, and active order deliverables.
+                                    Manage user-based task assignments, developer workloads, and order deliverables.
                                 </p>
                             </div>
                         </div>
@@ -131,7 +153,7 @@ export default function MyTasksPage() {
                         {canManage && (
                             <button
                                 type="button"
-                                onClick={() => setIsAssignModalOpen(true)}
+                                onClick={() => handleOpenAssignModalForStaff(undefined)}
                                 className="px-4 py-2 text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors flex items-center gap-1.5 shadow-xs"
                             >
                                 <Plus className="h-4 w-4" />
@@ -139,8 +161,21 @@ export default function MyTasksPage() {
                             </button>
                         )}
 
-                        {/* View Mode Toggle */}
+                        {/* View Mode 3-Way Toggle */}
                         <div className="inline-flex items-center p-1 bg-slate-100 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700/80">
+                            <button
+                                type="button"
+                                onClick={() => setViewMode('developer')}
+                                className={cn(
+                                    'h-7 px-3 text-xs font-medium gap-1.5 rounded-md flex items-center transition-colors',
+                                    viewMode === 'developer' 
+                                        ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-xs' 
+                                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                                )}
+                            >
+                                <Users className="h-3.5 w-3.5 text-blue-500" />
+                                By Developer
+                            </button>
                             <button
                                 type="button"
                                 onClick={() => setViewMode('kanban')}
@@ -177,7 +212,9 @@ export default function MyTasksPage() {
                         <span className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Total Tasks</span>
                         <div className="flex items-baseline justify-between">
                             <span className="text-2xl font-semibold text-slate-900 dark:text-slate-100">{metrics.total}</span>
-                            <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">100%</span>
+                            <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
+                                {metrics.totalStaffCount} Developers
+                            </span>
                         </div>
                     </div>
 
@@ -185,15 +222,19 @@ export default function MyTasksPage() {
                         <span className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider block">In Progress</span>
                         <div className="flex items-baseline justify-between">
                             <span className="text-2xl font-semibold text-blue-600 dark:text-blue-400">{metrics.inProgress}</span>
-                            <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400">Active</span>
+                            <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 flex items-center gap-1">
+                                <Zap className="h-3 w-3" /> Active
+                            </span>
                         </div>
                     </div>
 
                     <div className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl space-y-1">
-                        <span className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Under Review</span>
+                        <span className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Developer Capacity</span>
                         <div className="flex items-baseline justify-between">
-                            <span className="text-2xl font-semibold text-amber-500">{metrics.underReview}</span>
-                            <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400">Pending</span>
+                            <span className="text-2xl font-semibold text-emerald-600 dark:text-emerald-400">{metrics.freeStaffCount}</span>
+                            <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400">
+                                Free Now
+                            </span>
                         </div>
                     </div>
 
@@ -216,7 +257,16 @@ export default function MyTasksPage() {
             </div>
 
             {/* Main Content View */}
-            {viewMode === 'kanban' ? (
+            {viewMode === 'developer' ? (
+                <DeveloperBoard
+                    tasks={tasks}
+                    staffs={staffs}
+                    canManage={canManage}
+                    onEditTask={setEditTaskData}
+                    onSubmitTask={handleOpenSubmit}
+                    onAssignTaskToStaff={handleOpenAssignModalForStaff}
+                />
+            ) : viewMode === 'kanban' ? (
                 <KanbanBoard
                     tasks={tasks}
                     canManage={canManage}
@@ -381,8 +431,12 @@ export default function MyTasksPage() {
             {/* Assign Task Modal */}
             <AssignTaskModal
                 open={isAssignModalOpen}
-                onOpenChange={setIsAssignModalOpen}
+                onOpenChange={(open) => {
+                    setIsAssignModalOpen(open);
+                    if (!open) setAssignDefaultStaffId(undefined);
+                }}
                 existingTasks={tasks}
+                defaultStaffId={assignDefaultStaffId}
             />
         </div>
     );

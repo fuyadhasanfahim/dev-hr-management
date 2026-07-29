@@ -159,6 +159,7 @@ export default function ClientsPage() {
       status: client.status,
       teamMembers: client.teamMembers || [],
       assignedServices: client.assignedServices || [],
+      assignedTelemarketer: typeof client.assignedTelemarketer === 'object' ? client.assignedTelemarketer._id : client.assignedTelemarketer || "",
     });
     setIsEditDialogOpen(true);
   };
@@ -178,24 +179,22 @@ export default function ClientsPage() {
             )}
           </p>
         </div>
-        {!isTelemarketer && (
-          <div className="flex items-center gap-3">
-            <Button
-              variant="outline"
-              className="bg-white dark:bg-slate-900"
-              onClick={() => toast.info("Export feature coming soon")}
-            >
-              <FileDown className="h-4 w-4 text-slate-500 dark:text-slate-400" />
-              Export
-            </Button>
-            <Button
-              onClick={() => setIsAddDialogOpen(true)}
-              className="bg-teal-600 hover:bg-teal-700 text-white shadow-sm"
-            >
-              <Plus className="h-4 w-4" /> Add Client
-            </Button>
-          </div>
-        )}
+        <div className="flex items-center gap-3">
+          <Button
+            variant="outline"
+            className="bg-white dark:bg-slate-900"
+            onClick={() => toast.info("Export feature coming soon")}
+          >
+            <FileDown className="h-4 w-4 text-slate-500 dark:text-slate-400" />
+            Export
+          </Button>
+          <Button
+            onClick={() => setIsAddDialogOpen(true)}
+            className="bg-teal-600 hover:bg-teal-700 text-white shadow-sm"
+          >
+            <Plus className="h-4 w-4" /> Add Client
+          </Button>
+        </div>
       </div>
 
       {/* Stats section */}
@@ -250,7 +249,7 @@ export default function ClientsPage() {
 
       {/* Add Client Dialog */}
       <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-        <DialogContent className="max-w-4xl h-[90vh] max-h-[90vh] flex flex-col p-0 overflow-hidden gap-0 bg-white dark:bg-slate-900">
+        <DialogContent className="max-w-4xl h-[85vh] max-h-[85vh] flex flex-col p-0 overflow-hidden gap-0 bg-white dark:bg-slate-900 border shadow-2xl">
           <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 shrink-0">
             <DialogHeader>
               <DialogTitle className="text-xl font-semibold text-slate-900 dark:text-slate-100">Add New Client</DialogTitle>
@@ -271,7 +270,7 @@ export default function ClientsPage() {
 
       {/* Edit Client Dialog */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="max-w-4xl h-[90vh] max-h-[90vh] flex flex-col p-0 overflow-hidden gap-0 bg-white dark:bg-slate-900">
+        <DialogContent className="max-w-4xl h-[85vh] max-h-[85vh] flex flex-col p-0 overflow-hidden gap-0 bg-white dark:bg-slate-900 border shadow-2xl">
           <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 shrink-0">
             <DialogHeader>
               <DialogTitle className="text-xl font-semibold text-slate-900 dark:text-slate-100">Edit Client</DialogTitle>

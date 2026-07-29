@@ -7,6 +7,20 @@ const router: Router = Router();
 // Get all clients
 router.get('/', authorizeTelemarketer, ClientController.getAllClients);
 
+// Get next auto-incremented WB-10001 client ID (must be before :id route)
+router.get(
+    '/next-id',
+    authorizeTelemarketer,
+    ClientController.getNextClientId,
+);
+
+// Migrate existing client IDs to WB-10001 format
+router.post(
+    '/migrate-ids',
+    authorizeTelemarketer,
+    ClientController.migrateClientIds,
+);
+
 // Get client stats (must be before :id route)
 router.get(
     '/:id/stats',
