@@ -1096,8 +1096,8 @@ export function buildPrintHtml(
 
     const detailsHtml = (includedSupportItems.length || notIncludedItems.length || clientRequirements.length || keyTermsItems.length || termsItems.length) ? `
         ${listBlock('Included Support', includedSupportItems)}
-        ${listBlock('Not Included', notIncludedItems)}
-        ${listBlock('Client Requirements', clientRequirements)}
+        ${listBlock('Not Included in Price', notIncludedItems)}
+        ${listBlock('Client Needs to Provide', clientRequirements)}
         ${listBlock('Key Terms', keyTermsItems)}
         ${termsItems.length ? `
             <div class="paginate-group">
