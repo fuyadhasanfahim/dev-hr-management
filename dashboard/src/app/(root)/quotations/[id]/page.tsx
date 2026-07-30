@@ -434,10 +434,10 @@ export default function ViewQuotationPage() {
 
     const currency = data.currency || '৳';
     const totals = data.totals ?? {
-        subtotal: 0,
-        discountAmount: 0,
-        taxAmount: 0,
-        grandTotal: 0,
+        subtotal: liveTotals.totals.subtotal,
+        discountAmount: liveTotals.totals.discountAmount,
+        taxAmount: liveTotals.totals.taxAmount,
+        grandTotal: liveTotals.totals.grandTotal,
     };
     const grandTotal = totals.grandTotal ?? 0;
     const subtotal = totals.subtotal ?? 0;

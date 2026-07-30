@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { useSession } from '@/lib/auth-client';
 import { Role } from '@/constants/role';
 import { DESIGNATION_LABELS, type Designation } from '@/constants/designation';
@@ -8,7 +9,7 @@ import {
     useGetMyTasksQuery,
     useSubmitTaskMutation,
 } from '@/redux/features/task/taskApi';
-import { useGetStaffsQuery } from '@/redux/features/staff/staffApi';
+import { useGetStaffsQuery, useGetMeQuery } from '@/redux/features/staff/staffApi';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import {
@@ -50,8 +51,19 @@ const DEFAULT_FILTERS: WorkloadFiltersState = {
 };
 
 export default function TeamWorkloadPage() {
+    const router = useRouter();
     const { data: session } = useSession();
     const role = session?.user?.role;
+    const { data: meData } = useGetMeQuery(undefined, { skip: !session });
+
+    useEffect(() => {
+        if (role && role !== Role.SUPER_ADMIN && role !== Role.ADMIN) {
+            if (meData?.staff?._id) {
+                router.replace(`/tasks/member/${meData.staff._id}`);
+            }
+        }
+    }, [role, meData, router]);
+
     const canManage = useMemo(() => {
         return role === Role.SUPER_ADMIN || role === Role.ADMIN || role === Role.HR_MANAGER || role === Role.TEAM_LEADER;
     }, [role]);
