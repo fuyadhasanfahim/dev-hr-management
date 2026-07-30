@@ -141,10 +141,10 @@ export default function StaffHeader() {
                             </div>
 
                             <div className="flex flex-col">
-                                <span className="text-3xl font-bold text-foreground leading-none">
+                                <span className="text-3xl font-bold text-slate-900 dark:text-white leading-none">
                                     {format(currentTime, 'hh:mm')}
                                 </span>
-                                <span className="text-sm uppercase tracking-widest text-muted-foreground">
+                                <span className="text-sm uppercase tracking-widest text-slate-500 dark:text-slate-400">
                                     {format(currentTime, 'a')}
                                 </span>
                             </div>
