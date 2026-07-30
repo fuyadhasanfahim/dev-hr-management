@@ -3543,8 +3543,8 @@ function QuotationSummary({
     const totalOneTime = webDevFixed + photoTotal + videoFixed + marketingFixed;
     const totalRecurring = webDevMonthly + videoMonthly + marketingMonthly;
 
-    const discountAmount = ((totalOneTime + totalRecurring) * (discountPercentage || 0)) / 100;
-    const subtotalAfterDiscount = (totalOneTime + totalRecurring) - discountAmount;
+    const discountAmount = (totalOneTime * (discountPercentage || 0)) / 100;
+    const subtotalAfterDiscount = totalOneTime - discountAmount;
     const taxAmount = (subtotalAfterDiscount * (taxPercentage || 0)) / 100;
     const grandTotalOneTime = subtotalAfterDiscount + taxAmount;
 

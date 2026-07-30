@@ -60,10 +60,11 @@ function calculateTotals(data: Partial<IQuotation>): {
         // per-image / per-video) feed this service's totals; monthly/yearly
         // cycles are billed separately and are pulled out into recurringCharges.
         const upfrontLineItemsTotal = (service.lineItems || []).reduce((acc, item) => {
-            if (!isUpfrontBillingCycle(item.billingCycle)) {
-                recurringCharges.push(item);
+            if (isUpfrontBillingCycle(item.billingCycle)) {
+                return acc + (item.price || 0) * (item.quantity ?? 1);
             }
-            return acc + (item.price || 0) * (item.quantity ?? 1);
+            recurringCharges.push(item);
+            return acc;
         }, 0);
 
         const serviceBase = basePrice + upfrontLineItemsTotal;

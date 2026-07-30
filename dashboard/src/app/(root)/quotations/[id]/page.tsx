@@ -1191,6 +1191,21 @@ export default function ViewQuotationPage() {
                                         {canSeeFinancials ? money(taxAmount) : '******'}
                                     </span>
                                 </div>
+                                {data.recurringCharges && data.recurringCharges.length > 0 && (
+                                    <div className="flex items-center justify-between py-1 border-t border-slate-100 dark:border-slate-800/50 mt-1 pt-2">
+                                        <span className="text-slate-500 dark:text-slate-400 font-bold">
+                                            Total Recurring / Mo
+                                        </span>
+                                        <span
+                                            className={cn(
+                                                'font-bold text-[#4E12D4] dark:text-[#C850FA]',
+                                                !canSeeFinancials && 'blur-[3px] select-none opacity-60'
+                                            )}
+                                        >
+                                            {canSeeFinancials ? money(data.recurringCharges.reduce((acc: number, item: any) => acc + (item.price || 0) * (item.quantity ?? 1), 0)) : '******'}
+                                        </span>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </div>
