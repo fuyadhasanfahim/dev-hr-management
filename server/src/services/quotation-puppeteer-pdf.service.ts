@@ -1062,19 +1062,27 @@ export function buildPrintHtml(
         </div>
     `;
 
+    const recurringTotalVal = recurringItems.reduce((acc, curr) => acc + (curr.lineTotal || 0), 0);
     const recurringHtml = recurringItems.length ? `
         <div class="paginate-group">
             <div class="paginate-block" data-keep-with-next="true">
                 <h2 class="section-title">Recurring Charges</h2>
             </div>
             ${recurringItems.map((r, i) => `
-                <div class="paginate-block${i === recurringItems.length - 1 ? ' blk-section-end' : ''}">
+                <div class="paginate-block">
                     <div class="recurring-item">
                         <div class="r-title">${esc(r.title)}</div>
                         <div class="r-amt">${amountCell(r)} / ${esc(r.cycleLabel.toLowerCase())}</div>
                     </div>
                 </div>
             `).join('')}
+            <div class="paginate-block blk-section-end">
+                <div class="invest-summary-rule"></div>
+                <div class="invest-total">
+                    <div class="invest-total-label">Total Recurring</div>
+                    <div class="invest-total-figure">${formatMoneyPdf(recurringTotalVal, currency)} / mo</div>
+                </div>
+            </div>
         </div>
     ` : '';
 
