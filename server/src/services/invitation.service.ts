@@ -71,7 +71,7 @@ const createInvitation = async (data: IInvitationCreate) => {
 
     // Send email
     const baseUrl = envConfig.auth_app_url || envConfig.client_url;
-    const signupUrl = `${baseUrl}/sign-up/${token}`;
+    const signupUrl = `${baseUrl}/sign-up/${token}?callbackUrl=${encodeURIComponent(envConfig.client_url)}`;
     await emailService.sendInvitationEmail({
         to: data.email,
         designation: data.designation,

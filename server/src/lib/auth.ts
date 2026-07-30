@@ -73,10 +73,17 @@ export const auth = betterAuth({
         sendOnSignUp: false,
         async sendVerificationEmail({ url, user }) {
             try {
+                // Ensure callbackUrl is included so the auth app redirects correctly
+                const verifyUrl = new URL(url);
+                if (!verifyUrl.searchParams.has('callbackUrl')) {
+                    verifyUrl.searchParams.set('callbackUrl', envConfig.client_url);
+                }
+                const finalUrl = verifyUrl.toString();
+
                 await emailService.sendVerificationEmail({
                     to: user.email,
                     userName: user.name || 'User',
-                    verificationUrl: url,
+                    verificationUrl: finalUrl,
                 });
             } catch (error) {
                 console.error(
