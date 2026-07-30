@@ -872,6 +872,10 @@ type QuotationContextType = {
     setNotIncludedItems: React.Dispatch<React.SetStateAction<string[]>>;
     clientRequirements: string[];
     setClientRequirements: React.Dispatch<React.SetStateAction<string[]>>;
+    includedSupportItems: string[];
+    setIncludedSupportItems: React.Dispatch<React.SetStateAction<string[]>>;
+    keyTermsItems: string[];
+    setKeyTermsItems: React.Dispatch<React.SetStateAction<string[]>>;
     paymentMilestones: any[];
     setPaymentMilestones: React.Dispatch<React.SetStateAction<any[]>>;
     paymentPreset: "50-50" | "30-40-30" | "100-upfront" | "custom";
@@ -998,6 +1002,8 @@ Please review the details below. Should you have any questions or require custom
     const [videoEditingUnit, setVideoEditingUnit] = useState<"video" | "second" | "10-seconds">("video");
     const [notIncludedItems, setNotIncludedItems] = useState<string[]>([]);
     const [clientRequirements, setClientRequirements] = useState<string[]>([]);
+    const [includedSupportItems, setIncludedSupportItems] = useState<string[]>([]);
+    const [keyTermsItems, setKeyTermsItems] = useState<string[]>([]);
     const [paymentPreset, setPaymentPreset] = useState<"50-50" | "30-40-30" | "100-upfront" | "custom">("50-50");
     const [paymentMilestones, setPaymentMilestones] = useState<any[]>([
         { label: "50% Upfront Deposit (Project Kickoff)", percentage: 50 },
@@ -1067,6 +1073,12 @@ Please review the details below. Should you have any questions or require custom
             }
             if (initialData.clientRequirements && Array.isArray(initialData.clientRequirements) && initialData.clientRequirements.length > 0) {
                 setClientRequirements(initialData.clientRequirements);
+            }
+            if (initialData.includedSupport && Array.isArray(initialData.includedSupport) && initialData.includedSupport.length > 0) {
+                setIncludedSupportItems(initialData.includedSupport);
+            }
+            if (initialData.keyTerms && Array.isArray(initialData.keyTerms) && initialData.keyTerms.length > 0) {
+                setKeyTermsItems(initialData.keyTerms);
             }
             if (initialData.paymentMilestones && Array.isArray(initialData.paymentMilestones) && initialData.paymentMilestones.length > 0) {
                 setPaymentMilestones(initialData.paymentMilestones);
@@ -1512,6 +1524,8 @@ Please review the details below. Should you have any questions or require custom
             services: services,
             notIncluded: notIncludedItems,
             clientRequirements: clientRequirements,
+            includedSupport: includedSupportItems,
+            keyTerms: keyTermsItems,
             paymentMilestones: paymentMilestones,
             status: initialData?.status || "draft",
         };
@@ -1619,6 +1633,10 @@ Please review the details below. Should you have any questions or require custom
                 setNotIncludedItems,
                 clientRequirements,
                 setClientRequirements,
+                includedSupportItems,
+                setIncludedSupportItems,
+                keyTermsItems,
+                setKeyTermsItems,
                 paymentMilestones,
                 setPaymentMilestones,
                 paymentPreset,
@@ -1860,9 +1878,11 @@ Please review the details below. Should you have any questions or require custom
 
                         {/* Exclusions & Terms Sections */}
                         <div className="space-y-6 pt-2">
+                            <IncludedSupportSection />
                             <NotIncludedSection />
                             <ClientRequirementsSection />
                             <PaymentTermsSection />
+                            <KeyTermsSection />
                         </div>
                     </div>
 
@@ -3649,15 +3669,13 @@ function QuotationSummary({
                         </div>
                     </div>
 
-                    {(discountPercentage > 0 || taxPercentage > 0) && (
-                        <div className="flex justify-between items-center text-sm font-extrabold border-t pt-2 mt-1">
-                            <span>Grand Total (Initial)</span>
-                            <span className="text-primary font-mono text-base font-bold">
-                                {currencySymbol}
-                                {grandTotalOneTime.toLocaleString("en-IN")}
-                            </span>
-                        </div>
-                    )}
+                    <div className="flex justify-between items-center text-sm font-extrabold border-t pt-2 mt-1">
+                        <span>Grand Total (Initial)</span>
+                        <span className="text-primary font-mono text-base font-bold">
+                            {currencySymbol}
+                            {grandTotalOneTime.toLocaleString("en-IN")}
+                        </span>
+                    </div>
 
                     {showMarketing && marketingAdBudget > 0 && (
                         <div className="flex justify-between items-center text-xs font-semibold text-muted-foreground border-t border-dashed pt-2 mt-2">
@@ -3701,6 +3719,286 @@ function QuotationSummary({
                         </Button>
                     )}
                 </div>
+            </CardContent>
+        </Card>
+    );
+}
+
+function IncludedSupportSection() {
+    const { includedSupportItems, setIncludedSupportItems } = useQuotation();
+    const [isAdding, setIsAdding] = useState(false);
+    const [newItemText, setNewItemText] = useState("");
+    const [isBulkOpen, setIsBulkOpen] = useState(false);
+    const [bulkText, setBulkText] = useState("");
+
+    const handleAddItem = () => {
+        if (!newItemText.trim()) return;
+        setIncludedSupportItems((prev) => [...prev, newItemText.trim()]);
+        setNewItemText("");
+        setIsAdding(false);
+    };
+
+    const handleBulkImport = () => {
+        if (!bulkText.trim()) return;
+        const lines = bulkText
+            .split("\n")
+            .map((l) => l.trim().replace(/^[-*•◦▪+]\s*/, ""))
+            .filter(Boolean);
+        if (lines.length > 0) {
+            setIncludedSupportItems((prev) => [...prev, ...lines]);
+            toast.success(`Imported ${lines.length} items!`);
+        }
+        setBulkText("");
+        setIsBulkOpen(false);
+    };
+
+    const handleDeleteItem = (index: number) => {
+        setIncludedSupportItems((prev) => prev.filter((_, i) => i !== index));
+    };
+
+    return (
+        <Card className="border shadow-xs">
+            <CardHeader className="pb-3">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <div>
+                        <CardTitle className="text-base font-bold flex items-center gap-2">
+                            <span className="flex size-5 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-500 text-xs font-bold">✓</span>
+                            Included Support
+                        </CardTitle>
+                        <CardDescription className="text-xs">
+                            List support services, maintenance, or warranties included in this quotation.
+                        </CardDescription>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <Dialog open={isBulkOpen} onOpenChange={setIsBulkOpen}>
+                            <DialogTrigger asChild>
+                                <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5 font-medium">
+                                    <IconCopy className="size-3.5" />
+                                    Bulk Paste
+                                </Button>
+                            </DialogTrigger>
+                            <DialogContent className="max-w-lg">
+                                <DialogHeader>
+                                    <DialogTitle>Bulk Paste Included Support</DialogTitle>
+                                    <DialogDescription className="text-xs">
+                                        Paste multiple items (one per line). Bullets and hyphens will be cleaned automatically.
+                                    </DialogDescription>
+                                </DialogHeader>
+                                <div className="space-y-3 pt-2">
+                                    <Textarea
+                                        placeholder="3 Months Free Bug Fixing&#10;1 Year Hosting Support"
+                                        value={bulkText}
+                                        onChange={(e) => setBulkText(e.target.value)}
+                                        rows={6}
+                                        className="font-mono text-xs"
+                                    />
+                                    <div className="flex justify-end gap-2">
+                                        <Button variant="outline" size="sm" onClick={() => setIsBulkOpen(false)}>Cancel</Button>
+                                        <Button size="sm" onClick={handleBulkImport}>Import Items</Button>
+                                    </div>
+                                </div>
+                            </DialogContent>
+                        </Dialog>
+                        <Button
+                            size="sm"
+                            className="h-8 text-xs gap-1.5 font-semibold"
+                            onClick={() => setIsAdding(true)}
+                        >
+                            <IconPlus className="size-3.5" />
+                            Add Item
+                        </Button>
+                    </div>
+                </div>
+            </CardHeader>
+            <Separator />
+            <CardContent className="space-y-3">
+                {includedSupportItems.length === 0 && !isAdding && (
+                    <div className="p-6 text-center border-2 border-dashed rounded-xl bg-muted/20">
+                        <p className="text-xs text-muted-foreground font-medium">No included support specified. Click "+ Add Item" or "Bulk Paste" above.</p>
+                    </div>
+                )}
+
+                <div className="space-y-2">
+                    {includedSupportItems.map((item, index) => (
+                        <div
+                            key={index}
+                            className="flex items-center justify-between gap-3 p-3 rounded-lg border bg-card hover:bg-muted/30 transition-colors text-sm"
+                        >
+                            <div className="flex items-center gap-3 min-w-0 flex-1">
+                                <span className="flex size-6 shrink-0 items-center justify-center rounded-md bg-muted text-[11px] font-mono font-bold text-muted-foreground">
+                                    {String(index + 1).padStart(2, "0")}
+                                </span>
+                                <span className="font-medium text-foreground text-xs leading-relaxed truncate">{item}</span>
+                            </div>
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                className="size-7 text-muted-foreground hover:text-destructive shrink-0"
+                                onClick={() => handleDeleteItem(index)}
+                            >
+                                <IconTrash className="size-3.5" />
+                            </Button>
+                        </div>
+                    ))}
+                </div>
+
+                {isAdding && (
+                    <div className="flex items-center gap-2 p-2 border rounded-lg bg-muted/20">
+                        <Input
+                            placeholder="e.g. 1 Year Hosting Support"
+                            value={newItemText}
+                            onChange={(e) => setNewItemText(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === "Enter") handleAddItem();
+                                if (e.key === "Escape") setIsAdding(false);
+                            }}
+                            className="h-8 text-xs bg-background"
+                            autoFocus
+                        />
+                        <Button size="sm" className="h-8 text-xs shrink-0" onClick={handleAddItem}>Save</Button>
+                        <Button size="sm" variant="ghost" className="h-8 text-xs shrink-0" onClick={() => setIsAdding(false)}>Cancel</Button>
+                    </div>
+                )}
+            </CardContent>
+        </Card>
+    );
+}
+
+function KeyTermsSection() {
+    const { keyTermsItems, setKeyTermsItems } = useQuotation();
+    const [isAdding, setIsAdding] = useState(false);
+    const [newItemText, setNewItemText] = useState("");
+    const [isBulkOpen, setIsBulkOpen] = useState(false);
+    const [bulkText, setBulkText] = useState("");
+
+    const handleAddItem = () => {
+        if (!newItemText.trim()) return;
+        setKeyTermsItems((prev) => [...prev, newItemText.trim()]);
+        setNewItemText("");
+        setIsAdding(false);
+    };
+
+    const handleBulkImport = () => {
+        if (!bulkText.trim()) return;
+        const lines = bulkText
+            .split("\n")
+            .map((l) => l.trim().replace(/^[-*•◦▪+]\s*/, ""))
+            .filter(Boolean);
+        if (lines.length > 0) {
+            setKeyTermsItems((prev) => [...prev, ...lines]);
+            toast.success(`Imported ${lines.length} items!`);
+        }
+        setBulkText("");
+        setIsBulkOpen(false);
+    };
+
+    const handleDeleteItem = (index: number) => {
+        setKeyTermsItems((prev) => prev.filter((_, i) => i !== index));
+    };
+
+    return (
+        <Card className="border shadow-xs">
+            <CardHeader className="pb-3">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <div>
+                        <CardTitle className="text-base font-bold flex items-center gap-2">
+                            <span className="flex size-5 items-center justify-center rounded-full bg-blue-500/10 text-blue-500 text-xs font-bold">!</span>
+                            Key Terms
+                        </CardTitle>
+                        <CardDescription className="text-xs">
+                            List important contractual terms, milestones, or conditions.
+                        </CardDescription>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <Dialog open={isBulkOpen} onOpenChange={setIsBulkOpen}>
+                            <DialogTrigger asChild>
+                                <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5 font-medium">
+                                    <IconCopy className="size-3.5" />
+                                    Bulk Paste
+                                </Button>
+                            </DialogTrigger>
+                            <DialogContent className="max-w-lg">
+                                <DialogHeader>
+                                    <DialogTitle>Bulk Paste Key Terms</DialogTitle>
+                                    <DialogDescription className="text-xs">
+                                        Paste multiple items (one per line). Bullets and hyphens will be cleaned automatically.
+                                    </DialogDescription>
+                                </DialogHeader>
+                                <div className="space-y-3 pt-2">
+                                    <Textarea
+                                        placeholder="Development begins after 50% upfront payment.&#10;Final delivery upon remaining balance."
+                                        value={bulkText}
+                                        onChange={(e) => setBulkText(e.target.value)}
+                                        rows={6}
+                                        className="font-mono text-xs"
+                                    />
+                                    <div className="flex justify-end gap-2">
+                                        <Button variant="outline" size="sm" onClick={() => setIsBulkOpen(false)}>Cancel</Button>
+                                        <Button size="sm" onClick={handleBulkImport}>Import Items</Button>
+                                    </div>
+                                </div>
+                            </DialogContent>
+                        </Dialog>
+                        <Button
+                            size="sm"
+                            className="h-8 text-xs gap-1.5 font-semibold"
+                            onClick={() => setIsAdding(true)}
+                        >
+                            <IconPlus className="size-3.5" />
+                            Add Item
+                        </Button>
+                    </div>
+                </div>
+            </CardHeader>
+            <Separator />
+            <CardContent className="space-y-3">
+                {keyTermsItems.length === 0 && !isAdding && (
+                    <div className="p-6 text-center border-2 border-dashed rounded-xl bg-muted/20">
+                        <p className="text-xs text-muted-foreground font-medium">No key terms specified. Click "+ Add Item" or "Bulk Paste" above.</p>
+                    </div>
+                )}
+
+                <div className="space-y-2">
+                    {keyTermsItems.map((item, index) => (
+                        <div
+                            key={index}
+                            className="flex items-center justify-between gap-3 p-3 rounded-lg border bg-card hover:bg-muted/30 transition-colors text-sm"
+                        >
+                            <div className="flex items-center gap-3 min-w-0 flex-1">
+                                <span className="flex size-6 shrink-0 items-center justify-center rounded-md bg-muted text-[11px] font-mono font-bold text-muted-foreground">
+                                    {String(index + 1).padStart(2, "0")}
+                                </span>
+                                <span className="font-medium text-foreground text-xs leading-relaxed truncate">{item}</span>
+                            </div>
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                className="size-7 text-muted-foreground hover:text-destructive shrink-0"
+                                onClick={() => handleDeleteItem(index)}
+                            >
+                                <IconTrash className="size-3.5" />
+                            </Button>
+                        </div>
+                    ))}
+                </div>
+
+                {isAdding && (
+                    <div className="flex items-center gap-2 p-2 border rounded-lg bg-muted/20">
+                        <Input
+                            placeholder="e.g. Development begins after 50% upfront payment."
+                            value={newItemText}
+                            onChange={(e) => setNewItemText(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === "Enter") handleAddItem();
+                                if (e.key === "Escape") setIsAdding(false);
+                            }}
+                            className="h-8 text-xs bg-background"
+                            autoFocus
+                        />
+                        <Button size="sm" className="h-8 text-xs shrink-0" onClick={handleAddItem}>Save</Button>
+                        <Button size="sm" variant="ghost" className="h-8 text-xs shrink-0" onClick={() => setIsAdding(false)}>Cancel</Button>
+                    </div>
+                )}
             </CardContent>
         </Card>
     );
@@ -4205,3 +4503,4 @@ function PaymentTermsSection() {
         </Card>
     );
 }
+

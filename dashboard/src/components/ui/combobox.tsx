@@ -50,7 +50,7 @@ export function Combobox({
   const selected = options.find((o) => o.value === value);
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={setOpen} modal={true}>
       <PopoverTrigger asChild>
         <Button
           variant="outline"
@@ -73,7 +73,7 @@ export function Combobox({
           )}
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+      <PopoverContent className="w-[var(--radix-popover-trigger-width)] min-w-[280px] p-0" align="start">
         <Command>
           <CommandInput placeholder={searchPlaceholder} />
           <CommandList>
@@ -82,15 +82,17 @@ export function Combobox({
               {options.map((option) => (
                 <CommandItem
                   key={option.value}
-                  value={`${option.label} ${option.description ?? ""} ${option.value}`}
-                  onSelect={() => {
-                    onChange(option.value === value ? "" : option.value);
+                  value={option.value}
+                  keywords={[option.label, option.description || ""]}
+                  onSelect={(currentValue) => {
+                    const selectedOption = options.find((o) => o.value.toLowerCase() === currentValue) || option;
+                    onChange(selectedOption.value === value ? "" : selectedOption.value);
                     setOpen(false);
                   }}
                 >
                   <Check
                     className={cn(
-                      "h-4 w-4",
+                      "h-4 w-4 mr-2",
                       value === option.value ? "opacity-100" : "opacity-0",
                     )}
                   />

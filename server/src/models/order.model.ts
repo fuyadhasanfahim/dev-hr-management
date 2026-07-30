@@ -127,6 +127,8 @@ export interface IQuotationSnapshot {
     paymentMilestones?: IQuotationSnapshotMilestone[];
     notIncluded?: string[];
     clientRequirements?: string[];
+    includedSupport?: string[];
+    keyTerms?: string[];
     workflow?: string[];
     currency: string;
     grandTotal: number;       // in original currency unit (not cents)
@@ -256,6 +258,8 @@ const snapshotSchema = new Schema<IQuotationSnapshot>(
         paymentMilestones: [snapshotMilestoneSchema],
         notIncluded: [String],
         clientRequirements: [String],
+        includedSupport: [String],
+        keyTerms: [String],
         workflow: [String],
         currency: { type: String, required: true },
         grandTotal: { type: Number, required: true },

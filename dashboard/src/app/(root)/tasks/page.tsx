@@ -3,12 +3,14 @@
 import { useState, useMemo } from 'react';
 import { useSession } from '@/lib/auth-client';
 import { Role } from '@/constants/role';
+import { DESIGNATION_LABELS, type Designation } from '@/constants/designation';
 import {
     useGetMyTasksQuery,
     useSubmitTaskMutation,
 } from '@/redux/features/task/taskApi';
 import { useGetStaffsQuery } from '@/redux/features/staff/staffApi';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
 import {
     Dialog,
     DialogContent,
@@ -17,28 +19,37 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
-import { format, isPast } from 'date-fns';
+import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import { KanbanBoard } from '@/components/tasks/kanban/KanbanBoard';
-import { DeveloperBoard } from '@/components/tasks/developer/DeveloperBoard';
 import { AssignTaskModal } from '@/components/tasks/AssignTaskModal';
 import { EditTaskModal } from '@/components/tasks/EditTaskModal';
+import { TaskDetailSheet } from '@/components/tasks/detail/TaskDetailSheet';
+import { WorkloadSummary } from '@/components/tasks/workload/WorkloadSummary';
+import { WorkloadFilters, type WorkloadFiltersState } from '@/components/tasks/workload/WorkloadFilters';
+import { WorkloadTable, type MemberRow } from '@/components/tasks/workload/WorkloadTable';
 import {
-    ClipboardList,
-    Send,
-    CheckCircle2,
-    LayoutGrid,
-    Users,
-    List,
-    Plus,
-    Edit3,
-    Clock,
-    UserCheck,
-    Zap,
-} from 'lucide-react';
-import { cn } from '@/lib/utils';
+    getCurrentTask,
+    countActiveTasks,
+    getWorkloadStatus,
+    isTaskBlocked,
+    isTaskOverdue,
+    type TaskItem,
+} from '@/lib/task-progress';
+import { ClipboardList, LayoutGrid, LayoutList, Plus, Send } from 'lucide-react';
 
-export default function MyTasksPage() {
+const DEFAULT_FILTERS: WorkloadFiltersState = {
+    search: '',
+    role: 'all',
+    status: 'all',
+    priority: 'all',
+    availability: 'all',
+    project: 'all',
+};
+
+export default function TeamWorkloadPage() {
     const { data: session } = useSession();
     const role = session?.user?.role;
     const canManage = useMemo(() => {
@@ -51,46 +62,102 @@ export default function MyTasksPage() {
 
     const [submitTask, { isLoading: isSubmitting }] = useSubmitTaskMutation();
 
-    const [viewMode, setViewMode] = useState<'kanban' | 'developer' | 'list'>('developer');
+    const [viewMode, setViewMode] = useState<'table' | 'kanban'>('table');
+    const [filters, setFilters] = useState<WorkloadFiltersState>(DEFAULT_FILTERS);
     const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
-    const [assignDefaultStaffId, setAssignDefaultStaffId] = useState<string | undefined>(undefined);
     const [editTaskData, setEditTaskData] = useState<any>(null);
+    const [detailTaskId, setDetailTaskId] = useState<string | null>(null);
     const [isSubmitModalOpen, setIsSubmitModalOpen] = useState(false);
     const [selectedTask, setSelectedTask] = useState<any>(null);
     const [submissionLink, setSubmissionLink] = useState('');
     const [submissionNote, setSubmissionNote] = useState('');
 
-    const tasks = tasksRes?.data || [];
+    const tasks: TaskItem[] = tasksRes?.data || [];
 
-    // Metrics computation
-    const metrics = useMemo(() => {
-        const total = tasks.length;
-        const pending = tasks.filter((t: any) => t.status === 'pending' || t.status === 'rejected').length;
-        const inProgress = tasks.filter((t: any) => t.status === 'in_progress').length;
-        const underReview = tasks.filter((t: any) => t.status === 'under_review').length;
-        const completed = tasks.filter((t: any) => t.status === 'completed').length;
-        const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
+    // Re-derived from the live query cache every render so toggling a checklist
+    // item or changing status inside the sheet reflects immediately instead of
+    // being frozen at the snapshot captured when the sheet was opened.
+    const detailTask = useMemo(() => tasks.find((t) => t._id === detailTaskId) || null, [tasks, detailTaskId]);
 
-        // Developer capacity metrics
-        const staffWorkload: Record<string, number> = {};
-        tasks.forEach((t: any) => {
-            const sId = t.assignedTo?._id || t.assignedTo;
-            if (sId && t.status !== 'completed') {
-                staffWorkload[sId] = (staffWorkload[sId] || 0) + 1;
-            }
+    // Group tasks by staff member (source of truth for the workload table)
+    const allMembers: MemberRow[] = useMemo(() => {
+        const tasksByStaff = new Map<string, TaskItem[]>();
+        tasks.forEach((t) => {
+            const staffId = typeof t.assignedTo === 'object' ? t.assignedTo?._id : t.assignedTo;
+            if (!staffId) return;
+            if (!tasksByStaff.has(staffId)) tasksByStaff.set(staffId, []);
+            tasksByStaff.get(staffId)!.push(t);
         });
 
-        const totalStaffCount = staffs.length;
-        const activeStaffCount = Object.keys(staffWorkload).length;
-        const freeStaffCount = Math.max(0, totalStaffCount - activeStaffCount);
-
-        return { total, pending, inProgress, underReview, completed, pct, totalStaffCount, activeStaffCount, freeStaffCount };
+        return staffs.map((staff: any) => {
+            const staffTasks = tasksByStaff.get(staff._id) || [];
+            const currentTask = getCurrentTask(staffTasks);
+            const activeCount = countActiveTasks(staffTasks);
+            return {
+                staffId: staff._id,
+                name: staff.user?.name || staff.name || 'Team Member',
+                designationLabel: DESIGNATION_LABELS[staff.designation as Designation] || staff.designation || 'Team Member',
+                designationValue: staff.designation,
+                currentTask,
+                activeCount,
+                totalCount: staffTasks.length,
+                workloadStatus: getWorkloadStatus(activeCount),
+            } as MemberRow & { designationValue: string };
+        });
     }, [tasks, staffs]);
 
-    const handleOpenAssignModalForStaff = (staffId?: string) => {
-        setAssignDefaultStaffId(staffId);
-        setIsAssignModalOpen(true);
-    };
+    const roleOptions = useMemo(() => {
+        const set = new Set<string>();
+        staffs.forEach((s: any) => s.designation && set.add(s.designation));
+        return Array.from(set).map((d) => ({ value: d, label: DESIGNATION_LABELS[d as Designation] || d }));
+    }, [staffs]);
+
+    const projectOptions = useMemo(() => {
+        const map = new Map<string, string>();
+        tasks.forEach((t) => {
+            if (typeof t.orderId === 'object' && t.orderId?.orderNumber) {
+                map.set(t.orderId._id, `#${t.orderId.orderNumber}`);
+            }
+        });
+        return Array.from(map.entries()).map(([value, label]) => ({ value, label }));
+    }, [tasks]);
+
+    const filteredMembers = useMemo(() => {
+        return allMembers.filter((m: any) => {
+            if (filters.search.trim()) {
+                const q = filters.search.toLowerCase();
+                const nameMatch = m.name.toLowerCase().includes(q);
+                const taskMatch = m.currentTask?.title?.toLowerCase().includes(q);
+                if (!nameMatch && !taskMatch) return false;
+            }
+            if (filters.role !== 'all' && m.designationValue !== filters.role) return false;
+            if (filters.availability !== 'all' && m.workloadStatus !== filters.availability) return false;
+            if (filters.status !== 'all') {
+                if (!m.currentTask) return false;
+                if (filters.status === 'rejected') {
+                    if (m.currentTask.status !== 'rejected') return false;
+                } else if (m.currentTask.status !== filters.status) return false;
+            }
+            if (filters.priority !== 'all') {
+                if (!m.currentTask || m.currentTask.priority !== filters.priority) return false;
+            }
+            if (filters.project !== 'all') {
+                const orderId = typeof m.currentTask?.orderId === 'object' ? m.currentTask.orderId?._id : m.currentTask?.orderId;
+                if (orderId !== filters.project) return false;
+            }
+            return true;
+        });
+    }, [allMembers, filters]);
+
+    // Summary metrics — derived from the same real task/staff data as the table
+    const metrics = useMemo(() => {
+        const total = tasks.length;
+        const inProgress = tasks.filter((t) => t.status === 'in_progress').length;
+        const blocked = tasks.filter((t) => isTaskBlocked(t)).length;
+        const overdue = tasks.filter((t) => isTaskOverdue(t)).length;
+        const availableMembers = allMembers.filter((m) => m.workloadStatus === 'available').length;
+        return { total, inProgress, blocked, overdue, availableMembers };
+    }, [tasks, allMembers]);
 
     const handleOpenSubmit = (task: any) => {
         setSelectedTask(task);
@@ -111,6 +178,7 @@ export default function MyTasksPage() {
             }).unwrap();
             toast.success('Deliverables submitted for review!');
             setIsSubmitModalOpen(false);
+            setDetailTaskId(null);
         } catch (err: any) {
             toast.error(err?.data?.message || 'Failed to submit task work.');
         }
@@ -120,8 +188,8 @@ export default function MyTasksPage() {
         return (
             <div className="container mx-auto p-6 space-y-6">
                 <Skeleton className="h-12 w-64 rounded-xl" />
-                <div className="grid gap-6">
-                    <Skeleton className="h-28 rounded-xl" />
+                <div className="grid gap-4">
+                    <Skeleton className="h-20 rounded-xl" />
                     <Skeleton className="h-96 rounded-xl" />
                 </div>
             </div>
@@ -129,238 +197,77 @@ export default function MyTasksPage() {
     }
 
     return (
-        <div className="container mx-auto p-6 space-y-6 max-w-7xl">
-            {/* Header Section */}
-            <div className="space-y-6">
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-200 dark:border-slate-800">
-                    <div className="space-y-1">
-                        <div className="flex items-center gap-2.5">
-                            <div className="p-2 bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 rounded-lg border border-blue-200 dark:border-blue-800/40">
-                                <ClipboardList className="h-5 w-5" />
-                            </div>
-                            <div>
-                                <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">
-                                    Tasks & Developer Workload
-                                </h1>
-                                <p className="text-xs text-slate-500 dark:text-slate-400 font-normal">
-                                    Manage user-based task assignments, developer workloads, and order deliverables.
-                                </p>
-                            </div>
-                        </div>
+        <div className="container mx-auto p-6 space-y-5 max-w-7xl">
+            {/* Header */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b">
+                <div className="flex items-center gap-2.5">
+                    <div className="p-2 bg-primary/10 text-primary rounded-lg border border-primary/20">
+                        <ClipboardList className="h-5 w-5" />
                     </div>
-
-                    <div className="flex items-center gap-3 flex-wrap">
-                        {canManage && (
-                            <button
-                                type="button"
-                                onClick={() => handleOpenAssignModalForStaff(undefined)}
-                                className="px-4 py-2 text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors flex items-center gap-1.5 shadow-xs"
-                            >
-                                <Plus className="h-4 w-4" />
-                                Assign Task
-                            </button>
-                        )}
-
-                        {/* View Mode 3-Way Toggle */}
-                        <div className="inline-flex items-center p-1 bg-slate-100 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700/80">
-                            <button
-                                type="button"
-                                onClick={() => setViewMode('developer')}
-                                className={cn(
-                                    'h-7 px-3 text-xs font-medium gap-1.5 rounded-md flex items-center transition-colors',
-                                    viewMode === 'developer' 
-                                        ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-xs' 
-                                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                                )}
-                            >
-                                <Users className="h-3.5 w-3.5 text-blue-500" />
-                                By Developer
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => setViewMode('kanban')}
-                                className={cn(
-                                    'h-7 px-3 text-xs font-medium gap-1.5 rounded-md flex items-center transition-colors',
-                                    viewMode === 'kanban' 
-                                        ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-xs' 
-                                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                                )}
-                            >
-                                <LayoutGrid className="h-3.5 w-3.5" />
-                                Kanban
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => setViewMode('list')}
-                                className={cn(
-                                    'h-7 px-3 text-xs font-medium gap-1.5 rounded-md flex items-center transition-colors',
-                                    viewMode === 'list' 
-                                        ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-xs' 
-                                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                                )}
-                            >
-                                <List className="h-3.5 w-3.5" />
-                                List View
-                            </button>
-                        </div>
+                    <div>
+                        <h1 className="text-xl font-semibold">Team Workload</h1>
+                        <p className="text-xs text-muted-foreground font-normal">
+                            Track current assignments, progress, capacity, and task status across your team.
+                        </p>
                     </div>
                 </div>
 
-                {/* Clean Pure Tailwind Metrics Cards */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl space-y-1">
-                        <span className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Total Tasks</span>
-                        <div className="flex items-baseline justify-between">
-                            <span className="text-2xl font-semibold text-slate-900 dark:text-slate-100">{metrics.total}</span>
-                            <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
-                                {metrics.totalStaffCount} Developers
-                            </span>
-                        </div>
-                    </div>
+                <div className="flex items-center gap-2 flex-wrap">
+                    {canManage && (
+                        <Button size="sm" onClick={() => setIsAssignModalOpen(true)} className="gap-1.5">
+                            <Plus className="h-4 w-4" />
+                            Assign Task
+                        </Button>
+                    )}
 
-                    <div className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl space-y-1">
-                        <span className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider block">In Progress</span>
-                        <div className="flex items-baseline justify-between">
-                            <span className="text-2xl font-semibold text-blue-600 dark:text-blue-400">{metrics.inProgress}</span>
-                            <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 flex items-center gap-1">
-                                <Zap className="h-3 w-3" /> Active
-                            </span>
-                        </div>
-                    </div>
-
-                    <div className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl space-y-1">
-                        <span className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Developer Capacity</span>
-                        <div className="flex items-baseline justify-between">
-                            <span className="text-2xl font-semibold text-emerald-600 dark:text-emerald-400">{metrics.freeStaffCount}</span>
-                            <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400">
-                                Free Now
-                            </span>
-                        </div>
-                    </div>
-
-                    <div className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl space-y-1.5">
-                        <span className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Completed Pace</span>
-                        <div className="space-y-1">
-                            <div className="flex items-center justify-between text-xs font-medium text-emerald-600 dark:text-emerald-400 font-mono">
-                                <span>{metrics.completed} Done</span>
-                                <span>{metrics.pct}%</span>
-                            </div>
-                            <div className="h-1.5 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                                <div 
-                                    className="h-full bg-emerald-500 rounded-full transition-all duration-300"
-                                    style={{ width: `${metrics.pct}%` }}
-                                />
-                            </div>
-                        </div>
+                    <div className="inline-flex items-center p-1 bg-muted rounded-lg border">
+                        <Button
+                            type="button"
+                            size="sm"
+                            variant={viewMode === 'table' ? 'default' : 'ghost'}
+                            onClick={() => setViewMode('table')}
+                            className="h-7 px-3 text-xs gap-1.5"
+                        >
+                            <LayoutList className="h-3.5 w-3.5" />
+                            List
+                        </Button>
+                        <Button
+                            type="button"
+                            size="sm"
+                            variant={viewMode === 'kanban' ? 'default' : 'ghost'}
+                            onClick={() => setViewMode('kanban')}
+                            className="h-7 px-3 text-xs gap-1.5"
+                        >
+                            <LayoutGrid className="h-3.5 w-3.5" />
+                            Kanban
+                        </Button>
                     </div>
                 </div>
             </div>
 
-            {/* Main Content View */}
-            {viewMode === 'developer' ? (
-                <DeveloperBoard
-                    tasks={tasks}
-                    staffs={staffs}
-                    canManage={canManage}
-                    onEditTask={setEditTaskData}
-                    onSubmitTask={handleOpenSubmit}
-                    onAssignTaskToStaff={handleOpenAssignModalForStaff}
-                />
-            ) : viewMode === 'kanban' ? (
+            {/* Summary */}
+            <WorkloadSummary
+                totalTasks={metrics.total}
+                inProgress={metrics.inProgress}
+                blocked={metrics.blocked}
+                overdue={metrics.overdue}
+                availableMembers={metrics.availableMembers}
+            />
+
+            {viewMode === 'table' ? (
+                <div className="space-y-4">
+                    <WorkloadFilters value={filters} onChange={setFilters} roleOptions={roleOptions} projectOptions={projectOptions} />
+                    <WorkloadTable members={filteredMembers} allMembers={allMembers} />
+                </div>
+            ) : (
                 <KanbanBoard
                     tasks={tasks}
                     canManage={canManage}
                     onEditTask={setEditTaskData}
                     onSubmitTask={handleOpenSubmit}
+                    onOpenDetail={(task) => setDetailTaskId(task._id)}
                     staffs={staffs}
                 />
-            ) : tasks.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-20 text-center space-y-3 bg-white dark:bg-slate-900 border border-dashed border-slate-200 dark:border-slate-800 rounded-xl p-6">
-                    <CheckCircle2 className="h-10 w-10 text-slate-400 opacity-50" />
-                    <div className="space-y-1">
-                        <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">All caught up!</h3>
-                        <p className="text-xs text-slate-500 dark:text-slate-400">
-                            You currently have no active tasks needing action.
-                        </p>
-                    </div>
-                </div>
-            ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {tasks.map((task: any) => {
-                        const isOverdue = isPast(new Date(task.dueDate)) && task.status !== 'completed';
-                        const assigneeName = task.assignedTo?.userId?.name || task.assignedTo?.name || 'Unassigned';
-
-                        return (
-                            <div
-                                key={task._id}
-                                className={cn(
-                                    "bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 space-y-3 shadow-xs",
-                                    isOverdue && "border-red-300 dark:border-red-800/60 bg-red-50/10 dark:bg-red-950/10"
-                                )}
-                            >
-                                <div className="flex items-start justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-3">
-                                    <div className="space-y-1 flex-1 min-w-0">
-                                        <div className="flex items-center gap-2 flex-wrap">
-                                            <span className={cn(
-                                                "px-2 py-0.5 text-[10px] font-medium rounded uppercase",
-                                                task.priority === 'urgent' && "bg-red-50 text-red-600 dark:bg-red-950/40 dark:text-red-400",
-                                                task.priority === 'high' && "bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400",
-                                                task.priority === 'medium' && "bg-blue-50 text-blue-600 dark:bg-blue-950/40 dark:text-blue-400",
-                                                task.priority === 'low' && "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400"
-                                            )}>
-                                                {task.priority}
-                                            </span>
-                                            {typeof task.orderId === 'object' && task.orderId?.orderNumber && (
-                                                <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400">
-                                                    #{task.orderId.orderNumber}
-                                                </span>
-                                            )}
-                                        </div>
-                                        <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 leading-snug">
-                                            {task.title}
-                                        </h3>
-                                    </div>
-
-                                    {canManage && (
-                                        <button
-                                            type="button"
-                                            onClick={() => setEditTaskData(task)}
-                                            className="text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 shrink-0"
-                                        >
-                                            <Edit3 className="h-3.5 w-3.5" />
-                                            Edit
-                                        </button>
-                                    )}
-                                </div>
-
-                                <div className="space-y-2 text-xs text-slate-600 dark:text-slate-400">
-                                    <div className="flex items-center justify-between">
-                                        <span>Assigned to: <strong className="text-slate-900 dark:text-slate-100 font-semibold">{assigneeName}</strong></span>
-                                        <span className="flex items-center gap-1 font-medium">
-                                            <Clock className="h-3 w-3 text-slate-400" />
-                                            {format(new Date(task.dueDate), 'MMM dd, hh:mm a')}
-                                        </span>
-                                    </div>
-
-                                    {task.status === 'under_review' ? (
-                                        <span className="inline-block px-2.5 py-1 text-xs font-medium bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 rounded">
-                                            Under Review
-                                        </span>
-                                    ) : (
-                                        <button
-                                            type="button"
-                                            onClick={() => handleOpenSubmit(task)}
-                                            className="px-3 py-1.5 text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-md flex items-center gap-1.5 transition-colors"
-                                        >
-                                            <Send className="h-3.5 w-3.5" />
-                                            Submit Deliverables
-                                        </button>
-                                    )}
-                                </div>
-                            </div>
-                        );
-                    })}
-                </div>
             )}
 
             {/* Submit Modal */}
@@ -368,7 +275,7 @@ export default function MyTasksPage() {
                 <DialogContent className="sm:max-w-[460px]">
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2 text-base font-semibold">
-                            <Send className="h-4 w-4 text-blue-600" />
+                            <Send className="h-4 w-4 text-primary" />
                             Submit Work Deliverables
                         </DialogTitle>
                         <DialogDescription className="text-xs">
@@ -376,50 +283,54 @@ export default function MyTasksPage() {
                         </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4 py-2">
-                        <div className="space-y-1">
-                            <label className="text-xs font-medium text-slate-700 dark:text-slate-300">
-                                Reference Link (GitHub, Drive, Figma)
-                            </label>
-                            <input
+                        <div className="space-y-1.5">
+                            <Label className="text-xs font-medium">Reference Link (GitHub, Drive, Figma)</Label>
+                            <Input
                                 type="url"
                                 placeholder="https://..."
                                 value={submissionLink}
                                 onChange={(e) => setSubmissionLink(e.target.value)}
-                                className="w-full px-3 py-2 text-xs font-mono bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                                className="h-9 text-xs font-mono"
                             />
                         </div>
-                        <div className="space-y-1">
-                            <label className="text-xs font-medium text-slate-700 dark:text-slate-300">
-                                Notes / Completion Summary <span className="text-red-500">*</span>
-                            </label>
-                            <textarea
+                        <div className="space-y-1.5">
+                            <Label className="text-xs font-medium">
+                                Notes / Completion Summary <span className="text-destructive">*</span>
+                            </Label>
+                            <Textarea
                                 placeholder="Summary of work completed..."
                                 value={submissionNote}
                                 onChange={(e) => setSubmissionNote(e.target.value)}
-                                className="w-full min-h-[90px] p-3 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 resize-none"
+                                className="min-h-[90px] text-xs resize-none"
                             />
                         </div>
                     </div>
                     <DialogFooter className="gap-2">
-                        <button
-                            type="button"
-                            onClick={() => setIsSubmitModalOpen(false)}
-                            disabled={isSubmitting}
-                            className="px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md"
-                        >
+                        <Button variant="ghost" size="sm" onClick={() => setIsSubmitModalOpen(false)} disabled={isSubmitting}>
                             Cancel
-                        </button>
-                        <button
-                            type="button"
-                            onClick={handleSubmit}
-                            disabled={isSubmitting || !submissionNote.trim()}
-                            className="px-4 py-1.5 text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors disabled:opacity-50"
-                        >
+                        </Button>
+                        <Button size="sm" onClick={handleSubmit} disabled={isSubmitting || !submissionNote.trim()}>
                             {isSubmitting ? 'Submitting...' : 'Submit Work'}
-                        </button>
+                        </Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            {/* Task Detail Sheet (Kanban card click) */}
+            <TaskDetailSheet
+                task={detailTask}
+                open={!!detailTaskId}
+                onOpenChange={(open) => !open && setDetailTaskId(null)}
+                canManage={canManage}
+                onEdit={(task) => {
+                    setDetailTaskId(null);
+                    setEditTaskData(task);
+                }}
+                onSubmit={(task) => {
+                    setDetailTaskId(null);
+                    handleOpenSubmit(task);
+                }}
+            />
 
             {/* Edit Task Modal */}
             <EditTaskModal
@@ -431,12 +342,8 @@ export default function MyTasksPage() {
             {/* Assign Task Modal */}
             <AssignTaskModal
                 open={isAssignModalOpen}
-                onOpenChange={(open) => {
-                    setIsAssignModalOpen(open);
-                    if (!open) setAssignDefaultStaffId(undefined);
-                }}
+                onOpenChange={setIsAssignModalOpen}
                 existingTasks={tasks}
-                defaultStaffId={assignDefaultStaffId}
             />
         </div>
     );

@@ -106,6 +106,8 @@ export interface IQuotation extends Document {
 
     notIncluded?: string[];
     clientRequirements?: string[];
+    includedSupport?: string[];
+    keyTerms?: string[];
 
     /** Monthly/yearly line items flattened out of services[].lineItems, billed separately from totals.grandTotal. */
     recurringCharges?: IQuotationLineItem[];

@@ -43,6 +43,7 @@ import {
     Camera,
     Check,
     Sparkles,
+    Info,
 } from 'lucide-react';
 import Link from 'next/link';
 import QuotationPuppeteerPdfBtn, {
@@ -872,6 +873,77 @@ export default function ViewQuotationPage() {
                             </div>
                         </div>
                     )}
+                    {/* Included Support */}
+                    {data.includedSupport && data.includedSupport.length > 0 && (
+                    <div className="rounded-3xl border border-emerald-200/80 dark:border-emerald-900/40 bg-white/80 dark:bg-slate-900/60 shadow-sm overflow-hidden backdrop-blur-xl transition-all duration-300 hover:shadow-md">
+                        <div className="p-5 border-b border-emerald-100 dark:border-emerald-900/30 bg-gradient-to-r from-emerald-500/5 to-transparent flex items-center justify-between gap-4">
+                            <div className="flex items-center gap-3.5">
+                                <div className="w-11 h-11 rounded-2xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center border border-emerald-500/20 shadow-sm">
+                                    <CheckCircle2 className="w-5 h-5 stroke-[2.5]" />
+                                </div>
+                                <div>
+                                    <h4 className="text-base font-extrabold tracking-tight text-slate-900 dark:text-white">
+                                        Included Support
+                                    </h4>
+                                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Support services and maintenance</p>
+                                </div>
+                            </div>
+                            <Badge variant="outline" className="rounded-full px-3 py-1 text-xs font-bold text-emerald-500 border-emerald-500/30 bg-emerald-500/10">
+                                {data.includedSupport.length} Items
+                            </Badge>
+                        </div>
+                        <div className="p-5">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                                {data.includedSupport.map((item: string, idx: number) => (
+                                    <div key={idx} className="flex items-start gap-3 p-3.5 rounded-2xl bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-100/80 dark:border-emerald-900/30 transition-all duration-200 hover:bg-emerald-100/50 dark:hover:bg-emerald-950/30">
+                                        <span className="w-6 h-6 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold text-xs flex items-center justify-center shrink-0 mt-0.5 border border-emerald-500/20">
+                                            ✓
+                                        </span>
+                                        <span className="text-sm font-medium text-slate-700 dark:text-slate-300 leading-snug">
+                                            {item}
+                                        </span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                    )}
+
+                    {/* Key Terms */}
+                    {data.keyTerms && data.keyTerms.length > 0 && (
+                    <div className="rounded-3xl border border-blue-200/80 dark:border-blue-900/40 bg-white/80 dark:bg-slate-900/60 shadow-sm overflow-hidden backdrop-blur-xl transition-all duration-300 hover:shadow-md">
+                        <div className="p-5 border-b border-blue-100 dark:border-blue-900/30 bg-gradient-to-r from-blue-500/5 to-transparent flex items-center justify-between gap-4">
+                            <div className="flex items-center gap-3.5">
+                                <div className="w-11 h-11 rounded-2xl bg-blue-500/10 text-blue-500 flex items-center justify-center border border-blue-500/20 shadow-sm">
+                                    <Info className="w-5 h-5 stroke-[2.5]" />
+                                </div>
+                                <div>
+                                    <h4 className="text-base font-extrabold tracking-tight text-slate-900 dark:text-white">
+                                        Key Terms
+                                    </h4>
+                                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Important contractual terms</p>
+                                </div>
+                            </div>
+                            <Badge variant="outline" className="rounded-full px-3 py-1 text-xs font-bold text-blue-500 border-blue-500/30 bg-blue-500/10">
+                                {data.keyTerms.length} Terms
+                            </Badge>
+                        </div>
+                        <div className="p-5">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                                {data.keyTerms.map((item: string, idx: number) => (
+                                    <div key={idx} className="flex items-start gap-3 p-3.5 rounded-2xl bg-blue-50/50 dark:bg-blue-950/20 border border-blue-100/80 dark:border-blue-900/30 transition-all duration-200 hover:bg-blue-100/50 dark:hover:bg-blue-950/30">
+                                        <span className="w-6 h-6 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 font-bold text-xs flex items-center justify-center shrink-0 mt-0.5 border border-blue-500/20">
+                                            !
+                                        </span>
+                                        <span className="text-sm font-medium text-slate-700 dark:text-slate-300 leading-snug">
+                                            {item}
+                                        </span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                    )}
 
                     {/* Exclusions: Not Included in This Price */}
                     {data.notIncluded && data.notIncluded.length > 0 && (
@@ -1173,3 +1245,4 @@ export default function ViewQuotationPage() {
         </div>
     );
 }
+

@@ -21,6 +21,7 @@ import {
 } from '@/components/ui/card';
 import { toast } from 'sonner';
 import { Role } from '@/constants/role';
+import { DESIGNATIONS, DEPARTMENTS } from '@/constants/metadata';
 
 export default function SendInvitation() {
     const [createInvitation, { isLoading }] = useCreateInvitationMutation();
@@ -142,33 +143,45 @@ export default function SendInvitation() {
                                 Designation{' '}
                                 <span className="text-destructive">*</span>
                             </Label>
-                            <Input
-                                id="designation"
-                                placeholder="e.g., Software Engineer"
+                            <Select
                                 value={formData.designation}
-                                onChange={(e) =>
-                                    setFormData({
-                                        ...formData,
-                                        designation: e.target.value,
-                                    })
+                                onValueChange={(value) =>
+                                    setFormData({ ...formData, designation: value })
                                 }
                                 required
-                            />
+                            >
+                                <SelectTrigger id="designation" className="w-full">
+                                    <SelectValue placeholder="Select designation" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {DESIGNATIONS.map((designation) => (
+                                        <SelectItem key={designation.value} value={designation.value}>
+                                            {designation.label}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
                         </div>
 
                         <div className="space-y-2">
                             <Label htmlFor="department">Department</Label>
-                            <Input
-                                id="department"
-                                placeholder="e.g., Engineering"
+                            <Select
                                 value={formData.department}
-                                onChange={(e) =>
-                                    setFormData({
-                                        ...formData,
-                                        department: e.target.value,
-                                    })
+                                onValueChange={(value) =>
+                                    setFormData({ ...formData, department: value })
                                 }
-                            />
+                            >
+                                <SelectTrigger id="department" className="w-full">
+                                    <SelectValue placeholder="Select department" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {DEPARTMENTS.map((dept) => (
+                                        <SelectItem key={dept.value} value={dept.value}>
+                                            {dept.label}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
                         </div>
 
                         <div className="space-y-2">

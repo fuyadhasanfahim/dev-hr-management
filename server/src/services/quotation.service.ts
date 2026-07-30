@@ -301,10 +301,12 @@ export class QuotationService {
     ): Promise<IQuotation> {
         const quotation = await QuotationModel.findById(id);
         if (!quotation) throw new AppError('Quotation not found', 404);
-        const editableStatuses = ['draft', 'sent', 'viewed'];
+        
+        // TEMPORARY: Allow editing all statuses (including accepted) until the full relational architecture is implemented.
+        const editableStatuses = ['draft', 'sent', 'viewed', 'accepted', 'change_requested'];
         if (!editableStatuses.includes(quotation.status)) {
             throw new AppError(
-                `Cannot edit a ${quotation.status} quotation directly. Please create a new version instead.`,
+                `Cannot edit a ${quotation.status} quotation.`,
                 409,
             );
         }

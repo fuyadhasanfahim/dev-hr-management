@@ -214,6 +214,8 @@ function buildQuotationSnapshot(
         paymentMilestones,
         notIncluded: Array.isArray(quotation.notIncluded) ? [...quotation.notIncluded] : [],
         clientRequirements: Array.isArray(quotation.clientRequirements) ? [...quotation.clientRequirements] : [],
+        includedSupport: Array.isArray(quotation.includedSupport) ? [...quotation.includedSupport] : [],
+        keyTerms: Array.isArray(quotation.keyTerms) ? [...quotation.keyTerms] : [],
         workflow: Array.isArray(quotation.workflow) ? [...quotation.workflow] : [],
         currency,
         grandTotal: quotation.totals?.grandTotal || 0,

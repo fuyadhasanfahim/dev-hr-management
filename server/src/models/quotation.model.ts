@@ -83,6 +83,8 @@ const quotationSchema = new Schema<IQuotation>(
 
         notIncluded: [{ type: String }],
         clientRequirements: [{ type: String }],
+        includedSupport: [{ type: String }],
+        keyTerms: [{ type: String }],
 
         // Monthly/yearly line items flattened out of `services[].lineItems`, kept
         // separate from `totals` since they're billed on an ongoing basis and are

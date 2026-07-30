@@ -99,6 +99,8 @@ const initialState: QuotationData = {
   services: [],
   notIncluded: [],
   clientRequirements: [],
+  includedSupport: [],
+  keyTerms: [],
   recurringCharges: [],
   workflow: [],
   paymentMilestones: [

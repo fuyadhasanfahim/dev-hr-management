@@ -727,6 +727,12 @@ export function buildPrintHtml(
     const clientRequirements = (Array.isArray(q.clientRequirements) ? q.clientRequirements : [])
         .map((s: any) => normalizeText(s))
         .filter((s: string) => s && !isPlaceholderRow(s));
+    const includedSupportItems = (Array.isArray(q.includedSupport) ? q.includedSupport : [])
+        .map((s: any) => normalizeText(s))
+        .filter((s: string) => s && !isPlaceholderRow(s));
+    const keyTermsItems = (Array.isArray(q.keyTerms) ? q.keyTerms : [])
+        .map((s: any) => normalizeText(s))
+        .filter((s: string) => s && !isPlaceholderRow(s));
     const workflowSteps = (Array.isArray(q.workflow) ? q.workflow : [])
         .map((s: any) => normalizeText(s))
         .filter((s: string) => s && !isPlaceholderRow(s));
@@ -1088,9 +1094,11 @@ export function buildPrintHtml(
         `;
     }
 
-    const detailsHtml = (notIncludedItems.length || clientRequirements.length || termsItems.length) ? `
+    const detailsHtml = (includedSupportItems.length || notIncludedItems.length || clientRequirements.length || keyTermsItems.length || termsItems.length) ? `
+        ${listBlock('Included Support', includedSupportItems)}
         ${listBlock('Not Included', notIncludedItems)}
         ${listBlock('Client Requirements', clientRequirements)}
+        ${listBlock('Key Terms', keyTermsItems)}
         ${termsItems.length ? `
             <div class="paginate-group">
                 <div class="paginate-block" data-keep-with-next="true">
