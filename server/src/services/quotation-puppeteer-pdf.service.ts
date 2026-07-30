@@ -1158,6 +1158,7 @@ export function buildPrintHtml(
       --brand: #4E12D4;
       --brand-soft: #F5F1FF;
       --brand-ink: #160735;
+      --brand-line: rgba(78, 18, 212, 0.18);
 
       --font-sans: 'Inter', system-ui, -apple-system, 'Hind Siliguri', sans-serif;
       --font-mono: 'Geist Mono', ui-monospace, 'JetBrains Mono', monospace;
@@ -1229,7 +1230,7 @@ export function buildPrintHtml(
         font-size: 7pt;
         letter-spacing: 0.04em;
         color: var(--muted);
-        border-top: 0.5px solid var(--border);
+        border-top: 0.5px solid var(--brand-line);
         padding-top: 3mm;
     }
     /* The running footer carries the project title, which can be long; keep it
@@ -1257,7 +1258,7 @@ export function buildPrintHtml(
     .cover-meta-item { white-space: nowrap; font-size: 9.5pt; }
     .meta-label { font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
     .meta-value { font-weight: 600; color: var(--ink); }
-    .cover-rule { height: 1pt; width: 40mm; background: var(--border); margin-bottom: 12mm; }
+    .cover-rule { height: 1.5pt; width: 40mm; background: var(--brand); margin-bottom: 12mm; }
 
     .editorial { margin-bottom: 16mm; max-width: 160mm; }
     .eyebrow { font-size: 9pt; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--brand); margin-bottom: 2mm; }
@@ -1270,7 +1271,7 @@ export function buildPrintHtml(
     .scope-group-num { font-size: 28pt; font-weight: 300; color: var(--brand); line-height: 1; margin-bottom: 2mm; }
     .scope-group-name { font-size: 26pt; font-weight: 800; letter-spacing: -0.02em; color: var(--ink); line-height: 1.1; margin-bottom: 3mm; }
     .scope-group-desc { font-size: 11pt; color: var(--ink-secondary); max-width: 152mm; }
-    .scope-rule { height: 1pt; background: var(--border); width: 100%; margin-bottom: 6mm; }
+    .scope-rule { height: 1pt; background: var(--brand-line); width: 100%; margin-bottom: 6mm; }
 
     .module-header-wrap { margin-bottom: 3mm; margin-top: 2mm; }
     .deliv-row { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 2mm; }
@@ -1280,7 +1281,7 @@ export function buildPrintHtml(
     .deliv-row.depth-1 { margin-left: 2mm; }
     .deliv-row.depth-2 { margin-left: 6mm; }
     .deliv-row.depth-3 { margin-left: 10mm; }
-    .deliv-mark { color: var(--muted); font-size: 12pt; line-height: 1.3; flex: 0 0 10px; margin-top: -1px; }
+    .deliv-mark { color: var(--brand); font-size: 12pt; line-height: 1.3; flex: 0 0 10px; margin-top: -1px; }
     .deliv-content { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.5mm; }
     .deliv-name { font-size: 10.5pt; font-weight: 500; color: var(--ink); }
     .deliv-route { font-family: var(--font-mono); font-size: 8pt; color: var(--muted); word-break: break-all; margin-top: 1px; }
@@ -1317,7 +1318,7 @@ export function buildPrintHtml(
        against the tail of whatever preceded it. */
     .paginate-block > .section-title { margin-top: 12mm; }
     .page-content > .paginate-block:first-child > .section-title { margin-top: 0; }
-    .section-title { font-size: 18pt; font-weight: 700; color: var(--ink); margin-bottom: 5mm; letter-spacing: -0.01em; border-bottom: 1pt solid var(--border); padding-bottom: 2mm; }
+    .section-title { font-size: 18pt; font-weight: 700; color: var(--ink); margin-bottom: 5mm; letter-spacing: -0.01em; border-bottom: 1.5pt solid var(--brand); padding-bottom: 2mm; }
 
     .workflow { display: flex; flex-direction: column; gap: 2.5mm; }
     .workflow-row { display: flex; gap: 4mm; align-items: baseline; font-size: 11pt; }
@@ -1327,7 +1328,7 @@ export function buildPrintHtml(
     .payment-stages { display: flex; gap: 6mm; }
     .payment-stage { flex: 1; border-left: 2pt solid var(--brand); padding-left: 4mm; }
     .stage-num { font-size: 9pt; font-weight: 600; color: var(--muted); margin-bottom: 1mm; }
-    .stage-pct { font-size: 28pt; font-weight: 800; color: var(--ink); line-height: 1; letter-spacing: -0.02em; }
+    .stage-pct { font-size: 28pt; font-weight: 800; color: var(--brand); line-height: 1; letter-spacing: -0.02em; }
     .stage-label { font-size: 10pt; font-weight: 600; color: var(--ink); margin: 2mm 0 1mm; text-transform: uppercase; letter-spacing: 0.05em; }
     .stage-desc { font-size: 9.5pt; color: var(--ink-secondary); line-height: 1.4; }
 
@@ -1353,7 +1354,7 @@ export function buildPrintHtml(
     .list-block { margin-bottom: 8mm; }
     .list-block-title { font-size: 11pt; font-weight: 600; color: var(--ink); margin-bottom: 3mm; text-transform: uppercase; letter-spacing: 0.05em; }
     .list-row { display: flex; gap: 2.5mm; font-size: 10pt; color: var(--ink-secondary); margin-bottom: 1.5mm; align-items: baseline; }
-    .list-mark { color: var(--muted); font-size: 12pt; line-height: 1; }
+    .list-mark { color: var(--brand); font-size: 12pt; line-height: 1; }
     
     .terms-block { margin-top: 6mm; }
     .terms-row { margin-bottom: 3mm; }
@@ -1375,8 +1376,8 @@ export function buildPrintHtml(
     .authorized-name { font-size: 11pt; font-weight: 700; color: var(--ink); }
     .authorized-role { font-size: 9pt; color: var(--ink-secondary); margin-top: 0.5mm; }
 
-    .closing { border-top: 1pt solid var(--border); padding-top: 6mm; margin-top: 12mm; }
-    .closing-name { font-size: 12pt; font-weight: 700; color: var(--ink); margin-bottom: 2mm; }
+    .closing { border-top: 1.5pt solid var(--brand); padding-top: 6mm; margin-top: 12mm; }
+    .closing-name { font-size: 12pt; font-weight: 700; color: var(--brand); margin-bottom: 2mm; }
     .closing-contact { font-size: 10pt; color: var(--ink-secondary); margin-bottom: 1mm; }
     .closing-address { font-size: 9pt; color: var(--muted); }
 
@@ -1495,13 +1496,20 @@ export async function renderQuotationPdfBuffer(q: Record<string, any>): Promise<
 
         const page = await browser.newPage();
         page.on('console', (msg) => console.log('PAGE LOG:', msg.text()));
-        page.on('pageerror', (err) => console.log('PAGE ERROR:', err.toString()));
+        page.on('pageerror', (err: any) => console.log('PAGE ERROR:', err.toString()));
         try {
             await page.setContent(html, { waitUntil: 'load' });
             await page.evaluateHandle('document.fonts.ready');
             
-            // Execute deterministic pagination inside the browser
+            // Execute deterministic pagination inside the browser. This function
+            // body runs in the browser's DOM context, not Node — the project's
+            // tsconfig has no "dom" lib (it's a server package), so `window` and
+            // `document` are shadowed here as local `any`-typed bindings rather
+            // than left as unresolvable globals.
             await page.evaluate(() => {
+                const window: any = (globalThis as any).window;
+                const document: any = (globalThis as any).document;
+
                 // Every page carries the brand mark behind its content; built
                 // here rather than in the static HTML because the page shells
                 // themselves are created by this script.
@@ -1532,11 +1540,11 @@ export async function renderQuotationPdfBuffer(q: Record<string, any>): Promise<
                 let currentContainer = createPage(pageNum);
 
                 const source = document.getElementById('source-content');
-                const groups = Array.from(source.children);
+                const groups: any[] = Array.from(source.children);
 
                 for (const group of groups) {
                     if (!group.classList.contains('paginate-group')) continue;
-                    const blocks = Array.from(group.children);
+                    const blocks: any[] = Array.from(group.children);
                     
                     // Try the group whole first — that keeps small, indivisible
                     // units (a payment grid, a short list) intact. When it does
@@ -1588,7 +1596,7 @@ export async function renderQuotationPdfBuffer(q: Record<string, any>): Promise<
                 // Cleanup
                 source.remove();
 
-                function createPage(num) {
+                function createPage(num: number) {
                     const page = document.createElement('div');
                     page.className = 'pdf-page';
 
@@ -1603,16 +1611,16 @@ export async function renderQuotationPdfBuffer(q: Record<string, any>): Promise<
                     return page.querySelector('.page-content');
                 }
 
-                function tryAppendGroup(elements, force = false) {
-                    const clones = elements.map(el => el.cloneNode(true));
-                    clones.forEach(c => currentContainer.appendChild(c));
-                    
+                function tryAppendGroup(elements: any[], force = false) {
+                    const clones = elements.map((el: any) => el.cloneNode(true));
+                    clones.forEach((c: any) => currentContainer.appendChild(c));
+
                     // Allow 1px tolerance for rounding issues
                     if (force || currentContainer.offsetHeight <= maxSafeHeight + 1) {
                         return true;
                     }
-                    
-                    clones.forEach(c => currentContainer.removeChild(c));
+
+                    clones.forEach((c: any) => currentContainer.removeChild(c));
                     return false;
                 }
             });
