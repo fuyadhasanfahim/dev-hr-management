@@ -1414,7 +1414,7 @@ Please review the details below. Should you have any questions or require custom
                 title: i.name,
                 description: i.description,
                 price: i.price,
-                billingCycle: i.billingType === "fixed" ? "one-time" : "monthly" as any,
+                billingCycle: (i.billingType === "fixed" || i.billingType === "one-time") ? "one-time" : "monthly" as any,
             }));
 
             services.push({
@@ -1473,7 +1473,7 @@ Please review the details below. Should you have any questions or require custom
                 title: i.name,
                 description: i.description,
                 price: i.price,
-                billingCycle: i.billingType === "fixed" ? "one-time" : "monthly",
+                billingCycle: (i.billingType === "fixed" || i.billingType === "one-time") ? "one-time" : "monthly",
             }));
 
             if (marketingAdBudget > 0) {
