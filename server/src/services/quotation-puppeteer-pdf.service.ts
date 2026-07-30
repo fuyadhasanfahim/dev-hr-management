@@ -1068,7 +1068,7 @@ export function buildPrintHtml(
             <div class="paginate-block" data-keep-with-next="true">
                 <h2 class="section-title">Recurring Charges</h2>
             </div>
-            ${recurringItems.map((r, i) => `
+            ${recurringItems.map((r) => `
                 <div class="paginate-block">
                     <div class="recurring-item">
                         <div class="r-title">${esc(r.title)}</div>
