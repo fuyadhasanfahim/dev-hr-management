@@ -279,14 +279,14 @@ export class ReceiptService {
     /**
      * Returns the quotation snapshot + full payment history for the summary panel.
      */
-    static async getPaymentSummary(quotationGroupId: string) {
+    static async getPaymentSummary(quotationGroupId: string, userId?: string) {
         const quotation = await QuotationModel.findOne({
             quotationGroupId,
             isLatestVersion: true,
         }).populate('clientId', 'name emails');
         if (!quotation) throw new AppError('Quotation not found', 404);
 
-        const receipt = await ReceiptModel.findOne({ quotationGroupId })
+        let receipt = await ReceiptModel.findOne({ quotationGroupId })
             .populate({
                 path: 'paymentHistory',
                 // Same-day payments share an identical paymentDate, so tie-break on
@@ -294,6 +294,30 @@ export class ReceiptService {
                 options: { sort: { paymentDate: -1, createdAt: -1 } },
             })
             .lean();
+
+        // Self-heal: the zero-payment receipt is normally created alongside the
+        // quotation, but that step is best-effort (see createQuotation) and can
+        // silently fail. Backfill it here rather than permanently blocking payments.
+        if (!receipt) {
+            try {
+                const created = await ReceiptService.createZeroPaymentReceipt(
+                    quotation,
+                    userId || quotation.createdBy.toString(),
+                );
+                receipt = await ReceiptModel.findById(created._id)
+                    .populate({
+                        path: 'paymentHistory',
+                        options: { sort: { paymentDate: -1, createdAt: -1 } },
+                    })
+                    .lean();
+                logger.warn(
+                    { quotationGroupId },
+                    'receipt.zero_payment.backfilled_on_summary_read',
+                );
+            } catch (err) {
+                logger.error({ err, quotationGroupId }, 'receipt.zero_payment.backfill_failed');
+            }
+        }
 
         const grandTotal = quotation.totals?.grandTotal || 0;
         const totalPaid = receipt?.totalPaid ?? 0;

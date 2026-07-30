@@ -216,6 +216,13 @@ export class QuotationService {
         data: Partial<IQuotation>,
         userId: string,
     ): Promise<IQuotation> {
+        // A quotation with no services can never be converted to an order
+        // (see order.service.ts buildQuotationSnapshot). Reject it up front
+        // rather than letting it persist and fail later at conversion time.
+        if (!data.services || data.services.length === 0) {
+            throw new AppError('At least one service must be selected', 400);
+        }
+
         // Prevent accidental rapid duplicates: identical payload by same user within 5 minutes.
         const fingerprintPayload = (() => {
             const d: any = { ...(data as any) };
@@ -302,7 +309,12 @@ export class QuotationService {
             );
         }
 
-        const { totals, recurringCharges } = calculateTotals({ ...quotation.toObject(), ...data });
+        const merged = { ...quotation.toObject(), ...data };
+        if (!merged.services || merged.services.length === 0) {
+            throw new AppError('At least one service must be selected', 400);
+        }
+
+        const { totals, recurringCharges } = calculateTotals(merged);
 
         const { quotationGroupId: _g, version: _v, isLatestVersion: _l, ...safeData } = data as any;
 
@@ -567,8 +579,13 @@ export class QuotationService {
             const { _id: _, __v: __, secureToken: ___, tokenExpiresAt: ____, orderId: _____, ...baseData } = currentLatest.toObject();
             const quotationNumber = await generateQuotationNumber();
 
+            const mergedForVersion = { ...baseData, ...data };
+            if (!mergedForVersion.services || mergedForVersion.services.length === 0) {
+                throw new AppError('At least one service must be selected', 400);
+            }
+
             // Recalculate totals for the new version
-            const { totals, recurringCharges } = calculateTotals({ ...baseData, ...data });
+            const { totals, recurringCharges } = calculateTotals(mergedForVersion);
 
             const createdDocs = await QuotationModel.create(
                 [

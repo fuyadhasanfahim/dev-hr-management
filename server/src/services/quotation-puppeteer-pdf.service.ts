@@ -1,6 +1,5 @@
 import { format } from 'date-fns';
 import puppeteer from 'puppeteer';
-import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -13,18 +12,21 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 /* ────────────────────────────────────────────────────────────────────────────
- * WebBriks Quotation PDF — "Scope Ledger" edition.
+ * WebBriks Quotation PDF — "Editorial Proposal" edition.
  *
- * Rebuilt per the redesign brief: an engineering scope-of-work document rather
- * than a marketing brochure. Page architecture: full-bleed cover → contents +
- * scope-at-a-glance → executive summary → section dividers → two-column module
- * pages → a dedicated pricing page → a two-column terms page with the
- * authorization block at its foot. A running ledger rail counts deliverables.
+ * A three-page commercial proposal (Cover → Scope & Delivery → Investment &
+ * Terms) built to read like a document a senior designer at a premium agency
+ * prepared for one specific client — not a system-generated invoice. The
+ * visual language is deliberately restrained: near-black type, one accent
+ * colour used sparingly, hairline dividers instead of boxed cards, and a
+ * single low-opacity brand mark on the cover only.
  *
- * Typography is self-contained: the three-face system (Bricolage Grotesque /
- * Inter / Geist Mono, plus Hind Siliguri for Bangla) is fetched once, filtered
- * to the latin + bengali subsets, and embedded as base64 @font-face rules so a
- * cold Puppeteer container never falls back to a system font mid-render.
+ * Typography is self-contained: fonts are fetched once and embedded as base64
+ * @font-face rules so a cold Puppeteer container never falls back to a system
+ * font mid-render. Page numbers ("WEBBRIKS · #QTN-… · 1 / 3") are rendered by
+ * Chrome's own header/footer templating (via `page.pdf({ displayHeaderFooter
+ * })`), which is the only reliable way to know the true page count for
+ * variable-length content — every other element on the page is authored HTML.
  * ──────────────────────────────────────────────────────────────────────────── */
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -103,7 +105,7 @@ function normalizeText(input: unknown): string {
     return String(input ?? '')
         .replace(/[ʼ‘‛]/g, '’')
         .replace(/[“”]/g, '"')
-        .replace(/ /g, ' ')
+        .replace(/ /g, ' ')
         .replace(/[ \t]+/g, ' ')
         .trimEnd();
 }
@@ -138,6 +140,13 @@ function isPlaceholderRow(text: string): boolean {
 const DEFAULT_LOGO =
     'https://res.cloudinary.com/dny7zfbg9/image/upload/v1777996436/q83auvamwih8u8ftw5zu.png';
 
+// Authorising signature shown at the close of the document. Overridable per
+// deployment so a different signatory can be configured without a code change.
+const DEFAULT_SIGNATURE =
+    'https://res.cloudinary.com/dny7zfbg9/image/upload/v1776961131/ouvycul8e7xskhrioca4.png';
+const SIGNATORY_NAME = process.env.COMPANY_SIGNATORY_NAME || 'Md. Ashaduzzaman';
+const SIGNATORY_ROLE = process.env.COMPANY_SIGNATORY_ROLE || 'Founder & CEO';
+
 // Read the local logo as a fallback base64 string
 let LOCAL_LOGO_BASE64 = '';
 try {
@@ -157,11 +166,16 @@ try {
     logger.error({ err: e }, 'Failed to load local logo.png');
 }
 
-const DEFAULT_SIGNATURE =
-    'https://res.cloudinary.com/dny7zfbg9/image/upload/v1776961131/ouvycul8e7xskhrioca4.png';
-
 const FALLBACK_PIXEL_PNG =
     'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+
+const DEFAULT_COMPANY = {
+    name: 'WebBriks',
+    website: 'www.webbriks.com',
+    email: 'hello@webbriks.com',
+    phone: '+880 1977 201923',
+    address: '115 Senpara Parbata, Mirpur, Dhaka 1216, Bangladesh.',
+};
 
 const imageCache = new Map<string, string>();
 
@@ -198,10 +212,11 @@ const BROWSER_UA =
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
 // Google Fonts family specs. Only the latin (and, for Hind Siliguri, bengali)
-// subsets are embedded to keep the payload lean.
+// subsets are embedded to keep the payload lean. Inter carries the entire
+// type system (body copy through display headings — one typeface, hierarchy
+// via weight/size); Geist Mono is reserved for eyebrows, labels and figures.
 const FONT_FAMILIES: Array<{ spec: string; subsets: string[] }> = [
-    { spec: 'Inter:wght@400;500;600;700', subsets: ['latin'] },
-    { spec: 'Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700', subsets: ['latin'] },
+    { spec: 'Inter:wght@400;500;600;700;800', subsets: ['latin'] },
     { spec: 'Geist+Mono:wght@400;500;600', subsets: ['latin'] },
     { spec: 'Hind+Siliguri:wght@400;600', subsets: ['bengali', 'latin'] },
 ];
@@ -283,6 +298,130 @@ async function buildEmbeddedFontCss(): Promise<string> {
     return embeddedFontCss;
 }
 
+/* ── Cover brand mark: cropped out of the master logo at render time ────── */
+
+let cachedMarkDataUrl: string | null = null;
+
+/**
+ * Crops the square "WB" mark out of the full wordmark logo using an off-screen
+ * <canvas> inside a scratch Puppeteer page. Scans for the transparent gap that
+ * separates the icon from the "webbriks" wordmark text, so it stays correct
+ * even if the source logo file is swapped for a different export. Falls back
+ * to the full logo (and finally to `null`, which just hides the mark) if
+ * anything about the crop fails — a missing decoration must never fail a PDF.
+ */
+async function extractBrandMark(
+    browser: Awaited<ReturnType<typeof puppeteer.launch>>,
+    logoDataUrl: string,
+): Promise<string | null> {
+    if (cachedMarkDataUrl) return cachedMarkDataUrl;
+    if (!logoDataUrl || !logoDataUrl.startsWith('data:image')) return null;
+
+    const page = await browser.newPage();
+    try {
+        const cropped = await page.evaluate(async (src: string) => {
+            // Runs inside the Puppeteer (browser) context, not Node — the DOM
+            // globals below don't exist in this file's Node/TS lib, so they're
+            // reached via `globalThis as any` rather than typed directly.
+            const g = globalThis as any;
+            const img = new g.Image();
+            const loaded = new Promise<boolean>((resolve) => {
+                img.onload = () => resolve(true);
+                img.onerror = () => resolve(false);
+            });
+            img.src = src;
+            if (!(await loaded)) return null;
+
+            const w = img.naturalWidth;
+            const h = img.naturalHeight;
+            if (!w || !h) return null;
+
+            const canvas = g.document.createElement('canvas');
+            canvas.width = w;
+            canvas.height = h;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) return null;
+            ctx.drawImage(img, 0, 0);
+
+            let imageData: any;
+            try {
+                imageData = ctx.getImageData(0, 0, w, h);
+            } catch {
+                return null;
+            }
+            const data = imageData.data;
+            const ALPHA_THRESHOLD = 12;
+
+            const colHasPixel = new Array<boolean>(w).fill(false);
+            for (let x = 0; x < w; x++) {
+                for (let y = 0; y < h; y++) {
+                    if (data[(y * w + x) * 4 + 3]! > ALPHA_THRESHOLD) {
+                        colHasPixel[x] = true;
+                        break;
+                    }
+                }
+            }
+
+            // Find the right edge of the icon: the first sufficiently-wide run of
+            // empty columns after content has started marks the gap before the
+            // wordmark text.
+            const GAP_THRESHOLD = Math.max(8, Math.round(h * 0.03));
+            let rightEdge = w - 1;
+            let started = false;
+            let gapRun = 0;
+            for (let x = 0; x < w; x++) {
+                if (colHasPixel[x]) {
+                    started = true;
+                    gapRun = 0;
+                    continue;
+                }
+                if (started) {
+                    gapRun++;
+                    if (gapRun >= GAP_THRESHOLD) {
+                        rightEdge = x - gapRun;
+                        break;
+                    }
+                }
+            }
+            if (rightEdge < 8) return null;
+
+            let top = h;
+            let bottom = -1;
+            for (let y = 0; y < h; y++) {
+                for (let x = 0; x <= rightEdge; x++) {
+                    if (data[(y * w + x) * 4 + 3]! > ALPHA_THRESHOLD) {
+                        if (y < top) top = y;
+                        if (y > bottom) bottom = y;
+                        break;
+                    }
+                }
+            }
+            if (top >= bottom) {
+                top = 0;
+                bottom = h - 1;
+            }
+
+            const cropW = rightEdge + 1;
+            const cropH = bottom - top + 1;
+            const out = g.document.createElement('canvas');
+            out.width = cropW;
+            out.height = cropH;
+            const octx = out.getContext('2d');
+            if (!octx) return null;
+            octx.drawImage(canvas, 0, top, cropW, cropH, 0, 0, cropW, cropH);
+            return out.toDataURL('image/png');
+        }, logoDataUrl);
+
+        cachedMarkDataUrl = cropped || logoDataUrl;
+        return cachedMarkDataUrl;
+    } catch (e) {
+        logger.warn({ err: e }, 'quotation.brand_mark_crop_failed');
+        return logoDataUrl;
+    } finally {
+        await page.close().catch(() => {});
+    }
+}
+
 /* ── Scope tree parsing & counting ────────────────────────────────────────── */
 
 interface ParsedFeatureNode {
@@ -297,8 +436,6 @@ interface ParsedFeatureNode {
 /** Parses flat indented scope strings into a structured feature tree. Placeholder
  *  and empty rows are filtered out here so they never reach the layout. */
 function parseScopeTree(rawItems: string[]): ParsedFeatureNode[] {
-    const nodes: ParsedFeatureNode[] = [];
-
     const parsedList = rawItems
         .map((rawText) => {
             const match = rawText.match(/^(\s*)/);
@@ -332,6 +469,7 @@ function parseScopeTree(rawItems: string[]): ParsedFeatureNode[] {
         // Drop leftover placeholder rows (e.g. a stray "New Feature").
         .filter((item) => !isPlaceholderRow(item.name));
 
+    const nodes: ParsedFeatureNode[] = [];
     const stack: { node: ParsedFeatureNode; level: number }[] = [];
 
     for (const item of parsedList) {
@@ -368,7 +506,40 @@ function countDescendants(node: ParsedFeatureNode): number {
     return c;
 }
 
+/* ── Billing-cycle presentation ───────────────────────────────────────────── */
+
+const BILLING_CYCLE_LABELS: Record<string, string> = {
+    'one-time': 'One-time',
+    monthly: 'Monthly',
+    yearly: 'Yearly',
+    'per-image': 'Per image',
+    'per-video': 'Per video',
+    'per-second': 'Per second',
+    'per-10s': 'Per 10 sec',
+};
+
+function billingCycleLabel(cycle: unknown): string {
+    const key = String(cycle || 'one-time');
+    return BILLING_CYCLE_LABELS[key] || key;
+}
+
 /* ── Section model ────────────────────────────────────────────────────────── */
+
+interface TechStackModel {
+    description: string;
+    rows: Array<[string, string[]]>;
+}
+
+interface LineItemModel {
+    title: string;
+    description: string;
+    billingCycle: string;
+    cycleLabel: string;
+    quantity: number;
+    unitPrice: number;
+    lineTotal: number;
+    isUpfront: boolean;
+}
 
 interface SectionModel {
     category: string;
@@ -377,11 +548,42 @@ interface SectionModel {
     scopeDescription: string;
     modules: ParsedFeatureNode[];
     deliverableCount: number;
-    techStack?: any;
+    techStack: TechStackModel | null;
     basePrice: number;
-    lineItems: any[];
+    /** Every line item, upfront and recurring alike, in authored order. */
+    lineItems: LineItemModel[];
+    upfrontLineItems: LineItemModel[];
+    recurringLineItems: LineItemModel[];
+    /** Mirrors calculateTotals() in quotation.service.ts so the printed
+     *  breakdown reconciles exactly with the stored grand total. */
+    serviceBase: number;
+    discountPct: number;
+    discountAmount: number;
+    taxRatePct: number;
+    taxAmount: number;
+    serviceTotal: number;
     recurringMonthly: number;
-    isMarketing: boolean;
+}
+
+function buildTechStack(tech: any): TechStackModel | null {
+    if (!tech) return null;
+    const pick = (v: any): string[] =>
+        (Array.isArray(v) ? v : [])
+            .map((x: any) => normalizeText(x))
+            .filter((x: string) => x && !isPlaceholderRow(x));
+
+    const rows: Array<[string, string[]]> = (
+        [
+            ['Frontend', pick(tech.frontend)],
+            ['Backend', pick(tech.backend)],
+            ['Database', pick(tech.database)],
+            ['Tools', pick(tech.tools)],
+        ] as Array<[string, string[]]>
+    ).filter(([, list]) => list.length > 0);
+
+    const description = normalizeText(tech.description || '');
+    if (rows.length === 0 && !description) return null;
+    return { description, rows };
 }
 
 function buildSections(services: any[]): SectionModel[] {
@@ -398,21 +600,42 @@ function buildSections(services: any[]): SectionModel[] {
                 ? service.scopeItems.map((x: any) => String(x || '').replace(/\s+$/, ''))
                 : [];
             const tree = parseScopeTree(rawItems);
-            // Drop modules that ended up empty AND carry no price of their own.
-            const modules = tree.filter(
-                (m) => m.children.length > 0 || (m.price && m.price > 0),
-            );
+            // Keep every authored module — including leaf modules with no
+            // children, which are legitimate single-line deliverables.
+            const modules = tree;
             const deliverableCount = modules.reduce((sum, m) => sum + countDescendants(m), 0);
 
-            const lineItems: any[] = Array.isArray(service?.lineItems) ? service.lineItems : [];
-            let recurringMonthly = 0;
-            for (const item of lineItems) {
-                const qty = item.quantity ?? 1;
-                const lineTotal = (Number(item.price) || 0) * qty;
-                if (!isUpfrontBillingCycle(item.billingCycle || 'one-time') && item.billingCycle === 'monthly') {
-                    recurringMonthly += lineTotal;
-                }
-            }
+            const rawLineItems: any[] = Array.isArray(service?.lineItems) ? service.lineItems : [];
+            const lineItems: LineItemModel[] = rawLineItems.map((item) => {
+                const billingCycle = String(item?.billingCycle || 'one-time');
+                const quantity = typeof item?.quantity === 'number' ? item.quantity : 1;
+                const unitPrice = Number(item?.price) || 0;
+                return {
+                    title: normalizeText(item?.title || 'Line item'),
+                    description: normalizeText(item?.description || ''),
+                    billingCycle,
+                    cycleLabel: billingCycleLabel(billingCycle),
+                    quantity,
+                    unitPrice,
+                    lineTotal: unitPrice * quantity,
+                    isUpfront: isUpfrontBillingCycle(billingCycle as any),
+                };
+            });
+
+            const upfrontLineItems = lineItems.filter((l) => l.isUpfront);
+            const recurringLineItems = lineItems.filter((l) => !l.isUpfront);
+            const recurringMonthly = recurringLineItems
+                .filter((l) => l.billingCycle === 'monthly')
+                .reduce((sum, l) => sum + l.lineTotal, 0);
+
+            const basePrice = Number(service?.basePrice) || 0;
+            const upfrontLineItemsTotal = upfrontLineItems.reduce((sum, l) => sum + l.lineTotal, 0);
+            const serviceBase = basePrice + upfrontLineItemsTotal;
+            const discountPct = Number(service?.discount) || 0;
+            const discountAmount = (serviceBase * discountPct) / 100;
+            const serviceSubtotal = serviceBase - discountAmount;
+            const taxRatePct = Number(service?.taxRate) || 0;
+            const taxAmount = (serviceSubtotal * taxRatePct) / 100;
 
             const rawDesc = normalizeText(service?.scopeDescription || '');
             const isLorem = rawDesc.toLowerCase().includes('lorem ipsum');
@@ -424,105 +647,45 @@ function buildSections(services: any[]): SectionModel[] {
                 scopeDescription: isLorem ? '' : rawDesc,
                 modules,
                 deliverableCount,
-                techStack: service?.techStack,
-                basePrice: Number(service?.basePrice) || 0,
+                techStack: buildTechStack(service?.techStack),
+                basePrice,
                 lineItems,
+                upfrontLineItems,
+                recurringLineItems,
+                serviceBase,
+                discountPct,
+                discountAmount,
+                taxRatePct,
+                taxAmount,
+                serviceTotal: serviceSubtotal + taxAmount,
                 recurringMonthly,
-                isMarketing: category === 'marketing',
             } as SectionModel;
         })
-        .filter((s) => s.modules.length > 0 || s.basePrice > 0);
+        .filter((s) => s.modules.length > 0 || s.basePrice > 0 || s.lineItems.length > 0);
 }
 
-/* ── Render helpers ───────────────────────────────────────────────────────── */
+/* ── Payment milestone phrasing ──────────────────────────────────────────── */
 
-function renderDeliverable(node: ParsedFeatureNode, currency: string): string {
-    const price =
-        node.price && node.price > 0
-            ? `<span class="deliv-price">${formatMoneyPdf(node.price, currency)}</span>`
-            : '';
-    const route = node.route ? `<span class="deliv-route">${esc(node.route)}</span>` : '';
-    const nested =
-        node.children && node.children.length > 0
-            ? `<div class="deliv-sub">${node.children
-                  .map(
-                      (c) =>
-                          `<div class="deliv-sub-item"><span class="deliv-sub-mark"></span><span>${esc(
-                              c.name,
-                          )}</span></div>`,
-                  )
-                  .join('')}</div>`
-            : '';
-
-    return `<div class="deliv">
-      <span class="deliv-mark"></span>
-      <span class="deliv-body">
-        <span class="deliv-name">${esc(node.name)}${price}</span>
-        ${route}
-        ${nested}
-      </span>
-    </div>`;
+function milestonePhrase(index: number, total: number): string {
+    if (total <= 1) return 'Due in full at project kickoff.';
+    if (index === 0) return 'Advance payment required to initiate the project.';
+    if (index === total - 1) return 'Remaining balance after final delivery and approval.';
+    return 'Due upon reaching the agreed project milestone.';
 }
 
-function renderModule(module: ParsedFeatureNode, index: number, currency: string): string {
-    const idx = String(index).padStart(2, '0');
-    const count = countDescendants(module);
-    const priceTag =
-        module.price && module.price > 0
-            ? `<span class="module-price">${formatMoneyPdf(module.price, currency)}</span>`
-            : '';
-    const countTag = count > 0 ? `<span class="module-count">${count}</span>` : '';
-
-    const deliverables = module.children.map((c) => renderDeliverable(c, currency)).join('');
-
-    return `<div class="module">
-      <div class="module-head">
-        <span class="module-idx">${idx}</span>
-        <h3 class="module-name">${esc(module.name)}</h3>
-        <span class="module-meta">${priceTag}${countTag}</span>
-      </div>
-      ${deliverables ? `<div class="deliverables">${deliverables}</div>` : ''}
-    </div>`;
-}
-
-function renderTechStack(tech: any): string {
-    if (!tech) return '';
-    const rows: Array<[string, string[]]> = (
-        [
-            ['Frontend', tech.frontend],
-            ['Backend', tech.backend],
-            ['Database', tech.database],
-            ['Tools', tech.tools],
-        ] as Array<[string, unknown]>
-    ).filter(([, l]) => Array.isArray(l) && (l as string[]).length > 0) as Array<[string, string[]]>;
-    if (rows.length === 0) return '';
-
-    const body = rows
-        .map(
-            ([layer, list]) => `<div class="tech-row">
-        <div class="tech-layer">${esc(layer)}</div>
-        <div class="tech-chips">${list.map((t) => `<span class="tech-chip">${esc(t)}</span>`).join('')}</div>
-      </div>`,
-        )
-        .join('');
-
-    return `<div class="tech-block">
-      <div class="block-eyebrow">Technology Stack</div>
-      ${body}
-    </div>`;
-}
+/* ── Print HTML ───────────────────────────────────────────────────────────── */
 
 export function buildPrintHtml(
     q: Record<string, any>,
-    ctx: { logoSrc: string; signatureSrc: string; fontCss: string },
+    ctx: { logoSrc: string; markSrc: string | null; fontCss: string; signatureSrc?: string },
 ): string {
     const client = q.client || {};
     const details = q.details || {};
     const totals = q.totals || {};
     const currency = q.currency || 'BDT';
 
-    const quotationNo =
-        String(q.quotationNumber || 'DRAFT-001').replace(/^#/, '').trim() || 'DRAFT-001';
+    const quotationNo = String(q.quotationNumber || 'DRAFT-001').replace(/^#/, '').trim() || 'DRAFT-001';
+    const version = Number(q.version) || 1;
     const issueDate = details?.date
         ? format(new Date(details.date), 'MMMM dd, yyyy')
         : format(new Date(), 'MMMM dd, yyyy');
@@ -530,36 +693,31 @@ export function buildPrintHtml(
         ? format(new Date(details.validUntil), 'MMMM dd, yyyy')
         : '—';
 
-    const companyName = normalizeText(q.company?.name || 'WebBriks');
-    const companyWebsite = normalizeText(q.company?.website || '');
+    const companyName = normalizeText(q.company?.name || DEFAULT_COMPANY.name);
+    const companyWebsite = normalizeText(q.company?.website || DEFAULT_COMPANY.website);
+    const companyEmail = normalizeText(q.company?.email || DEFAULT_COMPANY.email);
+    const companyPhone = normalizeText(q.company?.phone || DEFAULT_COMPANY.phone);
+    const companyAddress = normalizeText(q.company?.address || DEFAULT_COMPANY.address);
 
     const clientContact = normalizeText(client.contactName || '');
     const clientCompany = normalizeText(client.companyName || '');
-    // Dedupe: only show the contact line when it differs from the company name.
-    const clientPrimary = clientCompany || clientContact || 'Valued Client';
+    const clientAddress = normalizeText(client.address || '');
+    const clientEmail = normalizeText(client.email || '');
+    const clientPhone = normalizeText(client.phone || '');
+    const clientPrimary = clientContact || clientCompany || 'Valued Client';
     const clientSecondary =
-        clientContact && clientContact.toLowerCase() !== clientPrimary.toLowerCase()
-            ? clientContact
-            : '';
+        clientCompany && clientCompany.toLowerCase() !== clientPrimary.toLowerCase() ? clientCompany : '';
 
     const proposalTitle = normalizeText(details?.title || 'Digital Agency Proposal');
     const rawOverview = normalizeText(q.overview || details?.overview || '');
-    const overview =
-        rawOverview && !rawOverview.toLowerCase().includes('lorem ipsum') ? rawOverview : '';
+    const overview = rawOverview && !rawOverview.toLowerCase().includes('lorem ipsum') ? rawOverview : '';
 
     const sections = buildSections(Array.isArray(q.services) ? q.services : []);
 
-    const totalModules = sections.reduce((s, sec) => s + sec.modules.length, 0);
-    const totalDeliverables = sections.reduce((s, sec) => s + sec.deliverableCount, 0);
-    const totalSections = sections.length;
-    const recurringMonthly = sections.reduce((s, sec) => s + sec.recurringMonthly, 0);
-
     const grandTotalVal = Number(
-        totals.grandTotal || sections.reduce((s, sec) => s + sec.basePrice, 0),
+        totals.grandTotal ?? sections.reduce((s, sec) => s + sec.serviceTotal, 0),
     );
-    const subtotalVal = Number(
-        totals.subtotal || sections.reduce((s, sec) => s + sec.basePrice, 0),
-    );
+    const subtotalVal = Number(totals.subtotal ?? grandTotalVal);
     const discountVal = Number(totals.discountAmount || 0);
     const taxVal = Number(totals.taxAmount || 0);
 
@@ -569,351 +727,418 @@ export function buildPrintHtml(
     const clientRequirements = (Array.isArray(q.clientRequirements) ? q.clientRequirements : [])
         .map((s: any) => normalizeText(s))
         .filter((s: string) => s && !isPlaceholderRow(s));
+    const workflowSteps = (Array.isArray(q.workflow) ? q.workflow : [])
+        .map((s: any) => normalizeText(s))
+        .filter((s: string) => s && !isPlaceholderRow(s));
 
-    const notIncludedFinal = notIncludedItems.length
-        ? notIncludedItems
-        : [
-              'Domain registration & premium hosting (billed separately)',
-              'Third-party paid API licences, plugins, or premium fonts',
-              'Paid advertising budget for Meta, Google, or LinkedIn',
-              'Raw unedited footage or source design files',
-          ];
-    const clientReqFinal = clientRequirements.length
-        ? clientRequirements
-        : [
-              'Brand logo, colour palette & typography guidelines',
-              'Admin access / credentials for hosting, domain, or CMS',
-              'Final approved copy, content & product photography',
-              'A dedicated point of contact for feedback and approvals',
-          ];
+    // The quotation model carries no free-form terms array, so the standard
+    // contractual terms are composed from the quotation's own real fields
+    // (validity date, currency, company and client names). Any terms the
+    // document should state that are *not* derivable — exclusions and client
+    // obligations — come from notIncluded/clientRequirements and are listed
+    // under their own headings rather than being restated here.
+    const termsItems: Array<{ title: string; body: string }> = [
+        { title: 'Quotation validity', body: `This quotation is valid until ${validUntilStr}. Pricing may be revised after this date.` },
+        { title: 'Taxes & currency', body: `All amounts are in ${currency} and exclusive of applicable taxes unless stated otherwise.` },
+        { title: 'Scope changes', body: 'Any change in scope may affect the price and timeline, and will be agreed in writing before the work proceeds.' },
+        { title: 'Liability', body: `${companyName} is not liable for delays caused by client-side dependencies.` },
+        { title: 'Ownership', body: 'Ownership of the final deliverables transfers to the client upon full payment.' },
+    ];
+
+    const storedRecurring = (Array.isArray(q.recurringCharges) ? q.recurringCharges : []).map((item: any) => {
+        const billingCycle = String(item?.billingCycle || 'monthly');
+        const quantity = typeof item?.quantity === 'number' ? item.quantity : 1;
+        const unitPrice = Number(item?.price) || 0;
+        return {
+            title: normalizeText(item?.title || 'Recurring item'),
+            description: normalizeText(item?.description || ''),
+            billingCycle,
+            cycleLabel: billingCycleLabel(billingCycle),
+            quantity,
+            unitPrice,
+            lineTotal: unitPrice * quantity,
+            isUpfront: false,
+        } as LineItemModel;
+    });
+    const recurringItems: LineItemModel[] = storedRecurring.length
+        ? storedRecurring
+        : sections.flatMap((sec) => sec.recurringLineItems);
 
     const paymentMilestones = Array.isArray(q.paymentMilestones) ? q.paymentMilestones : [];
     const milestonesToUse = paymentMilestones.length
         ? paymentMilestones
         : [
-              { label: 'Upfront deposit — project kickoff', percentage: 50 },
-              { label: 'Final delivery & handover', percentage: 50 },
+              { label: 'Advance Payment', percentage: 50 },
+              { label: 'Final Payment', percentage: 50 },
           ];
 
-    /* ── Page: cover ─────────────────────────────────────────────────────── */
-    const metaStrip = `
-      <div class="cover-meta">
-        <div class="cover-meta-cell">
-          <div class="cover-meta-k">Prepared For</div>
-          <div class="cover-meta-v">${esc(clientPrimary)}</div>
-          ${clientSecondary ? `<div class="cover-meta-sub">Attn: ${esc(clientSecondary)}</div>` : ''}
-        </div>
-        <div class="cover-meta-cell">
-          <div class="cover-meta-k">Issue Date</div>
-          <div class="cover-meta-v">${esc(issueDate)}</div>
-        </div>
-        <div class="cover-meta-cell">
-          <div class="cover-meta-k">Valid Until</div>
-          <div class="cover-meta-v">${esc(validUntilStr)}</div>
-        </div>
-      </div>`;
+    function paragraphs(text: string, cls: string): string {
+        return text
+            .split(/\n+/)
+            .map((p) => p.trim())
+            .filter(Boolean)
+            .map((p) => `<p class="${cls}">${esc(p)}</p>`)
+            .join('');
+    }
 
-    const coverHtml = `
-      <section class="cover">
-        <div class="cover-top">
-          <div class="cover-logo-plate">
-            <img src="${esc(ctx.logoSrc)}" alt="${esc(companyName)}" class="cover-logo" />
+    const clientLines = [clientSecondary, clientAddress, clientEmail, clientPhone].filter(Boolean);
+    const companyLines = [companyAddress, companyEmail, companyPhone, companyWebsite].filter(Boolean);
+
+    const metaItems: Array<[string, string]> = [
+        ['Quotation', `#${quotationNo}`],
+        ...(version > 1 ? ([['Revision', `Version ${version}`]] as Array<[string, string]>) : []),
+        ['Issued', issueDate],
+        ['Valid Until', validUntilStr],
+    ];
+
+    const overviewBody = overview || `${companyName} will design and deliver this engagement for ${clientPrimary}, covering everything from initial scoping through launch and handover.`;
+
+    const coverSectionHtml = `
+      <div class="paginate-group">
+          <div class="paginate-block">
+              <div class="cover-top">
+                <img src="${esc(ctx.logoSrc)}" alt="${esc(companyName)}" class="cover-logo" />
+                <div class="cover-meta">
+                  ${metaItems.map(([label, value]) => `<div class="cover-meta-item"><span class="meta-label">${esc(label)}:</span> <span class="meta-value">${esc(value)}</span></div>`).join('')}
+                </div>
+              </div>
+              <h1 class="cover-title">${esc(proposalTitle)}</h1>
+              <div class="parties">
+                <div class="party">
+                  <div class="party-label">Prepared for</div>
+                  <div class="party-name">${esc(clientPrimary)}</div>
+                  ${clientLines.map((l) => `<div class="party-line">${esc(l)}</div>`).join('')}
+                </div>
+                <div class="party">
+                  <div class="party-label">Prepared by</div>
+                  <div class="party-name">${esc(companyName)}</div>
+                  ${companyLines.map((l) => `<div class="party-line">${esc(l)}</div>`).join('')}
+                </div>
+              </div>
+              <div class="cover-rule"></div>
+              <div class="editorial">
+                <div class="eyebrow">Project Overview</div>
+                ${paragraphs(overviewBody, 'editorial-body')}
+              </div>
           </div>
-          <div class="cover-eyebrow">Official Quotation</div>
-        </div>
-        <div class="cover-number">#${esc(quotationNo)}</div>
-        <div class="cover-mid">
-          <div class="cover-kicker">Scope of Work &amp; Investment</div>
-          <h1 class="cover-title">${esc(proposalTitle)}</h1>
-          <div class="cover-rule"></div>
-          ${metaStrip}
-        </div>
-        <div class="cover-foot">
-          <span>${esc(companyName)}</span>
-          ${companyWebsite ? `<span>${esc(companyWebsite)}</span>` : ''}
-        </div>
-      </section>`;
+      </div>
+    `;
 
-    /* ── Page: contents + scope at a glance ──────────────────────────────── */
-    const contentsRows = [
-        { name: 'Executive Summary', meta: `${totalSections} section${totalSections === 1 ? '' : 's'}` },
-        ...sections.map((sec, i) => ({
-            name: `Section ${String(i + 1).padStart(2, '0')} · ${sec.label}`,
-            meta: `${sec.deliverableCount} deliverables`,
-        })),
-        { name: 'Investment', meta: formatMoneyPdf(grandTotalVal, currency) },
-        { name: 'Terms & Authorization', meta: `${milestonesToUse.length} milestones` },
-    ]
-        .map(
-            (r) =>
-                `<div class="toc-row"><span class="toc-name">${esc(r.name)}</span><span class="toc-dot"></span><span class="toc-meta">${esc(
-                    r.meta,
-                )}</span></div>`,
-        )
-        .join('');
+    function formatPriceSafe(pText: string): string {
+        if (!pText) return '';
+        const pNum = Number(pText.replace(/[^0-9.-]+/g, ''));
+        if (!isNaN(pNum) && String(pNum) === pText.trim()) {
+            return formatMoneyPdf(pNum, currency);
+        }
+        return pText;
+    }
 
-    const scopeGlanceGroups = sections
-        .map((sec, si) => {
-            const rows = sec.modules
-                .map((m, mi) => {
-                    const idx = String(mi + 1).padStart(2, '0');
-                    const count = countDescendants(m);
-                    return `<div class="glance-row">
-              <span class="glance-idx">${idx}</span>
-              <span class="glance-name">${esc(m.name)}</span>
-              <span class="glance-count">${count || ''}</span>
-            </div>`;
-                })
-                .join('');
-            return `<div class="glance-group">
-          <div class="glance-group-head">Section ${String(si + 1).padStart(2, '0')} · ${esc(
-              sec.label,
-          )}<span class="glance-group-total">${sec.deliverableCount} deliverables</span></div>
-          <div class="glance-grid">${rows}</div>
+    function renderScopeChildren(nodes: ParsedFeatureNode[], depth: number): string {
+        if (!nodes.length) return '';
+        return nodes.map((n) => {
+            const route = n.route ? `<div class="deliv-route">${esc(n.route)}</div>` : '';
+            const priceStr = formatPriceSafe(n.priceStr || '');
+            const price = priceStr ? `<div class="deliv-price">${esc(priceStr)}</div>` : '';
+            return `<div class="paginate-block">
+                <div class="deliv-row depth-${Math.min(depth, 3)}">
+                    <div class="deliv-mark">•</div>
+                    <div class="deliv-content">
+                      <div class="deliv-name">${esc(n.name)}</div>
+                      ${route}
+                    </div>
+                    ${price}
+                </div>
+            </div>${renderScopeChildren(n.children, depth + 1)}`;
+        }).join('');
+    }
+
+    function amountCell(item: LineItemModel): string {
+        const unitLine = item.quantity !== 1 ? `<div class="unit-note">${item.quantity} × ${formatMoneyPdf(item.unitPrice, currency)}</div>` : '';
+        return `${formatMoneyPdf(item.lineTotal, currency)}${unitLine}`;
+    }
+
+    function techStackHtml(tech: TechStackModel): string {
+        return `<div class="paginate-group">
+            <div class="paginate-block">
+                <div class="tech-block">
+                    <div class="tech-title">Technology Stack</div>
+                    ${tech.description ? `<p class="tech-desc">${esc(tech.description)}</p>` : ''}
+                    <div class="tech-rows">
+                        ${tech.rows.map(([layer, list]) => `
+                            <div class="tech-row">
+                                <span class="tech-layer">${esc(layer)}</span>
+                                <span class="tech-items">${list.join(' · ')}</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            </div>
         </div>`;
-        })
-        .join('');
+    }
 
-    const contentsHtml = `
-      <section class="sheet break-before">
-        <div class="page-title-block">
-          <div class="page-eyebrow">Contents</div>
-          <h2 class="page-title">What&rsquo;s inside</h2>
-        </div>
-        <div class="toc">${contentsRows}</div>
-
-        <div class="glance-header">
-          <div class="page-eyebrow">Scope at a glance</div>
-          <div class="glance-total">
-            <span class="glance-total-num">${totalDeliverables}</span>
-            <span class="glance-total-lab">deliverables across ${totalModules} modules</span>
-          </div>
-        </div>
-        ${scopeGlanceGroups}
-      </section>`;
-
-    /* ── Page: executive summary ─────────────────────────────────────────── */
-    const summaryLeadText = overview
-        ? overview
-        : `This quotation covers ${totalDeliverables} deliverables across ${totalModules} modules${
-              totalSections > 1 ? ` in ${totalSections} sections` : ''
-          }, from design through delivery and handover.`;
-    // Preserve authored paragraph breaks: `normalizeText` keeps newlines, so any
-    // run of them marks a paragraph boundary. Each paragraph gets its own <p> so
-    // the summary no longer collapses into one wall of text.
-    const summaryLeadHtml = summaryLeadText
-        .split(/\n+/)
-        .map((p) => p.trim())
-        .filter(Boolean)
-        .map((p) => `<p>${esc(p)}</p>`)
-        .join('');
-
-    const timelineHtml = milestonesToUse.length
-        ? `<div class="timeline">
-        <div class="block-eyebrow">Delivery Milestones</div>
-        ${milestonesToUse
-            .map(
-                (m: any, i: number) => `<div class="timeline-row">
-          <span class="timeline-idx">${String(i + 1).padStart(2, '0')}</span>
-          <span class="timeline-label">${esc(normalizeText(m.label))}</span>
-          ${m.percentage ? `<span class="timeline-pct">${m.percentage}%</span>` : ''}
-        </div>`,
-            )
-            .join('')}
-      </div>`
-        : '';
-
-    const summaryHtml = `
-      <section class="sheet break-before">
-        <div class="page-title-block">
-          <div class="page-eyebrow">Executive Summary</div>
-          <h2 class="page-title">${esc(proposalTitle)}</h2>
-        </div>
-        <div class="summary-lead">${summaryLeadHtml}</div>
-
-        <div class="stat-row">
-          <div class="stat-cell">
-            <div class="stat-num">${totalDeliverables}</div>
-            <div class="stat-lab">Deliverables</div>
-          </div>
-          <div class="stat-cell">
-            <div class="stat-num">${totalModules}</div>
-            <div class="stat-lab">Modules</div>
-          </div>
-          <div class="stat-cell">
-            <div class="stat-num">${totalSections}</div>
-            <div class="stat-lab">Section${totalSections === 1 ? '' : 's'}</div>
-          </div>
-        </div>
-
-        ${timelineHtml}
-      </section>`;
-
-    /* ── Pages: section dividers + modules ───────────────────────────────── */
-    const sectionsHtml = sections
-        .map((sec, si) => {
-            const secNo = String(si + 1).padStart(2, '0');
-            const divider = `
-        <section class="section-divider">
-          <div class="divider-inner">
-            <div class="divider-no">Section ${secNo}</div>
-            <h2 class="divider-title">${esc(sec.label)}</h2>
-            <div class="divider-summary">${esc(sec.kicker)} · ${sec.modules.length} module${
-                sec.modules.length === 1 ? '' : 's'
-            } · ${sec.deliverableCount} deliverables</div>
-          </div>
-        </section>`;
-
-            const desc = sec.scopeDescription
-                ? `<p class="section-desc">${esc(sec.scopeDescription)}</p>`
-                : '';
-
-            const modulesHtml = sec.modules
-                .map((m, mi) => renderModule(m, mi + 1, currency))
-                .join('');
-
-            const tech = renderTechStack(sec.techStack);
-
-            return `${divider}<div class="section-body">${desc}${modulesHtml}${tech}</div>`;
-        })
-        .join('');
-
-    /* ── Page: pricing ───────────────────────────────────────────────────── */
-    const summaryAdjustments = `
-      ${
-          discountVal > 0 || taxVal > 0
-              ? `<div class="price-adjustments">
-        <div class="adj-row"><span>One-time project investment</span><span>${formatMoneyPdf(
-            subtotalVal,
-            currency,
-        )}</span></div>
-        ${
-            discountVal > 0
-                ? `<div class="adj-row adj-neg"><span>Applied discount</span><span>− ${formatMoneyPdf(
-                      discountVal,
-                      currency,
-                  )}</span></div>`
-                : ''
-        }
-        ${
-            taxVal > 0
-                ? `<div class="adj-row"><span>Tax / VAT</span><span>${formatMoneyPdf(
-                      taxVal,
-                      currency,
-                  )}</span></div>`
-                : ''
-        }
-      </div>`
-              : ''
-      }`;
-
-    const recurringNote =
-        recurringMonthly > 0
-            ? `<div class="price-recurring">Plus recurring costs of <strong>${formatMoneyPdf(
-                  recurringMonthly,
-                  currency,
-              )} / month</strong>, billed separately from the one-time total above.</div>`
-            : '';
-
-    const milestoneRows = milestonesToUse
-        .map(
-            (m: any) => `<div class="milestone-row">
-        ${m.percentage ? `<span class="milestone-pct">${m.percentage}%</span>` : '<span class="milestone-pct">—</span>'}
-        <span class="milestone-label">${esc(normalizeText(m.label))}</span>
-      </div>`,
-        )
-        .join('');
-
-    const pricingHtml = `
-      <section class="sheet break-before pricing">
-        <div class="page-title-block">
-          <div class="page-eyebrow">Investment</div>
-          <h2 class="page-title">One-time project investment</h2>
-        </div>
-
-        <div class="price-hero">
-          <div class="price-figure">${formatMoneyPdf(grandTotalVal, currency)}</div>
-          <div class="price-rule"></div>
-          <div class="price-ledger">
-            <span>${totalDeliverables} deliverables</span>
-            <span class="price-ledger-sep">·</span>
-            <span>${totalModules} modules</span>
-          </div>
-        </div>
-
-        ${summaryAdjustments}
-
-        <div class="price-milestones">
-          <div class="block-eyebrow">Payment Terms</div>
-          ${milestoneRows}
-        </div>
-
-        ${recurringNote}
-
-        <div class="price-note">
-          This one-time price covers the scope defined in this document through delivery and
-          handover. Third-party subscriptions, ad budgets, and post-launch changes outside the
-          agreed scope are billed separately — see the terms overleaf.
-        </div>
-      </section>`;
-
-    /* ── Page: terms + authorization ─────────────────────────────────────── */
-    const notIncludedHtml = notIncludedFinal
-        .map(
-            (item: string) =>
-                `<div class="terms-item"><span class="terms-mark excl">–</span><span>${esc(item)}</span></div>`,
-        )
-        .join('');
-    const clientReqHtml = clientReqFinal
-        .map(
-            (item: string) =>
-                `<div class="terms-item"><span class="terms-mark incl">+</span><span>${esc(item)}</span></div>`,
-        )
-        .join('');
-
-    const termsHtml = `
-      <section class="sheet break-before terms">
-        <div class="page-title-block">
-          <div class="page-eyebrow">Terms</div>
-          <h2 class="page-title">Scope boundaries</h2>
-        </div>
-
-        <div class="terms-cols">
-          <div class="terms-col">
-            <div class="terms-col-head excl">Not included in price</div>
-            ${notIncludedHtml}
-          </div>
-          <div class="terms-col">
-            <div class="terms-col-head incl">Client needs to provide</div>
-            ${clientReqHtml}
-          </div>
-        </div>
-
-        <div class="auth">
-          <div class="auth-left">
-            <div class="block-eyebrow light">Authorization</div>
-            <div class="auth-desc">
-              This quotation is valid until <strong>${esc(validUntilStr)}</strong>. On acceptance,
-              formal execution begins per the agreed milestone schedule.
+    const servicesHtml = sections.map((sec, i) => {
+        // Every service after the first opens with extra leading space, so the
+        // reader can see one service has ended and another has begun instead of
+        // the two running together.
+        const headerBlock = `
+            <div class="paginate-block${i > 0 ? ' scope-group-spaced' : ''}" data-keep-with-next="true">
+                <div class="scope-group-header">
+                    <div class="scope-group-num">${String(i + 1).padStart(2, '0')}</div>
+                    <div class="scope-group-name">${esc(sec.label.toUpperCase())}</div>
+                    ${sec.scopeDescription ? paragraphs(sec.scopeDescription, 'scope-group-desc') : ''}
+                </div>
+                <div class="scope-rule"></div>
             </div>
-          </div>
-          <div class="auth-right">
-            ${
-                ctx.signatureSrc
-                    ? `<img src="${esc(ctx.signatureSrc)}" alt="Signature" class="auth-sig" />`
-                    : '<div class="auth-sig-gap"></div>'
-            }
-            <div class="auth-sig-line">
-              <div class="auth-sig-label">Authorized Signature</div>
-              <div class="auth-sig-org">${esc(companyName)}</div>
-            </div>
-          </div>
-        </div>
-      </section>`;
+        `;
 
-    const ledgerRail = `<div class="ledger-rail"><span>#${esc(
-        quotationNo,
-    )} &nbsp;·&nbsp; ${totalDeliverables} DELIVERABLES</span></div>`;
+        const modulesHtml = sec.modules.map((m, mIndex) => {
+            const priceStr = formatPriceSafe(m.priceStr || '');
+            const price = priceStr ? `<div class="deliv-price module-price">${esc(priceStr)}</div>` : '';
+            
+            // If it's the very first module, bundle it with the service header so they stay together
+            const isFirst = mIndex === 0;
+            const headerInjection = isFirst ? headerBlock : '';
+
+            return `<div class="paginate-group module-group">
+                ${headerInjection}
+                <div class="paginate-block" data-keep-with-next="true">
+                    <div class="module-header-wrap">
+                        <div class="deliv-row depth-0">
+                            <div class="deliv-content">
+                              <div class="module-name">${esc(m.name)}</div>
+                            </div>
+                            ${price}
+                        </div>
+                    </div>
+                </div>
+                ${renderScopeChildren(m.children, 1)}
+            </div>`;
+        }).join('');
+
+        // A service can legitimately carry no itemised scope — its detail then
+        // lives in the description and the investment table. Emit just the
+        // header in that case; a filler sentence adds nothing for the reader.
+        const emptyState = sec.modules.length === 0 ? `<div class="paginate-group">${headerBlock}</div>` : '';
+
+        let subPricingHtml = '';
+        if (sec.lineItems.length > 0) {
+            const liHtml = sec.lineItems.map(li => `
+                <div class="service-line-item">
+                    <div class="li-left">
+                        <div class="li-title">${esc(li.title)}</div>
+                        ${li.description ? `<div class="li-desc">${esc(li.description)}</div>` : ''}
+                    </div>
+                    <div class="li-right">
+                        ${amountCell(li)}
+                        ${li.billingCycle !== 'one-time' ? `<div class="li-cycle">${esc(li.cycleLabel)}</div>` : ''}
+                    </div>
+                </div>
+            `).join('');
+            
+            subPricingHtml = `
+                <div class="paginate-group">
+                    <div class="paginate-block">
+                        <div class="service-pricing">
+                            ${liHtml}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        return `
+            ${emptyState}
+            ${modulesHtml}
+            ${subPricingHtml}
+            ${sec.techStack ? techStackHtml(sec.techStack) : ''}
+        `;
+    }).join('');
+
+    const workflowHtml = workflowSteps.length ? `
+        <div class="paginate-group">
+            <div class="paginate-block" data-keep-with-next="true">
+                <h2 class="section-title">Project Workflow</h2>
+            </div>
+            ${workflowSteps.map((step, i) => `
+                <div class="paginate-block${i === workflowSteps.length - 1 ? ' blk-section-end' : ''}">
+                    <div class="workflow-row">
+                        <span class="workflow-num">${String(i + 1).padStart(2, '0')}</span>
+                        <span class="workflow-text">${esc(step)}</span>
+                    </div>
+                </div>
+            `).join('')}
+        </div>
+    ` : '';
+
+    const paymentStagesHtml = `
+        <div class="paginate-group">
+            <div class="paginate-block">
+                <div class="section-container">
+                    <h2 class="section-title">Payment Terms</h2>
+                    <div class="payment-stages">
+                        ${milestonesToUse.map((m: any, i: number) => {
+                            const pct = Number(m.percentage) || 0;
+                            const note = normalizeText(m.note || '');
+                            return `<div class="payment-stage">
+                                <div class="stage-num">${String(i + 1).padStart(2, '0')}</div>
+                                <div class="stage-pct">${pct}%</div>
+                                <div class="stage-label">${esc(normalizeText(m.label || 'Payment').toUpperCase())}</div>
+                                <div class="stage-desc">${esc(note || milestonePhrase(i, milestonesToUse.length))}</div>
+                            </div>`;
+                        }).join('')}
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    const investGroupBlocks = sections.map((sec) => {
+        let itemsHtml = '';
+        if (sec.basePrice > 0) {
+            itemsHtml += `
+                <div class="invest-item">
+                    <span>Base Package</span>
+                    <span>${formatMoneyPdf(sec.basePrice, currency)}</span>
+                </div>
+            `;
+        }
+        for (const li of sec.upfrontLineItems) {
+            itemsHtml += `
+                <div class="invest-item">
+                    <span>${esc(li.title)}</span>
+                    <span>${amountCell(li)}</span>
+                </div>
+            `;
+        }
+        return `
+            <div class="paginate-block">
+                <div class="invest-group">
+                    <div class="invest-group-title">${esc(sec.label.toUpperCase())}</div>
+                    ${itemsHtml}
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    const summaryRows: Array<[string, string, boolean?]> = [['Subtotal', formatMoneyPdf(subtotalVal, currency)]];
+    if (discountVal > 0) summaryRows.push(['Discount', `− ${formatMoneyPdf(discountVal, currency)}`, true]);
+    if (taxVal > 0) summaryRows.push(['Tax / VAT', formatMoneyPdf(taxVal, currency)]);
+
+    const investSummaryHtml = `
+        <div class="invest-summary">
+            ${summaryRows.map(([label, value, neg]) => `
+                <div class="invest-summary-row">
+                    <span>${esc(label)}</span>
+                    <span${neg ? ' class="neg"' : ''}>${esc(value)}</span>
+                </div>
+            `).join('')}
+        </div>
+    `;
+
+    // Emitted as several sibling blocks rather than one indivisible unit so the
+    // paginator can start the table on a page that has room for part of it,
+    // instead of pushing the whole section over and leaving a large gap behind.
+    const investmentHtml = `
+        <div class="paginate-group">
+            <div class="paginate-block" data-keep-with-next="true">
+                <h2 class="section-title">Investment Summary</h2>
+            </div>
+            ${investGroupBlocks}
+            <div class="paginate-block blk-section-end">
+                <div class="invest-summary-rule"></div>
+                ${investSummaryHtml}
+                <div class="invest-summary-rule"></div>
+                <div class="invest-total">
+                    <div class="invest-total-label">Total Investment</div>
+                    <div class="invest-total-figure">${formatMoneyPdf(grandTotalVal, currency)}</div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    const recurringHtml = recurringItems.length ? `
+        <div class="paginate-group">
+            <div class="paginate-block" data-keep-with-next="true">
+                <h2 class="section-title">Recurring Charges</h2>
+            </div>
+            ${recurringItems.map((r, i) => `
+                <div class="paginate-block${i === recurringItems.length - 1 ? ' blk-section-end' : ''}">
+                    <div class="recurring-item">
+                        <div class="r-title">${esc(r.title)}</div>
+                        <div class="r-amt">${amountCell(r)} / ${esc(r.cycleLabel.toLowerCase())}</div>
+                    </div>
+                </div>
+            `).join('')}
+        </div>
+    ` : '';
+
+    function listBlock(title: string, items: string[]): string {
+        if (!items.length) return '';
+        return `
+            <div class="paginate-group">
+                <div class="paginate-block" data-keep-with-next="true">
+                    <div class="list-block-title">${esc(title)}</div>
+                </div>
+                ${items.map((item, i) => `
+                    <div class="paginate-block${i === items.length - 1 ? ' blk-section-end' : ''}">
+                        <div class="list-row"><span class="list-mark">•</span><span>${esc(item)}</span></div>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+    }
+
+    const detailsHtml = (notIncludedItems.length || clientRequirements.length || termsItems.length) ? `
+        ${listBlock('Not Included', notIncludedItems)}
+        ${listBlock('Client Requirements', clientRequirements)}
+        ${termsItems.length ? `
+            <div class="paginate-group">
+                <div class="paginate-block" data-keep-with-next="true">
+                    <div class="list-block-title">Terms &amp; Conditions</div>
+                </div>
+                ${termsItems.map((t: any, i: number) => `
+                    <div class="paginate-block${i === termsItems.length - 1 ? ' blk-section-end' : ''}">
+                        <div class="terms-row">
+                            <div class="terms-title">${esc(t.title)}</div>
+                            <div class="terms-desc">${esc(t.body)}</div>
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+        ` : ''}
+    ` : '';
+
+    const advancePct = milestonesToUse[0]?.percentage ? `${milestonesToUse[0].percentage}%` : 'agreed';
+    const nextStepsHtml = `
+        <div class="paginate-group">
+            <div class="paginate-block">
+                <div class="section-container next-steps-container">
+                    <h2 class="section-title">Next Steps</h2>
+                    <div class="next-steps-list">
+                        <div>Confirm quotation</div>
+                        <div>Complete ${esc(advancePct)} initial payment</div>
+                        <div>Project begins</div>
+                    </div>
+                    <div class="authorized">
+                        <div class="authorized-label">Authorized by</div>
+                        ${
+                            ctx.signatureSrc
+                                ? `<img class="authorized-sig" src="${esc(ctx.signatureSrc)}" alt="" />`
+                                : `<div class="authorized-sig-spacer"></div>`
+                        }
+                        <div class="authorized-line"></div>
+                        <div class="authorized-name">${esc(SIGNATORY_NAME)}</div>
+                        <div class="authorized-role">${esc(SIGNATORY_ROLE)}, ${esc(companyName)}</div>
+                    </div>
+                    <div class="closing">
+                        <div class="closing-name">${esc(companyName)}</div>
+                        <div class="closing-contact">${esc(companyWebsite)} · ${esc(companyEmail)} · ${esc(companyPhone)}</div>
+                        <div class="closing-address">${esc(companyAddress)}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
 
     return `<!DOCTYPE html>
 <html lang="en">
@@ -924,458 +1149,264 @@ export function buildPrintHtml(
     ${ctx.fontCss}
 
     :root {
-      --ink-900: #101220;
-      --ink-700: #2B2F42;
-      --ink-500: #5C6275;
-      --ink-300: #9AA0B1;
-      --paper: #FFFFFF;
-      --paper-alt: #F5F5F8;
-      --rule: #E4E5EC;
-      --rule-strong: #C9CBD6;
-      --accent: #4B21D9;
-      --accent-deep: #1E1146;
-      --accent-tint: #F0ECFE;
-      --incl: #14705A;
-      --excl: #8E3350;
-      --incl-bg: #F1F7F4;
-      --excl-bg: #FBF2F5;
+      --ink: #111118;
+      --ink-secondary: #5F6070;
+      --muted: #8D8E9A;
+      --surface: #F7F7FA;
+      --border: #E5E7EB;
+      --white: #FFFFFF;
+      --brand: #4E12D4;
+      --brand-soft: #F5F1FF;
+      --brand-ink: #160735;
 
-      --font-display: 'Bricolage Grotesque', 'Inter Tight', 'Inter', system-ui, sans-serif;
-      --font-body: 'Inter', 'Hind Siliguri', system-ui, -apple-system, sans-serif;
+      --font-sans: 'Inter', system-ui, -apple-system, 'Hind Siliguri', sans-serif;
       --font-mono: 'Geist Mono', ui-monospace, 'JetBrains Mono', monospace;
     }
 
-    @page { size: A4; margin: 18mm 16mm 16mm; }
-    @page :first { margin: 0; }
-
+    /* Print margins are disabled in browser, we use deterministic A4 containers */
+    @page { size: A4; margin: 0; }
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
-    html, body { background: var(--paper); }
+    html, body { background: var(--surface); }
     body {
-      font-family: var(--font-body);
-      color: var(--ink-700);
-      font-size: 9.5pt;
-      line-height: 1.55;
+      font-family: var(--font-sans);
+      color: var(--ink-secondary);
+      font-size: 10pt;
+      line-height: 1.6;
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
       -webkit-font-smoothing: antialiased;
       font-variant-numeric: tabular-nums;
     }
 
-    .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
-    strong { font-weight: 600; color: var(--ink-900); }
+    strong { font-weight: 600; color: var(--ink); }
+    em { font-style: normal; }
 
-    /* Pagination */
-    .break-before { break-before: page; }
-    .section-divider { break-before: page; break-inside: avoid; }
-    .module-head, .stat-cell, .price-hero, .milestone-row,
-    .deliv, .toc-row, .glance-row, .timeline-row, .tech-row { break-inside: avoid; }
-    h1, h2, h3, .module-head, .divider-title, .page-title { break-after: avoid; }
-    .auth, .terms-col-head, .price-milestones { break-inside: avoid; }
-    p, .deliv, .terms-item { orphans: 3; widows: 3; }
-
-    /* ── Ledger rail (repeats on every page; hidden beneath the cover) ── */
-    /* Fixed elements position relative to the page CONTENT box in print, so a
-       negative offset is what pushes the rail out into the outer paper margin. */
-    .ledger-rail {
-      position: fixed;
-      left: -11mm; top: 0; bottom: 0;
-      width: 7mm;
-      display: flex; align-items: center; justify-content: center;
-      z-index: 1;
+    /* Deterministic Pagination Styles */
+    #source-content { display: none; }
+    
+    .pdf-page {
+        width: 210mm;
+        height: 297mm;
+        box-sizing: border-box;
+        padding: 16mm 16mm 22mm 16mm;
+        position: relative;
+        page-break-after: always;
+        break-after: page;
+        background: var(--white);
+        overflow: hidden;
     }
-    .ledger-rail span {
-      writing-mode: vertical-rl;
-      transform: rotate(180deg);
-      font-family: var(--font-mono);
-      font-size: 6pt; font-weight: 500;
-      letter-spacing: 0.14em;
-      text-transform: uppercase;
-      color: var(--ink-300);
-      white-space: nowrap;
+    
+    .page-content {
+        /* Height will naturally flow, limited by JS */
+        display: flex;
+        flex-direction: column;
+        position: relative;
+        z-index: 1;
     }
 
-    /* ── Cover (full bleed, page 1) ── */
-    .cover {
-      position: relative;
-      z-index: 2;
-      width: 210mm; height: 297mm;
-      background: linear-gradient(180deg, var(--accent-deep) 0%, #160C36 100%);
-      color: #fff;
-      padding: 20mm;
-      display: flex; flex-direction: column;
-      overflow: hidden;
+    /* Brand mark behind the content of every page. Kept very faint and
+       centred so it reads as stationery rather than an overlay. */
+    .page-watermark {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 95mm;
+        opacity: 0.035;
+        z-index: 0;
+        pointer-events: none;
     }
-    .cover-top {
-      display: flex; justify-content: space-between; align-items: center;
+    .page-watermark img { width: 100%; height: auto; display: block; }
+    
+    .page-footer {
+        position: absolute;
+        left: 16mm;
+        right: 16mm;
+        bottom: 8mm; /* safely in 22mm margin */
+        display: flex;
+        justify-content: space-between;
+        font-size: 7pt;
+        letter-spacing: 0.04em;
+        color: var(--muted);
+        border-top: 0.5px solid var(--border);
+        padding-top: 3mm;
     }
-    /* The mark is a full-colour raster lockup (purple badge + wordmark). On the
-       deep-violet ground it is set on a white plate rather than knocked out with
-       brightness(0) invert(1) — that filter flattens the whole PNG into a solid
-       white square and erases the WB monogram. */
-    .cover-logo-plate {
-      background: #FFFFFF;
-      border-radius: 3mm;
-      padding: 2.5mm 4mm;
-      display: inline-flex; align-items: center;
-    }
-    .cover-logo { height: 9mm; width: auto; object-fit: contain; display: block; }
-    .cover-eyebrow {
-      font-family: var(--font-mono);
-      font-size: 7.5pt; font-weight: 500; letter-spacing: 0.18em;
-      text-transform: uppercase; color: var(--ink-300);
-    }
-    .cover-number {
-      font-family: var(--font-mono);
-      font-size: 22pt; font-weight: 500; letter-spacing: -0.01em;
-      color: #C9BFF2; margin-top: 6mm;
-    }
-    .cover-mid { margin-top: auto; margin-bottom: auto; }
-    .cover-kicker {
-      font-family: var(--font-mono);
-      font-size: 8pt; font-weight: 500; letter-spacing: 0.16em;
-      text-transform: uppercase; color: #A99FD6; margin-bottom: 8mm;
-    }
-    .cover-title {
-      font-family: var(--font-display);
-      font-weight: 600; font-size: 46pt; line-height: 0.98;
-      letter-spacing: -0.03em; color: #fff;
-      max-width: 150mm;
-    }
-    .cover-rule {
-      height: 0.5pt; width: 100%; background: rgba(255,255,255,0.28);
-      margin: 12mm 0 7mm;
-    }
-    .cover-meta { display: flex; gap: 16mm; }
-    .cover-meta-k {
-      font-family: var(--font-mono);
-      font-size: 7pt; font-weight: 500; letter-spacing: 0.14em;
-      text-transform: uppercase; color: #A99FD6; margin-bottom: 2mm;
-    }
-    .cover-meta-v { font-size: 10pt; color: #ECEAF6; font-weight: 500; }
-    .cover-meta-sub { font-size: 8pt; color: #A99FD6; margin-top: 1mm; }
-    .cover-foot {
-      display: flex; justify-content: space-between;
-      font-family: var(--font-mono);
-      font-size: 7.5pt; letter-spacing: 0.06em; color: var(--ink-300);
+    /* The running footer carries the project title, which can be long; keep it
+       to a single line rather than letting it push into the page content. */
+    .page-footer > span {
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
     }
 
-    /* ── Generic sheet / page-title ── */
-    .sheet { position: relative; }
-    .page-title-block { margin-bottom: 8mm; }
-    .page-eyebrow {
-      font-family: var(--font-mono);
-      font-size: 7.5pt; font-weight: 500; letter-spacing: 0.14em;
-      text-transform: uppercase; color: var(--accent); margin-bottom: 2mm;
-    }
-    .page-title {
-      font-family: var(--font-display);
-      font-weight: 600; font-size: 26pt; line-height: 1.02;
-      letter-spacing: -0.02em; color: var(--ink-900);
-    }
-    .block-eyebrow {
-      font-family: var(--font-mono);
-      font-size: 7.5pt; font-weight: 500; letter-spacing: 0.14em;
-      text-transform: uppercase; color: var(--accent); margin-bottom: 4mm;
-    }
-    .block-eyebrow.light { color: #A99FD6; }
+    /* Original Component Styles (unmodified) */
+    .cover-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10mm; margin-bottom: 12mm; }
+    .cover-logo { height: 12mm; width: auto; object-fit: contain; display: block; flex-shrink: 0; }
+        .cover-title { font-size: 34pt; font-weight: 800; letter-spacing: -0.025em; line-height: 1.1; color: var(--ink); max-width: 165mm; margin-bottom: 9mm; }
+    .parties { display: flex; gap: 14mm; margin-bottom: 8mm; }
+    .party { flex: 1; }
+    .party-label { font-size: 8.5pt; font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin-bottom: 1.8mm; }
+    .party-name { font-size: 12pt; font-weight: 600; color: var(--ink); margin-bottom: 1.2mm; }
+    .party-line { font-size: 10pt; color: var(--ink-secondary); line-height: 1.5; }
+    /* Sits beside the logo in the cover header, so the identifying facts of the
+       quotation read as a masthead rather than a separate block further down. */
+    /* One fact per line, label and value inline, so the masthead reads as a
+       short list rather than three stacked columns. */
+    .cover-meta { display: flex; flex-direction: column; gap: 1.6mm; text-align: right; padding-top: 1mm; }
+    .cover-meta-item { white-space: nowrap; font-size: 9.5pt; }
+    .meta-label { font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+    .meta-value { font-weight: 600; color: var(--ink); }
+    .cover-rule { height: 1pt; width: 40mm; background: var(--border); margin-bottom: 12mm; }
 
-    /* ── Contents ── */
-    .toc { margin-bottom: 12mm; }
-    .toc-row {
-      display: flex; align-items: baseline; gap: 3mm;
-      padding: 3mm 0; border-bottom: 0.5pt solid var(--rule);
-    }
-    .toc-name { font-size: 10pt; font-weight: 500; color: var(--ink-900); }
-    .toc-dot { flex: 1; }
-    .toc-meta {
-      font-family: var(--font-mono);
-      font-size: 8pt; color: var(--ink-300); letter-spacing: 0.02em;
-    }
+    .editorial { margin-bottom: 16mm; max-width: 160mm; }
+    .eyebrow { font-size: 9pt; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--brand); margin-bottom: 2mm; }
+    .editorial-title { font-size: 18pt; font-weight: 700; letter-spacing: -0.01em; color: var(--ink); margin-bottom: 4mm; }
+    .editorial-body { font-size: 10.5pt; color: var(--ink-secondary); line-height: 1.6; }
+    .editorial-body + .editorial-body { margin-top: 3mm; }
 
-    /* ── Scope at a glance ── */
-    .glance-header {
-      display: flex; justify-content: space-between; align-items: flex-end;
-      padding-bottom: 3mm; margin-bottom: 5mm;
-      border-bottom: 0.5pt solid var(--rule-strong);
-    }
-    .glance-total { text-align: right; }
-    .glance-total-num {
-      font-family: var(--font-mono); font-size: 15pt; font-weight: 500;
-      color: var(--accent); margin-right: 2mm;
-    }
-    .glance-total-lab { font-size: 8.5pt; color: var(--ink-500); }
-    .glance-group { margin-bottom: 6mm; }
-    .glance-group-head {
-      font-family: var(--font-display);
-      font-size: 11pt; font-weight: 600; color: var(--ink-900);
-      margin-bottom: 3mm; padding-bottom: 2mm;
-      border-bottom: 0.5pt solid var(--rule);
-      display: flex; justify-content: space-between; align-items: baseline;
-    }
-    .glance-group-total {
-      font-family: var(--font-mono); font-size: 7.5pt;
-      color: var(--ink-300); font-weight: 400; letter-spacing: 0.04em;
-    }
-    .glance-grid {
-      display: grid; grid-template-columns: 1fr 1fr 1fr;
-      column-gap: 8mm; row-gap: 1.6mm;
-    }
-    .glance-row { display: flex; align-items: baseline; gap: 2mm; font-size: 8.25pt; }
-    .glance-idx {
-      font-family: var(--font-mono); font-size: 7pt; font-weight: 500;
-      color: var(--accent); width: 6mm; flex-shrink: 0;
-    }
-    .glance-name { flex: 1; color: var(--ink-700); }
-    .glance-count {
-      font-family: var(--font-mono); font-size: 7pt; color: var(--ink-300);
-      flex-shrink: 0;
-    }
+    .scope-group-header { margin-bottom: 6mm; margin-top: 8mm; }
+    .scope-group-header:first-child { margin-top: 0; }
+    .scope-group-num { font-size: 28pt; font-weight: 300; color: var(--brand); line-height: 1; margin-bottom: 2mm; }
+    .scope-group-name { font-size: 26pt; font-weight: 800; letter-spacing: -0.02em; color: var(--ink); line-height: 1.1; margin-bottom: 3mm; }
+    .scope-group-desc { font-size: 11pt; color: var(--ink-secondary); max-width: 152mm; }
+    .scope-rule { height: 1pt; background: var(--border); width: 100%; margin-bottom: 6mm; }
 
-    /* ── Executive summary ── */
-    .summary-lead { max-width: 155mm; margin-bottom: 10mm; }
-    .summary-lead p { font-size: 11pt; line-height: 1.6; color: var(--ink-700); }
-    .summary-lead p + p { margin-top: 4mm; }
-    .stat-row { display: flex; gap: 4mm; margin-bottom: 10mm; }
-    .stat-cell {
-      flex: 1; border: 0.5pt solid var(--rule-strong); border-radius: 3px;
-      padding: 6mm 5mm;
-    }
-    .stat-num {
-      font-family: var(--font-mono); font-size: 24pt; font-weight: 500;
-      color: var(--ink-900); line-height: 1; letter-spacing: -0.02em;
-    }
-    .stat-lab {
-      font-family: var(--font-mono); font-size: 7.5pt; font-weight: 500;
-      letter-spacing: 0.12em; text-transform: uppercase;
-      color: var(--ink-500); margin-top: 3mm;
-    }
-    .timeline { border-top: 0.5pt solid var(--rule-strong); padding-top: 5mm; }
-    .timeline-row {
-      display: flex; align-items: baseline; gap: 4mm;
-      padding: 2.5mm 0; border-bottom: 0.5pt solid var(--rule);
-    }
-    .timeline-idx {
-      font-family: var(--font-mono); font-size: 8pt; color: var(--accent);
-      font-weight: 500; width: 7mm;
-    }
-    .timeline-label { flex: 1; font-size: 9.5pt; color: var(--ink-700); }
-    .timeline-pct {
-      font-family: var(--font-mono); font-size: 9pt; font-weight: 500;
-      color: var(--ink-900);
-    }
+    .module-header-wrap { margin-bottom: 3mm; margin-top: 2mm; }
+    .deliv-row { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 2mm; }
+    .deliv-row.depth-0 { margin-bottom: 0; align-items: baseline; }
+    .module-name { font-size: 12.5pt; font-weight: 700; color: var(--ink); }
+    .module-price { font-size: 10.5pt; font-weight: 600; color: var(--brand); }
+    .deliv-row.depth-1 { margin-left: 2mm; }
+    .deliv-row.depth-2 { margin-left: 6mm; }
+    .deliv-row.depth-3 { margin-left: 10mm; }
+    .deliv-mark { color: var(--muted); font-size: 12pt; line-height: 1.3; flex: 0 0 10px; margin-top: -1px; }
+    .deliv-content { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.5mm; }
+    .deliv-name { font-size: 10.5pt; font-weight: 500; color: var(--ink); }
+    .deliv-route { font-family: var(--font-mono); font-size: 8pt; color: var(--muted); word-break: break-all; margin-top: 1px; }
+    .deliv-price { flex: 0 0 auto; white-space: nowrap; text-align: right; font-size: 10pt; font-weight: 500; color: var(--ink); }
 
-    /* ── Section divider (half page ink) ── */
-    .section-divider {
-      width: 100%;
-      background: linear-gradient(180deg, var(--accent-deep) 0%, #160C36 100%);
-      color: #fff;
-      /* pull into the page margins so it reads as a full-width band */
-      margin: -18mm -16mm 8mm;
-      padding: 26mm 16mm 20mm;
-    }
-    .divider-no {
-      font-family: var(--font-mono); font-size: 8pt; font-weight: 500;
-      letter-spacing: 0.16em; text-transform: uppercase; color: #A99FD6;
-      margin-bottom: 5mm;
-    }
-    .divider-title {
-      font-family: var(--font-display); font-weight: 600; font-size: 30pt;
-      line-height: 1.02; letter-spacing: -0.02em; color: #fff;
-    }
-    .divider-summary {
-      font-family: var(--font-mono); font-size: 8.5pt; color: #C9BFF2;
-      letter-spacing: 0.02em; margin-top: 5mm;
-    }
-    .section-body { }
-    .section-desc {
-      font-size: 10pt; color: var(--ink-500); margin-bottom: 7mm; max-width: 150mm;
-    }
+    /* The service's own line items continue straight on from its deliverables —
+       no divider or heading, so they read as part of the same service block. */
+    .service-pricing { margin-bottom: 4mm; }
+    .service-line-item { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2mm; font-size: 10pt; }
+    .li-left { flex: 1; padding-right: 4mm; }
+    .li-title { color: var(--ink); font-weight: 500; }
+    .li-desc { font-size: 9pt; color: var(--muted); margin-top: 0.5mm; }
+    .li-right { text-align: right; color: var(--ink); }
+    .li-cycle { font-size: 8pt; color: var(--muted); margin-top: 0.5mm; }
 
-    /* ── Module ── */
-    .module { margin-bottom: 7mm; }
-    .module-head {
-      display: flex; align-items: baseline; gap: 3mm;
-      border-top: 0.5pt solid var(--rule-strong);
-      padding-top: 2.5mm; margin-bottom: 3mm;
-    }
-    .module-idx {
-      font-family: var(--font-mono); font-size: 9pt; font-weight: 500;
-      color: var(--accent); flex-shrink: 0;
-    }
-    .module-name {
-      font-family: var(--font-display); font-weight: 600; font-size: 13pt;
-      color: var(--ink-900); letter-spacing: -0.01em; line-height: 1.2; flex: 1;
-    }
-    .module-meta { display: flex; align-items: baseline; gap: 3mm; flex-shrink: 0; }
-    .module-price {
-      font-family: var(--font-mono); font-size: 9pt; font-weight: 500;
-      color: var(--accent);
-    }
-    .module-count {
-      font-family: var(--font-mono); font-size: 8pt; color: var(--ink-300);
-      min-width: 6mm; text-align: right;
-    }
-    .deliverables {
-      display: grid; grid-template-columns: 1fr 1fr;
-      column-gap: 8mm; row-gap: 1.6mm;
-      padding-left: 6mm;
-    }
-    .deliv { display: flex; gap: 2.5mm; align-items: baseline; }
-    .deliv-mark {
-      width: 3px; height: 3px; background: var(--accent); opacity: 0.6;
-      flex-shrink: 0; margin-top: 1.6mm; border-radius: 0;
-    }
-    .deliv-body { flex: 1; }
-    .deliv-name { font-size: 8.75pt; color: var(--ink-700); line-height: 1.45; }
-    .deliv-price {
-      font-family: var(--font-mono); font-size: 8pt; color: var(--accent);
-      margin-left: 2mm;
-    }
-    .deliv-route {
-      display: block; font-family: var(--font-mono); font-size: 7pt;
-      color: var(--ink-300); margin-top: 0.5mm;
-    }
-    .deliv-sub { margin-top: 1mm; padding-left: 3mm; }
-    .deliv-sub-item {
-      display: flex; gap: 2mm; align-items: baseline;
-      font-size: 8pt; color: var(--ink-500); line-height: 1.4;
-    }
-    .deliv-sub-mark {
-      width: 2.5px; height: 2.5px; border: 0.5pt solid var(--ink-300);
-      flex-shrink: 0; margin-top: 1.4mm;
-    }
+    .tech-block { margin-top: 6mm; margin-bottom: 8mm; }
+    .tech-title { font-size: 10pt; font-weight: 600; color: var(--ink); margin-bottom: 2mm; text-transform: uppercase; letter-spacing: 0.05em; }
+    .tech-desc { font-size: 9.5pt; color: var(--ink-secondary); margin-bottom: 2mm; }
+    .tech-rows { display: flex; flex-direction: column; gap: 1mm; }
+    .tech-row { display: flex; font-size: 9.5pt; }
+    .tech-layer { font-weight: 600; color: var(--ink); width: 25mm; flex-shrink: 0; }
+    .tech-items { color: var(--ink-secondary); }
 
-    /* ── Tech stack ── */
-    .tech-block {
-      margin-top: 8mm; padding-top: 5mm;
-      border-top: 0.5pt solid var(--rule-strong);
-    }
-    .tech-row {
-      display: flex; gap: 5mm; padding: 2mm 0;
-      border-bottom: 0.5pt solid var(--rule);
-    }
-    .tech-row:last-child { border-bottom: none; }
-    .tech-layer {
-      width: 28mm; flex-shrink: 0; font-weight: 600; font-size: 9pt;
-      color: var(--ink-900);
-    }
-    .tech-chips { flex: 1; }
-    .tech-chip {
-      display: inline-block; font-size: 8pt; color: var(--ink-700);
-      background: var(--paper-alt); border: 0.5pt solid var(--rule);
-      padding: 0.6mm 2.4mm; border-radius: 3px; margin: 0 1.5mm 1.5mm 0;
-    }
+    .section-container { margin-bottom: 12mm; }
+    /* Sections are emitted as several sibling blocks so the paginator can split
+       them; this replaces the wrapper's bottom margin on the closing block. */
+    .blk-section-end { margin-bottom: 12mm; }
+    /* Leading space that separates one service block from the previous one.
+       Collapsed when the header happens to land at the top of a fresh page,
+       where the page margin already provides the separation. */
+    .scope-group-spaced { margin-top: 14mm; }
+    .page-content > .scope-group-spaced:first-child { margin-top: 0; }
+    /* Same idea for the major section headings, so a section never butts up
+       against the tail of whatever preceded it. */
+    .paginate-block > .section-title { margin-top: 12mm; }
+    .page-content > .paginate-block:first-child > .section-title { margin-top: 0; }
+    .section-title { font-size: 18pt; font-weight: 700; color: var(--ink); margin-bottom: 5mm; letter-spacing: -0.01em; border-bottom: 1pt solid var(--border); padding-bottom: 2mm; }
 
-    /* ── Pricing page ── */
-    .pricing .price-hero { margin: 4mm 0 8mm; }
-    .price-figure {
-      font-family: var(--font-mono); font-weight: 500; font-size: 44pt;
-      line-height: 1; letter-spacing: -0.02em; color: var(--ink-900);
-      white-space: nowrap;
-    }
-    .price-rule {
-      height: 0.5pt; background: var(--rule-strong); margin: 5mm 0 3mm;
-    }
-    .price-ledger {
-      font-family: var(--font-mono); font-size: 9.5pt; color: var(--ink-500);
-      letter-spacing: 0.01em;
-    }
-    .price-ledger-sep { color: var(--ink-300); margin: 0 2mm; }
-    .price-ledger-em { color: var(--accent); font-weight: 500; }
+    .workflow { display: flex; flex-direction: column; gap: 2.5mm; }
+    .workflow-row { display: flex; gap: 4mm; align-items: baseline; font-size: 11pt; }
+    .workflow-num { font-size: 10pt; font-weight: 600; color: var(--brand); width: 8mm; }
+    .workflow-text { color: var(--ink); font-weight: 500; }
 
-    .price-adjustments {
-      border: 0.5pt solid var(--rule); border-radius: 3px;
-      padding: 2mm 5mm; margin-bottom: 8mm;
-    }
-    .adj-row {
-      display: flex; justify-content: space-between;
-      padding: 2.5mm 0; border-bottom: 0.5pt solid var(--rule);
-      font-size: 9.5pt; color: var(--ink-700);
-    }
-    .adj-row:last-child { border-bottom: none; }
-    .adj-row span:last-child { font-family: var(--font-mono); font-weight: 500; color: var(--ink-900); }
-    .adj-neg span { color: var(--excl) !important; }
+    .payment-stages { display: flex; gap: 6mm; }
+    .payment-stage { flex: 1; border-left: 2pt solid var(--brand); padding-left: 4mm; }
+    .stage-num { font-size: 9pt; font-weight: 600; color: var(--muted); margin-bottom: 1mm; }
+    .stage-pct { font-size: 28pt; font-weight: 800; color: var(--ink); line-height: 1; letter-spacing: -0.02em; }
+    .stage-label { font-size: 10pt; font-weight: 600; color: var(--ink); margin: 2mm 0 1mm; text-transform: uppercase; letter-spacing: 0.05em; }
+    .stage-desc { font-size: 9.5pt; color: var(--ink-secondary); line-height: 1.4; }
 
-    .price-milestones { margin-bottom: 7mm; }
-    .milestone-row {
-      display: flex; align-items: baseline; gap: 4mm;
-      padding: 2.5mm 0; border-bottom: 0.5pt solid var(--rule);
-    }
-    .milestone-row:last-child { border-bottom: none; }
-    .milestone-pct {
-      font-family: var(--font-mono); font-size: 11pt; font-weight: 500;
-      color: var(--accent); width: 14mm; flex-shrink: 0;
-    }
-    .milestone-label { font-size: 10pt; color: var(--ink-700); }
-    .price-recurring {
-      background: var(--accent-tint); border-radius: 3px;
-      padding: 4mm 5mm; font-size: 9pt; color: var(--ink-700); margin-bottom: 7mm;
-    }
-    .price-note {
-      font-size: 8.5pt; color: var(--ink-500); line-height: 1.55;
-      max-width: 155mm; padding-top: 5mm;
-      border-top: 0.5pt solid var(--rule);
-    }
+    .invest-list { margin-bottom: 6mm; }
+    .invest-group { margin-bottom: 5mm; }
+    .invest-group-title { font-size: 11pt; font-weight: 700; color: var(--ink); margin-bottom: 2mm; text-transform: uppercase; letter-spacing: 0.02em; }
+    .invest-item { display: flex; justify-content: space-between; font-size: 10.5pt; color: var(--ink-secondary); margin-bottom: 1.5mm; }
+    .invest-item span:last-child { color: var(--ink); font-variant-numeric: tabular-nums; }
+    .invest-summary-rule { height: 1pt; background: var(--border); margin: 3mm 0; }
+    .invest-summary { display: flex; flex-direction: column; gap: 1.5mm; padding: 2mm 0; }
+    .invest-summary-row { display: flex; justify-content: space-between; font-size: 11pt; color: var(--ink-secondary); }
+    .invest-summary-row span:last-child { color: var(--ink); font-weight: 500; font-variant-numeric: tabular-nums; }
+    .invest-summary-row .neg { color: var(--brand) !important; }
+    .invest-total { background: var(--brand-soft); padding: 5mm 6mm; display: flex; justify-content: space-between; align-items: baseline; border-radius: 4px; margin-top: 4mm; }
+    .invest-total-label { font-size: 11pt; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--brand); }
+    .invest-total-figure { font-size: 22pt; font-weight: 800; color: var(--brand-ink); letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
 
-    /* ── Terms ── */
-    .terms-cols {
-      display: grid; grid-template-columns: 1fr 1fr; gap: 10mm;
-      margin-bottom: 8mm;
-    }
-    .terms-col-head {
-      font-family: var(--font-mono); font-size: 8pt; font-weight: 500;
-      letter-spacing: 0.1em; text-transform: uppercase;
-      padding-bottom: 2.5mm; margin-bottom: 3mm;
-    }
-    .terms-col-head.excl { color: var(--excl); border-top: 0.5pt solid var(--excl); padding-top: 2.5mm; }
-    .terms-col-head.incl { color: var(--incl); border-top: 0.5pt solid var(--incl); padding-top: 2.5mm; }
-    .terms-item {
-      display: flex; gap: 2.5mm; align-items: baseline;
-      font-size: 8.25pt; color: var(--ink-700); line-height: 1.3;
-      padding: 0.35mm 0;
-    }
-    .terms-mark { font-family: var(--font-mono); font-weight: 600; flex-shrink: 0; }
-    .terms-mark.excl { color: var(--excl); }
-    .terms-mark.incl { color: var(--incl); }
+    .recurring-list { display: flex; flex-direction: column; gap: 2mm; }
+    .recurring-item { display: flex; justify-content: space-between; font-size: 10.5pt; border-bottom: 1pt dashed var(--border); padding-bottom: 2mm; }
+    .r-title { color: var(--ink); font-weight: 500; }
+    .r-amt { color: var(--ink); font-variant-numeric: tabular-nums; }
 
-    /* ── Authorization (foot of terms) ── */
-    .auth {
-      background: linear-gradient(180deg, var(--accent-deep) 0%, #160C36 100%);
-      color: #fff; border-radius: 3px;
-      padding: 6mm 8mm;
-      display: flex; justify-content: space-between; align-items: flex-end; gap: 12mm;
-    }
-    .auth-left { max-width: 95mm; }
-    .auth-desc { font-size: 8.5pt; color: #C9BFF2; line-height: 1.5; }
-    .auth-desc strong { color: #fff; }
-    .auth-sig { height: 11mm; width: auto; object-fit: contain; filter: brightness(0) invert(1); opacity: 0.92; display: block; margin: 0 auto 1mm; }
-    .auth-sig-gap { height: 11mm; }
-    .auth-sig-line { border-top: 0.5pt solid rgba(255,255,255,0.5); padding-top: 2mm; width: 55mm; text-align: center; }
-    .auth-sig-label {
-      font-family: var(--font-mono); font-size: 8pt; font-weight: 500;
-      letter-spacing: 0.06em; text-transform: uppercase; color: #C9BFF2;
-    }
-    .auth-sig-org { font-size: 8.5pt; color: #A99FD6; margin-top: 0.5mm; }
+    .list-block { margin-bottom: 8mm; }
+    .list-block-title { font-size: 11pt; font-weight: 600; color: var(--ink); margin-bottom: 3mm; text-transform: uppercase; letter-spacing: 0.05em; }
+    .list-row { display: flex; gap: 2.5mm; font-size: 10pt; color: var(--ink-secondary); margin-bottom: 1.5mm; align-items: baseline; }
+    .list-mark { color: var(--muted); font-size: 12pt; line-height: 1; }
+    
+    .terms-block { margin-top: 6mm; }
+    .terms-row { margin-bottom: 3mm; }
+    .terms-title { font-size: 10.5pt; font-weight: 600; color: var(--ink); margin-bottom: 1mm; }
+    .terms-desc { font-size: 10pt; color: var(--ink-secondary); }
+
+    .next-steps-container { margin-top: 4mm; }
+    .next-steps-list { display: flex; flex-direction: column; gap: 2mm; margin-bottom: 8mm; }
+    .next-steps-list div { font-size: 11pt; font-weight: 500; color: var(--ink); display: flex; gap: 3mm; align-items: baseline; }
+    .next-steps-list div::before { content: "→"; color: var(--brand); font-weight: bold; }
+    
+    /* Authorising signature — the document is machine-generated, so this
+       identifies who at the company stands behind the quoted figures. */
+    .authorized { margin-top: 12mm; }
+    .authorized-label { font-size: 8.5pt; font-weight: 500; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin-bottom: 3mm; }
+    .authorized-sig { display: block; height: 14mm; width: auto; max-width: 60mm; object-fit: contain; object-position: left bottom; margin-bottom: 1.5mm; }
+    .authorized-sig-spacer { height: 14mm; }
+    .authorized-line { border-bottom: 1pt solid var(--ink); width: 60mm; margin-bottom: 2.5mm; }
+    .authorized-name { font-size: 11pt; font-weight: 700; color: var(--ink); }
+    .authorized-role { font-size: 9pt; color: var(--ink-secondary); margin-top: 0.5mm; }
+
+    .closing { border-top: 1pt solid var(--border); padding-top: 6mm; margin-top: 12mm; }
+    .closing-name { font-size: 12pt; font-weight: 700; color: var(--ink); margin-bottom: 2mm; }
+    .closing-contact { font-size: 10pt; color: var(--ink-secondary); margin-bottom: 1mm; }
+    .closing-address { font-size: 9pt; color: var(--muted); }
+
   </style>
 </head>
 <body>
-  ${ledgerRail}
-  ${coverHtml}
-  ${contentsHtml}
-  ${summaryHtml}
-  ${sectionsHtml}
-  ${pricingHtml}
-  ${termsHtml}
+  <!-- The source content is strictly separated into logical blocks -->
+  <div id="source-content">
+    ${coverSectionHtml}
+    ${servicesHtml}
+    ${workflowHtml}
+    ${investmentHtml}
+    ${recurringHtml}
+    ${paymentStagesHtml}
+    ${detailsHtml}
+    ${nextStepsHtml}
+  </div>
+
+  <script>
+    // Embedded pagination data
+    window.WATERMARK_SRC = ${JSON.stringify(ctx.markSrc || '')};
+    // Everything in the running footer except the page number, which the
+    // paginator appends once it knows which page it is building.
+    window.FOOTER_PREFIX = ${JSON.stringify(`${companyName} | ${proposalTitle} | Confidential`)};
+    window.__name = (fn, name) => Object.defineProperty(fn, 'name', { value: name, configurable: true });
+  </script>
 </body>
 </html>`;
 }
 
-/* ── Validation gate ──────────────────────────────────────────────────────── */
-
-/** Blocks a render when client-facing identity data is missing or is an obvious
- *  placeholder. Throws AppError(422) with a human-readable list of problems so
- *  the admin fixes the data instead of shipping garbage to a client. */
 export function assertRenderable(q: Record<string, any>): void {
     const problems: string[] = [];
     const client = q.client || {};
@@ -1415,45 +1446,6 @@ export function assertRenderable(q: Record<string, any>): void {
     }
 }
 
-const PT_PER_MM = 2.834645669;
-
-/** Stamps a subtle footer (wordmark + "n / total") onto every page except the
- *  cover, using pdf-lib's built-in Courier so no font embedding is needed. Falls
- *  back to the unstamped buffer rather than failing the whole export. */
-export async function stampFooters(buf: Buffer, wordmark: string): Promise<Buffer> {
-    try {
-        const doc = await PDFDocument.load(buf);
-        const font = await doc.embedFont(StandardFonts.Courier);
-        const pages = doc.getPages();
-        const total = pages.length;
-        // Courier is WinAnsi-only; keep the wordmark ASCII-safe.
-        const mark = (wordmark.replace(/[^\x20-\x7E]/g, '').trim() || 'WebBriks').toUpperCase();
-        const y = 9 * PT_PER_MM;
-        const size = 7;
-        const gray = rgb(0.6, 0.63, 0.69);
-        const ink = rgb(0.17, 0.18, 0.26);
-
-        for (let i = 1; i < pages.length; i++) {
-            const p = pages[i]!;
-            const { width } = p.getSize();
-            p.drawText(mark, { x: 16 * PT_PER_MM, y, size, font, color: gray });
-
-            const cur = String(i + 1);
-            const rest = ` / ${total}`;
-            const curW = font.widthOfTextAtSize(cur, size);
-            const restW = font.widthOfTextAtSize(rest, size);
-            const rightX = width - 16 * PT_PER_MM - curW - restW;
-            p.drawText(cur, { x: rightX, y, size, font, color: ink });
-            p.drawText(rest, { x: rightX + curW, y, size, font, color: gray });
-        }
-
-        return Buffer.from(await doc.save());
-    } catch (e) {
-        logger.warn({ err: e }, 'quotation.footer_stamp_failed');
-        return buf;
-    }
-}
-
 let browserSingleton: Awaited<ReturnType<typeof puppeteer.launch>> | null = null;
 
 async function getBrowserInstance() {
@@ -1474,19 +1466,12 @@ async function getBrowserInstance() {
     return browserSingleton;
 }
 
-export class QuotationPuppeteerPdfService {
-    static async generatePdf(
-        quotationId: string,
-    ): Promise<{ buffer: Buffer; filename: string }> {
-        const q = await QuotationModel.findById(quotationId)
-            .populate('clientId', 'name clientId emails')
-            .lean();
-        if (!q) throw new AppError('Quotation not found', 404);
-
-        // Data hygiene gate — never ship placeholder identity data to a client.
-        assertRenderable(q as Record<string, any>);
-
-        const signatureUrl = process.env.COMPANY_SIGNATURE_URL || DEFAULT_SIGNATURE;
+/**
+ * Renders a quotation object to PDF bytes. Kept separate from `generatePdf` so
+ * the exact production render path (asset loading → HTML → in-browser
+ * pagination → print) can be exercised against a fixture without a database.
+ */
+export async function renderQuotationPdfBuffer(q: Record<string, any>): Promise<Buffer> {
         const companyLogoRemote = ((q as any).company?.logo as string) || DEFAULT_LOGO;
 
         let logoSrc = null;
@@ -1497,45 +1482,180 @@ export class QuotationPuppeteerPdfService {
             logoSrc = LOCAL_LOGO_BASE64 || (await fetchImageAsDataUrl(DEFAULT_LOGO)) || FALLBACK_PIXEL_PNG;
         }
 
-        const signatureSrc = (await fetchImageAsDataUrl(signatureUrl)) || '';
         const fontCss = await buildEmbeddedFontCss();
-        const companyName = String((q as any).company?.name || 'WebBriks').trim();
-
-        const html = buildPrintHtml(q as Record<string, any>, { logoSrc, signatureSrc, fontCss });
 
         const browser = await getBrowserInstance();
+        const markSrc = await extractBrandMark(browser, logoSrc).catch(() => null);
+
+        const signatureUrl = process.env.COMPANY_SIGNATURE_URL || DEFAULT_SIGNATURE;
+        const signatureSrc = (await fetchImageAsDataUrl(signatureUrl)) || '';
+
+        const html = buildPrintHtml(q as Record<string, any>, { logoSrc, markSrc, fontCss, signatureSrc });
+        const qn = String((q as any).quotationNumber || '').trim();
+
         const page = await browser.newPage();
+        page.on('console', (msg) => console.log('PAGE LOG:', msg.text()));
+        page.on('pageerror', (err) => console.log('PAGE ERROR:', err.toString()));
         try {
             await page.setContent(html, { waitUntil: 'load' });
-            // Ensure the embedded faces are parsed before laying out for print.
             await page.evaluateHandle('document.fonts.ready');
-            await page.emulateMediaType('print');
+            
+            // Execute deterministic pagination inside the browser
+            await page.evaluate(() => {
+                // Every page carries the brand mark behind its content; built
+                // here rather than in the static HTML because the page shells
+                // themselves are created by this script.
+                const watermarkSrc = window.WATERMARK_SRC || '';
+                const watermarkMarkup = watermarkSrc
+                    ? '<div class="page-watermark"><img src="' + watermarkSrc + '" alt="" /></div>'
+                    : '';
+                const footerPrefix = window.FOOTER_PREFIX || '';
 
-            // Header/footer are NOT delegated to Chrome: its templates render in
-            // every page's margin, including the full-bleed cover, and cannot be
-            // suppressed per page. Instead we render clean pages and stamp the
-            // footer with pdf-lib afterwards, skipping the cover.
-            const rawPdf = await page.pdf({
-                format: 'A4',
-                printBackground: true,
-                preferCSSPageSize: true,
-                displayHeaderFooter: false,
+                // Dynamically measure the exact safe height available
+                const measurer = document.createElement('div');
+                measurer.style.width = '210mm';
+                measurer.style.height = '297mm';
+                measurer.style.padding = '16mm 16mm 22mm 16mm';
+                measurer.style.boxSizing = 'border-box';
+                measurer.style.position = 'absolute';
+                measurer.style.visibility = 'hidden';
+                const contentBox = document.createElement('div');
+                contentBox.style.height = '100%';
+                measurer.appendChild(contentBox);
+                document.body.appendChild(measurer);
+                
+                // Real pixel value calculated by browser
+                const maxSafeHeight = contentBox.clientHeight;
+                document.body.removeChild(measurer);
+
+                let pageNum = 1;
+                let currentContainer = createPage(pageNum);
+
+                const source = document.getElementById('source-content');
+                const groups = Array.from(source.children);
+
+                for (const group of groups) {
+                    if (!group.classList.contains('paginate-group')) continue;
+                    const blocks = Array.from(group.children);
+                    
+                    // Try the group whole first — that keeps small, indivisible
+                    // units (a payment grid, a short list) intact. When it does
+                    // not fit we fall straight through to block-by-block
+                    // placement rather than relocating the entire group to a
+                    // fresh page: moving it wholesale is what used to strand a
+                    // large blank area at the foot of the previous page.
+                    const fits = tryAppendGroup(blocks);
+
+                    if (!fits) {
+                        for (let i = 0; i < blocks.length; i++) {
+                            let block = blocks[i];
+                            let keepGroup = [block];
+                            let j = i;
+                            
+                            // Group blocks with data-keep-with-next
+                            while (blocks[j].getAttribute('data-keep-with-next') === 'true' && j + 1 < blocks.length) {
+                                j++;
+                                keepGroup.push(blocks[j]);
+                            }
+                            
+                            let bFits = tryAppendGroup(keepGroup);
+                            
+                            if (!bFits) {
+                                if (currentContainer.children.length > 0) {
+                                    pageNum++;
+                                    currentContainer = createPage(pageNum);
+                                    bFits = tryAppendGroup(keepGroup);
+                                }
+                                
+                                // If the keep-group STILL fails on a blank page, force append individually
+                                if (!bFits) {
+                                    for (let k = i; k <= j; k++) {
+                                        if (!tryAppendGroup([blocks[k]])) {
+                                            if (currentContainer.children.length > 0) {
+                                                pageNum++;
+                                                currentContainer = createPage(pageNum);
+                                            }
+                                            tryAppendGroup([blocks[k]], true);
+                                        }
+                                    }
+                                }
+                            }
+                            i = j;
+                        }
+                    }
+                }
+
+                // Cleanup
+                source.remove();
+
+                function createPage(num) {
+                    const page = document.createElement('div');
+                    page.className = 'pdf-page';
+
+                    page.innerHTML = `
+                        ${watermarkMarkup}
+                        <div class="page-content"></div>
+                        <div class="page-footer">
+                            <span>${footerPrefix} | Page ${num}</span>
+                        </div>
+                    `;
+                    document.body.appendChild(page);
+                    return page.querySelector('.page-content');
+                }
+
+                function tryAppendGroup(elements, force = false) {
+                    const clones = elements.map(el => el.cloneNode(true));
+                    clones.forEach(c => currentContainer.appendChild(c));
+                    
+                    // Allow 1px tolerance for rounding issues
+                    if (force || currentContainer.offsetHeight <= maxSafeHeight + 1) {
+                        return true;
+                    }
+                    
+                    clones.forEach(c => currentContainer.removeChild(c));
+                    return false;
+                }
             });
 
-            const pdf = await stampFooters(Buffer.from(rawPdf), companyName);
+            await page.emulateMediaType('print');
 
-            const qn = String((q as any).quotationNumber || '').trim();
-            const title = String((q as any).details?.title || '').trim();
-            const stem = qn ? (qn.startsWith('#') ? qn : `#${qn}`) : title || 'quotation';
-            const rawName = `${stem}.pdf`;
-            const filename = rawName.replace(/[/\\?%*:|"<>]/g, '-');
-            return { buffer: Buffer.from(pdf), filename };
+            // Generate the exact 210x297 DOM nodes as an A4 PDF without any native margins
+            const pdf = await page.pdf({
+                format: 'A4',
+                printBackground: true,
+                preferCSSPageSize: true, // Takes the actual A4 DOM sizes
+                displayHeaderFooter: false, // We built the footer into the DOM natively
+                margin: { top: 0, bottom: 0, left: 0, right: 0 },
+            });
+
+            return Buffer.from(pdf);
         } catch (e: unknown) {
             const err = e as { message?: string };
-            logger.error({ err: e, quotationId }, 'quotation.puppeteer_pdf_failed');
+            logger.error({ err: e, quotationNumber: qn }, 'quotation.puppeteer_pdf_failed');
             throw new AppError(err?.message || 'Failed to generate PDF with Puppeteer', 500);
         } finally {
             await page.close().catch(() => {});
         }
+}
+
+export class QuotationPuppeteerPdfService {
+    static async generatePdf(
+        quotationId: string,
+    ): Promise<{ buffer: Buffer; filename: string }> {
+        const q = await QuotationModel.findById(quotationId)
+            .populate('clientId', 'name clientId emails')
+            .lean();
+        if (!q) throw new AppError('Quotation not found', 404);
+
+        assertRenderable(q as Record<string, any>);
+
+        const buffer = await renderQuotationPdfBuffer(q as Record<string, any>);
+
+        const qn = String((q as any).quotationNumber || '').trim();
+        const title = String((q as any).details?.title || '').trim();
+        const stem = qn ? (qn.startsWith('#') ? qn : `#${qn}`) : title || 'quotation';
+        const filename = `${stem}.pdf`.replace(/[/\\?%*:|"<>]/g, '-');
+
+        return { buffer, filename };
     }
 }

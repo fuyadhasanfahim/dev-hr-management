@@ -72,7 +72,7 @@ const getPaymentSummary = async (req: Request, res: Response, next: NextFunction
     try {
         const { quotationGroupId } = req.params;
         if (!quotationGroupId) return next(new Error('quotationGroupId is required'));
-        const result = await ReceiptService.getPaymentSummary(quotationGroupId);
+        const result = await ReceiptService.getPaymentSummary(quotationGroupId, req.user?.id);
         return res.status(200).json({ success: true, data: result });
     } catch (err) {
         next(err);
