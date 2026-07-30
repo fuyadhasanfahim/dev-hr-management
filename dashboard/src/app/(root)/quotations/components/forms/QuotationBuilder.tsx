@@ -1124,7 +1124,7 @@ Please review the details below. Should you have any questions or require custom
                             name: item.title,
                             description: item.description || "",
                             price: item.price,
-                            billingType: item.billingCycle,
+                            billingType: item.billingCycle === "one-time" ? "fixed" : item.billingCycle,
                         })));
                     }
                 } else if (service.category === "photo-editing") {
@@ -1165,7 +1165,7 @@ Please review the details below. Should you have any questions or require custom
                             name: item.title,
                             description: item.description || "",
                             price: item.price,
-                            billingType: item.billingCycle,
+                            billingType: item.billingCycle === "one-time" ? "fixed" : item.billingCycle,
                         })));
                     }
                 }
@@ -1414,7 +1414,7 @@ Please review the details below. Should you have any questions or require custom
                 title: i.name,
                 description: i.description,
                 price: i.price,
-                billingCycle: (i.billingType === "fixed" || i.billingType === "one-time") ? "one-time" : "monthly" as any,
+                billingCycle: ((i.billingType as string) === "fixed" || (i.billingType as string) === "one-time") ? "one-time" : "monthly" as any,
             }));
 
             services.push({
@@ -1473,7 +1473,7 @@ Please review the details below. Should you have any questions or require custom
                 title: i.name,
                 description: i.description,
                 price: i.price,
-                billingCycle: (i.billingType === "fixed" || i.billingType === "one-time") ? "one-time" : "monthly",
+                billingCycle: ((i.billingType as string) === "fixed" || (i.billingType as string) === "one-time") ? "one-time" : "monthly",
             }));
 
             if (marketingAdBudget > 0) {
