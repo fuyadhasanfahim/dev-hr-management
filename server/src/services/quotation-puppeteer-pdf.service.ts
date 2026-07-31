@@ -1350,13 +1350,16 @@ export function buildPrintHtml(
     .scope-group-spaced { margin-top: 10mm; }
     .page-content > .scope-group-spaced:first-child { margin-top: 0; }
     /* Same idea for the major section headings, so a section never butts up
-       against the tail of whatever preceded it. */
-    .paginate-block > .section-title { margin-top: 10mm; }
-    .page-content > .paginate-block:first-child > .section-title { margin-top: 0; }
+       against the tail of whatever preceded it. Descendant (not direct-child)
+       selector: Payment Terms nests its h2 inside a .section-container
+       wrapper while the other sections don't, so a direct-child combinator
+       here would silently skip it. */
+    .paginate-block .section-title { margin-top: 10mm; }
+    .page-content > .paginate-block:first-child .section-title { margin-top: 0; }
     /* Same rule for the smaller list headings, so consecutive list blocks keep
        breathing room without either of them carrying a trailing margin. */
-    .paginate-block > .list-block-title { margin-top: 9mm; }
-    .page-content > .paginate-block:first-child > .list-block-title { margin-top: 0; }
+    .paginate-block .list-block-title { margin-top: 9mm; }
+    .page-content > .paginate-block:first-child .list-block-title { margin-top: 0; }
     .section-title { font-size: 18pt; font-weight: 700; color: var(--ink); margin-bottom: 5mm; letter-spacing: -0.01em; border-bottom: 1.5pt solid var(--brand); padding-bottom: 2mm; }
     /* Heading for a part of a section (e.g. Recurring inside Investment):
        lighter than a section title so the two read as one continuous block. */
