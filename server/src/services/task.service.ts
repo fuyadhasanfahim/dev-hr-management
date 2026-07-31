@@ -108,6 +108,16 @@ const updateTaskStatus = async (taskId: string, status: TaskStatus, actorId?: st
 
     const oldStatus = task.status;
     task.status = status;
+
+    if (status === TaskStatus.COMPLETED && task.subtasks && task.subtasks.length > 0) {
+        task.subtasks.forEach((s: any) => {
+            s.completed = true;
+            if (!s.completedAt) s.completedAt = new Date();
+            s.needsRevision = false;
+            s.revisionNote = undefined;
+        });
+    }
+
     await task.save();
 
     // Background notification about random status changes
@@ -218,6 +228,16 @@ const reviewTask = async (
         payload.decision === 'approve'
             ? TaskStatus.COMPLETED
             : TaskStatus.REJECTED;
+
+    if (task.status === TaskStatus.COMPLETED && task.subtasks && task.subtasks.length > 0) {
+        task.subtasks.forEach((s: any) => {
+            s.completed = true;
+            if (!s.completedAt) s.completedAt = new Date();
+            s.needsRevision = false;
+            s.revisionNote = undefined;
+        });
+    }
+
     task.reviewNote = payload.note!;
     task.reviewedBy = new Types.ObjectId(reviewerId);
     task.reviewedAt = new Date();
@@ -311,6 +331,8 @@ const toggleSubtask = async (taskId: string, subtaskId: string, completed?: bool
     subtask.completed = completed !== undefined ? completed : !subtask.completed;
     if (subtask.completed) {
         subtask.completedAt = new Date();
+        subtask.needsRevision = false;
+        subtask.revisionNote = undefined;
     } else {
         subtask.completedAt = undefined;
     }
@@ -334,6 +356,54 @@ const toggleSubtask = async (taskId: string, subtaskId: string, completed?: bool
     return task;
 };
 
+const requestSubtaskRevision = async (taskId: string, subtaskId: string, note: string, actorId?: string) => {
+    const task = await OrderTaskModel.findById(taskId);
+    if (!task) {
+        throw new AppError('Task not found.', 404);
+    }
+
+    const subtask = (task.subtasks as any)?.id(subtaskId) || task.subtasks?.find((s: any) => s._id?.toString() === subtaskId);
+    if (!subtask) {
+        throw new AppError('Subtask not found.', 404);
+    }
+
+    subtask.completed = false;
+    subtask.completedAt = undefined;
+    subtask.needsRevision = true;
+    subtask.revisionNote = note;
+
+    if (task.status === TaskStatus.COMPLETED || task.status === TaskStatus.UNDER_REVIEW) {
+        task.status = TaskStatus.IN_PROGRESS;
+    }
+
+    await task.save();
+
+    // Background notify the assigned staff member
+    (async () => {
+        try {
+            const populated = await OrderTaskModel.findById(task._id)
+                .populate({ path: 'assignedTo', select: 'userId' });
+            
+            const targetStaffUserId = (populated?.assignedTo as any)?.userId;
+            
+            if (targetStaffUserId) {
+                await notificationService.notifyTaskActivity({
+                    userId: targetStaffUserId,
+                    taskId: task._id as any,
+                    title: `⚠️ Revision Requested on Feature`,
+                    message: `Revision requested on "${subtask.title}": ${note}`,
+                    actionUrl: "/tasks",
+                    ...(actorId ? { createdBy: new Types.ObjectId(actorId) } : {}),
+                });
+            }
+        } catch (err) {
+            logger.error({ err, taskId: task._id }, 'Failed to broadcast subtask revision notification');
+        }
+    })();
+
+    return task;
+};
+
 const TaskService = {
     createTask,
     getAllTasks,
@@ -345,6 +415,7 @@ const TaskService = {
     reviewTask,
     deleteTask,
     toggleSubtask,
+    requestSubtaskRevision,
 };
 
 export default TaskService;

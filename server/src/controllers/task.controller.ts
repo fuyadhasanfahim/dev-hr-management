@@ -270,6 +270,34 @@ async function toggleSubtask(req: Request, res: Response, next: NextFunction): P
     }
 }
 
+async function requestSubtaskRevision(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+        const { taskId, subtaskId } = req.params;
+        const { note } = req.body;
+        const user = req.user;
+
+        if (!taskId || !subtaskId) {
+            throw new AppError('Task ID and Subtask ID are required', 400);
+        }
+        if (!note) {
+            throw new AppError('Revision note is required', 400);
+        }
+
+        const result = await TaskService.requestSubtaskRevision(taskId, subtaskId, note, user?.id);
+
+        // Real-time broadcast
+        broadcastEvent('task:update', { action: 'subtask_revision_requested', task: result });
+
+        res.status(200).json({
+            success: true,
+            message: 'Subtask revision requested successfully',
+            data: result,
+        });
+    } catch (err) {
+        next(err);
+    }
+}
+
 export default {
     createTask,
     getOrderTasks,
@@ -280,4 +308,5 @@ export default {
     updateTaskStatus,
     deleteTask,
     toggleSubtask,
+    requestSubtaskRevision,
 };

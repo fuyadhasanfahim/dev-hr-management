@@ -1,6 +1,7 @@
 import NotificationModel from "../models/notification.model.js";
 import { Types } from "mongoose";
 import { emitToUser } from "../socket.js";
+import emailService from "./email.service.js";
 
 // Create a notification for a single user
 const createNotification = async (data: {
@@ -50,6 +51,24 @@ const createNotification = async (data: {
     const notification = await NotificationModel.create(payload);
     if (data.userId) {
         emitToUser(data.userId.toString(), "notification:new", notification);
+
+        if (data.type === 'task') {
+            import("../models/user.model.js").then(({ default: UserModel }) => {
+                const query: any = Types.ObjectId.isValid(data.userId)
+                    ? { $or: [{ _id: new Types.ObjectId(data.userId) }, { _id: data.userId }, { id: data.userId }] }
+                    : { $or: [{ _id: data.userId }, { id: data.userId }] };
+                UserModel.findOne(query).then((user: any) => {
+                    if (user && user.email) {
+                        emailService.sendTaskNotificationEmail({
+                            to: user.email,
+                            title: data.title,
+                            message: data.message,
+                            actionUrl: data.actionUrl
+                        })?.catch((err: any) => console.error("Failed to send task email:", err));
+                    }
+                }).catch((err: any) => console.error("Failed to find user for email:", err));
+            }).catch((err: any) => console.error("Failed to import UserModel for email:", err));
+        }
     }
 
     return notification;
@@ -395,6 +414,25 @@ const notifyAdminsTaskReview = async (data: {
         createdDocs.forEach((doc: any) => {
             if (doc.userId) {
                 emitToUser(doc.userId.toString(), "notification:new", doc);
+                
+                // Trigger email for admin task review
+                import("../models/user.model.js").then(({ default: UserModel }) => {
+                    const query: any = Types.ObjectId.isValid(doc.userId.toString())
+                        ? { $or: [{ _id: new Types.ObjectId(doc.userId.toString()) }, { _id: doc.userId.toString() }, { id: doc.userId.toString() }] }
+                        : { $or: [{ _id: doc.userId.toString() }, { id: doc.userId.toString() }] };
+                    UserModel.findOne(query).then((user: any) => {
+                        if (user && user.email) {
+                            import("./email.service.js").then(({ default: emailService }) => {
+                                emailService.sendTaskNotificationEmail({
+                                    to: user.email,
+                                    title: doc.title,
+                                    message: doc.message,
+                                    actionUrl: doc.actionUrl
+                                })?.catch((err: any) => console.error("Failed to send admin task email:", err));
+                            });
+                        }
+                    }).catch((err: any) => console.error("Failed to find admin for email:", err));
+                }).catch((err: any) => console.error("Failed to import UserModel for email:", err));
             }
         });
     }

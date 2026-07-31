@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 import {
@@ -11,6 +11,16 @@ import {
     SheetDescription,
     SheetFooter,
 } from '@/components/ui/sheet';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription as DialogDesc,
+    DialogFooter as DialogFoot,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
@@ -19,6 +29,7 @@ import {
     useUpdateTaskStatusMutation,
     useReviewTaskMutation,
     useToggleSubtaskMutation,
+    useRequestSubtaskRevisionMutation,
     useDeleteTaskMutation,
 } from '@/redux/features/task/taskApi';
 import {
@@ -33,7 +44,7 @@ import {
     type TaskItem,
 } from '@/lib/task-progress';
 import { cn } from '@/lib/utils';
-import { CalendarClock, CheckCircle2, Edit3, PlayCircle, Send, Trash2, XCircle } from 'lucide-react';
+import { CalendarClock, CheckCircle2, Edit3, PlayCircle, Send, Trash2, XCircle, RotateCcw } from 'lucide-react';
 
 interface TaskDetailSheetProps {
     task: TaskItem | null;
@@ -63,7 +74,12 @@ export function TaskDetailSheet({ task, open, onOpenChange, canManage, onEdit, o
     const [updateTaskStatus] = useUpdateTaskStatusMutation();
     const [reviewTask] = useReviewTaskMutation();
     const [toggleSubtask] = useToggleSubtaskMutation();
+    const [requestSubtaskRevision, { isLoading: isRequestingRevision }] = useRequestSubtaskRevisionMutation();
     const [deleteTask] = useDeleteTaskMutation();
+
+    const [revisionModalOpen, setRevisionModalOpen] = useState(false);
+    const [activeSubtaskId, setActiveSubtaskId] = useState<string | null>(null);
+    const [revisionNote, setRevisionNote] = useState('');
 
     const subtasks = useMemo(() => (task ? getTaskSubtasks(task) : []), [task]);
     const progress = useMemo(() => (task ? getTaskProgress(task) : { completed: 0, total: 0, pct: 0 }), [task]);
@@ -105,6 +121,32 @@ export function TaskDetailSheet({ task, open, onOpenChange, canManage, onEdit, o
         }
     };
 
+    const handleOpenRevision = (subtaskId: string) => {
+        if (subtaskId.startsWith('fallback_')) {
+            toast.error('Cannot request revision on auto-generated features.');
+            return;
+        }
+        setActiveSubtaskId(subtaskId);
+        setRevisionNote('');
+        setRevisionModalOpen(true);
+    };
+
+    const handleSubmitRevision = async () => {
+        if (!activeSubtaskId || !revisionNote.trim()) return;
+        try {
+            await requestSubtaskRevision({
+                taskId: task._id,
+                subtaskId: activeSubtaskId,
+                note: revisionNote,
+            }).unwrap();
+            toast.success('Revision requested for this feature');
+            setRevisionModalOpen(false);
+            setActiveSubtaskId(null);
+        } catch (err: any) {
+            toast.error(err?.data?.message || 'Failed to request revision');
+        }
+    };
+
     const handleDelete = async () => {
         if (!confirm('Are you sure you want to delete this task?')) return;
         try {
@@ -117,6 +159,7 @@ export function TaskDetailSheet({ task, open, onOpenChange, canManage, onEdit, o
     };
 
     return (
+        <>
         <Sheet open={open} onOpenChange={onOpenChange}>
             <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto">
                 <SheetHeader className="border-b">
@@ -181,29 +224,53 @@ export function TaskDetailSheet({ task, open, onOpenChange, canManage, onEdit, o
                             <Progress value={progress.pct} className="h-2" />
                             <div className="space-y-1.5 max-h-64 overflow-y-auto pr-1">
                                 {subtasks.map((st) => (
-                                    <label
-                                        key={st._id}
+                                    <div key={st._id} className="space-y-1.5">
+                                        <div
                                         className={cn(
-                                            'flex items-start gap-2 p-2 rounded-md border text-xs cursor-pointer select-none',
-                                            st.completed
+                                            'flex items-start justify-between gap-2 p-2 rounded-md border text-xs',
+                                            st.needsRevision
+                                                ? 'bg-destructive/5 border-destructive/20'
+                                                : st.completed
                                                 ? 'bg-emerald-500/5 border-emerald-500/20'
-                                                : 'bg-muted/20 border-border/60 hover:bg-muted/40'
+                                                : 'bg-muted/20 border-border/60'
                                         )}
                                     >
-                                        <input
-                                            type="checkbox"
-                                            checked={st.completed}
-                                            onChange={() => handleToggleSubtask(st._id, st.completed)}
-                                            className="mt-0.5 h-3.5 w-3.5 rounded border-border accent-primary shrink-0"
-                                        />
-                                        <span className={cn(st.completed && 'line-through text-muted-foreground')}>
-                                            {st.title}
-                                        </span>
-                                    </label>
-                                ))}
-                            </div>
+                                        <label className="flex items-start gap-2 cursor-pointer select-none flex-1">
+                                            <input
+                                                type="checkbox"
+                                                checked={st.completed}
+                                                onChange={() => handleToggleSubtask(st._id, st.completed)}
+                                                className="mt-0.5 h-3.5 w-3.5 rounded border-border accent-primary shrink-0"
+                                            />
+                                            <span className={cn(st.completed && 'line-through text-muted-foreground')}>
+                                                {st.title}
+                                            </span>
+                                        </label>
+                                        {canManage && (
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                className="h-6 px-2 text-[10px] text-muted-foreground hover:text-destructive"
+                                                onClick={() => handleOpenRevision(st._id)}
+                                                title="Request Revision"
+                                            >
+                                                <RotateCcw className="h-3 w-3 mr-1" /> Revise
+                                            </Button>
+                                        )}
+                                    </div>
+                                    {st.needsRevision && st.revisionNote && (
+                                        <div className="pl-6">
+                                            <div className="p-2 rounded bg-destructive/10 border border-destructive/20 text-destructive text-[10px]">
+                                                <span className="font-semibold">Revision Note: </span>
+                                                {st.revisionNote}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
                         </div>
-                    )}
+                    </div>
+                )}
 
                     {/* Description */}
                     {task.description && (
@@ -288,5 +355,38 @@ export function TaskDetailSheet({ task, open, onOpenChange, canManage, onEdit, o
                 </SheetFooter>
             </SheetContent>
         </Sheet>
+
+        {/* Request Revision Modal */}
+        <Dialog open={revisionModalOpen} onOpenChange={setRevisionModalOpen}>
+            <DialogContent className="sm:max-w-[425px]">
+                <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2 text-base font-semibold">
+                        <RotateCcw className="h-4 w-4 text-destructive" />
+                        Request Revision
+                    </DialogTitle>
+                    <DialogDesc className="text-xs">
+                        Specify what needs to be fixed for this feature.
+                    </DialogDesc>
+                </DialogHeader>
+                <div className="space-y-3 py-2">
+                    <Label className="text-xs font-medium">Revision Notes <span className="text-destructive">*</span></Label>
+                    <Textarea
+                        placeholder="Explain the required changes..."
+                        value={revisionNote}
+                        onChange={(e) => setRevisionNote(e.target.value)}
+                        className="min-h-[100px] text-xs resize-none"
+                    />
+                </div>
+                <DialogFoot>
+                    <Button variant="ghost" size="sm" onClick={() => setRevisionModalOpen(false)} disabled={isRequestingRevision}>
+                        Cancel
+                    </Button>
+                    <Button size="sm" variant="destructive" onClick={handleSubmitRevision} disabled={!revisionNote.trim() || isRequestingRevision}>
+                        {isRequestingRevision ? 'Submitting...' : 'Submit Request'}
+                    </Button>
+                </DialogFoot>
+            </DialogContent>
+        </Dialog>
+        </>
     );
 }

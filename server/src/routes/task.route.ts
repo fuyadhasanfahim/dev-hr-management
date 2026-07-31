@@ -13,6 +13,7 @@ router.post('/', authorize(...ADMIN_LEAD_ROLES), TaskController.createTask);
 router.patch('/:taskId', authorize(...ADMIN_LEAD_ROLES), TaskController.updateTask);
 router.patch('/:taskId/review', authorize(...ADMIN_LEAD_ROLES), TaskController.reviewTask);
 router.delete('/:taskId', authorize(...ADMIN_LEAD_ROLES), TaskController.deleteTask);
+router.patch('/:taskId/subtasks/:subtaskId/request-revision', authorize(...ADMIN_LEAD_ROLES), TaskController.requestSubtaskRevision);
 
 // Public retrieval for order visibility
 router.get('/order/:orderId', authorize(...ALL_STAFF_ROLES), TaskController.getOrderTasks);

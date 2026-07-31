@@ -16,6 +16,8 @@ export interface SubTaskItem {
     completedAt?: string;
     isSubFeature?: boolean;
     parentName?: string;
+    needsRevision?: boolean;
+    revisionNote?: string;
 }
 
 export interface TaskAssignee {

@@ -7,6 +7,8 @@ export interface SubTaskItem {
     completedAt?: string;
     isSubFeature?: boolean;
     parentName?: string;
+    needsRevision?: boolean;
+    revisionNote?: string;
 }
 
 export interface TaskItem {
@@ -69,6 +71,30 @@ export const taskApi = apiSlice.injectEndpoints({
                 method: "PATCH",
                 body: data,
             }),
+            async onQueryStarted({ taskId, data }, { dispatch, queryFulfilled }) {
+                const patchResultMine = dispatch(
+                    taskApi.util.updateQueryData("getMyTasks", undefined, (draft: any) => {
+                        if (draft?.data) {
+                            const task = draft.data.find((t: any) => t._id === taskId);
+                            if (task) {
+                                task.status = data.decision === 'approve' ? 'completed' : 'rejected';
+                                if (task.status === 'completed' && task.subtasks) {
+                                    task.subtasks.forEach((s: any) => {
+                                        s.completed = true;
+                                        s.needsRevision = false;
+                                        s.revisionNote = undefined;
+                                    });
+                                }
+                            }
+                        }
+                    })
+                );
+                try {
+                    await queryFulfilled;
+                } catch {
+                    patchResultMine.undo();
+                }
+            },
             invalidatesTags: ["Task", "Order"],
         }),
         updateTask: builder.mutation({
@@ -92,6 +118,13 @@ export const taskApi = apiSlice.injectEndpoints({
                             const task = draft.data.find((t: any) => t._id === taskId);
                             if (task) {
                                 task.status = status;
+                                if (status === 'completed' && task.subtasks) {
+                                    task.subtasks.forEach((s: any) => {
+                                        s.completed = true;
+                                        s.needsRevision = false;
+                                        s.revisionNote = undefined;
+                                    });
+                                }
                             }
                         }
                     })
@@ -133,6 +166,41 @@ export const taskApi = apiSlice.injectEndpoints({
             },
             invalidatesTags: ["Task"],
         }),
+        requestSubtaskRevision: builder.mutation({
+            query: ({ taskId, subtaskId, note }) => ({
+                url: `/tasks/${taskId}/subtasks/${subtaskId}/request-revision`,
+                method: "PATCH",
+                body: { note },
+            }),
+            async onQueryStarted({ taskId, subtaskId, note }, { dispatch, queryFulfilled }) {
+                const patchResultMine = dispatch(
+                    taskApi.util.updateQueryData("getMyTasks", undefined, (draft: any) => {
+                        if (draft?.data) {
+                            const task = draft.data.find((t: any) => t._id === taskId);
+                            if (task) {
+                                if (task.status === 'completed' || task.status === 'under_review') {
+                                    task.status = 'in_progress';
+                                }
+                                if (task.subtasks) {
+                                    const st = task.subtasks.find((s: any) => s._id === subtaskId);
+                                    if (st) {
+                                        st.completed = false;
+                                        st.needsRevision = true;
+                                        st.revisionNote = note;
+                                    }
+                                }
+                            }
+                        }
+                    })
+                );
+                try {
+                    await queryFulfilled;
+                } catch {
+                    patchResultMine.undo();
+                }
+            },
+            invalidatesTags: ["Task"],
+        }),
         deleteTask: builder.mutation({
             query: (taskId) => ({
                 url: `/tasks/${taskId}`,
@@ -152,5 +220,6 @@ export const {
     useUpdateTaskMutation,
     useUpdateTaskStatusMutation,
     useToggleSubtaskMutation,
+    useRequestSubtaskRevisionMutation,
     useDeleteTaskMutation,
 } = taskApi;

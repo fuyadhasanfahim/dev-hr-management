@@ -22,6 +22,8 @@ export interface ISubTask {
     completedAt?: Date;
     isSubFeature?: boolean;
     parentName?: string;
+    needsRevision?: boolean;
+    revisionNote?: string;
 }
 
 export interface IOrderTask extends Document {
@@ -70,6 +72,14 @@ const subtaskSchema = new Schema<ISubTask>(
             default: false,
         },
         parentName: {
+            type: String,
+            trim: true,
+        },
+        needsRevision: {
+            type: Boolean,
+            default: false,
+        },
+        revisionNote: {
             type: String,
             trim: true,
         },

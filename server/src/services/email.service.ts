@@ -7,6 +7,7 @@ import { InvitationEmail } from '../templates/InvitationEmail.js';
 import { ApplicationStatusEmail } from '../templates/ApplicationStatusEmail.js';
 import { QuotationEmail, type QuotationMilestoneEmailInfo } from '../templates/QuotationEmail.js';
 import { ReceiptEmail } from '../templates/ReceiptEmail.js';
+import { TaskNotificationEmail } from '../templates/TaskNotificationEmail.js';
 import * as React from 'react';
 import envConfig from '../config/env.config.js';
 
@@ -563,6 +564,30 @@ const sendConsultationScheduledEmail = async (data: SendConsultationScheduledDat
     }
 };
 
+const sendTaskNotificationEmail = async (data: { to: string, title: string, message: string, actionUrl?: string }) => {
+    try {
+        const fullActionUrl = data.actionUrl ? `${envConfig.client_url}${data.actionUrl}` : undefined;
+        
+        const emailHtml = await render(
+            React.createElement(TaskNotificationEmail, {
+                title: data.title,
+                message: data.message,
+                actionUrl: fullActionUrl,
+            }),
+        );
+
+        return await transporter.sendMail({
+            from: 'Task Notifications | WebBriks',
+            to: data.to,
+            subject: data.title,
+            html: emailHtml,
+        });
+    } catch (error) {
+        console.error('Error sending task notification email:', error);
+        return false;
+    }
+};
+
 export default {
     sendInvoiceEmail,
     sendPinResetEmail,
@@ -577,6 +602,7 @@ export default {
     sendMeetingCancellationEmail,
     sendSupportOtpEmail,
     sendConsultationScheduledEmail,
+    sendTaskNotificationEmail,
 };
 
 
