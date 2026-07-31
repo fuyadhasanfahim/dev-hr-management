@@ -1080,7 +1080,7 @@ export function buildPrintHtml(
                 <div class="invest-summary-rule"></div>
                 <div class="invest-total" style="margin-bottom: 24px;">
                     <div class="invest-total-label">Total Recurring</div>
-                    <div class="invest-total-figure" style="color: #4E12D4;">${formatMoneyPdf(recurringTotalVal, currency)} / mo</div>
+                    <div class="invest-total-figure" style="color: #4E12D4;">${formatMoneyPdf(recurringTotalVal, currency)}</div>
                 </div>
             </div>
         </div>

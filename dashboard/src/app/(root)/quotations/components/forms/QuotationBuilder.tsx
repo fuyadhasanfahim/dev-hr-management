@@ -3518,30 +3518,30 @@ function QuotationSummary({
               .filter((i) => i.billingType === "fixed")
               .reduce((acc, i) => acc + i.price, 0)
         : 0;
-    const webDevMonthly = showWebDev
+    const webDevRecurring = showWebDev
         ? webDevPricing
-              .filter((i) => i.billingType === "monthly")
+              .filter((i) => i.billingType !== "fixed")
               .reduce((acc, i) => acc + i.price, 0)
         : 0;
 
     const photoTotal = showPhoto ? photoEditingQty * photoEditingRate : 0;
 
     const videoFixed = showVideo ? videoEditingQty * videoEditingRate : 0;
-    const videoMonthly = 0;
+    const videoRecurring = 0;
 
     const marketingFixed = showMarketing
         ? marketingFeaturesTotal + marketingPricing
               .filter((i) => i.billingType === "fixed")
               .reduce((acc, i) => acc + i.price, 0)
         : 0;
-    const marketingMonthly = showMarketing
+    const marketingRecurring = showMarketing
         ? marketingPricing
-              .filter((i) => i.billingType === "monthly")
+              .filter((i) => i.billingType !== "fixed")
               .reduce((acc, i) => acc + i.price, 0)
         : 0;
 
     const totalOneTime = webDevFixed + photoTotal + videoFixed + marketingFixed;
-    const totalRecurring = webDevMonthly + videoMonthly + marketingMonthly;
+    const totalRecurring = webDevRecurring + videoRecurring + marketingRecurring;
 
     const discountAmount = (totalOneTime * (discountPercentage || 0)) / 100;
     const subtotalAfterDiscount = totalOneTime - discountAmount;
@@ -3678,7 +3678,7 @@ function QuotationSummary({
                     </div>
                     {totalRecurring > 0 && (
                         <div className="flex justify-between items-center text-sm font-semibold border-t border-slate-100 dark:border-slate-800/60 pt-2 mt-2">
-                            <span className="text-muted-foreground">Total Recurring / Mo</span>
+                            <span className="text-muted-foreground">Total Recurring</span>
                             <span className="font-mono font-bold text-[#4E12D4] dark:text-[#C850FA]">
                                 {currencySymbol}
                                 {totalRecurring.toLocaleString("en-IN")}

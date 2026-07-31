@@ -1195,7 +1195,7 @@ export default function ViewQuotationPage() {
                                     <>
                                         <div className="flex items-center justify-between py-1 border-t border-slate-100 dark:border-slate-800/50 mt-1 pt-2">
                                             <span className="text-slate-500 dark:text-slate-400 font-bold">
-                                                Total Recurring / Mo
+                                                Total Recurring
                                             </span>
                                             <span
                                                 className={cn(
