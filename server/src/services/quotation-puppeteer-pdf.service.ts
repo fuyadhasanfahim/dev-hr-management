@@ -1041,7 +1041,33 @@ export function buildPrintHtml(
         </div>
     `;
 
-    // Emitted as several sibling blocks rather than one indivisible unit so the
+    const recurringTotalVal = recurringItems.reduce((acc, curr) => acc + (curr.lineTotal || 0), 0);
+
+    // Recurring reads as a sub-part of Investment rather than its own section,
+    // so the two always sit together instead of drifting onto separate pages.
+    const recurringBlocks = recurringItems.length ? `
+        <div class="paginate-block" data-keep-with-next="true">
+            <h3 class="subsection-title">Recurring Charges</h3>
+        </div>
+        ${recurringItems.map((r) => `
+            <div class="paginate-block">
+                <div class="recurring-item">
+                    <div class="r-title">${esc(r.title)}</div>
+                    <div class="r-amt">${amountCell(r)} / ${esc(r.cycleLabel.toLowerCase())}</div>
+                </div>
+            </div>
+        `).join('')}
+        <div class="paginate-block">
+            <div class="invest-summary-rule"></div>
+            <div class="invest-total invest-total-recurring">
+                <div class="invest-total-label">Total Recurring</div>
+                <div class="invest-total-figure">${formatMoneyPdf(recurringTotalVal, currency)}</div>
+            </div>
+        </div>
+    ` : '';
+
+    // One group covering setup costs, recurring charges and the amount due
+    // today. Emitted as sibling blocks rather than one indivisible unit so the
     // paginator can start the table on a page that has room for part of it,
     // instead of pushing the whole section over and leaving a large gap behind.
     const investmentHtml = `
@@ -1050,7 +1076,7 @@ export function buildPrintHtml(
                 <h2 class="section-title">Investment Summary</h2>
             </div>
             ${investGroupBlocks}
-            <div class="paginate-block blk-section-end">
+            <div class="paginate-block"${recurringItems.length ? ' data-keep-with-next="true"' : ''}>
                 <div class="invest-summary-rule"></div>
                 ${investSummaryHtml}
                 <div class="invest-summary-rule"></div>
@@ -1059,39 +1085,11 @@ export function buildPrintHtml(
                     <div class="invest-total-figure">${formatMoneyPdf(grandTotalVal, currency)}</div>
                 </div>
             </div>
-        </div>
-    `;
-
-    const recurringTotalVal = recurringItems.reduce((acc, curr) => acc + (curr.lineTotal || 0), 0);
-    const recurringHtml = recurringItems.length ? `
-        <div class="paginate-group">
-            <div class="paginate-block" data-keep-with-next="true">
-                <h2 class="section-title">Recurring Charges</h2>
-            </div>
-            ${recurringItems.map((r) => `
-                <div class="paginate-block">
-                    <div class="recurring-item">
-                        <div class="r-title">${esc(r.title)}</div>
-                        <div class="r-amt">${amountCell(r)} / ${esc(r.cycleLabel.toLowerCase())}</div>
-                    </div>
-                </div>
-            `).join('')}
+            ${recurringBlocks}
             <div class="paginate-block blk-section-end">
-                <div class="invest-summary-rule"></div>
-                <div class="invest-total" style="margin-bottom: 24px;">
-                    <div class="invest-total-label">Total Recurring</div>
-                    <div class="invest-total-figure" style="color: #4E12D4;">${formatMoneyPdf(recurringTotalVal, currency)}</div>
-                </div>
-            </div>
-        </div>
-    ` : '';
-
-    const dueTodayHtml = `
-        <div class="paginate-group">
-            <div class="paginate-block blk-section-end">
-                <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 24px; margin-top: 16px; margin-bottom: 24px; display: flex; justify-content: space-between; align-items: center;">
-                    <div style="font-weight: 800; font-size: 14pt; color: #0f172a;">Total Initial Payment (Due Today)</div>
-                    <div style="font-weight: 900; font-size: 18pt; color: #4E12D4;">${formatMoneyPdf(grandTotalVal + recurringTotalVal, currency)}</div>
+                <div class="due-today">
+                    <div class="due-today-label">Total Initial Payment (Due Today)</div>
+                    <div class="due-today-figure">${formatMoneyPdf(grandTotalVal + recurringTotalVal, currency)}</div>
                 </div>
             </div>
         </div>
@@ -1136,32 +1134,39 @@ export function buildPrintHtml(
     ` : '';
 
     const advancePct = milestonesToUse[0]?.percentage ? `${milestonesToUse[0].percentage}%` : 'agreed';
+    // Split into siblings rather than one tall unit: as a single block it could
+    // not fit in a part-used page and moved wholesale, stranding a large blank
+    // area behind it. The signature stays bound to the closing details.
     const nextStepsHtml = `
         <div class="paginate-group">
+            <div class="paginate-block" data-keep-with-next="true">
+                <h2 class="section-title">Next Steps</h2>
+            </div>
             <div class="paginate-block">
-                <div class="section-container next-steps-container">
-                    <h2 class="section-title">Next Steps</h2>
-                    <div class="next-steps-list">
-                        <div>Confirm quotation</div>
-                        <div>Complete ${esc(advancePct)} initial payment</div>
-                        <div>Project begins</div>
-                    </div>
-                    <div class="authorized">
-                        <div class="authorized-label">Authorized by</div>
-                        ${
-                            ctx.signatureSrc
-                                ? `<img class="authorized-sig" src="${esc(ctx.signatureSrc)}" alt="" />`
-                                : `<div class="authorized-sig-spacer"></div>`
-                        }
-                        <div class="authorized-line"></div>
-                        <div class="authorized-name">${esc(SIGNATORY_NAME)}</div>
-                        <div class="authorized-role">${esc(SIGNATORY_ROLE)}, ${esc(companyName)}</div>
-                    </div>
-                    <div class="closing">
-                        <div class="closing-name">${esc(companyName)}</div>
-                        <div class="closing-contact">${esc(companyWebsite)} · ${esc(companyEmail)} · ${esc(companyPhone)}</div>
-                        <div class="closing-address">${esc(companyAddress)}</div>
-                    </div>
+                <div class="next-steps-list">
+                    <div>Confirm quotation</div>
+                    <div>Complete ${esc(advancePct)} initial payment</div>
+                    <div>Project begins</div>
+                </div>
+            </div>
+            <div class="paginate-block" data-keep-with-next="true">
+                <div class="authorized">
+                    <div class="authorized-label">Authorized by</div>
+                    ${
+                        ctx.signatureSrc
+                            ? `<img class="authorized-sig" src="${esc(ctx.signatureSrc)}" alt="" />`
+                            : `<div class="authorized-sig-spacer"></div>`
+                    }
+                    <div class="authorized-line"></div>
+                    <div class="authorized-name">${esc(SIGNATORY_NAME)}</div>
+                    <div class="authorized-role">${esc(SIGNATORY_ROLE)}, ${esc(companyName)}</div>
+                </div>
+            </div>
+            <div class="paginate-block blk-section-end">
+                <div class="closing">
+                    <div class="closing-name">${esc(companyName)}</div>
+                    <div class="closing-contact">${esc(companyWebsite)} · ${esc(companyEmail)} · ${esc(companyPhone)}</div>
+                    <div class="closing-address">${esc(companyAddress)}</div>
                 </div>
             </div>
         </div>
@@ -1332,20 +1337,31 @@ export function buildPrintHtml(
     .tech-layer { font-weight: 600; color: var(--ink); width: 25mm; flex-shrink: 0; }
     .tech-items { color: var(--ink-secondary); }
 
-    .section-container { margin-bottom: 12mm; }
-    /* Sections are emitted as several sibling blocks so the paginator can split
-       them; this replaces the wrapper's bottom margin on the closing block. */
-    .blk-section-end { margin-bottom: 12mm; }
+    .section-container { margin-bottom: 0; }
+    /* Inter-section spacing is carried entirely by the *next* section's heading
+       (below), never by a trailing margin here. A trailing margin counts toward
+       the block's height when the paginator tests whether it fits, so a closing
+       block could be bumped to the next page purely because of space that would
+       have been discarded at the page break anyway. */
+    .blk-section-end { margin-bottom: 0; }
     /* Leading space that separates one service block from the previous one.
        Collapsed when the header happens to land at the top of a fresh page,
        where the page margin already provides the separation. */
-    .scope-group-spaced { margin-top: 14mm; }
+    .scope-group-spaced { margin-top: 10mm; }
     .page-content > .scope-group-spaced:first-child { margin-top: 0; }
     /* Same idea for the major section headings, so a section never butts up
        against the tail of whatever preceded it. */
-    .paginate-block > .section-title { margin-top: 12mm; }
+    .paginate-block > .section-title { margin-top: 10mm; }
     .page-content > .paginate-block:first-child > .section-title { margin-top: 0; }
+    /* Same rule for the smaller list headings, so consecutive list blocks keep
+       breathing room without either of them carrying a trailing margin. */
+    .paginate-block > .list-block-title { margin-top: 9mm; }
+    .page-content > .paginate-block:first-child > .list-block-title { margin-top: 0; }
     .section-title { font-size: 18pt; font-weight: 700; color: var(--ink); margin-bottom: 5mm; letter-spacing: -0.01em; border-bottom: 1.5pt solid var(--brand); padding-bottom: 2mm; }
+    /* Heading for a part of a section (e.g. Recurring inside Investment):
+       lighter than a section title so the two read as one continuous block. */
+    .subsection-title { font-size: 12.5pt; font-weight: 700; color: var(--ink); text-transform: uppercase; letter-spacing: 0.03em; margin-top: 7mm; margin-bottom: 3mm; padding-bottom: 1.5mm; border-bottom: 1pt solid var(--brand-line); }
+    .page-content > .paginate-block:first-child > .subsection-title { margin-top: 0; }
 
     .workflow { display: flex; flex-direction: column; gap: 2.5mm; }
     .workflow-row { display: flex; gap: 4mm; align-items: baseline; font-size: 11pt; }
@@ -1372,6 +1388,13 @@ export function buildPrintHtml(
     .invest-total { background: var(--brand-soft); padding: 5mm 6mm; display: flex; justify-content: space-between; align-items: baseline; border-radius: 4px; margin-top: 4mm; }
     .invest-total-label { font-size: 11pt; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--brand); }
     .invest-total-figure { font-size: 22pt; font-weight: 800; color: var(--brand-ink); letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+    .invest-total-recurring .invest-total-figure { color: var(--brand); }
+
+    /* Closing figure of the financial section — what the client actually pays
+       now, so it carries slightly more weight than the sub-totals above it. */
+    .due-today { background: var(--surface); border: 1pt solid var(--border); border-radius: 4px; padding: 3mm 6mm; margin-top: 3mm; line-height: 1.2; display: flex; justify-content: space-between; align-items: baseline; }
+    .due-today-label { font-size: 12pt; font-weight: 700; color: var(--ink); }
+    .due-today-figure { font-size: 18pt; font-weight: 800; color: var(--brand); letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
 
     .recurring-list { display: flex; flex-direction: column; gap: 2mm; }
     .recurring-item { display: flex; justify-content: space-between; font-size: 10.5pt; border-bottom: 1pt dashed var(--border); padding-bottom: 2mm; }
@@ -1388,14 +1411,13 @@ export function buildPrintHtml(
     .terms-title { font-size: 10.5pt; font-weight: 600; color: var(--ink); margin-bottom: 1mm; }
     .terms-desc { font-size: 10pt; color: var(--ink-secondary); }
 
-    .next-steps-container { margin-top: 4mm; }
-    .next-steps-list { display: flex; flex-direction: column; gap: 2mm; margin-bottom: 8mm; }
+    .next-steps-list { display: flex; flex-direction: column; gap: 2mm; margin-bottom: 4mm; }
     .next-steps-list div { font-size: 11pt; font-weight: 500; color: var(--ink); display: flex; gap: 3mm; align-items: baseline; }
     .next-steps-list div::before { content: "→"; color: var(--brand); font-weight: bold; }
     
     /* Authorising signature — the document is machine-generated, so this
        identifies who at the company stands behind the quoted figures. */
-    .authorized { margin-top: 12mm; }
+    .authorized { margin-top: 8mm; }
     .authorized-label { font-size: 8.5pt; font-weight: 500; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin-bottom: 3mm; }
     .authorized-sig { display: block; height: 14mm; width: auto; max-width: 60mm; object-fit: contain; object-position: left bottom; margin-bottom: 1.5mm; }
     .authorized-sig-spacer { height: 14mm; }
@@ -1403,7 +1425,7 @@ export function buildPrintHtml(
     .authorized-name { font-size: 11pt; font-weight: 700; color: var(--ink); }
     .authorized-role { font-size: 9pt; color: var(--ink-secondary); margin-top: 0.5mm; }
 
-    .closing { border-top: 1.5pt solid var(--brand); padding-top: 6mm; margin-top: 12mm; }
+    .closing { border-top: 1.5pt solid var(--brand); padding-top: 6mm; margin-top: 8mm; }
     .closing-name { font-size: 12pt; font-weight: 700; color: var(--brand); margin-bottom: 2mm; }
     .closing-contact { font-size: 10pt; color: var(--ink-secondary); margin-bottom: 1mm; }
     .closing-address { font-size: 9pt; color: var(--muted); }
@@ -1417,8 +1439,6 @@ export function buildPrintHtml(
     ${servicesHtml}
     ${workflowHtml}
     ${investmentHtml}
-    ${recurringHtml}
-    ${dueTodayHtml}
     ${paymentStagesHtml}
     ${detailsHtml}
     ${nextStepsHtml}
@@ -1500,6 +1520,137 @@ async function getBrowserInstance() {
  * the exact production render path (asset loading → HTML → in-browser
  * pagination → print) can be exercised against a fixture without a database.
  */
+
+/**
+ * Deterministic pagination: walks the authored `.paginate-group` blocks and
+ * lays them onto fixed A4 page shells, keeping `data-keep-with-next` blocks
+ * (a heading and its first row) together.
+ *
+ * Runs in the browser's DOM context via `page.evaluate`, not in Node — the
+ * project's tsconfig has no "dom" lib (it's a server package), so `window` and
+ * `document` are shadowed here as local `any`-typed bindings rather than left
+ * as unresolvable globals. Exported alongside `buildPrintHtml` so the exact
+ * production layout can be reproduced against a fixture without a database.
+ */
+export function paginateDocument() {
+    const window: any = (globalThis as any).window;
+    const document: any = (globalThis as any).document;
+
+    // Every page carries the brand mark behind its content; built
+    // here rather than in the static HTML because the page shells
+    // themselves are created by this script.
+    const watermarkSrc = window.WATERMARK_SRC || '';
+    const watermarkMarkup = watermarkSrc
+        ? '<div class="page-watermark"><img src="' + watermarkSrc + '" alt="" /></div>'
+        : '';
+    const footerPrefix = window.FOOTER_PREFIX || '';
+
+    // Dynamically measure the exact safe height available
+    const measurer = document.createElement('div');
+    measurer.style.width = '210mm';
+    measurer.style.height = '297mm';
+    measurer.style.padding = '16mm 16mm 22mm 16mm';
+    measurer.style.boxSizing = 'border-box';
+    measurer.style.position = 'absolute';
+    measurer.style.visibility = 'hidden';
+    const contentBox = document.createElement('div');
+    contentBox.style.height = '100%';
+    measurer.appendChild(contentBox);
+    document.body.appendChild(measurer);
+
+    // Real pixel value calculated by browser
+    const maxSafeHeight = contentBox.clientHeight;
+    document.body.removeChild(measurer);
+
+    let pageNum = 1;
+    let currentContainer = createPage(pageNum);
+
+    const source = document.getElementById('source-content');
+    const groups: any[] = Array.from(source.children);
+
+    for (const group of groups) {
+        if (!group.classList.contains('paginate-group')) continue;
+        const blocks: any[] = Array.from(group.children);
+
+        // Try the group whole first — that keeps small, indivisible
+        // units (a payment grid, a short list) intact. When it does
+        // not fit we fall straight through to block-by-block
+        // placement rather than relocating the entire group to a
+        // fresh page: moving it wholesale is what used to strand a
+        // large blank area at the foot of the previous page.
+        const fits = tryAppendGroup(blocks);
+
+        if (!fits) {
+            for (let i = 0; i < blocks.length; i++) {
+                const block = blocks[i];
+                const keepGroup = [block];
+                let j = i;
+
+                // Group blocks with data-keep-with-next
+                while (blocks[j].getAttribute('data-keep-with-next') === 'true' && j + 1 < blocks.length) {
+                    j++;
+                    keepGroup.push(blocks[j]);
+                }
+
+                let bFits = tryAppendGroup(keepGroup);
+
+                if (!bFits) {
+                    if (currentContainer.children.length > 0) {
+                        pageNum++;
+                        currentContainer = createPage(pageNum);
+                        bFits = tryAppendGroup(keepGroup);
+                    }
+
+                    // If the keep-group STILL fails on a blank page, force append individually
+                    if (!bFits) {
+                        for (let k = i; k <= j; k++) {
+                            if (!tryAppendGroup([blocks[k]])) {
+                                if (currentContainer.children.length > 0) {
+                                    pageNum++;
+                                    currentContainer = createPage(pageNum);
+                                }
+                                tryAppendGroup([blocks[k]], true);
+                            }
+                        }
+                    }
+                }
+                i = j;
+            }
+        }
+    }
+
+    // Cleanup
+    source.remove();
+
+    function createPage(num: number) {
+        const page = document.createElement('div');
+        page.className = 'pdf-page';
+
+        page.innerHTML = `
+            ${watermarkMarkup}
+            <div class="page-content"></div>
+            <div class="page-footer">
+                <span>${footerPrefix} | Page ${num}</span>
+            </div>
+        `;
+        document.body.appendChild(page);
+        return page.querySelector('.page-content');
+    }
+
+    function tryAppendGroup(elements: any[], force = false) {
+        const clones = elements.map((el: any) => el.cloneNode(true));
+        clones.forEach((c: any) => currentContainer.appendChild(c));
+
+        // Allow 1px tolerance for rounding issues
+        if (force || currentContainer.offsetHeight <= maxSafeHeight + 1) {
+            return true;
+        }
+
+        clones.forEach((c: any) => currentContainer.removeChild(c));
+        return false;
+    }
+}
+
 export async function renderQuotationPdfBuffer(q: Record<string, any>): Promise<Buffer> {
         const companyLogoRemote = ((q as any).company?.logo as string) || DEFAULT_LOGO;
 
@@ -1529,129 +1680,7 @@ export async function renderQuotationPdfBuffer(q: Record<string, any>): Promise<
             await page.setContent(html, { waitUntil: 'load' });
             await page.evaluateHandle('document.fonts.ready');
             
-            // Execute deterministic pagination inside the browser. This function
-            // body runs in the browser's DOM context, not Node — the project's
-            // tsconfig has no "dom" lib (it's a server package), so `window` and
-            // `document` are shadowed here as local `any`-typed bindings rather
-            // than left as unresolvable globals.
-            await page.evaluate(() => {
-                const window: any = (globalThis as any).window;
-                const document: any = (globalThis as any).document;
-
-                // Every page carries the brand mark behind its content; built
-                // here rather than in the static HTML because the page shells
-                // themselves are created by this script.
-                const watermarkSrc = window.WATERMARK_SRC || '';
-                const watermarkMarkup = watermarkSrc
-                    ? '<div class="page-watermark"><img src="' + watermarkSrc + '" alt="" /></div>'
-                    : '';
-                const footerPrefix = window.FOOTER_PREFIX || '';
-
-                // Dynamically measure the exact safe height available
-                const measurer = document.createElement('div');
-                measurer.style.width = '210mm';
-                measurer.style.height = '297mm';
-                measurer.style.padding = '16mm 16mm 22mm 16mm';
-                measurer.style.boxSizing = 'border-box';
-                measurer.style.position = 'absolute';
-                measurer.style.visibility = 'hidden';
-                const contentBox = document.createElement('div');
-                contentBox.style.height = '100%';
-                measurer.appendChild(contentBox);
-                document.body.appendChild(measurer);
-                
-                // Real pixel value calculated by browser
-                const maxSafeHeight = contentBox.clientHeight;
-                document.body.removeChild(measurer);
-
-                let pageNum = 1;
-                let currentContainer = createPage(pageNum);
-
-                const source = document.getElementById('source-content');
-                const groups: any[] = Array.from(source.children);
-
-                for (const group of groups) {
-                    if (!group.classList.contains('paginate-group')) continue;
-                    const blocks: any[] = Array.from(group.children);
-                    
-                    // Try the group whole first — that keeps small, indivisible
-                    // units (a payment grid, a short list) intact. When it does
-                    // not fit we fall straight through to block-by-block
-                    // placement rather than relocating the entire group to a
-                    // fresh page: moving it wholesale is what used to strand a
-                    // large blank area at the foot of the previous page.
-                    const fits = tryAppendGroup(blocks);
-
-                    if (!fits) {
-                        for (let i = 0; i < blocks.length; i++) {
-                            let block = blocks[i];
-                            let keepGroup = [block];
-                            let j = i;
-                            
-                            // Group blocks with data-keep-with-next
-                            while (blocks[j].getAttribute('data-keep-with-next') === 'true' && j + 1 < blocks.length) {
-                                j++;
-                                keepGroup.push(blocks[j]);
-                            }
-                            
-                            let bFits = tryAppendGroup(keepGroup);
-                            
-                            if (!bFits) {
-                                if (currentContainer.children.length > 0) {
-                                    pageNum++;
-                                    currentContainer = createPage(pageNum);
-                                    bFits = tryAppendGroup(keepGroup);
-                                }
-                                
-                                // If the keep-group STILL fails on a blank page, force append individually
-                                if (!bFits) {
-                                    for (let k = i; k <= j; k++) {
-                                        if (!tryAppendGroup([blocks[k]])) {
-                                            if (currentContainer.children.length > 0) {
-                                                pageNum++;
-                                                currentContainer = createPage(pageNum);
-                                            }
-                                            tryAppendGroup([blocks[k]], true);
-                                        }
-                                    }
-                                }
-                            }
-                            i = j;
-                        }
-                    }
-                }
-
-                // Cleanup
-                source.remove();
-
-                function createPage(num: number) {
-                    const page = document.createElement('div');
-                    page.className = 'pdf-page';
-
-                    page.innerHTML = `
-                        ${watermarkMarkup}
-                        <div class="page-content"></div>
-                        <div class="page-footer">
-                            <span>${footerPrefix} | Page ${num}</span>
-                        </div>
-                    `;
-                    document.body.appendChild(page);
-                    return page.querySelector('.page-content');
-                }
-
-                function tryAppendGroup(elements: any[], force = false) {
-                    const clones = elements.map((el: any) => el.cloneNode(true));
-                    clones.forEach((c: any) => currentContainer.appendChild(c));
-
-                    // Allow 1px tolerance for rounding issues
-                    if (force || currentContainer.offsetHeight <= maxSafeHeight + 1) {
-                        return true;
-                    }
-
-                    clones.forEach((c: any) => currentContainer.removeChild(c));
-                    return false;
-                }
-            });
+            await page.evaluate(paginateDocument);
 
             await page.emulateMediaType('print');
 
