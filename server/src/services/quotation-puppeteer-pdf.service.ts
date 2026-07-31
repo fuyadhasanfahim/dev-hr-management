@@ -1055,7 +1055,7 @@ export function buildPrintHtml(
                 ${investSummaryHtml}
                 <div class="invest-summary-rule"></div>
                 <div class="invest-total">
-                    <div class="invest-total-label">Total Investment</div>
+                    <div class="invest-total-label">Total Setup / One-Time</div>
                     <div class="invest-total-figure">${formatMoneyPdf(grandTotalVal, currency)}</div>
                 </div>
             </div>
@@ -1078,13 +1078,24 @@ export function buildPrintHtml(
             `).join('')}
             <div class="paginate-block blk-section-end">
                 <div class="invest-summary-rule"></div>
-                <div class="invest-total">
+                <div class="invest-total" style="margin-bottom: 24px;">
                     <div class="invest-total-label">Total Recurring</div>
-                    <div class="invest-total-figure">${formatMoneyPdf(recurringTotalVal, currency)} / mo</div>
+                    <div class="invest-total-figure" style="color: #4E12D4;">${formatMoneyPdf(recurringTotalVal, currency)} / mo</div>
                 </div>
             </div>
         </div>
     ` : '';
+
+    const dueTodayHtml = `
+        <div class="paginate-group">
+            <div class="paginate-block blk-section-end">
+                <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 24px; margin-top: 16px; margin-bottom: 24px; display: flex; justify-content: space-between; align-items: center;">
+                    <div style="font-weight: 800; font-size: 14pt; color: #0f172a;">Total Initial Payment (Due Today)</div>
+                    <div style="font-weight: 900; font-size: 18pt; color: #4E12D4;">${formatMoneyPdf(grandTotalVal + recurringTotalVal, currency)}</div>
+                </div>
+            </div>
+        </div>
+    `;
 
     function listBlock(title: string, items: string[]): string {
         if (!items.length) return '';
@@ -1407,6 +1418,7 @@ export function buildPrintHtml(
     ${workflowHtml}
     ${investmentHtml}
     ${recurringHtml}
+    ${dueTodayHtml}
     ${paymentStagesHtml}
     ${detailsHtml}
     ${nextStepsHtml}

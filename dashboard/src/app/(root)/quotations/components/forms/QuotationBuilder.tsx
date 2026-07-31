@@ -3669,11 +3669,28 @@ function QuotationSummary({
                         </div>
                     </div>
 
-                    <div className="flex justify-between items-center text-sm font-extrabold border-t pt-2 mt-1">
-                        <span>Grand Total (Initial)</span>
-                        <span className="text-primary font-mono text-base font-bold">
+                    <div className="flex justify-between items-center text-sm font-semibold border-t border-slate-100 dark:border-slate-800/60 pt-2 mt-1">
+                        <span className="text-muted-foreground">Total Setup / One-Time</span>
+                        <span className="font-mono font-bold">
                             {currencySymbol}
                             {grandTotalOneTime.toLocaleString("en-IN")}
+                        </span>
+                    </div>
+                    {totalRecurring > 0 && (
+                        <div className="flex justify-between items-center text-sm font-semibold border-t border-slate-100 dark:border-slate-800/60 pt-2 mt-2">
+                            <span className="text-muted-foreground">Total Recurring / Mo</span>
+                            <span className="font-mono font-bold text-[#4E12D4] dark:text-[#C850FA]">
+                                {currencySymbol}
+                                {totalRecurring.toLocaleString("en-IN")}
+                            </span>
+                        </div>
+                    )}
+
+                    <div className="flex justify-between items-center text-sm font-extrabold border-t border-slate-200 dark:border-slate-700 pt-3 mt-3 text-emerald-600 dark:text-emerald-500">
+                        <span>Total Due Today</span>
+                        <span className="font-mono text-base font-black">
+                            {currencySymbol}
+                            {(grandTotalOneTime + totalRecurring).toLocaleString("en-IN")}
                         </span>
                     </div>
 
