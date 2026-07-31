@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import { envConfig } from '../config/env.config.js';
+import envConfig from '../config/env.config.js';
 
 async function deleteUserAndActivity() {
     try {
