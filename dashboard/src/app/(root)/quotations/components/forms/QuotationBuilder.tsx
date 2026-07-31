@@ -2032,8 +2032,8 @@ function WebDevelopmentService({
     const subtotalFixed = featuresFixedTotal + webDevPricing
         .filter((i) => i.billingType === "fixed")
         .reduce((acc, i) => acc + i.price, 0);
-    const subtotalMonthly = webDevPricing
-        .filter((i) => i.billingType === "monthly")
+    const subtotalRecurring = webDevPricing
+        .filter((i) => i.billingType !== "fixed")
         .reduce((acc, i) => acc + i.price, 0);
 
     const handleCopyWebDevAIStructure = () => {
@@ -2107,10 +2107,10 @@ Requirements for AI:
                             <span className="text-sm font-semibold mr-2">
                                 {subtotalFixed > 0 &&
                                     `${currencySymbol}${subtotalFixed.toLocaleString("en-IN")}`}
-                                {subtotalFixed > 0 && subtotalMonthly > 0 && " + "}
-                                {subtotalMonthly > 0 &&
-                                    `${currencySymbol}${subtotalMonthly.toLocaleString("en-IN")}/mo`}
-                                {subtotalFixed === 0 && subtotalMonthly === 0 && `${currencySymbol}0`}
+                                {subtotalFixed > 0 && subtotalRecurring > 0 && " + "}
+                                {subtotalRecurring > 0 &&
+                                    `${currencySymbol}${subtotalRecurring.toLocaleString("en-IN")} (Recurring)`}
+                                {subtotalFixed === 0 && subtotalRecurring === 0 && `${currencySymbol}0`}
                             </span>
 
                             {/* Service Header Action Buttons: 1. Copy, 2. Duplicate, 3. Remove */}
@@ -2547,8 +2547,8 @@ function MarketingService({
         marketingPricing
             .filter((i) => i.billingType === "fixed")
             .reduce((acc, i) => acc + i.price, 0);
-    const subtotalMonthly = marketingPricing
-        .filter((i) => i.billingType === "monthly")
+    const subtotalRecurring = marketingPricing
+        .filter((i) => i.billingType !== "fixed")
         .reduce((acc, i) => acc + i.price, 0);
 
     const handleCopyMarketingStructure = () => {
@@ -2623,12 +2623,12 @@ Requirements for AI:
                                 {subtotalFixed > 0 &&
                                     `${currencySymbol}${subtotalFixed.toLocaleString("en-IN")}`}
                                 {subtotalFixed > 0 &&
-                                    subtotalMonthly > 0 &&
+                                    subtotalRecurring > 0 &&
                                     " + "}
-                                {subtotalMonthly > 0 &&
-                                    `${currencySymbol}${subtotalMonthly.toLocaleString("en-IN")}/mo`}
+                                {subtotalRecurring > 0 &&
+                                    `${currencySymbol}${subtotalRecurring.toLocaleString("en-IN")} (Recurring)`}
                                 {subtotalFixed === 0 &&
-                                    subtotalMonthly === 0 &&
+                                    subtotalRecurring === 0 &&
                                     `${currencySymbol}0`}
                             </span>
 
@@ -3560,14 +3560,14 @@ function QuotationSummary({
             <Separator />
             <CardContent className="space-y-4 p-5 font-sans">
                 <div className="space-y-2.5">
-                    {showWebDev && (webDevFixed > 0 || webDevMonthly > 0) && (
+                    {showWebDev && (webDevFixed > 0 || webDevRecurring > 0) && (
                         <SummaryRow
                             label="Web Development"
                             value={
                                 <>
                                     {webDevFixed > 0 && `${currencySymbol}${webDevFixed.toLocaleString("en-IN")}`}
-                                    {webDevFixed > 0 && webDevMonthly > 0 && " + "}
-                                    {webDevMonthly > 0 && `${currencySymbol}${webDevMonthly.toLocaleString("en-IN")}/mo`}
+                                    {webDevFixed > 0 && webDevRecurring > 0 && " + "}
+                                    {webDevRecurring > 0 && `${currencySymbol}${webDevRecurring.toLocaleString("en-IN")} (Recurring)`}
                                 </>
                             }
                         />
@@ -3584,14 +3584,14 @@ function QuotationSummary({
                             value={`${currencySymbol}${videoFixed.toLocaleString("en-IN")}`}
                         />
                     )}
-                    {showMarketing && (marketingFixed > 0 || marketingMonthly > 0) && (
+                    {showMarketing && (marketingFixed > 0 || marketingRecurring > 0) && (
                         <SummaryRow
                             label="Marketing"
                             value={
                                 <>
                                     {marketingFixed > 0 && `${currencySymbol}${marketingFixed.toLocaleString("en-IN")}`}
-                                    {marketingFixed > 0 && marketingMonthly > 0 && " + "}
-                                    {marketingMonthly > 0 && `${currencySymbol}${marketingMonthly.toLocaleString("en-IN")}/mo`}
+                                    {marketingFixed > 0 && marketingRecurring > 0 && " + "}
+                                    {marketingRecurring > 0 && `${currencySymbol}${marketingRecurring.toLocaleString("en-IN")} (Recurring)`}
                                 </>
                             }
                         />
