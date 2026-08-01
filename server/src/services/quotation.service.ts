@@ -7,6 +7,7 @@ import type { IQuotation, IQuotationLineItem } from '../types/quotation.type.js'
 import type { QuotationStatus } from '../types/quotation.type.js';
 import { isUpfrontBillingCycle } from '../types/quotation.type.js';
 import { AppError } from '../utils/AppError.js';
+import { escapeRegex } from '../lib/sanitize.js';
 import { OutboxService } from './outbox.service.js';
 import { getCorrelationId } from '../lib/requestContext.js';
 import { logger } from '../lib/logger.js';
@@ -866,10 +867,11 @@ export class QuotationService {
 
         const mongoFilters: any = { ...filters };
         if (filters.search) {
+            const escaped = escapeRegex(filters.search);
             mongoFilters.$or = [
-                { quotationNumber: { $regex: filters.search, $options: 'i' } },
-                { 'details.title': { $regex: filters.search, $options: 'i' } },
-                { 'client.contactName': { $regex: filters.search, $options: 'i' } },
+                { quotationNumber: { $regex: escaped, $options: 'i' } },
+                { 'details.title': { $regex: escaped, $options: 'i' } },
+                { 'client.contactName': { $regex: escaped, $options: 'i' } },
             ];
             delete mongoFilters.search;
         }

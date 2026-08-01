@@ -6,6 +6,7 @@ import QuotationModel from '../models/quotation.model.js';
 import ClientModel from '../models/client.model.js';
 import { InvoiceCounter } from '../models/invoice-counter.model.js';
 import { AppError } from '../utils/AppError.js';
+import { escapeRegex } from '../lib/sanitize.js';
 import { logger } from '../lib/logger.js';
 import emailService from './email.service.js';
 import { ReceiptPuppeteerPdfService } from './receipt-puppeteer-pdf.service.js';
@@ -233,10 +234,11 @@ export class ReceiptService {
         if (filters.status) mongoFilters.status = filters.status;
         if (filters.paymentStatus) mongoFilters.paymentStatus = filters.paymentStatus;
         if (filters.search) {
+            const escaped = escapeRegex(filters.search);
             mongoFilters.$or = [
-                { receiptNumber: { $regex: filters.search, $options: 'i' } },
-                { clientName: { $regex: filters.search, $options: 'i' } },
-                { projectTitle: { $regex: filters.search, $options: 'i' } },
+                { receiptNumber: { $regex: escaped, $options: 'i' } },
+                { clientName: { $regex: escaped, $options: 'i' } },
+                { projectTitle: { $regex: escaped, $options: 'i' } },
             ];
         }
 
