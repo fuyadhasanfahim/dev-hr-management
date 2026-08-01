@@ -28,6 +28,7 @@ const requiredVars = [
     'CLOUDINARY_API_SECRET',
     'CLOUDINARY_UPLOAD_PATH',
     'QUOTATION_TOKEN_SECRET',
+    'ENCRYPTION_KEY',
 ] as const;
 
 const missing = requiredVars.filter((key) => !process.env[key]);
@@ -35,6 +36,26 @@ if (missing.length > 0) {
     throw new Error(
         `Missing required environment variables: ${missing.join(', ')}. ` +
             'Check your .env file.',
+    );
+}
+
+// DECISION (E2-F2-T1): AWS_* and GEMINI_API_KEY are intentionally NOT in
+// requiredVars above. Unlike ENCRYPTION_KEY (currently used to build the
+// encrypted payment token in invoice.controller.ts, via utils/crypto.ts —
+// and planned as the basis for real order-asset encryption under E2-F3-T1),
+// these gate optional features — S3 attachment upload and AI chat — that
+// already degrade gracefully without them: s3-upload.service.ts falls back
+// to dummy credentials and only fails when S3 is actually called, and
+// ai-chat.service.ts's getAI() throws its own clear, request-scoped error
+// only when AI chat is actually invoked. Hard-requiring them would block
+// environments that don't use those features at all. Warn at startup
+// instead, so a misconfiguration is still visible without blocking boot.
+const softWarnVars = ['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'AWS_BUCKET_NAME', 'GEMINI_API_KEY'] as const;
+const missingSoft = softWarnVars.filter((key) => !process.env[key]);
+if (missingSoft.length > 0) {
+    console.warn(
+        `[env.config] Optional environment variables not set: ${missingSoft.join(', ')}. ` +
+            'Features depending on them (S3 uploads, AI chat) will be unavailable until configured.',
     );
 }
 
