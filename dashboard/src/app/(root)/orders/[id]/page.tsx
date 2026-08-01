@@ -45,24 +45,9 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { OrderTasksTab } from "@/components/tasks/OrderTasksTab";
 
-import { OrderStatus, IOrder } from "@/types/order.type";
+import { OrderStatus } from "@/types/order.type";
 import { ORDER_STATUS_LABELS } from "@/lib/constants";
-
-// Status workflow: defines which statuses can transition to which
-const statusWorkflow: Record<OrderStatus, OrderStatus[]> = {
-  pending: ["in_progress", "cancelled"],
-  in_progress: ["completed", "revision", "cancelled"],
-  revision: ["in_progress", "cancelled"],
-  completed: ["delivered", "revision"],
-  delivered: ["revision"],
-  cancelled: [],
-};
-
-const getFilteredStatusOptions = (order: IOrder): OrderStatus[] => {
-  const currentStatus = order.status;
-  const baseOptions = statusWorkflow[currentStatus] || [];
-  return baseOptions.filter(opt => opt !== currentStatus);
-};
+import { getFilteredStatusOptions } from "@/constants/orderStatusWorkflow";
 
 export default function OrderDetailsPage() {
     const params = useParams();

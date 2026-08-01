@@ -119,14 +119,7 @@ import { Role } from "@/constants/role";
 import { TableContent } from "@/components/shared/table-content";
 import { ColumnDef } from "@tanstack/react-table";
 import { SelectContent as StatusPicker } from "@/components/shared/select-content";
-
-// No workflow restriction — staff can set any status directly.
-const ALL_ORDER_STATUSES = Object.keys(ORDER_STATUS_LABELS) as OrderStatus[];
-
-// Returns every other status an order can be switched to, excluding its current one.
-const getFilteredStatusOptions = (order: IOrder): OrderStatus[] => {
-  return ALL_ORDER_STATUSES.filter((opt) => opt !== order.status);
-};
+import { getFilteredStatusOptions } from "@/constants/orderStatusWorkflow";
 
 const safeFormat = (
   dateStr: string | undefined | null,
