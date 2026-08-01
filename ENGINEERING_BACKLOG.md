@@ -3,7 +3,7 @@
 **Status:** LIVING DOCUMENT — this file is the permanent source of truth for backend engineering work from this point forward.
 **Baseline inputs:** Principal Engineer Audit Report (2026-08-01) + Execution Roadmap (2026-08-01).
 **Scope:** `server/` (Express/MongoDB backend). Frontend apps (`auth/`, `dashboard/`, `support/`) are referenced only where a backend change has a required frontend companion — they are not independently audited here.
-**Last updated:** 2026-08-02 · **Updated by:** Principal Engineer review — new task **E5-F1-T2** filed (P1): the Outbox pattern has been write-only since introduction, discovered during E6-F1-T1 investigation. No implementation yet.
+**Last updated:** 2026-08-02 · **Updated by:** Principal Engineer review — E6-F1-T1 implemented; `quotation-timeline.controller.ts` wired up, `wallet-transaction.controller.ts` confirmed already live (backlog corrected).
 
 ---
 
@@ -40,7 +40,7 @@
 | E3-F3-T1 | Dockerize local dev | Ops Readiness | P2 | Not Started | 1–1.5 days | Low |
 | E5-F1-T1 | Move notifications onto BullMQ | Reliability | P2 | Not Started | 2–3 days | Medium |
 | E1-F2-T2 | Payroll mismatch → explicit confirmation | Data Integrity | P2 | Not Started | 1 day | Low |
-| E6-F1-T1 | Delete or wire orphaned controllers | Code Health | P2 | Not Started | 3–5 hrs | Low |
+| E6-F1-T1 | Delete or wire orphaned controllers | Code Health | P2 | Done* | 3–5 hrs | Low |
 | E4-F2-T1 | Consolidate audit-trail mechanisms | Observability | P2 | Not Started | 2–3 days | Medium |
 | E6-F2-T1 | Structured logging cleanup (console.* → pino) | Code Health | P3 | Not Started | 2–3 days | Very Low |
 | E3-F4-T1 | Redis-backed rate limiter | Ops Readiness | P3 | Not Started | 1 day | Low |
@@ -50,7 +50,7 @@
 | E8-F1-T1 | API versioning + OpenAPI spec | API Platform | P3 | Not Started | 3–5 days | Low |
 | E8-F2-T2 | Compression middleware + cursor pagination | API Platform | P3 | Not Started | 1–2 days | Low |
 
-**Completion:** 11 / 25 Tasks done (4 fully `Done`, 7 marked `Done*` — see notes on each). **P0 remaining:** 0/5 — all P0 tasks addressed. **P1 status:** E3-F2-T1 and E6-F2-T3 both fully `Done` — CI is green on `main`. E1-F3-T1 done* — code + tests complete, but the production duplicate-data check (Subtask a) is an open pre-deploy gate, not executable from this sandbox. E4-F1-T1 done* — Outbox admin API live and admin-gated, only the live HTTP+DB integration test is an open follow-up. E1-F2-T1 done* — `computeWorkDayStats()` extracted and wired into all three call sites, unit-tested including an explicit two-pass/single-pass equivalence proof; the live-DB before/after snapshot test specified in the original task remains an open follow-up. Remaining P1s: E2-F3-T1 (re-scope/deferral discussed but not yet reflected in this document — pending a dedicated update) and **E5-F1-T2** (new, filed 2026-08-02 — the Outbox pattern has been write-only since it was introduced; discovered during E6-F1-T1 investigation).
+**Completion:** 12 / 25 Tasks done (4 fully `Done`, 8 marked `Done*` — see notes on each). **P0 remaining:** 0/5 — all P0 tasks addressed. **P1 status:** E3-F2-T1 and E6-F2-T3 both fully `Done`. E1-F3-T1, E4-F1-T1, E1-F2-T1 all `Done*` (open follow-ups documented on each). Remaining P1s: **E2-F3-T1** (deferred pending a future asset-creation write path) and **E5-F1-T2** (Outbox consumer — blocked on a required product decision, see its Subtask a). **P2 status:** E6-F1-T1 now `Done*` — `quotation-timeline.controller.ts` wired, `wallet-transaction.controller.ts` confirmed already live.
 
 *`Done*` on E1-F1-T1 = the guard clause, model, and unit test matrix are complete and verified; the HTTP-level integration test (Subtask d) is `Blocked`, not skipped — it has a hard dependency on DB test infrastructure that doesn't exist yet (E7-F1-T1). See the Task Detail Card in §3 for the full breakdown; this is not being counted as fully `Done` until that subtask either completes or is formally waived.
 
@@ -569,23 +569,31 @@ E8  API Platform Maturity
 ### E6-F1 — Dead Code Elimination
 
 #### E6-F1-T1: Delete or wire orphaned controllers
-- **Priority:** P2 · **Status:** Not Started
-- **Business value:** `quotation-timeline.controller.ts` / `wallet-transaction.controller.ts` have no routes — a maintenance trap for future engineers assuming they're live.
-- **Engineering effort:** 3–5 hrs · **Regression risk:** Low either direction.
-- **Dependencies:** None; good to bundle with E4-F1-T1's investigative pattern.
-- **Exact files:** `server/src/controllers/quotation-timeline.controller.ts`, `server/src/controllers/wallet-transaction.controller.ts`, `server/src/models/wallet-transaction.model.ts`, `server/src/services/wallet.service.ts`.
-- **Testing strategy:** If wiring: standard route/integration tests. If deleting: build passes + grep confirms zero remaining references.
-- **Rollout plan:** Decision-per-controller, documented before execution.
-- **Rollback plan:** Deletion is `git revert`-safe; wiring follows standard new-route rollback.
-- **Acceptance criteria:** Documented decision per controller · no dead imports remain.
+- **Priority:** P2 · **Status:** Done*
+- **Business value:** `quotation-timeline.controller.ts` had no routes — a maintenance trap, and a complete, useful admin observability feature (merged quotation/outbox/order timeline + replay/regenerate-link actions) sitting entirely disconnected.
+- **Engineering effort:** 3–5 hrs (actual: ~1.5 hrs) · **Regression risk:** Low — confirmed via `git diff`: strictly additive, no existing controller/service logic touched.
+- **Dependencies:** None.
+- **Investigation performed (corrects the original task premise):** grepped the whole `server/src` tree for both controllers. `quotation-timeline.controller.ts` had zero references anywhere outside itself — genuinely orphaned. `wallet-transaction.controller.ts` was **already fully wired** in `staff.route.ts` (`GET /staffs/wallet-transactions/me`, `GET /staffs/wallet-transactions/all`, `POST /staffs/wallet-transactions/withdraw`, correctly role-gated) and actively consumed by the dashboard (`redux/features/staff/staffApi.ts`) — the backlog's "no routes" claim about it was stale. **Decision: wallet-transaction.controller.ts needs no action.** This correction was discovered while investigating this task, one turn before E5-F1-T2 was also discovered during the same investigation pass.
+- **Exact files:**
+  - New: `server/src/routes/quotation-timeline.route.ts` — `GET /:quotationGroupId`, `POST /:quotationGroupId/replay`, `POST /:quotationGroupId/regenerate-link`, each gated by `authorize(Role.SUPER_ADMIN, Role.ADMIN)` (same idiom as `outbox.route.ts` from E4-F1-T1).
+  - `server/src/routes/index.ts` — one import + one `moduleRoutes` entry.
+  - `server/src/controllers/quotation-timeline.controller.ts` — **not modified**, already correct.
+  - New: `server/src/routes/__tests__/quotation-timeline-route.test.ts` — 21 tests.
+- **Known limitation, documented in-code, not silently shipped as fully functional:** per **E5-F1-T2** (filed separately), the two POST actions enqueue an `OutboxEvent` that nothing currently consumes — wiring them is still correct (harmless, consistent with the rest of the system's current behavior) but they do not yet cause any real downstream effect. A comment in `quotation-timeline.route.ts` makes this explicit so it isn't mistaken for working end-to-end.
+- **Testing strategy:** Same approach as E4-F1-T1 — inspects Express's real `Router.stack` on the actual exported route object to confirm all 3 endpoints are registered with the correct controller handlers, then invokes the real wired `authorize(...)` middleware directly to prove 403/401/admission across all 3 routes. A live HTTP+DB integration test (real `getTimeline` output) needs infrastructure this sandbox doesn't have — same limitation as every DB-touching task this session.
+- **Rollout plan:** Direct deploy, additive route surface, `SUPER_ADMIN`/`ADMIN` only — unchanged from the original plan.
+- **Rollback plan:** Remove the 2-line addition to `routes/index.ts` (or delete `quotation-timeline.route.ts`) — underlying controller/service untouched either way.
+- **Acceptance criteria:**
+  - [x] Documented decision per controller — `quotation-timeline.controller.ts`: wired. `wallet-transaction.controller.ts`: no action needed, already live (backlog corrected).
+  - [x] No dead imports remain — confirmed via `git diff`; no controller/service files were touched, only new routing added.
 
 **Subtasks:**
 | ID | Description | Status |
 |---|---|---|
-| a | Investigate whether dashboard frontend references a timeline endpoint | Not Started |
-| b | Investigate whether wallet feature has any live data or usage | Not Started |
-| c | Execute decision (wire or delete) per controller | Not Started |
-| d | Confirm zero dangling references post-execution | Not Started |
+| a | Investigate whether dashboard frontend references a timeline endpoint | **Done** — zero references found in `dashboard/src`/`auth/src`/`support/src` |
+| b | Investigate whether wallet feature has any live data or usage | **Done** — found already wired and consumed; not orphaned, backlog corrected |
+| c | Execute decision (wire or delete) per controller | **Done** — wired `quotation-timeline.controller.ts`; no action on `wallet-transaction.controller.ts` |
+| d | Confirm zero dangling references post-execution | **Done** — `git diff` confirms no controller/service files touched, only additive routing |
 
 ### E6-F2 — Code Quality Standards
 
@@ -699,6 +707,7 @@ E8  API Platform Maturity
 | 2026-08-02 | E1-F3-T1 implemented: closed the Receipt zero-payment check-then-create race. `receipt.model.ts`'s `quotationGroupId` field changed from a plain index to `unique: true`, enforcing the 1:1 quotation-group↔receipt invariant at the DB level. `receipt.service.ts`'s `createZeroPaymentReceipt` now wraps `receipt.save()` in a try/catch that, on Mongo `E11000`, re-queries and returns the concurrent winner idempotently instead of throwing — mirroring the existing `outbox.service.ts` duplicate-key idiom rather than inventing a new pattern. New read-only `server/src/scripts/check-duplicate-receipt-groups.ts` operationalizes the required pre-deploy production duplicate check (Subtask a) for whoever has DB access, since this sandbox has no network path to production to run it directly — same constraint noted on every DB-touching task this session. 4 new deterministic unit tests (monkey-patched `ReceiptModel.findOne`/`.prototype.save`/`InvoiceCounter.findByIdAndUpdate`) prove the catch-and-retry logic resolves races idempotently, propagate non-`11000` errors unchanged, leave the no-race happy path unaffected, and leave the pre-existing early-return-on-`findOne` path untouched. Full suite 68/68 passing, typecheck clean, `git diff` confirmed isolated to the two intended files plus the two new files. Marked `Done*` — Subtask (a)/(b), the actual production duplicate-data check and any needed reconciliation, remain an explicit open pre-deploy gate, not silently assumed clean; the unique index should not be allowed to go live until that check passes. No other backlog item touched. | Principal Engineer review |
 | 2026-08-02 | E1-F2-T1 implemented: extracted `computeWorkDayStats()` into new `server/src/services/payroll-calculation.util.ts`, a pure function taking already-fetched data, and wired it into all three duplicated call sites (`getPayrollPreview`, `processPayroll`, `getAbsentDates` in `payroll.service.ts`). Per this task's own instruction to stop if the three implementations weren't behaviorally identical: found a real structural difference (single-pass vs. two-pass unemployed-check ordering in `getAbsentDates`), proved it doesn't change behavior (AND is commutative over the same boolean conditions), and encoded that proof as an executable test — an independent re-implementation of the old two-pass algorithm asserted equivalent to the new function's output across multiple fixtures — rather than just asserting it in a comment. One incidental dead-code removal in `processPayroll` (an unread `workDaysCount` local, confirmed via `git show HEAD` to have been dead before this change too, just disguised as "used" by an increment operator) was necessary to satisfy `noUnusedLocals` and is documented as a direct consequence of the extraction, not scope creep. 17 new unit tests (edge cases + the equivalence proof), full suite 113/113 passing, typecheck clean, `git diff` reviewed — only the day-counting loops replaced, all surrounding fetch/fallback/composition logic at each call site untouched. Marked `Done*` — the backlog's specified live-DB before/after snapshot test isn't executable in this sandbox (no network path to Mongo, same limitation as every DB-touching task this session); the unit-test matrix plus the equivalence proof are the substitute evidence, with a live-data run flagged as an open follow-up. No other backlog item touched. | Principal Engineer review |
 | 2026-08-02 | Investigated E6-F1-T1 (wiring up `quotation-timeline.controller.ts`) and, before implementing, traced its two admin actions' `OutboxService.enqueue()` calls back to the consumer side of the Outbox pattern. Found `claimNext()`/`markProcessed()`/`markFailed()` have zero callers anywhere in the codebase, confirmed via full-tree grep, a review of the only in-process job runner (`scheduler.service.ts`, 6 unrelated jobs), `package.json` (one entrypoint, no worker script), and git history (no evidence a consumer ever existed and was removed). The Outbox pattern has been write-only since its introduction — the one live producer, `quotation.service.ts`'s `quotation.superseded` event, has never triggered any downstream effect, and the intended effect is unknown (no consumer stub exists to infer it from). This also means the E4-F1-T1 replay API I shipped only resets a status field rather than reprocessing anything. Filed as new task **E5-F1-T2** (P1, under Epic E5/Feature F1) per governance rule 6 — investigation and full task card only, no code written or modified. Recommends a two-phase rollout (product decision on `quotation.superseded`'s intended behavior, then a minimal single-event-type consumer) rather than jumping directly to a generalized dispatcher, to avoid building for an unconfirmed requirement — the same discipline applied on E2-F3-T1. No other backlog item touched, no application code modified. | Principal Engineer review |
+| 2026-08-02 | E6-F1-T1 implemented: new `server/src/routes/quotation-timeline.route.ts` wires `GET /:quotationGroupId`, `POST /:quotationGroupId/replay`, `POST /:quotationGroupId/regenerate-link` to the already-implemented `QuotationTimelineController`, admin-gated via `authorize(Role.SUPER_ADMIN, Role.ADMIN)` (same idiom as E4-F1-T1's `outbox.route.ts`). Registered in `routes/index.ts` under `/quotation-timeline`. Investigation corrected the task's original premise: `wallet-transaction.controller.ts` was found already fully wired in `staff.route.ts` and consumed by the dashboard — not orphaned, no action taken, backlog corrected. The two POST actions are documented in-code (per E5-F1-T2) as enqueue-only until a consumer exists, so they aren't mistaken for fully functional. 21 new tests (router-stack registration + real wired `authorize(...)` middleware invocation, mirroring E4-F1-T1's approach), full suite 134/134 passing, typecheck clean, `git diff` confirmed strictly additive — no controller/service files touched. Marked `Done*` — the live HTTP+DB integration test for `getTimeline` needs infrastructure this sandbox doesn't have, same limitation as every DB-touching task this session. Committed separately from the E5-F1-T2 backlog-filing commit, per one-commit-per-task discipline. No other backlog item touched. | Principal Engineer review |
 
 ---
 

@@ -39,6 +39,7 @@ import { AIChatRoutes } from "./ai-chat.route.js";
 import { ConsultationRoutes } from "./consultation.route.js";
 import { testAiPdfRoute } from "./test-ai-pdf.route.js";
 import { outboxRoute } from "./outbox.route.js";
+import { quotationTimelineRoute } from "./quotation-timeline.route.js";
 
 const router: Router = Router();
 
@@ -200,6 +201,10 @@ const moduleRoutes = [
     {
         path: "/outbox",
         route: outboxRoute,
+    },
+    {
+        path: "/quotation-timeline",
+        route: quotationTimelineRoute,
     },
 ];
 
