@@ -3,7 +3,7 @@
 **Status:** LIVING DOCUMENT — this file is the permanent source of truth for backend engineering work from this point forward.
 **Baseline inputs:** Principal Engineer Audit Report (2026-08-01) + Execution Roadmap (2026-08-01).
 **Scope:** `server/` (Express/MongoDB backend). Frontend apps (`auth/`, `dashboard/`, `support/`) are referenced only where a backend change has a required frontend companion — they are not independently audited here.
-**Last updated:** 2026-08-02 · **Updated by:** Principal Engineer review — E1-F1-T2 implemented, then revised per reviewer request to remove a project-wide tsconfig change.
+**Last updated:** 2026-08-02 · **Updated by:** Principal Engineer review — E3-F2-T1 (Minimal CI) implemented; E6-F2-T3 filed as a new P1 task.
 
 ---
 
@@ -31,7 +31,8 @@
 | E3-F1-T1 | Add `/healthz` + graceful shutdown | Ops Readiness | P0 | Done* | 2–3 hrs | Very Low |
 | E2-F3-T1 | Real encryption for order assets | Security | P1 | Not Started | 1.5–2.5 days | Medium |
 | E4-F1-T1 | Wire up Outbox admin API | Observability | P1 | Not Started | 4–6 hrs | Very Low |
-| E3-F2-T1 | Minimal CI (typecheck + build gate) | Ops Readiness | P1 | Not Started | 3–4 hrs | Very Low |
+| E3-F2-T1 | Minimal CI (typecheck + build gate) | Ops Readiness | P1 | Done* | 3–4 hrs | Very Low |
+| E6-F2-T3 | Fix pre-existing unused-import typecheck errors | Code Health | P1 | Not Started | ~15 min | Very Low |
 | E1-F2-T1 | Extract shared payroll day-counting logic | Data Integrity | P1 | Not Started | 1–1.5 days | Medium |
 | E1-F3-T1 | Fix Receipt zero-payment race condition | Data Integrity | P1 | Not Started | 3–4 hrs | Low |
 | E7-F1-T1 | Test framework + state-machine test suite | Quality Engineering | P2 | Not Started | 4–6 days | Low |
@@ -48,7 +49,7 @@
 | E8-F1-T1 | API versioning + OpenAPI spec | API Platform | P3 | Not Started | 3–5 days | Low |
 | E8-F2-T2 | Compression middleware + cursor pagination | API Platform | P3 | Not Started | 1–2 days | Low |
 
-**Completion:** 5 / 23 Tasks done (2 fully `Done`, 3 marked `Done*` — see notes on each). **P0 remaining:** 0/5 — all P0 tasks addressed (3 fully verified, 2 with a documented, narrowly-scoped open verification gap each, both caused by this sandbox having no reachable database/network).
+**Completion:** 6 / 24 Tasks done (2 fully `Done`, 4 marked `Done*` — see notes on each). **P0 remaining:** 0/5 — all P0 tasks addressed. **P1 status:** E3-F2-T1 done*; E6-F2-T3 (new, filed 2026-08-02) blocks E3-F2-T1's last acceptance criterion and is the natural next pick.
 
 *`Done*` on E1-F1-T1 = the guard clause, model, and unit test matrix are complete and verified; the HTTP-level integration test (Subtask d) is `Blocked`, not skipped — it has a hard dependency on DB test infrastructure that doesn't exist yet (E7-F1-T1). See the Task Detail Card in §3 for the full breakdown; this is not being counted as fully `Done` until that subtask either completes or is formally waived.
 
@@ -361,22 +362,26 @@ E8  API Platform Maturity
 ### E3-F2 — CI/CD Pipeline
 
 #### E3-F2-T1: Minimal CI — typecheck + build gate
-- **Priority:** P1 · **Status:** Not Started
+- **Priority:** P1 · **Status:** Done* (see acceptance-criteria note — one criterion blocked by a separately-filed, pre-existing issue, not by this task's own work)
 - **Business value:** Makes the existing strict `tsconfig.json` actually enforce something on every push instead of only when a developer remembers to run `tsc` locally — the cheapest multiplier on every other task's safety.
-- **Engineering effort:** 3–4 hrs · **Regression risk:** Very low, CI-only.
-- **Dependencies:** None. Should land before E7-F1-T1 (test framework) so the test step can be appended to the same pipeline.
-- **Exact files:** new `.github/workflows/ci.yml`.
-- **Testing strategy:** Verify a deliberately-broken PR fails the check; verify clean `main` passes.
-- **Rollout plan:** Merge directly, no app-code risk.
-- **Rollback plan:** Delete workflow file.
-- **Acceptance criteria:** CI runs on every push/PR · broken build fails · clean build passes.
+- **Engineering effort:** 3–4 hrs (actual: ~1 hr) · **Regression risk:** Very low, CI-only — confirmed via `git status`/`git diff` that only the new workflow file was added, zero application code touched.
+- **Dependencies:** None (confirmed satisfied — all P0 work done). Should land before E7-F1-T1 (test framework) so the test step can be appended to the same pipeline; **deliberately does not run tests yet** for exactly that reason, even though `node --test` suites already exist from P0 work — appending a test step is earmarked for E7-F1-T1, not this task.
+- **Exact files:** new `.github/workflows/ci.yml` — triggers on push/PR to `main`, checks out, sets up Node 24 (matching this project's actual dev environment, for consistency), `npm ci` in `server/`, runs `npx tsc --noEmit`. Scoped to `server/` only, matching the backlog's declared scope; frontend apps intentionally not typechecked here.
+- **Discovery made while implementing (filed, not fixed):** the exact command this workflow runs currently fails on `main` today — 4 pre-existing, unrelated `noUnusedLocals` errors in `src/scripts/migrate-relational-data.ts` (confirmed present and untouched since before any P0 work this session). Filed as **E6-F2-T3**, elevated to P1 since it's now a concrete CI blocker, not fixed here per instructions not to resolve unrelated issues mid-task.
+- **Testing strategy:** Could not literally trigger GitHub Actions from this environment (no network path to push/observe a live run). Verified both paths locally instead: ran the exact command (`npx tsc --noEmit` in `server/`) and confirmed it **exits non-zero (2)** on the current pre-existing errors — proving the gate correctly fails a broken build, using real existing breakage rather than an artificially introduced one. The "clean passes" path is backed by consistent evidence across every task this session: the identical command has reliably exited 0 with no output on every individual file touched, and on the dashboard app entirely, whenever there were genuinely zero errors. Workflow YAML manually reviewed for structural correctness (consistent 2-space indentation, no tabs); no YAML linter was available in this environment to do a stricter parse check — flagged as a minor unverified detail, not asserted as certain.
+- **Rollout plan:** Merge directly, no app-code risk. Will show red on `main` immediately after merge, for the reason filed as E6-F2-T3 — not a defect in this task, but worth knowing before treating a red CI badge as alarming.
+- **Rollback plan:** Delete the workflow file — zero impact either direction, purely additive.
+- **Acceptance criteria:**
+  - [x] CI runs on every push/PR — workflow correctly triggers on both events per its `on:` block.
+  - [x] Broken build fails — verified directly (exit code 2 on the current real errors).
+  - [ ] ~~Clean build passes~~ — **not currently true on `main`**, blocked by the pre-existing issue filed as E6-F2-T3. The gate mechanism itself is proven correct (see testing strategy); what's missing is `main` actually being clean, which is a separate, now-tracked task.
 
 **Subtasks:**
 | ID | Description | Status |
 |---|---|---|
-| a | Write `ci.yml` running `npx tsc --noEmit` (or `npm run build`) for `server/` | Not Started |
-| b | Verify against a deliberately broken test PR | Not Started |
-| c | Verify clean pass on `main` | Not Started |
+| a | Write `ci.yml` running `npx tsc --noEmit` (or `npm run build`) for `server/` | **Done** |
+| b | Verify against a deliberately broken build | **Done** — used the real pre-existing errors rather than introducing an artificial one |
+| c | Verify against a clean build | **Blocked** — pending E6-F2-T3 |
 
 ### E3-F3 — Containerization
 
@@ -525,6 +530,18 @@ E8  API Platform Maturity
 - **Exact files:** `quotation.service.ts`, `order.service.ts` → new `constants/timing.ts`.
 - **Acceptance criteria:** No bare numeric literals for the identified time windows/tolerances remain.
 
+#### E6-F2-T3: Fix pre-existing unused-import typecheck errors in `migrate-relational-data.ts`
+- **Priority:** P1 · **Status:** Not Started
+- **Discovered:** 2026-08-02, while implementing E3-F2-T1 (Minimal CI). Elevated to P1 (out of step with its E6-F2 siblings, which are P3) because it is now a concrete, immediate blocker: `npx tsc --noEmit` — the exact command the new CI workflow runs — currently exits non-zero on `main` because of this, independent of any other work. CI will show red on every push/PR until this lands, which defeats the purpose of just having stood it up.
+- **Business value:** Restores "clean `main` passes" as actually true, so the new CI gate is meaningful from the next push onward instead of permanently red for an unrelated reason.
+- **Engineering effort:** ~15 min · **Regression risk:** Very low — the errors are `noUnusedLocals` violations (imported but never referenced), so the fix is either removing the unused import or using it if it was meant to be; either way it's a one-off migration script, not a live code path.
+- **Dependencies:** None. Should be picked up promptly — it's the natural, obvious next task after E3-F2-T1 given it's the one thing standing between "CI exists" and "CI is green," but per process it's filed here rather than folded into E3-F2-T1's scope.
+- **Exact files:** `server/src/scripts/migrate-relational-data.ts` (lines 5, 10, 14, 17 — `QuotationModel`, `OrderModel`, `OrderTaskModel`, `ReceiptModel` imports currently unused).
+- **Testing strategy:** `npx tsc --noEmit` in `server/` exits 0 with no output after the fix; confirm the script's actual runtime behavior (if it's still a live migration tool, not dead code) is unaffected by whatever the fix turns out to be.
+- **Rollout plan:** Direct, no flag — either delete the dead imports or wire them into the logic they were presumably meant for; requires a quick read of the script to determine which (not yet done — this task is filed, not investigated, per instructions not to fix unrelated issues while executing E3-F2-T1).
+- **Rollback plan:** Trivial revert, no data/runtime impact either direction.
+- **Acceptance criteria:** `npx tsc --noEmit` clean in `server/` · CI (E3-F2-T1) goes green on `main` · script's intended behavior (whatever it turns out to be) preserved.
+
 ---
 
 ## 9. E7 — Quality Engineering
@@ -602,6 +619,8 @@ E8  API Platform Maturity
 | 2026-08-01 | E3-F1-T1 implemented: `GET /healthz` (reflects `mongoose.connection.readyState`) added to `app.ts`; `SIGTERM`/`SIGINT` graceful-shutdown wired in `server.ts` via new `createGracefulShutdown()` factory in `lib/gracefulShutdown.ts`. Both pieces of decision logic extracted into small dependency-free/injectable modules (`lib/health.ts`, `lib/gracefulShutdown.ts`) specifically to make them testable without a real DB connection or a real `process.exit` — same sandbox network constraint hit on every task this session. 8 new tests, including a deterministic hung-connection test that proves the bounded-timeout forced-exit actually fires within the configured window (not just asserted to exist). Full suite 64/64 passing, typecheck clean, `git diff` confirmed strictly additive in both touched files. Marked `Done*` — Subtask (c) substituted a live manual SIGTERM test (not possible in this sandbox) with a stronger deterministic automated equivalent; a true end-to-end test against a running deployment is flagged as a still-open follow-up. No other backlog item touched. | Principal Engineer review |
 | 2026-08-02 | E1-F1-T2 implemented (first frontend/`dashboard` change of this backlog): extracted the order-status transition table into a single shared `dashboard/src/constants/orderStatusWorkflow.ts`, removed both pages' local copies (one already-correct, one the broken "no workflow restriction" version), both now import the same function. 7 new tests, `tsc --noEmit` clean across the whole dashboard app, and a live Next.js dev server confirmed the new import resolves cleanly (`GET /orders 200`, no console errors) — a practical check beyond what was required. Initial version added `allowImportingTsExtensions: true` to `dashboard/tsconfig.json` to support the test file's import; documented in-task, not silently added. Marked `Done*` — 2 of 3 acceptance criteria fully verified; the third ("manual click-through produces no unexpected 409s") is partially verified (compile-time + unit-test level) but not a live authenticated click-through, since this sandbox has no reachable backend — same limitation noted on every task this session, flagged as an open follow-up rather than claimed complete. No other backlog item touched. | Principal Engineer review |
 | 2026-08-02 | E1-F1-T2 revised per reviewer request: removed `allowImportingTsExtensions` from `dashboard/tsconfig.json` (confirmed byte-identical to its original state via `git diff`) and rewrote `orderStatusWorkflow.test.ts` as `orderStatusWorkflow.test.mjs` — a plain `.mjs` file falls outside `tsconfig.json`'s `include` globs entirely, so `tsc` never parses it or its `.ts`-suffixed import specifier, while `node --test` still runs it directly against the real module. No project-wide configuration changed. Caught and fixed one incidental bug during the rewrite: the original comment's literal `**/*.ts`/`**/*.tsx` text embedded `*/`, prematurely closing the doc comment and causing a real syntax error, unrelated to the module-format question — reworded to avoid the sequence. 7/7 tests still passing, `tsc --noEmit` clean, `git diff` confirms only the test file and the two page files (from the original implementation) changed. No other backlog item touched. | Principal Engineer review |
+| 2026-08-02 | Full P0 integration review performed (review only, no code changed): no conflicts, no new duplication, no API/contract/security/performance regressions found. Two real governance findings surfaced and separately actioned per explicit follow-up request: `ENGINEERING_BACKLOG.md` was gitignored and untracked (fixed — `.gitignore` line removed, file committed as `3d65200`), and the 3 remaining uncommitted P0 tasks were split into one clean commit each (`94dbe56` E2-F2-T1, `958c042` E3-F1-T1, `757b4f9` E1-F1-T2) without touching the 2 pre-existing commits. | Principal Engineer review |
+| 2026-08-02 | E3-F2-T1 implemented: new `.github/workflows/ci.yml` — typecheck-only gate (`npx tsc --noEmit` in `server/`) on push/PR to `main`, Node 24, scoped to backend only. Deliberately does not run the existing `node --test` suites yet, per this task's own dependency note that test execution is earmarked for E7-F1-T1. Verified the fail path directly (exit code 2 against real pre-existing errors) since no live GitHub Actions run could be triggered from this environment; the pass path is backed by consistent same-command evidence across every prior task this session. Discovered mid-task that the gate's own command currently fails on `main` due to 4 pre-existing, unrelated `noUnusedLocals` errors in `migrate-relational-data.ts` — filed as new task **E6-F2-T3** (P1, elevated from its P3 siblings since it's now a concrete CI blocker) rather than fixed here. Marked `Done*` — 2 of 3 acceptance criteria met; "clean build passes" is blocked by E6-F2-T3, not by any defect in this task. No other backlog item touched. | Principal Engineer review |
 
 ---
 
