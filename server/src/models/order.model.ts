@@ -25,7 +25,10 @@ export enum AssetType {
 }
 
 // ─── Valid Status Transitions ─────────────────────────────────────────────────
-// Enforced in OrderService.transitionStatus — not here (schema is not the place for flow logic)
+// Enforced by assertValidOrderTransition() in order.service.ts, called from
+// transitionStatus() before any write. Declared here (not there) because the
+// schema is the natural home for the data shape of the rule; the schema
+// itself does not run the check — see order.service.ts.
 export const ALLOWED_STATUS_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
     [OrderStatus.PENDING]:      [OrderStatus.IN_PROGRESS, OrderStatus.CANCELLED],
     [OrderStatus.IN_PROGRESS]:  [OrderStatus.COMPLETED, OrderStatus.REVISION, OrderStatus.CANCELLED],

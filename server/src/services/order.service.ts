@@ -3,6 +3,7 @@ import mongoose, { Types } from 'mongoose';
 import OrderModel, {
     type IOrder,
     type IQuotationSnapshot,
+    ALLOWED_STATUS_TRANSITIONS,
     OrderStatus,
     OrderType,
 } from '../models/order.model.js';
@@ -368,9 +369,23 @@ async function createOrderFromQuotation(
 }
 
 /**
- * Transition order status. Staff may set any status directly — no
- * workflow-order restriction — but the update stays optimistic-concurrency
- * safe and still runs the delivered/completed asset-unlock side effect.
+ * Guards every order status change against `ALLOWED_STATUS_TRANSITIONS`
+ * (defined in order.model.ts). Exported (not just module-private) so it can
+ * be unit-tested directly without touching Mongoose/the DB — mirrors the
+ * `assertTransition` pattern already used in quotation.service.ts.
+ */
+export function assertValidOrderTransition(from: OrderStatus, to: OrderStatus): void {
+    const allowed = ALLOWED_STATUS_TRANSITIONS[from];
+    if (!allowed?.includes(to)) {
+        throw new AppError(`Invalid order transition: ${from} → ${to}`, 409);
+    }
+}
+
+/**
+ * Transition order status. Only transitions declared in
+ * `ALLOWED_STATUS_TRANSITIONS` are accepted — anything else throws 409
+ * before any write happens. The update stays optimistic-concurrency safe
+ * and still runs the delivered/completed asset-unlock side effect.
  */
 async function transitionStatus(
     orderId: string,
@@ -380,6 +395,8 @@ async function transitionStatus(
 ): Promise<IOrder> {
     const order = await OrderModel.findById(orderId);
     if (!order) throw new AppError('Order not found', 404);
+
+    assertValidOrderTransition(order.status, newStatus);
 
     const updated = await OrderModel.findOneAndUpdate(
         { _id: order._id, __v: order.__v },
