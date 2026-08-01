@@ -586,7 +586,17 @@ async function getOrderByIdFromDB(id: string, user?: { id?: string; role?: strin
 
 /**
  * Serve a single asset value after validating the client's accessToken.
- * NEVER returns the encryptedValue directly.
+ *
+ * NOTE (E2-F3-T1): despite the `encryptedValue` field name, no encryption
+ * is currently applied anywhere in this codebase — not on write (there is
+ * no write path that creates OrderAsset documents today) and not here on
+ * read; this function returns the stored value as-is, unconditionally, in
+ * every environment. An investigation (E2-F3-T1 Subtask a) confirmed zero
+ * OrderAsset documents exist, so there is nothing to migrate today. Real
+ * encryption (via utils/crypto.ts's encryptPayload/decryptPayload, already
+ * used elsewhere in this codebase) must be implemented together with
+ * whichever future task introduces an actual asset-creation write path —
+ * it cannot be wired in ahead of a write path that doesn't exist yet.
  */
 async function getAssetByAccessToken(
     orderId: string,
@@ -611,12 +621,13 @@ async function getAssetByAccessToken(
         );
     }
 
-    // In production: decrypt asset.encryptedValue here using KMS key
-    // For now: return the stored value (assume it's already plaintext in dev)
+    // No encryption is currently applied — see the function-level note
+    // above. `asset.encryptedValue` is returned as-is; there is no
+    // KMS/decrypt step, in this or any environment.
     return {
         type: asset.type,
         label: asset.label,
-        value: asset.encryptedValue, // TODO: decrypt with AWS KMS in production
+        value: asset.encryptedValue,
     };
 }
 
