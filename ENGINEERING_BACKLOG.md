@@ -3,7 +3,7 @@
 **Status:** LIVING DOCUMENT — this file is the permanent source of truth for backend engineering work from this point forward.
 **Baseline inputs:** Principal Engineer Audit Report (2026-08-01) + Execution Roadmap (2026-08-01).
 **Scope:** `server/` (Express/MongoDB backend). Frontend apps (`auth/`, `dashboard/`, `support/`) are referenced only where a backend change has a required frontend companion — they are not independently audited here.
-**Last updated:** 2026-08-02 · **Updated by:** Principal Engineer review — E6-F2-T3 implemented; CI now green on `main`.
+**Last updated:** 2026-08-02 · **Updated by:** Principal Engineer review — E1-F3-T1 implemented; production duplicate-check remains an open pre-deploy gate.
 
 ---
 
@@ -34,7 +34,7 @@
 | E3-F2-T1 | Minimal CI (typecheck + build gate) | Ops Readiness | P1 | Done | 3–4 hrs | Very Low |
 | E6-F2-T3 | Fix pre-existing unused-import typecheck errors | Code Health | P1 | Done | ~15 min | Very Low |
 | E1-F2-T1 | Extract shared payroll day-counting logic | Data Integrity | P1 | Not Started | 1–1.5 days | Medium |
-| E1-F3-T1 | Fix Receipt zero-payment race condition | Data Integrity | P1 | Not Started | 3–4 hrs | Low |
+| E1-F3-T1 | Fix Receipt zero-payment race condition | Data Integrity | P1 | Done* | 3–4 hrs | Low |
 | E7-F1-T1 | Test framework + state-machine test suite | Quality Engineering | P2 | Not Started | 4–6 days | Low |
 | E3-F3-T1 | Dockerize local dev | Ops Readiness | P2 | Not Started | 1–1.5 days | Low |
 | E5-F1-T1 | Move notifications onto BullMQ | Reliability | P2 | Not Started | 2–3 days | Medium |
@@ -49,7 +49,7 @@
 | E8-F1-T1 | API versioning + OpenAPI spec | API Platform | P3 | Not Started | 3–5 days | Low |
 | E8-F2-T2 | Compression middleware + cursor pagination | API Platform | P3 | Not Started | 1–2 days | Low |
 
-**Completion:** 8 / 24 Tasks done (4 fully `Done`, 4 marked `Done*` — see notes on each). **P0 remaining:** 0/5 — all P0 tasks addressed. **P1 status:** E3-F2-T1 and E6-F2-T3 both fully `Done` — CI is green on `main`. Remaining P1s: E2-F3-T1, E4-F1-T1, E1-F2-T1, E1-F3-T1.
+**Completion:** 9 / 24 Tasks done (4 fully `Done`, 5 marked `Done*` — see notes on each). **P0 remaining:** 0/5 — all P0 tasks addressed. **P1 status:** E3-F2-T1 and E6-F2-T3 both fully `Done` — CI is green on `main`. E1-F3-T1 done* — code + tests complete, but the production duplicate-data check (Subtask a) is an open pre-deploy gate, not executable from this sandbox. Remaining P1s: E2-F3-T1, E4-F1-T1, E1-F2-T1.
 
 *`Done*` on E1-F1-T1 = the guard clause, model, and unit test matrix are complete and verified; the HTTP-level integration test (Subtask d) is `Blocked`, not skipped — it has a hard dependency on DB test infrastructure that doesn't exist yet (E7-F1-T1). See the Task Detail Card in §3 for the full breakdown; this is not being counted as fully `Done` until that subtask either completes or is formally waived.
 
@@ -206,25 +206,32 @@ E8  API Platform Maturity
 ### E1-F3 — Financial Ledger Integrity
 
 #### E1-F3-T1: Fix Receipt zero-payment race condition
-- **Priority:** P1 · **Status:** Not Started
+- **Priority:** P1 · **Status:** Done* (see acceptance-criteria note — one criterion is an open pre-deploy gate this sandbox cannot clear, not silently skipped)
 - **Business value:** Closes the one place in the codebase where the "check-then-create" duplicate-prevention pattern (used correctly everywhere else — Order, Quotation) wasn't applied, protecting the 1:1 quotation-group↔receipt invariant under concurrent requests.
-- **Engineering effort:** 3–4 hrs
-- **Regression risk:** Low, **conditional on** the pre-deployment duplicate check (Subtask a) coming back clean.
+- **Engineering effort:** 3–4 hrs (actual: ~2.5 hrs) · **Regression risk:** Low — confirmed via `git diff`: additive-only changes (a schema constraint tightening + a try/catch around an existing `save()` call); no existing read/write path altered.
 - **Dependencies:** None.
-- **Exact files:** `server/src/models/receipt.model.ts` (add unique index on `quotationGroupId`), `server/src/services/receipt.service.ts` (`createZeroPaymentReceipt` ~L86, catch Mongo `11000`).
-- **Testing strategy:** Concurrent-call test (`Promise.all` of two simultaneous creations) asserts exactly one receipt persists and both calls resolve without error.
-- **Rollout plan:** Index migration must run *after* the duplicate-data check confirms a clean collection; code change ships alongside.
-- **Rollback plan:** Drop the unique index — safe, no data loss either direction.
-- **Acceptance criteria:** Production data confirmed duplicate-free (or reconciled) before index creation · unique index live · concurrent creation attempts idempotently resolve to one receipt.
+- **Pre-implementation verification performed:** read `createZeroPaymentReceipt` end-to-end and confirmed the exact race: `ReceiptModel.findOne({ quotationGroupId })` followed later by `receipt.save()` with no DB-level constraint between the two — a second concurrent call that passes `findOne` before the first call's `save()` commits will itself `save()` successfully today, producing two receipts for one quotation group. Compared against `outbox.service.ts`'s existing `if (err?.code === 11000) return null;` idiom (the codebase's established "duplicate key => already exists, resolve idempotently" pattern) and mirrored its shape rather than inventing a new one.
+- **Exact files:**
+  - `server/src/models/receipt.model.ts` — `quotationGroupId` field changed from `{ required: true, index: true }` to `{ required: true, unique: true }` (a unique index supersedes a plain index on the same field), with an inline comment pointing to this task and the service-side handling.
+  - `server/src/services/receipt.service.ts` — `createZeroPaymentReceipt` (~L87–135): wrapped `receipt.save()` in a `try/catch`; on `err.code === 11000`, re-queries by `quotationGroupId` and returns the winning document instead of throwing, mirroring the existing early-return-on-`findOne` behavior. Non-`11000` errors are rethrown unchanged.
+  - New: `server/src/scripts/check-duplicate-receipt-groups.ts` — read-only script (no writes) that aggregates `Receipt` by `quotationGroupId` and reports any group with more than one receipt. Operationalizes Subtask (a): built so whoever has production DB access can run it before this index is deployed; not executed against real production data by me (see acceptance-criteria note — no network path to production from this sandbox, the same constraint noted on every DB-touching task this session).
+  - New: `server/src/services/__tests__/receipt-zero-payment-race.test.ts` — 4 tests.
+- **Testing strategy:** The backlog's specified test (`Promise.all` of two simultaneous creations against a live, unique-indexed MongoDB) requires real DB infrastructure that doesn't exist in this sandbox (no network path to Mongo, no `mongodb-memory-server` — E7-F1-T1's explicit scope, same limitation as every DB-touching task this session). Substituted with a deterministic unit-level equivalent: `ReceiptModel.findOne`/`ReceiptModel.prototype.save`/`InvoiceCounter.findByIdAndUpdate` are monkey-patched to reproduce the exact sequence a real race produces (existence check sees nothing, save then fails with a real Mongo `E11000`), proving the catch-and-retry logic resolves to the concurrent winner instead of throwing. Also covered: non-`11000` errors still propagate (not silently swallowed), the no-race happy path is unaffected and not spuriously retried, and the pre-existing early-return-on-`findOne` path is untouched. This verifies the *application-level* half of the fix directly; the *DB-level* half (the unique index actually rejecting a concurrent duplicate write) is verified by code inspection of the schema change only, not exercised against a real MongoDB — flagged as an open follow-up, same as the acceptance-criteria note below.
+- **Rollout plan:** Unchanged from the original plan — run `check-duplicate-receipt-groups.ts` against production first; only deploy once it reports zero duplicate groups (or after reconciling any it finds). The code change (service catch logic) is safe to deploy on its own at any time; the schema's `unique: true` should not go live until the check is clean, since Mongoose's automatic index build would otherwise fail against a collection with existing duplicates.
+- **Rollback plan:** Revert `receipt.model.ts` (drops the unique index back to a plain index) and/or `receipt.service.ts` (drops the catch, reverting to the pre-existing race) — either or both are independently safe, no data loss either direction.
+- **Acceptance criteria:**
+  - [ ] ~~Production data confirmed duplicate-free (or reconciled) before index creation~~ — **not verifiable from this sandbox**, no network path to the production database (same limitation as every prior production-data check this session, e.g. E2-F2-T1's Subtask c). The read-only `check-duplicate-receipt-groups.ts` script is built and ready; running it against production and reconciling any findings is a required, explicit pre-deploy step for whoever has that access, flagged here as an open item rather than assumed clean.
+  - [x] Unique index live in code — `quotationGroupId` is declared `unique: true` in the schema; whether it is actually live in a given deployment's database depends on the production check above completing successfully first (Mongoose builds indexes automatically on connect, and that build would fail — loudly, not silently — against a collection with existing duplicates, which is itself a real safety backstop even before the manual check runs).
+  - [x] Concurrent creation attempts idempotently resolve to one receipt — verified via the 4 deterministic unit tests described above; the true live-DB `Promise.all` version of this check is recommended before this is fully trusted in production and is noted as an open follow-up.
 
 **Subtasks:**
 | ID | Description | Status |
 |---|---|---|
-| a | Query production for existing duplicate `quotationGroupId` values in `Receipt` | Not Started |
-| b | If duplicates found: manually reconcile (merge/void) before proceeding | Not Started |
-| c | Add unique index on `Receipt.quotationGroupId` | Not Started |
-| d | Add `11000`-catch idempotent-return logic to `createZeroPaymentReceipt` | Not Started |
-| e | Write and pass the concurrent-call test | Not Started |
+| a | Query production for existing duplicate `quotationGroupId` values in `Receipt` | **Blocked** — tooling built (`check-duplicate-receipt-groups.ts`), but this sandbox has no network path to production to actually run it; required pre-deploy step for whoever has DB access |
+| b | If duplicates found: manually reconcile (merge/void) before proceeding | **Blocked** — depends on (a)'s result, unknown from this sandbox |
+| c | Add unique index on `Receipt.quotationGroupId` | **Done** |
+| d | Add `11000`-catch idempotent-return logic to `createZeroPaymentReceipt` | **Done** |
+| e | Write and pass the concurrent-call test | **Done** — substituted a deterministic monkey-patched unit-test equivalent for the live-DB version; see Testing strategy note |
 
 ---
 
@@ -626,6 +633,7 @@ E8  API Platform Maturity
 | 2026-08-02 | Full P0 integration review performed (review only, no code changed): no conflicts, no new duplication, no API/contract/security/performance regressions found. Two real governance findings surfaced and separately actioned per explicit follow-up request: `ENGINEERING_BACKLOG.md` was gitignored and untracked (fixed — `.gitignore` line removed, file committed as `3d65200`), and the 3 remaining uncommitted P0 tasks were split into one clean commit each (`94dbe56` E2-F2-T1, `958c042` E3-F1-T1, `757b4f9` E1-F1-T2) without touching the 2 pre-existing commits. | Principal Engineer review |
 | 2026-08-02 | E3-F2-T1 implemented: new `.github/workflows/ci.yml` — typecheck-only gate (`npx tsc --noEmit` in `server/`) on push/PR to `main`, Node 24, scoped to backend only. Deliberately does not run the existing `node --test` suites yet, per this task's own dependency note that test execution is earmarked for E7-F1-T1. Verified the fail path directly (exit code 2 against real pre-existing errors) since no live GitHub Actions run could be triggered from this environment; the pass path is backed by consistent same-command evidence across every prior task this session. Discovered mid-task that the gate's own command currently fails on `main` due to 4 pre-existing, unrelated `noUnusedLocals` errors in `migrate-relational-data.ts` — filed as new task **E6-F2-T3** (P1, elevated from its P3 siblings since it's now a concrete CI blocker) rather than fixed here. Marked `Done*` — 2 of 3 acceptance criteria met; "clean build passes" is blocked by E6-F2-T3, not by any defect in this task. No other backlog item touched. | Principal Engineer review |
 | 2026-08-02 | E6-F2-T3 implemented: removed 4 dead imports (`QuotationModel`, `OrderModel`, `OrderTaskModel`, `ReceiptModel`) from `server/src/scripts/migrate-relational-data.ts`. Investigated before fixing (task was filed without investigation per process): confirmed all 4 identifiers had zero references anywhere in the file — the script reads/writes via raw `mongoose.connection.db.collection(...)` calls, not these Mongoose models — so this was pure dead-code removal, not a case of "wire vs. delete." `npx tsc --noEmit` in `server/` now exits 0 with no output (was exit 2/4 errors before); full existing test suite still 64/64 passing (zero regressions, as expected since nothing referencing these imports could have depended on them). `git diff` confirmed a clean 4-line deletion, no other line touched. All 3 acceptance criteria met, task marked fully `Done`. As a direct consequence, **E3-F2-T1's third acceptance criterion ("clean build passes") is now also met** — that task is updated from `Done*` to fully `Done` in this same change, since its own work was already complete and the only gap was this external blocker. No other backlog item touched. | Principal Engineer review |
+| 2026-08-02 | E1-F3-T1 implemented: closed the Receipt zero-payment check-then-create race. `receipt.model.ts`'s `quotationGroupId` field changed from a plain index to `unique: true`, enforcing the 1:1 quotation-group↔receipt invariant at the DB level. `receipt.service.ts`'s `createZeroPaymentReceipt` now wraps `receipt.save()` in a try/catch that, on Mongo `E11000`, re-queries and returns the concurrent winner idempotently instead of throwing — mirroring the existing `outbox.service.ts` duplicate-key idiom rather than inventing a new pattern. New read-only `server/src/scripts/check-duplicate-receipt-groups.ts` operationalizes the required pre-deploy production duplicate check (Subtask a) for whoever has DB access, since this sandbox has no network path to production to run it directly — same constraint noted on every DB-touching task this session. 4 new deterministic unit tests (monkey-patched `ReceiptModel.findOne`/`.prototype.save`/`InvoiceCounter.findByIdAndUpdate`) prove the catch-and-retry logic resolves races idempotently, propagate non-`11000` errors unchanged, leave the no-race happy path unaffected, and leave the pre-existing early-return-on-`findOne` path untouched. Full suite 68/68 passing, typecheck clean, `git diff` confirmed isolated to the two intended files plus the two new files. Marked `Done*` — Subtask (a)/(b), the actual production duplicate-data check and any needed reconciliation, remain an explicit open pre-deploy gate, not silently assumed clean; the unique index should not be allowed to go live until that check passes. No other backlog item touched. | Principal Engineer review |
 
 ---
 

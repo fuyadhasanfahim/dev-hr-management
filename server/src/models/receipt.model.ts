@@ -39,7 +39,11 @@ const receiptSchema = new Schema<IReceipt>(
         receiptNumber: { type: String, required: true, unique: true, index: true },
 
         quotationId: { type: Schema.Types.ObjectId, ref: 'Quotation', required: true },
-        quotationGroupId: { type: String, required: true, index: true },
+        // Unique: enforces the 1:1 quotation-group <-> receipt invariant at the
+        // DB level, closing the check-then-create race in
+        // createZeroPaymentReceipt (E1-F3-T1). See that function for the
+        // application-level idempotent handling of the resulting E11000.
+        quotationGroupId: { type: String, required: true, unique: true },
         quotationNumber: { type: String, required: true },
 
         clientId: { type: Schema.Types.ObjectId, ref: 'Client', required: true, index: true },

@@ -118,7 +118,27 @@ export class ReceiptService {
             createdBy: new Types.ObjectId(userId),
         });
 
-        return await receipt.save();
+        try {
+            return await receipt.save();
+        } catch (err: any) {
+            // A concurrent request may have created the receipt for this
+            // quotationGroupId between the findOne check above and this save.
+            // The unique index on quotationGroupId turns that race into a
+            // duplicate-key error instead of a second receipt — resolve
+            // idempotently to whichever request actually won, same as the
+            // early-return path above.
+            if (err?.code === 11000) {
+                const winner = await ReceiptModel.findOne({ quotationGroupId: quotation.quotationGroupId });
+                if (winner) {
+                    logger.warn(
+                        { quotationGroupId: quotation.quotationGroupId },
+                        'receipt.zero_payment.race_resolved_idempotently',
+                    );
+                    return winner;
+                }
+            }
+            throw err;
+        }
     }
 
     /**
