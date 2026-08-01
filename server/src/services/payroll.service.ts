@@ -12,6 +12,7 @@ import ShiftOffDateModel from '../models/shift-off-date.model.js';
 import mongoose, { Types } from 'mongoose';
 import { getBDMonthRange, getBDNow, getBDWeekDay, getBDStartOfDay, getBDDateString } from '../utils/date.util.js';
 import auditService from './audit.service.js';
+import { computeWorkDayStats } from './payroll-calculation.util.js';
 
 // ── Helpers ────────────────────────────────────────────────────────────
 
@@ -178,11 +179,6 @@ const getPayrollPreview = async ({
             (a) => a.status === 'half_day',
         ).length;
         // Calculate Work Days, Missing Punches, and Unemployed Days by Day-by-Day Timeline
-        let expectedWorkDates: Date[] = [];
-        let workDaysCount = 0;
-        let missingPunches = 0;
-        let unemployedDays = 0;
-
         const todayBDStr = getBDDateString(getBDNow());
 
         const joinStr = staff.joinDate
@@ -196,59 +192,25 @@ const getPayrollPreview = async ({
             (sod) => staffShiftAssignments.some(sa => sa.shiftId._id.toString() === sod.shiftId.toString())
         ).flatMap(sod => sod.dates.map((d: Date) => getBDDateString(d)));
 
-        daysInMonth.forEach((day: Date) => {
-            const dayStr = getBDDateString(day);
-
-            // 1. Check if unemployed (strictly before join or after exit)
-            const isBeforeJoin = joinStr && dayStr < joinStr;
-            const isAfterExit = exitStr && dayStr > exitStr;
-            if (isBeforeJoin || isAfterExit) {
-                unemployedDays++;
-                return; // Not a work day if unemployed
-            }
-
-            // 2. Resolve shift for this specific day
-            const dayAssignment = (staffShiftAssignments as any[]).find(
-                (sa) => {
-                    const s = getBDDateString(sa.startDate);
-                    const e = sa.endDate
-                        ? getBDDateString(sa.endDate)
-                        : '9999-12-31';
-                    return dayStr >= s && dayStr <= e!;
-                },
-            );
-
-            const shift: any = dayAssignment?.shiftId;
-            if (!shift) return;
-
-            // 3. Skip if it's a specific "Off Date" for this shift
-            if (staffShiftOffDates.includes(dayStr)) {
-                return; 
-            }
-
-            // 4. Check if it's a work day
-            if (shift.workDays.includes(getBDWeekDay(day))) {
-                workDaysCount++;
-                expectedWorkDates.push(day);
-
-                // 5. Check for missing punch
-                if (dayStr < todayBDStr) {
-                    const hasRecord = staffAttendance.some((a: any) => {
-                        const aStr = getBDDateString(new Date(a.date));
-                        return aStr === dayStr;
-                    });
-                    if (!hasRecord) {
-                        missingPunches++;
-                    }
-                }
-            }
+        const {
+            workDaysCount: computedWorkDaysCount,
+            unemployedDays,
+            missingPunchDates,
+        } = computeWorkDayStats({
+            daysInMonth,
+            shiftAssignments: staffShiftAssignments as any[],
+            attendanceRecords: staffAttendance as any[],
+            shiftOffDateStrings: staffShiftOffDates,
+            joinDate: staff.joinDate,
+            exitDate: staff.exitDate,
+            todayBDStr,
         });
 
         // Fallback: If NO shift assignments found for the entire month, use 22-day heuristic
-        if (staffShiftAssignments.length === 0) {
-            workDaysCount = 22;
-        }
+        const workDaysCount =
+            staffShiftAssignments.length === 0 ? 22 : computedWorkDaysCount;
 
+        const missingPunches = missingPunchDates.length;
         const absentDays = literalAbsentDays + missingPunches;
 
         // C. Salary calculation (fixed /30 policy)
@@ -465,66 +427,26 @@ const processPayroll = async ({
             const staffSalary = staff.salary || 0;
             const perDaySalary = staffSalary / 30;
 
-            const joinDate = staff.joinDate ? new Date(staff.joinDate) : null;
-            const exitDate = staff.exitDate ? new Date(staff.exitDate) : null;
-
-            let expectedWorkDates: Date[] = [];
-            let workDaysCount = 0;
-            let unemployedDays = 0;
-            let missingPunches = 0;
-            
             const todayBDStr = getBDDateString(getBDNow());
 
-            daysInMonth.forEach((day: Date) => {
-                const dayStr = getBDDateString(day);
-
-                // 1. Check unemployed
-                const isBeforeJoin = joinDate && dayStr < getBDDateString(joinDate);
-                const isAfterExit = exitDate && dayStr > getBDDateString(exitDate);
-                if (isBeforeJoin || isAfterExit) {
-                    unemployedDays++;
-                    return;
-                }
-
-                // 2. Resolve shift
-                const dayAssignment = (allAssignments as any[]).find((sa) => {
-                    const s = getBDDateString(sa.startDate);
-                    const e = sa.endDate
-                        ? getBDDateString(sa.endDate)
-                        : '9999-12-31';
-                    return dayStr >= s && dayStr <= e;
-                });
-
-                const shift: any = dayAssignment?.shiftId;
-                if (!shift) return;
-
-                // 3. Skip if it's a specific "Off Date" for this shift
-                if (staffShiftOffDates.includes(dayStr)) {
-                    return; 
-                }
-
-                // 4. Work day
-                if (shift.workDays.includes(getBDWeekDay(day))) {
-                    workDaysCount++;
-                    expectedWorkDates.push(day);
-
-                    // 5. Check for missing punch
-                    if (dayStr < todayBDStr) {
-                        const hasRecord = allAttendance.some((a: any) => {
-                            const aStr = getBDDateString(a.date);
-                            return aStr === dayStr;
-                        });
-                        if (!hasRecord) {
-                            missingPunches++;
-                        }
-                    }
-                }
+            // NOTE: unlike getPayrollPreview, this call site never reads the
+            // resulting workDaysCount downstream (confirmed unchanged from
+            // the pre-extraction code, where it was computed and reassigned
+            // by the 22-day fallback but never referenced afterward either
+            // — see the E1-F2-T1 backlog note). Only unemployedDays and
+            // missingPunchDates feed into absentDays/totalDeductionUnits
+            // below, so only those are destructured here.
+            const { unemployedDays, missingPunchDates } = computeWorkDayStats({
+                daysInMonth,
+                shiftAssignments: allAssignments as any[],
+                attendanceRecords: allAttendance as any[],
+                shiftOffDateStrings: staffShiftOffDates,
+                joinDate: staff.joinDate,
+                exitDate: staff.exitDate,
+                todayBDStr,
             });
 
-            if (allAssignments.length === 0) {
-                workDaysCount = 22;
-            }
-
+            const missingPunches = missingPunchDates.length;
             const absentDays = literalAbsentDays + missingPunches;
             // Half-day and late count as present with full payment
             // LOGIC REFINEMENT: totalDeductionUnits capped at 30 to prevent >100% deduction in 31-day months.
@@ -905,34 +827,10 @@ const getAbsentDates = async (staffId: string, month: string) => {
         sod.dates.map((d: Date) => getBDDateString(d))
     );
 
+    // Fallback: If no shifts assigned, return empty list (no 22-day heuristic
+    // here — this endpoint intentionally shows actual absences based on
+    // tracked shifts only, unlike getPayrollPreview/processPayroll).
     const daysInMonth = eachDayOfInterval({ start: startDate, end: endDate });
-    const expectedWorkDates: Date[] = [];
-
-    daysInMonth.forEach((day: Date) => {
-        const dayStr = getBDDateString(day);
-
-        // Skip if it's a specific "Off Date" for this shift
-        if (staffShiftOffDates.includes(dayStr)) {
-            return; 
-        }
-
-        const dayAssignment = (allAssignments as any[]).find((sa) => {
-            const s = getBDDateString(sa.startDate);
-            const saEnd = sa.endDate;
-            const e = saEnd
-                ? getBDDateString(saEnd)
-                : '9999-12-31';
-            return dayStr >= s && dayStr <= e!;
-        });
-
-        const shift: any = dayAssignment?.shiftId;
-        if (shift && shift.workDays.includes(getBDWeekDay(day))) {
-            expectedWorkDates.push(day);
-        }
-    });
-
-    // Fallback: If no shifts assigned, return empty list (or could use 22-day fallback if needed,
-    // but here we want to show actual absences based on tracked shifts).
 
     const allAttendance = await AttendanceDayModel.find({
         staffId,
@@ -943,32 +841,22 @@ const getAbsentDates = async (staffId: string, month: string) => {
         .filter((a) => a.status === 'absent')
         .map((a: any) => ({ date: a.date, status: 'absent' }));
 
-    const missingPunches: { date: Date; status: string }[] = [];
     const todayBDStr = getBDDateString(getBDNow());
-    
-    const joinStr = staff.joinDate
-        ? getBDDateString(staff.joinDate)
-        : null;
-    const exitStr = staff.exitDate
-        ? getBDDateString(staff.exitDate)
-        : null;
 
-    expectedWorkDates.forEach((day: Date) => {
-        const dayStr = getBDDateString(day);
-        if (dayStr >= todayBDStr) return;
-
-        const isBeforeJoin = joinStr && dayStr < joinStr;
-        const isAfterExit = exitStr && dayStr > exitStr;
-        if (isBeforeJoin || isAfterExit) return;
-
-        const hasRecord = allAttendance.some(
-            (a: any) => getBDDateString(a.date) === dayStr,
-        );
-
-        if (!hasRecord) {
-            missingPunches.push({ date: day, status: 'absent' });
-        }
+    const { missingPunchDates } = computeWorkDayStats({
+        daysInMonth,
+        shiftAssignments: allAssignments as any[],
+        attendanceRecords: allAttendance as any[],
+        shiftOffDateStrings: staffShiftOffDates,
+        joinDate: staff.joinDate,
+        exitDate: staff.exitDate,
+        todayBDStr,
     });
+
+    const missingPunches = missingPunchDates.map((date) => ({
+        date,
+        status: 'absent',
+    }));
 
     return [...literalAbsents, ...missingPunches].sort(
         (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
