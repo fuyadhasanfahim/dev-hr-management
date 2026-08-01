@@ -15,16 +15,7 @@ export enum TaskPriority {
     URGENT = 'urgent',
 }
 
-export interface ISubTask {
-    _id?: Types.ObjectId | string;
-    title: string;
-    completed: boolean;
-    completedAt?: Date;
-    isSubFeature?: boolean;
-    parentName?: string;
-    needsRevision?: boolean;
-    revisionNote?: string;
-}
+// Removed ISubTask, now in subtask.model.ts
 
 export interface IOrderTask extends Document {
     orderId: Types.ObjectId;
@@ -33,7 +24,7 @@ export interface IOrderTask extends Document {
     
     title: string;
     description?: string;
-    subtasks?: ISubTask[];
+    subtasks: any[]; // Populated virtual
     status: TaskStatus;
     priority: TaskPriority;
     
@@ -55,37 +46,7 @@ export interface IOrderTask extends Document {
     updatedAt: Date;
 }
 
-const subtaskSchema = new Schema<ISubTask>(
-    {
-        title: {
-            type: String,
-            required: true,
-            trim: true,
-        },
-        completed: {
-            type: Boolean,
-            default: false,
-        },
-        completedAt: Date,
-        isSubFeature: {
-            type: Boolean,
-            default: false,
-        },
-        parentName: {
-            type: String,
-            trim: true,
-        },
-        needsRevision: {
-            type: Boolean,
-            default: false,
-        },
-        revisionNote: {
-            type: String,
-            trim: true,
-        },
-    },
-    { _id: true }
-);
+// Removed subtaskSchema, now in subtask.model.ts
 
 const taskSchema = new Schema<IOrderTask>(
     {
@@ -115,7 +76,6 @@ const taskSchema = new Schema<IOrderTask>(
             type: String,
             trim: true,
         },
-        subtasks: [subtaskSchema],
         status: {
             type: String,
             enum: Object.values(TaskStatus),
@@ -153,6 +113,13 @@ const taskSchema = new Schema<IOrderTask>(
 // Indexes for frequent queries
 taskSchema.index({ orderId: 1, status: 1 });
 taskSchema.index({ assignedTo: 1, dueDate: 1 });
+
+// ── Virtual Relations ────────────────────────────────────────────────────────
+taskSchema.virtual('subtasks', {
+    ref: 'Subtask',
+    localField: '_id',
+    foreignField: 'taskId',
+});
 
 const OrderTaskModel = model<IOrderTask>('OrderTask', taskSchema);
 export default OrderTaskModel;

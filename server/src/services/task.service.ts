@@ -8,7 +8,17 @@ import notificationService from './notification.service.js';
 import { logger } from '../lib/logger.js';
 
 const createTask = async (payload: Partial<IOrderTask>) => {
-    const task = await OrderTaskModel.create(payload);
+    const { subtasks, ...taskPayload } = payload;
+    const task = await OrderTaskModel.create(taskPayload);
+
+    if (subtasks && subtasks.length > 0) {
+        const { default: SubtaskModel } = await import('../models/subtask.model.js');
+        const subtaskDocs = subtasks.map(st => ({
+            ...st,
+            taskId: task._id
+        }));
+        await SubtaskModel.insertMany(subtaskDocs);
+    }
 
     // Background notification broadcast
     (async () => {
@@ -109,13 +119,19 @@ const updateTaskStatus = async (taskId: string, status: TaskStatus, actorId?: st
     const oldStatus = task.status;
     task.status = status;
 
-    if (status === TaskStatus.COMPLETED && task.subtasks && task.subtasks.length > 0) {
-        task.subtasks.forEach((s: any) => {
-            s.completed = true;
-            if (!s.completedAt) s.completedAt = new Date();
-            s.needsRevision = false;
-            s.revisionNote = undefined;
-        });
+    if (status === TaskStatus.COMPLETED) {
+        const { default: SubtaskModel } = await import('../models/subtask.model.js');
+        await SubtaskModel.updateMany(
+            { taskId: task._id },
+            { 
+                $set: { 
+                    completed: true, 
+                    completedAt: new Date(),
+                    needsRevision: false
+                },
+                $unset: { revisionNote: 1 }
+            }
+        );
     }
 
     await task.save();
@@ -229,13 +245,19 @@ const reviewTask = async (
             ? TaskStatus.COMPLETED
             : TaskStatus.REJECTED;
 
-    if (task.status === TaskStatus.COMPLETED && task.subtasks && task.subtasks.length > 0) {
-        task.subtasks.forEach((s: any) => {
-            s.completed = true;
-            if (!s.completedAt) s.completedAt = new Date();
-            s.needsRevision = false;
-            s.revisionNote = undefined;
-        });
+    if (task.status === TaskStatus.COMPLETED) {
+        const { default: SubtaskModel } = await import('../models/subtask.model.js');
+        await SubtaskModel.updateMany(
+            { taskId: task._id },
+            { 
+                $set: { 
+                    completed: true, 
+                    completedAt: new Date(),
+                    needsRevision: false
+                },
+                $unset: { revisionNote: 1 }
+            }
+        );
     }
 
     task.reviewNote = payload.note!;
@@ -323,7 +345,8 @@ const toggleSubtask = async (taskId: string, subtaskId: string, completed?: bool
         throw new AppError('Task not found.', 404);
     }
 
-    const subtask = (task.subtasks as any)?.id(subtaskId) || task.subtasks?.find((s: any) => s._id?.toString() === subtaskId);
+    const { default: SubtaskModel } = await import('../models/subtask.model.js');
+    const subtask = await SubtaskModel.findOne({ _id: subtaskId, taskId: task._id });
     if (!subtask) {
         throw new AppError('Subtask not found.', 404);
     }
@@ -336,6 +359,7 @@ const toggleSubtask = async (taskId: string, subtaskId: string, completed?: bool
     } else {
         subtask.completedAt = undefined;
     }
+    await subtask.save();
 
     // Auto transition to in_progress if task was pending and subtasks are being completed
     if (subtask.completed && task.status === TaskStatus.PENDING) {
@@ -343,8 +367,9 @@ const toggleSubtask = async (taskId: string, subtaskId: string, completed?: bool
     }
 
     // Auto transition to COMPLETED if ALL subtasks are completed, or back to IN_PROGRESS if unchecked
-    if (task.subtasks && task.subtasks.length > 0) {
-        const allDone = task.subtasks.every((s: any) => s.completed);
+    const allSubtasks = await SubtaskModel.find({ taskId: task._id });
+    if (allSubtasks.length > 0) {
+        const allDone = allSubtasks.every((s: any) => s.completed);
         if (allDone && task.status !== TaskStatus.COMPLETED) {
             task.status = TaskStatus.COMPLETED;
         } else if (!allDone && task.status === TaskStatus.COMPLETED) {
@@ -362,7 +387,8 @@ const requestSubtaskRevision = async (taskId: string, subtaskId: string, note: s
         throw new AppError('Task not found.', 404);
     }
 
-    const subtask = (task.subtasks as any)?.id(subtaskId) || task.subtasks?.find((s: any) => s._id?.toString() === subtaskId);
+    const { default: SubtaskModel } = await import('../models/subtask.model.js');
+    const subtask = await SubtaskModel.findOne({ _id: subtaskId, taskId: task._id });
     if (!subtask) {
         throw new AppError('Subtask not found.', 404);
     }
@@ -371,6 +397,7 @@ const requestSubtaskRevision = async (taskId: string, subtaskId: string, note: s
     subtask.completedAt = undefined;
     subtask.needsRevision = true;
     subtask.revisionNote = note;
+    await subtask.save();
 
     if (task.status === TaskStatus.COMPLETED || task.status === TaskStatus.UNDER_REVIEW) {
         task.status = TaskStatus.IN_PROGRESS;

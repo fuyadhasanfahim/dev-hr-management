@@ -35,41 +35,6 @@ export const ALLOWED_STATUS_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
     [OrderStatus.CANCELLED]:    [],
 };
 
-// ─── Interfaces ───────────────────────────────────────────────────────────────
-
-export interface IOrderAsset {
-    type: AssetType;
-    label: string;
-    /**
-     * Stored encrypted at rest via application-level AES-256-GCM.
-     * Plain value is NEVER stored.
-     */
-    encryptedValue: string;
-    isLocked: boolean;
-    /**
-     * Time-limited access token generated on unlock (crypto.randomBytes).
-     * Client presents this token to retrieve the decrypted value.
-     * Rotated on each unlock request.
-     */
-    accessToken?: string;
-    accessTokenExpiresAt?: Date;
-    unlockedAt?: Date;
-}
-
-export interface IOrderMilestone {
-    milestone: string;
-    completedAt: Date;
-    completedBy: Types.ObjectId;
-    notes?: string;
-}
-
-export interface IStatusHistory {
-    status: OrderStatus;
-    changedBy: Types.ObjectId;
-    updatedAt: Date;
-    note?: string;
-}
-
 export interface IQuotationSnapshotLineItem {
     title: string;
     price: number;
@@ -149,7 +114,7 @@ export interface IOrder extends Document {
     clientId: Types.ObjectId;
     orderType: OrderType;
     status: OrderStatus;
-    statusHistory: IStatusHistory[];
+    statusHistory: any[]; // Populated virtual
     assignedTeam: Types.ObjectId[];
     teamLeader?: Types.ObjectId; // Designated supervisor Ref: Staff
     priority: 'low' | 'medium' | 'high' | 'urgent';
@@ -157,8 +122,8 @@ export interface IOrder extends Document {
     estimatedDeliveryDate?: Date;
     deliveredAt?: Date;
     completedAt?: Date;
-    assets: IOrderAsset[];
-    milestones: IOrderMilestone[];
+    assets: any[]; // Populated virtual
+    milestones: any[]; // Populated virtual
     
     // Financial/Volume summary (redundant with snapshot for quick access)
     totalPrice: number;
@@ -172,33 +137,6 @@ export interface IOrder extends Document {
 
 
 // ─── Sub-schemas ──────────────────────────────────────────────────────────────
-
-const assetSchema = new Schema<IOrderAsset>(
-    {
-        type: {
-            type: String,
-            enum: Object.values(AssetType),
-            required: true,
-        },
-        label: { type: String, required: true },
-        encryptedValue: { type: String, required: true },
-        isLocked: { type: Boolean, default: true },
-        accessToken: { type: String, select: false },    // never returned by default
-        accessTokenExpiresAt: { type: Date },
-        unlockedAt: { type: Date },
-    },
-    { _id: true },
-);
-
-const milestoneSchema = new Schema<IOrderMilestone>(
-    {
-        milestone: { type: String, required: true },
-        completedAt: { type: Date, required: true },
-        completedBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
-        notes: { type: String },
-    },
-    { _id: false },
-);
 
 const snapshotLineItemSchema = {
     title: String,
@@ -319,15 +257,6 @@ const orderSchema = new Schema<IOrder>(
             default: OrderStatus.PENDING,
             index: true,
         },
-        statusHistory: [
-            {
-                status: { type: String, enum: Object.values(OrderStatus) },
-                changedBy: { type: Schema.Types.ObjectId, ref: 'User' },
-                updatedAt: { type: Date, default: Date.now },
-                note: String,
-                _id: false,
-            },
-        ],
         assignedTeam: [{ type: Schema.Types.ObjectId, ref: 'Staff' }],
         teamLeader: { type: Schema.Types.ObjectId, ref: 'Staff', index: true },
         priority: {
@@ -339,8 +268,6 @@ const orderSchema = new Schema<IOrder>(
         estimatedDeliveryDate: { type: Date },
         deliveredAt: { type: Date },
         completedAt: { type: Date },
-        assets: [assetSchema],
-        milestones: [milestoneSchema],
 
         totalPrice: { type: Number, default: 0 },
         currency: { type: String, default: 'USD' },
@@ -361,6 +288,26 @@ const orderSchema = new Schema<IOrder>(
 
 orderSchema.index({ status: 1, createdAt: -1 });
 orderSchema.index({ 'quotationSnapshot.clientId': 1, status: 1 });
+
+// ── Virtual Relations ────────────────────────────────────────────────────────
+
+orderSchema.virtual('assets', {
+    ref: 'OrderAsset',
+    localField: '_id',
+    foreignField: 'orderId',
+});
+
+orderSchema.virtual('milestones', {
+    ref: 'OrderMilestone',
+    localField: '_id',
+    foreignField: 'orderId',
+});
+
+orderSchema.virtual('statusHistory', {
+    ref: 'OrderStatusHistory',
+    localField: '_id',
+    foreignField: 'orderId',
+});
 
 const OrderModel = model<IOrder>('Order', orderSchema);
 export default OrderModel;

@@ -315,16 +315,6 @@ async function createOrderFromQuotation(
                     clientId: quotation.clientId,
                     orderType,
                     status: OrderStatus.PENDING,
-                    statusHistory: [
-                        {
-                            status: OrderStatus.PENDING,
-                            changedBy: new Types.ObjectId(actualCreatedBy),
-                            updatedAt: new Date(),
-                            note: 'Order created from accepted quotation',
-                        },
-                    ],
-                    assets: [],
-                    milestones: [],
                     totalPrice: snapshot.grandTotal,
                     currency: snapshot.currency,
                     imageQuantity: 0,
@@ -338,6 +328,15 @@ async function createOrderFromQuotation(
         if (!order) {
             throw new AppError('Failed to create order document', 500);
         }
+
+        const { default: OrderStatusHistoryModel } = await import('../models/order-status-history.model.js');
+        await OrderStatusHistoryModel.create([{
+            orderId: order._id,
+            status: OrderStatus.PENDING,
+            changedBy: new Types.ObjectId(actualCreatedBy),
+            updatedAt: new Date(),
+            note: 'Order created from accepted quotation',
+        }], { session });
 
         // Back-reference: write orderId onto the quotation
         await QuotationModel.findByIdAndUpdate(
@@ -389,15 +388,7 @@ async function transitionStatus(
                 status: newStatus,
                 ...(newStatus === OrderStatus.DELIVERED ? { deliveredAt: new Date() } : {}),
                 ...(newStatus === OrderStatus.COMPLETED ? { completedAt: new Date() } : {}),
-            },
-            $push: {
-                statusHistory: {
-                    status: newStatus,
-                    changedBy: new Types.ObjectId(userId),
-                    updatedAt: new Date(),
-                    note: note || `Status updated to ${newStatus}`,
-                },
-            },
+            }
         },
         { new: true },
     );
@@ -408,6 +399,15 @@ async function transitionStatus(
             'Order was modified concurrently. Please retry.',
             409,
         );
+
+    const { default: OrderStatusHistoryModel } = await import('../models/order-status-history.model.js');
+    await OrderStatusHistoryModel.create({
+        orderId: order._id,
+        status: newStatus,
+        changedBy: new Types.ObjectId(userId),
+        updatedAt: new Date(),
+        note: note || `Status updated to ${newStatus}`,
+    });
 
     // [NEW] Asset Unlocking Side Effect for manual transitions
     // If staff manually moves to delivered/completed, ensure assets are unlocked
@@ -438,36 +438,47 @@ async function unlockAssets(orderId: string): Promise<IOrder> {
     const accessTokenExpiresAt = new Date();
     accessTokenExpiresAt.setDate(accessTokenExpiresAt.getDate() + 7); // 7-day access window
 
-    const plainAssets = order.toObject().assets || [];
-    const updatedAssets = plainAssets.map((asset) => ({
-        ...asset,
-        isLocked: false,
-        accessToken: crypto.randomBytes(32).toString('hex'),
-        accessTokenExpiresAt,
-        unlockedAt: asset.unlockedAt ?? new Date(),
-    }));
+    const { default: OrderAssetModel } = await import('../models/order-asset.model.js');
+    const assets = await OrderAssetModel.find({ orderId: order._id });
+
+    if (assets.length > 0) {
+        const bulkOps = assets.map(asset => ({
+            updateOne: {
+                filter: { _id: asset._id },
+                update: {
+                    $set: {
+                        isLocked: false,
+                        accessToken: crypto.randomBytes(32).toString('hex'),
+                        accessTokenExpiresAt,
+                        unlockedAt: asset.unlockedAt ?? new Date(),
+                    }
+                }
+            }
+        }));
+        await OrderAssetModel.bulkWrite(bulkOps);
+    }
 
     const updated = await OrderModel.findByIdAndUpdate(
         orderId,
         {
             $set: {
-                assets: updatedAssets,
                 status: OrderStatus.DELIVERED,
-            },
-            $push: {
-                statusHistory: {
-                    status: OrderStatus.DELIVERED,
-                    changedBy: new Types.ObjectId('000000000000000000000000'), // system actor
-                    updatedAt: new Date(),
-                    note: 'Assets unlocked. Order moved to delivered status.',
-                },
-            },
+            }
         },
         { new: true },
     );
 
     if (!updated)
         throw new AppError('Order not found during asset unlock', 404);
+
+    const { default: OrderStatusHistoryModel } = await import('../models/order-status-history.model.js');
+    await OrderStatusHistoryModel.create({
+        orderId: order._id,
+        status: OrderStatus.DELIVERED,
+        changedBy: new Types.ObjectId('000000000000000000000000'), // system actor
+        updatedAt: new Date(),
+        note: 'Assets unlocked. Order moved to delivered status.',
+    });
     return updated;
 }
 
@@ -527,7 +538,11 @@ async function getAllOrdersFromDB(query: any, user?: { id?: string; role?: strin
 }
 
 async function getOrderByIdFromDB(id: string, user?: { id?: string; role?: string }) {
-    const order = await OrderModel.findById(id).populate('clientId');
+    const order = await OrderModel.findById(id)
+        .populate('clientId')
+        .populate('assets')
+        .populate('milestones')
+        .populate('statusHistory');
     if (!order) return null;
 
     if (user?.id && [Role.STAFF, Role.TEAM_LEADER].includes(user.role as Role)) {
@@ -561,12 +576,11 @@ async function getAssetByAccessToken(
     assetId: string,
     accessToken: string,
 ) {
-    const order = await OrderModel.findById(orderId).select(
-        '+assets.accessToken',
-    );
+    const order = await OrderModel.findById(orderId);
     if (!order) throw new AppError('Order not found', 404);
 
-    const asset = order.assets.find((a: any) => a._id?.toString() === assetId);
+    const { default: OrderAssetModel } = await import('../models/order-asset.model.js');
+    const asset = await OrderAssetModel.findOne({ _id: assetId, orderId: order._id });
     if (!asset) throw new AppError('Asset not found', 404);
     if (asset.isLocked)
         throw new AppError('Asset is locked pending delivery payment', 403);

@@ -23,7 +23,7 @@ export interface IReceipt extends Document {
     // ── Payment ledger (computed from paymentHistory) ─────────────────────────
     totalPaid: number;
     paymentStatus: PaymentStatus;
-    paymentHistory: Types.ObjectId[];  // → ref ReceiptPayment
+    paymentHistory: any[]; // Populated virtual
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
     status: ReceiptStatus;
@@ -61,7 +61,7 @@ const receiptSchema = new Schema<IReceipt>(
             default: 'pending',
             index: true,
         },
-        paymentHistory: [{ type: Schema.Types.ObjectId, ref: 'ReceiptPayment' }],
+        // paymentHistory is now a virtual
 
         status: {
             type: String,
@@ -78,6 +78,13 @@ const receiptSchema = new Schema<IReceipt>(
 
 receiptSchema.index({ quotationGroupId: 1, status: 1 });
 receiptSchema.index({ clientId: 1, createdAt: -1 });
+
+// ── Virtual Relations ────────────────────────────────────────────────────────
+receiptSchema.virtual('paymentHistory', {
+    ref: 'ReceiptPayment',
+    localField: '_id',
+    foreignField: 'receiptId',
+});
 
 const ReceiptModel = model<IReceipt>('Receipt', receiptSchema);
 export default ReceiptModel;

@@ -168,8 +168,7 @@ export class ReceiptService {
 
         await payment.save();
 
-        // Push to history and recalculate totals
-        receipt.paymentHistory.push(payment._id as Types.ObjectId);
+        // Recalculate totals
         await recalculateReceiptTotals(receipt, grandTotal);
 
         logger.info(

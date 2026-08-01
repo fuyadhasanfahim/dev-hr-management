@@ -134,7 +134,13 @@ async function resolveQuotationByToken(
         throw new AppError('Invalid quotation link.', 410);
     }
 
-    const query = QuotationModel.findById(payload.quotationId);
+    const query = QuotationModel.findById(payload.quotationId)
+        .populate({
+            path: 'services',
+            populate: { path: 'lineItems' }
+        })
+        .populate('recurringCharges')
+        .populate('paymentMilestones');
     if (populate) query.populate('clientId', 'name emails');
     const quotation = await query;
     if (!quotation) throw new AppError('Quotation not found', 404);
@@ -269,11 +275,11 @@ export class QuotationService {
 
         // Server-side calculation of totals for integrity
         const { totals, recurringCharges } = calculateTotals(data);
+        const { services, paymentMilestones, recurringCharges: _rc, ...quotationData } = data as any;
 
         const quotation = new QuotationModel({
-            ...data,
+            ...quotationData,
             totals,
-            recurringCharges,
             quotationNumber,
             quotationGroupId,
             version: 1,
@@ -284,6 +290,44 @@ export class QuotationService {
         });
 
         const savedQuotation = await quotation.save();
+
+        const { default: QuotationServiceModel } = await import('../models/quotation-service.model.js');
+        const { default: QuotationLineItemModel } = await import('../models/quotation-line-item.model.js');
+        const { default: QuotationMilestoneModel } = await import('../models/quotation-milestone.model.js');
+
+        if (services && services.length > 0) {
+            for (const svc of services) {
+                const { lineItems, ...svcData } = svc;
+                const [savedSvc] = await QuotationServiceModel.create([{
+                    ...svcData,
+                    quotationId: savedQuotation._id,
+                }]);
+                if (lineItems && lineItems.length > 0) {
+                    const liDocs = lineItems.map((li: any) => ({
+                        ...li,
+                        quotationServiceId: savedSvc!._id,
+                        quotationId: savedQuotation._id,
+                    }));
+                    await QuotationLineItemModel.insertMany(liDocs);
+                }
+            }
+        }
+
+        if (recurringCharges && recurringCharges.length > 0) {
+            const rcDocs = recurringCharges.map((rc: any) => ({
+                ...rc,
+                quotationId: savedQuotation._id,
+            }));
+            await QuotationLineItemModel.insertMany(rcDocs);
+        }
+
+        if (paymentMilestones && paymentMilestones.length > 0) {
+            const milestoneDocs = paymentMilestones.map((m: any) => ({
+                ...m,
+                quotationId: savedQuotation._id,
+            }));
+            await QuotationMilestoneModel.insertMany(milestoneDocs);
+        }
 
         try {
             await ReceiptService.createZeroPaymentReceipt(savedQuotation, userId);
@@ -318,10 +362,54 @@ export class QuotationService {
 
         const { totals, recurringCharges } = calculateTotals(merged);
 
-        const { quotationGroupId: _g, version: _v, isLatestVersion: _l, ...safeData } = data as any;
+        const { quotationGroupId: _g, version: _v, isLatestVersion: _l, services, paymentMilestones, recurringCharges: _rc, ...safeData } = data as any;
 
-        Object.assign(quotation, { ...safeData, totals, recurringCharges });
-        return await quotation.save();
+        Object.assign(quotation, { ...safeData, totals });
+        await quotation.save();
+
+        const { default: QuotationServiceModel } = await import('../models/quotation-service.model.js');
+        const { default: QuotationLineItemModel } = await import('../models/quotation-line-item.model.js');
+        const { default: QuotationMilestoneModel } = await import('../models/quotation-milestone.model.js');
+
+        await QuotationServiceModel.deleteMany({ quotationId: quotation._id });
+        await QuotationLineItemModel.deleteMany({ quotationId: quotation._id });
+        await QuotationMilestoneModel.deleteMany({ quotationId: quotation._id });
+
+        if (merged.services && merged.services.length > 0) {
+            for (const svc of merged.services) {
+                const { lineItems, ...svcData } = svc;
+                const [savedSvc] = await QuotationServiceModel.create([{
+                    ...svcData,
+                    quotationId: quotation._id,
+                }]);
+                if (lineItems && lineItems.length > 0) {
+                    const liDocs = lineItems.map((li: any) => ({
+                        ...li,
+                        quotationServiceId: savedSvc!._id,
+                        quotationId: quotation._id,
+                    }));
+                    await QuotationLineItemModel.insertMany(liDocs);
+                }
+            }
+        }
+
+        if (recurringCharges && recurringCharges.length > 0) {
+            const rcDocs = recurringCharges.map((rc: any) => ({
+                ...rc,
+                quotationId: quotation._id,
+            }));
+            await QuotationLineItemModel.insertMany(rcDocs);
+        }
+
+        if (merged.paymentMilestones && merged.paymentMilestones.length > 0) {
+            const milestoneDocs = merged.paymentMilestones.map((m: any) => ({
+                ...m,
+                quotationId: quotation._id,
+            }));
+            await QuotationMilestoneModel.insertMany(milestoneDocs);
+        }
+
+        return quotation;
     }
 
     static async sendQuotation(
@@ -588,14 +676,13 @@ export class QuotationService {
 
             // Recalculate totals for the new version
             const { totals, recurringCharges } = calculateTotals(mergedForVersion);
+            const { services, paymentMilestones, recurringCharges: _rc, ...newQuotationData } = mergedForVersion as any;
 
             const createdDocs = await QuotationModel.create(
                 [
                     {
-                        ...baseData,
-                        ...data,
+                        ...newQuotationData,
                         totals,
-                        recurringCharges,
                         _id: new Types.ObjectId(),
                         quotationNumber,
                         quotationGroupId,
@@ -613,6 +700,44 @@ export class QuotationService {
             const newVersion = createdDocs[0];
             if (!newVersion) {
                 throw new Error('Failed to create new quotation version');
+            }
+
+            const { default: QuotationServiceModel } = await import('../models/quotation-service.model.js');
+            const { default: QuotationLineItemModel } = await import('../models/quotation-line-item.model.js');
+            const { default: QuotationMilestoneModel } = await import('../models/quotation-milestone.model.js');
+
+            if (mergedForVersion.services && mergedForVersion.services.length > 0) {
+                for (const svc of mergedForVersion.services) {
+                    const { lineItems, ...svcData } = svc;
+                    const [savedSvc] = await QuotationServiceModel.create([{
+                        ...svcData,
+                        quotationId: newVersion._id,
+                    }], { session });
+                    if (lineItems && lineItems.length > 0) {
+                        const liDocs = lineItems.map((li: any) => ({
+                            ...li,
+                            quotationServiceId: savedSvc!._id,
+                            quotationId: newVersion._id,
+                        }));
+                        await QuotationLineItemModel.insertMany(liDocs, { session });
+                    }
+                }
+            }
+
+            if (recurringCharges && recurringCharges.length > 0) {
+                const rcDocs = recurringCharges.map((rc: any) => ({
+                    ...rc,
+                    quotationId: newVersion._id,
+                }));
+                await QuotationLineItemModel.insertMany(rcDocs, { session });
+            }
+
+            if (mergedForVersion.paymentMilestones && mergedForVersion.paymentMilestones.length > 0) {
+                const milestoneDocs = mergedForVersion.paymentMilestones.map((m: any) => ({
+                    ...m,
+                    quotationId: newVersion._id,
+                }));
+                await QuotationMilestoneModel.insertMany(milestoneDocs, { session });
             }
 
             await OutboxService.enqueue(
@@ -750,7 +875,18 @@ export class QuotationService {
         }
 
         const [items, total] = await Promise.all([
-            QuotationModel.find(mongoFilters).sort(sort).skip(skip).limit(limit).populate('clientId', 'name clientId emails').exec(),
+            QuotationModel.find(mongoFilters)
+                .sort(sort)
+                .skip(skip)
+                .limit(limit)
+                .populate('clientId', 'name clientId emails')
+                .populate({
+                    path: 'services',
+                    populate: { path: 'lineItems' }
+                })
+                .populate('recurringCharges')
+                .populate('paymentMilestones')
+                .exec(),
             QuotationModel.countDocuments(mongoFilters),
         ]);
 
@@ -758,11 +894,26 @@ export class QuotationService {
     }
 
     static async getQuotationById(id: string): Promise<IQuotation | null> {
-        return QuotationModel.findById(id).populate('clientId', 'name clientId emails');
+        return QuotationModel.findById(id)
+            .populate('clientId', 'name clientId emails')
+            .populate({
+                path: 'services',
+                populate: { path: 'lineItems' }
+            })
+            .populate('recurringCharges')
+            .populate('paymentMilestones');
     }
 
     static async getGroupVersions(quotationGroupId: string): Promise<IQuotation[]> {
-        return QuotationModel.find({ quotationGroupId }).sort({ version: -1 }).populate('clientId', 'name clientId emails');
+        return QuotationModel.find({ quotationGroupId })
+            .sort({ version: -1 })
+            .populate('clientId', 'name clientId emails')
+            .populate({
+                path: 'services',
+                populate: { path: 'lineItems' }
+            })
+            .populate('recurringCharges')
+            .populate('paymentMilestones');
     }
 
     static async deleteQuotation(id: string): Promise<void> {
