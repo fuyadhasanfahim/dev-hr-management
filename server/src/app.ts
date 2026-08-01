@@ -6,6 +6,7 @@ import express, {
 import cors from "cors";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
+import mongoose from "mongoose";
 import envConfig from "./config/env.config.js";
 import { toNodeHandler } from "better-auth/node";
 import { auth } from "./lib/auth.js";
@@ -14,6 +15,7 @@ import { requestContextMiddleware } from "./middlewares/requestContext.middlewar
 import router from "./routes/index.js";
 import "./models/user.model.js";
 import { globalErrorHandler } from "./middlewares/globalErrorHandler.js";
+import { getHealthStatus } from "./lib/health.js";
 
 const { trusted_origins, client_url } = envConfig;
 
@@ -157,6 +159,13 @@ app.use(
 
 app.get("/", (_req: Request, res: Response) => {
     res.send("Agency SaaS API Running!");
+});
+
+// Unauthenticated liveness/readiness probe for load balancers/orchestrators.
+// Intentionally registered outside the /api auth gate, same as GET /.
+app.get("/healthz", (_req: Request, res: Response) => {
+    const { statusCode, body } = getHealthStatus(mongoose.connection.readyState);
+    res.status(statusCode).json(body);
 });
 
 // Centralized error handler
