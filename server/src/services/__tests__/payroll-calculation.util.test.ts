@@ -25,6 +25,8 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import {
     computeWorkDayStats,
+    resolvePayrollAmountConfirmation,
+    PAYROLL_AMOUNT_MISMATCH_TOLERANCE,
     type ComputeWorkDayStatsInput,
     type WorkDayShiftAssignment,
     type WorkDayAttendanceRecord,
@@ -278,5 +280,103 @@ describe('computeWorkDayStats — two-pass vs single-pass equivalence (the extra
             const current = computeWorkDayStats(scenario).missingPunchDates.map(getBDDateString).sort();
             assert.deepEqual(current, legacy, `scenario #${i} diverged`);
         }
+    });
+});
+
+/**
+ * Unit tests for E1-F2-T2: resolvePayrollAmountConfirmation(), the pure
+ * amount-mismatch confirmation decision extracted from processPayroll's
+ * inline ±2-tolerance auto-fold logic. No Mongoose/DB dependency — a pure
+ * function of already-resolved numbers — so these run in isolation, no
+ * mocking required. `processPayroll` itself (payroll.service.ts) is
+ * exercised end to end, including the "no writes before confirmation"
+ * safety property, in payroll-amount-mismatch.test.ts.
+ */
+describe('resolvePayrollAmountConfirmation (E1-F2-T2)', () => {
+    test('difference = 0: no mismatch, bonus/deduction returned unchanged', () => {
+        const result = resolvePayrollAmountConfirmation({
+            expectedAmount: 30000,
+            receivedAmount: 30000,
+            bonus: 100,
+            deduction: 50,
+            confirm: false,
+        });
+
+        assert.equal(result.requiresConfirmation, false);
+        assert.equal(result.difference, 0);
+        if (!result.requiresConfirmation) {
+            assert.equal(result.bonus, 100);
+            assert.equal(result.deduction, 50);
+        }
+    });
+
+    test('difference within ±2 tolerance (both signs, and exactly at the boundary): no mismatch, unchanged', () => {
+        for (const receivedAmount of [29998, 29999, 30001, 30002]) {
+            const result = resolvePayrollAmountConfirmation({
+                expectedAmount: 30000,
+                receivedAmount,
+                bonus: 0,
+                deduction: 0,
+                confirm: false,
+            });
+
+            assert.equal(result.requiresConfirmation, false, `receivedAmount=${receivedAmount} must be in-tolerance`);
+            if (!result.requiresConfirmation) {
+                assert.equal(result.bonus, 0);
+                assert.equal(result.deduction, 0);
+            }
+        }
+    });
+
+    test('difference > tolerance, confirm=false: requires confirmation, does not compute bonus/deduction', () => {
+        const result = resolvePayrollAmountConfirmation({
+            expectedAmount: 30000,
+            receivedAmount: 30050,
+            bonus: 0,
+            deduction: 0,
+            confirm: false,
+        });
+
+        assert.equal(result.requiresConfirmation, true);
+        assert.equal(result.difference, 50);
+        assert.ok(!('bonus' in result), 'an unconfirmed mismatch result must not carry bonus/deduction — nothing was decided');
+    });
+
+    test('difference > tolerance (positive), confirm=true: folds the excess into bonus, deduction untouched', () => {
+        const result = resolvePayrollAmountConfirmation({
+            expectedAmount: 30000,
+            receivedAmount: 30050,
+            bonus: 10,
+            deduction: 5,
+            confirm: true,
+        });
+
+        assert.equal(result.requiresConfirmation, false);
+        assert.equal(result.difference, 50);
+        if (!result.requiresConfirmation) {
+            assert.equal(result.bonus, 60, 'bonus should be the original 10 plus the 50 difference');
+            assert.equal(result.deduction, 5, 'deduction must be untouched when the difference is positive');
+        }
+    });
+
+    test('difference < -tolerance (negative), confirm=true: folds the shortfall into deduction, bonus untouched', () => {
+        const result = resolvePayrollAmountConfirmation({
+            expectedAmount: 30000,
+            receivedAmount: 29940,
+            bonus: 10,
+            deduction: 5,
+            confirm: true,
+        });
+
+        assert.equal(result.requiresConfirmation, false);
+        assert.equal(result.difference, -60);
+        if (!result.requiresConfirmation) {
+            assert.equal(result.bonus, 10, 'bonus must be untouched when the difference is negative');
+            assert.equal(result.deduction, 65, 'deduction should be the original 5 plus the 60 shortfall');
+        }
+    });
+
+    test('PAYROLL_AMOUNT_MISMATCH_TOLERANCE is exported and equals 2 (the pre-existing tolerance this replaces)', () => {
+        assert.equal(PAYROLL_AMOUNT_MISMATCH_TOLERANCE, 2);
     });
 });

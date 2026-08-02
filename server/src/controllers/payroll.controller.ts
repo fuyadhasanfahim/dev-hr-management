@@ -1,5 +1,5 @@
 import type { Request, Response } from "express";
-import payrollService from "../services/payroll.service.js";
+import payrollService, { PayrollAmountMismatchError } from "../services/payroll.service.js";
 
 const getPayrollPreview = async (req: Request, res: Response) => {
     try {
@@ -27,6 +27,7 @@ const processPayment = async (req: Request, res: Response) => {
             bonus,
             deduction,
             paymentType,
+            confirm,
         } = req.body;
 
         const result = await payrollService.processPayroll({
@@ -41,6 +42,7 @@ const processPayment = async (req: Request, res: Response) => {
             paymentType,
             ipAddress: req.ip,
             userAgent: req.headers['user-agent'],
+            confirm: confirm === true,
         });
 
         return res.status(200).json({
@@ -49,6 +51,24 @@ const processPayment = async (req: Request, res: Response) => {
             data: result,
         });
     } catch (error: any) {
+        // E1-F2-T2: an out-of-tolerance, unconfirmed amount mismatch — no
+        // write has occurred (processPayroll throws this before opening any
+        // Mongo session/transaction), so it's always safe to resolve as a
+        // client-actionable 409 rather than a generic 500.
+        if (error instanceof PayrollAmountMismatchError) {
+            return res.status(409).json({
+                success: false,
+                code: error.code,
+                message: error.message,
+                requiresConfirmation: true,
+                data: {
+                    expectedAmount: error.expectedAmount,
+                    receivedAmount: error.receivedAmount,
+                    difference: error.difference,
+                },
+            });
+        }
+
         const status = error.message.includes("locked") ? 400 : 500;
         return res
             .status(status)

@@ -28,6 +28,11 @@ export const processPaymentSchema = z.object({
     bonus: z.number().min(0).default(0),
     deduction: z.number().min(0).default(0),
     paymentType: z.literal("salary").default("salary"),
+    // E1-F2-T2: acknowledges an out-of-tolerance amount vs. the
+    // server-computed expected amount. Without this in the schema, Zod's
+    // default "strip unknown keys" behavior would silently drop it from
+    // req.body before it ever reaches the controller.
+    confirm: z.boolean().optional().default(false),
 });
 
 export const bulkProcessSchema = z.object({

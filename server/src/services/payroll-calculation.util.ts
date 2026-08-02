@@ -123,3 +123,77 @@ export function computeWorkDayStats(input: ComputeWorkDayStatsInput): WorkDaySta
 
     return { workDaysCount, unemployedDays, expectedWorkDates, missingPunchDates };
 }
+
+/**
+ * E1-F2-T2: the payroll-amount confirmation decision, extracted as a pure
+ * function so it's directly unit-testable without mocking Mongoose — same
+ * rationale as `computeWorkDayStats` above. `processPayroll` in
+ * payroll.service.ts calls this with `expectedAmount`/`receivedAmount`
+ * already resolved from a DB-backed computation, and — critically — calls
+ * it *before* opening any Mongo session/transaction, so the "no writes
+ * before confirmation" guarantee holds by construction.
+ */
+
+/** Rounding tolerance below which a received/expected amount difference is not a mismatch. */
+export const PAYROLL_AMOUNT_MISMATCH_TOLERANCE = 2;
+
+export interface PayrollAmountConfirmationInput {
+    expectedAmount: number;
+    receivedAmount: number;
+    bonus: number;
+    deduction: number;
+    /** Whether the caller has already acknowledged an out-of-tolerance amount. */
+    confirm: boolean;
+}
+
+export type PayrollAmountConfirmationResult =
+    | {
+          /** Difference is within tolerance, or the caller confirmed an out-of-tolerance amount. */
+          requiresConfirmation: false;
+          difference: number;
+          /** `bonus`/`deduction` folded to absorb a confirmed out-of-tolerance difference (unchanged if in-tolerance). */
+          bonus: number;
+          deduction: number;
+      }
+    | {
+          /** Out of tolerance and not yet confirmed — caller must not proceed to any write. */
+          requiresConfirmation: true;
+          difference: number;
+      };
+
+/**
+ * Decides whether a payroll amount mismatch requires explicit confirmation
+ * before proceeding, and — when confirmed or in-tolerance — returns the
+ * (possibly adjusted) `bonus`/`deduction` values to use, preserving this
+ * codebase's pre-existing "fold the difference into bonus/deduction"
+ * behavior for the confirmed case exactly as it was before this function
+ * existed.
+ */
+export function resolvePayrollAmountConfirmation({
+    expectedAmount,
+    receivedAmount,
+    bonus,
+    deduction,
+    confirm,
+}: PayrollAmountConfirmationInput): PayrollAmountConfirmationResult {
+    const difference = receivedAmount - expectedAmount;
+
+    if (Math.abs(difference) <= PAYROLL_AMOUNT_MISMATCH_TOLERANCE) {
+        return { requiresConfirmation: false, difference, bonus, deduction };
+    }
+
+    if (!confirm) {
+        return { requiresConfirmation: true, difference };
+    }
+
+    // Confirmed: fold the discrepancy into bonus/deduction, exactly as this
+    // codebase has always done once an override is acknowledged.
+    let nextBonus = bonus;
+    let nextDeduction = deduction;
+    if (difference > 0) {
+        nextBonus += difference;
+    } else {
+        nextDeduction -= difference;
+    }
+    return { requiresConfirmation: false, difference, bonus: nextBonus, deduction: nextDeduction };
+}

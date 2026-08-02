@@ -37,6 +37,7 @@ import {
 import { useSession } from "@/lib/auth-client";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { summarizeBulkPayrollResult } from "@/lib/payroll-mismatch";
 import { IPayrollItem } from "@/types/payroll.type";
 
 interface PayrollTableProps {
@@ -192,7 +193,7 @@ export default function PayrollTable({
     const firstStaff = data.find((d) => d._id === selectedStaffIds[0]);
 
     try {
-      await bulkPay({
+      const response = await bulkPay({
         month,
         paymentMethod: "cash",
         payments,
@@ -201,9 +202,34 @@ export default function PayrollTable({
         branchId: firstStaff?.branchId,
       }).unwrap();
 
-      toast.success("Bulk Payment Successful", {
-        description: `Processed payments for ${payments.length} staff members.`,
-      });
+      // The bulk endpoint always responds 200 and reports per-staff outcomes
+      // in data.results/data.errors rather than failing the whole request —
+      // a non-empty errors array must not be presented as unconditional
+      // success (E1-F2-T2 frontend companion).
+      const summary = summarizeBulkPayrollResult(
+        response.data,
+        (staffId) => data.find((d) => d._id === staffId)?.name || staffId,
+      );
+
+      if (summary.hasFailures) {
+        const moreSuffix =
+          summary.additionalErrorCount > 0
+            ? ` (+${summary.additionalErrorCount} more)`
+            : "";
+        toast.error(
+          summary.successCount > 0
+            ? "Bulk Payment Partially Completed"
+            : "Bulk Payment Failed",
+          {
+            description: `${summary.successCount} succeeded, ${summary.failureCount} failed. ${summary.errorLines.join("; ")}${moreSuffix}`,
+          },
+        );
+      } else {
+        toast.success("Bulk Payment Successful", {
+          description: `Processed payments for ${summary.successCount} staff members.`,
+        });
+      }
+
       setSelectedStaffIds([]);
       setBulkReviewOpen(false);
       setAdjustments({});

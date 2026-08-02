@@ -12,7 +12,7 @@ import ShiftOffDateModel from '../models/shift-off-date.model.js';
 import mongoose, { Types } from 'mongoose';
 import { getBDMonthRange, getBDNow, getBDWeekDay, getBDStartOfDay, getBDDateString } from '../utils/date.util.js';
 import auditService from './audit.service.js';
-import { computeWorkDayStats } from './payroll-calculation.util.js';
+import { computeWorkDayStats, resolvePayrollAmountConfirmation } from './payroll-calculation.util.js';
 
 // ── Helpers ────────────────────────────────────────────────────────────
 
@@ -345,6 +345,30 @@ const getPayrollPreview = async ({
 
 // ── Process Single Payment ─────────────────────────────────────────────
 
+/**
+ * E1-F2-T2: thrown when a salary payment's `amount` differs from the
+ * server-computed expected amount by more than
+ * `PAYROLL_AMOUNT_MISMATCH_TOLERANCE` and the caller has not passed
+ * `confirm: true`. Always thrown before any Mongo session/transaction is
+ * opened (see `processPayroll` below) — catching this in the controller
+ * and mapping it to a `409` is safe by construction: no write can have
+ * happened yet.
+ */
+export class PayrollAmountMismatchError extends Error {
+    public readonly code = 'PAYROLL_AMOUNT_MISMATCH' as const;
+    public readonly expectedAmount: number;
+    public readonly receivedAmount: number;
+    public readonly difference: number;
+
+    constructor(expectedAmount: number, receivedAmount: number, difference: number) {
+        super('Received amount differs from expected amount.');
+        this.expectedAmount = expectedAmount;
+        this.receivedAmount = receivedAmount;
+        this.difference = difference;
+        Error.captureStackTrace(this, this.constructor);
+    }
+}
+
 interface IPayrollProcessParams {
     staffId: string;
     month: string;
@@ -357,6 +381,8 @@ interface IPayrollProcessParams {
     paymentType?: 'salary';
     ipAddress?: string | undefined;
     userAgent?: string | undefined;
+    /** Acknowledges an out-of-tolerance `amount` vs. the server-computed expected amount. Default `false`. */
+    confirm?: boolean;
 }
 
 const processPayroll = async ({
@@ -371,6 +397,7 @@ const processPayroll = async ({
     paymentType = 'salary',
     ipAddress,
     userAgent,
+    confirm = false,
 }: IPayrollProcessParams) => {
     // Check if month is locked
     const locked = await PayrollLockModel.findOne({ month });
@@ -381,96 +408,110 @@ const processPayroll = async ({
     }
 
     const { year, monthNum, startDate, endDate } = parseMonthRange(month);
+
+    // ── E1-F2-T2: server-side amount verification for salary payments ──
+    // Deliberately runs entirely before `mongoose.startSession()` below —
+    // every read here uses a plain (non-transactional) query, and on an
+    // out-of-tolerance, unconfirmed mismatch this throws and returns
+    // without ever opening a session, so "no writes before confirmation"
+    // holds by construction rather than by care taken inside the
+    // transaction's try block. `staff` is read-only for the rest of this
+    // function (never saved), so fetching it here and reusing it below is
+    // safe and avoids a second fetch.
+    const staff = await StaffModel.findById(staffId);
+    if (!staff) throw new Error('Staff not found');
+
+    if (paymentType === 'salary') {
+        const allAssignments = await ShiftAssignmentModel.find({
+            staffId,
+            $or: [{ endDate: null }, { endDate: { $gte: startDate } }],
+            startDate: { $lte: endDate },
+        }).populate('shiftId');
+
+        const allAttendance = await AttendanceDayModel.find({
+            staffId: new Types.ObjectId(staffId),
+            date: { $gte: startDate, $lte: endDate },
+        });
+
+        const literalAbsentDays = allAttendance.filter(
+            (a) => a.status === 'absent',
+        ).length;
+
+        const daysInMonth = eachDayOfInterval({
+            start: startDate,
+            end: endDate,
+        });
+
+        // Fetch Shift Off-Dates for the relevant shift(s)
+        const staffShiftIds = allAssignments.map(sa => sa.shiftId._id.toString());
+        const shiftOffDates = await ShiftOffDateModel.find({
+            shiftId: { $in: staffShiftIds },
+            isActive: true,
+            dates: { $gte: startDate, $lte: endDate },
+        }).lean();
+
+        const staffShiftOffDates = (shiftOffDates as any[]).flatMap(sod =>
+            sod.dates.map((d: Date) => getBDDateString(d))
+        );
+
+        const staffSalary = staff.salary || 0;
+        const perDaySalary = staffSalary / 30;
+
+        const todayBDStr = getBDDateString(getBDNow());
+
+        // NOTE: unlike getPayrollPreview, this call site never reads the
+        // resulting workDaysCount downstream (confirmed unchanged from
+        // the pre-extraction code, where it was computed and reassigned
+        // by the 22-day fallback but never referenced afterward either
+        // — see the E1-F2-T1 backlog note). Only unemployedDays and
+        // missingPunchDates feed into absentDays/totalDeductionUnits
+        // below, so only those are destructured here.
+        const { unemployedDays, missingPunchDates } = computeWorkDayStats({
+            daysInMonth,
+            shiftAssignments: allAssignments as any[],
+            attendanceRecords: allAttendance as any[],
+            shiftOffDateStrings: staffShiftOffDates,
+            joinDate: staff.joinDate,
+            exitDate: staff.exitDate,
+            todayBDStr,
+        });
+
+        const missingPunches = missingPunchDates.length;
+        const absentDays = literalAbsentDays + missingPunches;
+        // Half-day and late count as present with full payment
+        // LOGIC REFINEMENT: totalDeductionUnits capped at 30 to prevent >100% deduction in 31-day months.
+        const totalDeductionUnits = Math.min(30, absentDays + unemployedDays);
+        const serverDeduction = totalDeductionUnits * perDaySalary;
+        const serverPayable = Math.max(0, staffSalary - serverDeduction);
+        const expectedAmount = Math.round(
+            serverPayable + bonus - deduction,
+        );
+
+        const receivedAmount = Math.round(amount);
+
+        // ±2 tolerance for rounding differences; beyond that, an
+        // unconfirmed mismatch must not silently auto-fold (E1-F2-T2) —
+        // see resolvePayrollAmountConfirmation for the decision itself.
+        const confirmation = resolvePayrollAmountConfirmation({
+            expectedAmount,
+            receivedAmount,
+            bonus,
+            deduction,
+            confirm,
+        });
+
+        if (confirmation.requiresConfirmation) {
+            throw new PayrollAmountMismatchError(expectedAmount, receivedAmount, confirmation.difference);
+        }
+
+        bonus = confirmation.bonus;
+        deduction = confirmation.deduction;
+    }
+
     const session = await mongoose.startSession();
     session.startTransaction();
 
     try {
-        const staff = await StaffModel.findById(staffId).session(session);
-        if (!staff) throw new Error('Staff not found');
-
-        // Server-side amount verification for salary payments
-        if (paymentType === 'salary') {
-            const allAssignments = await ShiftAssignmentModel.find({
-                staffId,
-                $or: [{ endDate: null }, { endDate: { $gte: startDate } }],
-                startDate: { $lte: endDate },
-            })
-                .populate('shiftId')
-                .session(session);
-
-            const allAttendance = await AttendanceDayModel.find({
-                staffId: new Types.ObjectId(staffId),
-                date: { $gte: startDate, $lte: endDate },
-            }).session(session);
-
-            const literalAbsentDays = allAttendance.filter(
-                (a) => a.status === 'absent',
-            ).length;
-
-            const daysInMonth = eachDayOfInterval({
-                start: startDate,
-                end: endDate,
-            });
-
-            // Fetch Shift Off-Dates for the relevant shift(s)
-            const staffShiftIds = allAssignments.map(sa => sa.shiftId._id.toString());
-            const shiftOffDates = await ShiftOffDateModel.find({
-                shiftId: { $in: staffShiftIds },
-                isActive: true,
-                dates: { $gte: startDate, $lte: endDate },
-            }).session(session).lean();
-
-            const staffShiftOffDates = (shiftOffDates as any[]).flatMap(sod => 
-                sod.dates.map((d: Date) => getBDDateString(d))
-            );
-
-            const staffSalary = staff.salary || 0;
-            const perDaySalary = staffSalary / 30;
-
-            const todayBDStr = getBDDateString(getBDNow());
-
-            // NOTE: unlike getPayrollPreview, this call site never reads the
-            // resulting workDaysCount downstream (confirmed unchanged from
-            // the pre-extraction code, where it was computed and reassigned
-            // by the 22-day fallback but never referenced afterward either
-            // — see the E1-F2-T1 backlog note). Only unemployedDays and
-            // missingPunchDates feed into absentDays/totalDeductionUnits
-            // below, so only those are destructured here.
-            const { unemployedDays, missingPunchDates } = computeWorkDayStats({
-                daysInMonth,
-                shiftAssignments: allAssignments as any[],
-                attendanceRecords: allAttendance as any[],
-                shiftOffDateStrings: staffShiftOffDates,
-                joinDate: staff.joinDate,
-                exitDate: staff.exitDate,
-                todayBDStr,
-            });
-
-            const missingPunches = missingPunchDates.length;
-            const absentDays = literalAbsentDays + missingPunches;
-            // Half-day and late count as present with full payment
-            // LOGIC REFINEMENT: totalDeductionUnits capped at 30 to prevent >100% deduction in 31-day months.
-            const totalDeductionUnits = Math.min(30, absentDays + unemployedDays);
-            const serverDeduction = totalDeductionUnits * perDaySalary;
-            const serverPayable = Math.max(0, staffSalary - serverDeduction);
-            const expectedAmount = Math.round(
-                serverPayable + bonus - deduction,
-            );
-            
-            const receivedAmount = Math.round(amount);
-
-            // Allow ±2 tolerance for rounding differences. 
-            // If the user manually forced a higher/lower base amount in the UI, compute the discrepancy and log it implicitly.
-            const difference = receivedAmount - expectedAmount;
-            if (Math.abs(difference) > 2) {
-                if (difference > 0) {
-                    bonus += difference;
-                } else {
-                    deduction -= difference;
-                }
-            }
-        }
-
         // Determine expense category
         const categoryName = 'Salary & Wages';
         const categoryRegex = /^Salary/i;

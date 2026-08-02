@@ -21,6 +21,15 @@ export interface IProcessPaymentRequest {
     bonus?: number;
     deduction?: number;
     createdBy: string;
+    /**
+     * E1-F2-T2: acknowledges an out-of-tolerance `amount` vs. the
+     * server-computed expected amount. Omit or pass `false` on the initial
+     * submission; the caller resends the exact same request with
+     * `confirm: true` after the admin confirms a `409
+     * PAYROLL_AMOUNT_MISMATCH` response (see `getPayrollAmountMismatchDetails`
+     * in `@/lib/payroll-mismatch`).
+     */
+    confirm?: boolean;
 }
 
 export interface IBulkProcessPaymentRequest {
@@ -36,6 +45,27 @@ export interface IBulkProcessPaymentRequest {
     paymentType: string;
     createdBy: string;
     branchId?: string;
+}
+
+export interface IBulkProcessPaymentSuccessItem {
+    staffId: string;
+    status: "success";
+    expenseId: string;
+}
+
+export interface IBulkProcessPaymentErrorItem {
+    staffId: string;
+    status: "failed";
+    message: string;
+}
+
+export interface IBulkProcessPaymentResponse {
+    success: boolean;
+    message: string;
+    data: {
+        results: IBulkProcessPaymentSuccessItem[];
+        errors: IBulkProcessPaymentErrorItem[];
+    };
 }
 
 export interface IUndoPaymentRequest {
@@ -110,7 +140,7 @@ export const payrollApi = apiSlice.injectEndpoints({
         }),
 
         bulkProcessPayment: builder.mutation<
-            { success: boolean; message: string },
+            IBulkProcessPaymentResponse,
             IBulkProcessPaymentRequest
         >({
             query: (data) => ({

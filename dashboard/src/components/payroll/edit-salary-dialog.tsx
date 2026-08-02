@@ -7,6 +7,16 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog";
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -18,9 +28,17 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { useProcessPaymentMutation } from "@/redux/features/payroll/payrollApi";
+import {
+    useProcessPaymentMutation,
+    type IProcessPaymentRequest,
+} from "@/redux/features/payroll/payrollApi";
 import { useSession } from "@/lib/auth-client";
+import {
+    getPayrollAmountMismatchDetails,
+    type PayrollAmountMismatchDetails,
+} from "@/lib/payroll-mismatch";
 import { Loader2, Save } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface EditSalaryDialogProps {
     open: boolean;
@@ -65,6 +83,16 @@ export default function EditSalaryDialog({
     const [finalAmount, setFinalAmount] = useState<number>(baseAmount || 0);
     const [isBaseEditable, setIsBaseEditable] = useState(false);
 
+    // E1-F2-T2: when the backend rejects an out-of-tolerance amount with a
+    // 409 PAYROLL_AMOUNT_MISMATCH, we hold on to the exact request payload
+    // that was rejected so the "Confirm & Pay Anyway" action can resend
+    // precisely that same request with `confirm: true` — not whatever the
+    // form fields have changed to while the confirmation dialog is open.
+    const [pendingMismatch, setPendingMismatch] = useState<{
+        payload: IProcessPaymentRequest;
+        details: PayrollAmountMismatchDetails;
+    } | null>(null);
+
     const [processPayment, { isLoading }] = useProcessPaymentMutation();
 
     useEffect(() => {
@@ -105,32 +133,56 @@ export default function EditSalaryDialog({
         }
     };
 
-    const handlePayment = async () => {
+    const submitPayment = async (payload: IProcessPaymentRequest) => {
         try {
-            await processPayment({
-                staffId,
-                month,
-                amount: finalAmount,
-                paymentMethod,
-                paymentType: "salary",
-                note,
-                bonus: parseFloat(bonus) || 0,
-                deduction: parseFloat(deduction) || 0,
-                createdBy: session?.user?.id || "",
-            }).unwrap();
+            await processPayment(payload).unwrap();
 
             toast.success("Payment Successful", {
                 description: `Salary paid to ${staffName}`,
             });
+            setPendingMismatch(null);
             onOpenChange(false);
-        } catch (error: any) {
+        } catch (error: unknown) {
+            // E1-F2-T2: an out-of-tolerance amount that hasn't been
+            // acknowledged yet — show the confirmation dialog with the
+            // server's expected/received/difference figures instead of a
+            // generic failure toast. Preserve existing behavior for every
+            // other error (locked month, validation, etc.).
+            const mismatch = getPayrollAmountMismatchDetails(error);
+            if (mismatch) {
+                setPendingMismatch({ payload, details: mismatch });
+                return;
+            }
+
+            const message =
+                (error as { data?: { message?: string } })?.data?.message;
             toast.error("Payment Failed", {
-                description: error.data?.message || "Could not process payment",
+                description: message || "Could not process payment",
             });
         }
     };
 
+    const handlePayment = () => {
+        submitPayment({
+            staffId,
+            month,
+            amount: finalAmount,
+            paymentMethod,
+            paymentType: "salary",
+            note,
+            bonus: parseFloat(bonus) || 0,
+            deduction: parseFloat(deduction) || 0,
+            createdBy: session?.user?.id || "",
+        });
+    };
+
+    const handleConfirmMismatch = () => {
+        if (!pendingMismatch) return;
+        submitPayment({ ...pendingMismatch.payload, confirm: true });
+    };
+
     return (
+        <>
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-[425px]">
                 <DialogHeader>
@@ -285,5 +337,75 @@ export default function EditSalaryDialog({
                 </DialogFooter>
             </DialogContent>
         </Dialog>
+
+        {/* E1-F2-T2: amount-mismatch confirmation (409 PAYROLL_AMOUNT_MISMATCH) */}
+        <AlertDialog
+                open={!!pendingMismatch}
+                onOpenChange={(open) => !open && setPendingMismatch(null)}
+            >
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Amount Mismatch</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            The amount you entered for{" "}
+                            <span className="font-semibold">{staffName}</span>{" "}
+                            differs from the system-calculated expected
+                            amount by more than the allowed tolerance.
+                            Review the figures below before proceeding.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+
+                    {pendingMismatch && (
+                        <div className="grid grid-cols-2 gap-y-2 gap-x-4 rounded-md border bg-muted/30 p-3 text-sm">
+                            <span className="text-muted-foreground">
+                                Expected Amount
+                            </span>
+                            <span className="text-right font-mono font-medium">
+                                {pendingMismatch.details.expectedAmount.toFixed(2)}
+                            </span>
+
+                            <span className="text-muted-foreground">
+                                Received Amount
+                            </span>
+                            <span className="text-right font-mono font-medium">
+                                {pendingMismatch.details.receivedAmount.toFixed(2)}
+                            </span>
+
+                            <span className="text-muted-foreground font-semibold">
+                                Difference
+                            </span>
+                            <span
+                                className={cn(
+                                    "text-right font-mono font-semibold",
+                                    pendingMismatch.details.difference > 0
+                                        ? "text-green-600"
+                                        : "text-red-600",
+                                )}
+                            >
+                                {pendingMismatch.details.difference > 0
+                                    ? "+"
+                                    : ""}
+                                {pendingMismatch.details.difference.toFixed(2)}
+                            </span>
+                        </div>
+                    )}
+
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={isLoading}>
+                            Cancel
+                        </AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={handleConfirmMismatch}
+                            disabled={isLoading}
+                        >
+                            {isLoading && (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                            )}
+                            Confirm & Pay Anyway
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+        </>
     );
 }
