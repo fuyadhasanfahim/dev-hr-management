@@ -110,7 +110,7 @@ export function LeadForm({
       <div className="flex-1 overflow-y-auto p-6 space-y-10">
         <section className="space-y-6">
           <div className="flex items-center gap-3 border-b border-border pb-2">
-            <User className="h-5 w-5 text-teal-600" />
+            <User className="h-5 w-5 text-primary" />
             <h3 className="font-semibold text-foreground text-lg">
               Contact Information
             </h3>
@@ -120,7 +120,7 @@ export function LeadForm({
 
         <section className="space-y-6">
           <div className="flex items-center gap-3 border-b border-border pb-2">
-            <Info className="h-5 w-5 text-teal-600" />
+            <Info className="h-5 w-5 text-primary" />
             <h3 className="font-semibold text-foreground text-lg">
               Lead Details
             </h3>
@@ -146,7 +146,7 @@ export function LeadForm({
         <Button
           type="submit"
           disabled={isSubmitting}
-          className="min-w-[120px] bg-teal-600 hover:bg-teal-700 text-white shadow-sm"
+          className="min-w-[120px] bg-primary hover:bg-primary/90 text-white shadow-sm"
         >
           {isSubmitting && <Loader className="h-4 w-4 animate-spin shrink-0" />}
           <span>{submitLabel}</span>
@@ -177,7 +177,7 @@ function LeadContactInfo({
             placeholder="+1 (555) 000-0000"
             {...register("phone")}
             className={cn(
-              "bg-background border-border focus-visible:ring-teal-500",
+              "bg-background border-border focus-visible:ring-primary",
               getFieldError("phone") && "border-red-500 focus-visible:ring-red-500"
             )}
           />
@@ -196,7 +196,7 @@ function LeadContactInfo({
             id="name"
             placeholder="John Doe or Company"
             {...register("name")}
-            className="bg-background border-border focus-visible:ring-teal-500"
+            className="bg-background border-border focus-visible:ring-primary"
           />
         </div>
       </div>
@@ -212,7 +212,7 @@ function LeadContactInfo({
             placeholder="john@example.com"
             {...register("email")}
             className={cn(
-              "bg-background border-border focus-visible:ring-teal-500",
+              "bg-background border-border focus-visible:ring-primary",
               getFieldError("email") && "border-red-500 focus-visible:ring-red-500"
             )}
           />
@@ -231,7 +231,7 @@ function LeadContactInfo({
             id="website"
             placeholder="https://example.com"
             {...register("website")}
-            className="bg-background border-border focus-visible:ring-teal-500"
+            className="bg-background border-border focus-visible:ring-primary"
           />
         </div>
       </div>
@@ -264,7 +264,7 @@ function LeadDetails({
             value={status || "none"}
             onValueChange={(value) => setValue("status", value)}
           >
-            <SelectTrigger className="w-full bg-background border-border focus:ring-teal-500">
+            <SelectTrigger className="w-full bg-background border-border focus:ring-primary">
               <SelectValue placeholder="Select status" />
             </SelectTrigger>
             <SelectContent>
@@ -294,7 +294,7 @@ function LeadDetails({
               setValue("priority", value)
             }
           >
-            <SelectTrigger className="w-full bg-background border-border focus:ring-teal-500">
+            <SelectTrigger className="w-full bg-background border-border focus:ring-primary">
               <SelectValue placeholder="Select priority" />
             </SelectTrigger>
             <SelectContent>
@@ -311,7 +311,7 @@ function LeadDetails({
             value={source || "none"}
             onValueChange={(value) => setValue("source", value)}
           >
-            <SelectTrigger className="w-full bg-background border-border focus:ring-teal-500">
+            <SelectTrigger className="w-full bg-background border-border focus:ring-primary">
               <SelectValue placeholder="Select source" />
             </SelectTrigger>
             <SelectContent>
@@ -334,7 +334,7 @@ function LeadDetails({
           id="currentNotes"
           placeholder="Add any initial notes or context about this lead..."
           {...register("currentNotes")}
-          className="min-h-[120px] bg-background border-border focus-visible:ring-teal-500 resize-y"
+          className="min-h-[120px] bg-background border-border focus-visible:ring-primary resize-y"
         />
       </div>
     </div>

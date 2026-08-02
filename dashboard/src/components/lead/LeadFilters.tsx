@@ -1,3 +1,4 @@
+import { AnimatePresence, motion } from "framer-motion";
 import { Search, X, SlidersHorizontal, CalendarDays } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -203,17 +204,17 @@ export function LeadFilters({
       <div className="flex flex-col xl:flex-row gap-3 items-start xl:items-center">
         {/* Search */}
         <div className="relative w-full xl:w-64 shrink-0">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Search name, email, phone..."
             value={localSearch}
             onChange={(e) => setLocalSearch(e.target.value)}
-            className="pl-9 h-9 bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 focus-visible:ring-teal-500"
+            className="pl-9 h-9 bg-background border-input text-foreground focus-visible:ring-brand-primary"
           />
           {localSearch && (
             <button
               onClick={() => setLocalSearch("")}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
             >
               <X className="h-3.5 w-3.5" />
             </button>
@@ -222,14 +223,14 @@ export function LeadFilters({
 
         {/* Filter dropdowns */}
         <div className="flex flex-wrap items-center gap-2 w-full xl:w-auto">
-          <SlidersHorizontal className="h-4 w-4 text-slate-400 dark:text-slate-500 hidden sm:block shrink-0" />
+          <SlidersHorizontal className="h-4 w-4 text-muted-foreground hidden sm:block shrink-0" />
 
           {/* Status */}
           <Select
             value={status || "all"}
             onValueChange={(val) => onFilterChange("status", val === "all" ? "" : val)}
           >
-            <SelectTrigger className="w-[130px] h-9 bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 text-sm focus:ring-teal-500">
+            <SelectTrigger className="w-[130px] h-9 bg-background border-input text-foreground text-sm focus:ring-brand-primary">
               <SelectValue placeholder="Status" />
             </SelectTrigger>
             <SelectContent>
@@ -255,7 +256,7 @@ export function LeadFilters({
             value={priority || "all"}
             onValueChange={(val) => onFilterChange("priority", val === "all" ? "" : val)}
           >
-            <SelectTrigger className="w-[125px] h-9 bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 text-sm focus:ring-teal-500">
+            <SelectTrigger className="w-[125px] h-9 bg-background border-input text-foreground text-sm focus:ring-brand-primary">
               <SelectValue placeholder="Priority" />
             </SelectTrigger>
             <SelectContent>
@@ -276,7 +277,7 @@ export function LeadFilters({
             value={source || "all"}
             onValueChange={(val) => onFilterChange("source", val === "all" ? "" : val)}
           >
-            <SelectTrigger className="w-[130px] h-9 bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 text-sm focus:ring-teal-500">
+            <SelectTrigger className="w-[130px] h-9 bg-background border-input text-foreground text-sm focus:ring-brand-primary">
               <SelectValue placeholder="Source" />
             </SelectTrigger>
             <SelectContent>
@@ -306,7 +307,7 @@ export function LeadFilters({
                 setLocalSearch("");
                 onClearFilters();
               }}
-              className="h-9 px-2.5 text-slate-500 hover:text-slate-900 dark:hover:text-slate-100 gap-1"
+              className="h-9 px-2.5 text-muted-foreground hover:text-foreground gap-1"
             >
               <X className="h-3.5 w-3.5" />
               Clear
@@ -318,8 +319,8 @@ export function LeadFilters({
       {/* ── Row 2: Next Action filters ───────────────────────────── */}
       <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-center">
         <div className="flex items-center gap-1.5 shrink-0">
-          <CalendarDays className="h-4 w-4 text-slate-400 dark:text-slate-500" />
-          <span className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+          <CalendarDays className="h-4 w-4 text-muted-foreground" />
+          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
             Next Action
           </span>
         </div>
@@ -331,7 +332,7 @@ export function LeadFilters({
               value={nextActionType || "all"}
               onValueChange={(val) => onFilterChange("nextActionType", val === "all" ? "" : val)}
             >
-              <SelectTrigger className="w-[140px] h-8 bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 text-xs focus:ring-teal-500">
+              <SelectTrigger className="w-[140px] h-8 bg-background border-input text-foreground text-xs focus:ring-brand-primary">
                 <SelectValue placeholder="Action Type" />
               </SelectTrigger>
               <SelectContent>
@@ -358,7 +359,7 @@ export function LeadFilters({
             value={datePreset || "all"}
             onValueChange={(val) => handleDatePresetChange(val === "all" ? "all" : val)}
           >
-            <SelectTrigger className="w-[140px] h-8 bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 text-xs focus:ring-teal-500">
+            <SelectTrigger className="w-[140px] h-8 bg-background border-input text-foreground text-xs focus:ring-brand-primary">
               <SelectValue placeholder="Date Range" />
             </SelectTrigger>
             <SelectContent>
@@ -378,14 +379,14 @@ export function LeadFilters({
                 type="date"
                 value={nextActionDateFrom}
                 onChange={(e) => onFilterChange("nextActionDateFrom", e.target.value)}
-                className="w-[135px] h-8 text-xs bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 focus-visible:ring-teal-500"
+                className="w-[135px] h-8 text-xs bg-background border-input text-foreground focus-visible:ring-brand-primary"
               />
-              <span className="text-xs text-slate-400">to</span>
+              <span className="text-xs text-muted-foreground">to</span>
               <Input
                 type="date"
                 value={nextActionDateTo}
                 onChange={(e) => onFilterChange("nextActionDateTo", e.target.value)}
-                className="w-[135px] h-8 text-xs bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 focus-visible:ring-teal-500"
+                className="w-[135px] h-8 text-xs bg-background border-input text-foreground focus-visible:ring-brand-primary"
               />
             </div>
           )}
@@ -393,38 +394,56 @@ export function LeadFilters({
       </div>
 
       {/* ── Row 3: Active filter pills (only when filters are active) ── */}
-      {activeFilters.length > 0 && (
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-xs text-slate-400 dark:text-slate-500">Active:</span>
-          {activeFilters.map((f) => (
-            <Badge
-              key={f.key}
-              variant="secondary"
-              className="gap-1.5 pl-2 pr-1 py-0.5 text-xs font-normal bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-0 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
-            >
-              {f.color && (
-                <span
-                  className="inline-block h-1.5 w-1.5 rounded-full shrink-0"
-                  style={{ backgroundColor: f.color }}
-                />
-              )}
-              {f.label}
-              <button
-                onClick={() => {
-                  if (f.key === "nextActionDate") {
-                    clearDateFilters();
-                  } else {
-                    onFilterChange(f.key, "");
-                  }
-                }}
-                className="ml-0.5 rounded-sm p-0.5 hover:bg-slate-300/60 dark:hover:bg-slate-600/60 transition-colors"
-              >
-                <X className="h-3 w-3" />
-              </button>
-            </Badge>
-          ))}
-        </div>
-      )}
+      <AnimatePresence>
+        {activeFilters.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.2 }}
+            className="flex items-center gap-2 flex-wrap overflow-hidden"
+          >
+            <span className="text-xs text-muted-foreground">Active:</span>
+            <AnimatePresence initial={false}>
+              {activeFilters.map((f) => (
+                <motion.div
+                  key={f.key}
+                  layout
+                  initial={{ opacity: 0, scale: 0.85 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.85 }}
+                  transition={{ duration: 0.15 }}
+                >
+                  <Badge
+                    variant="secondary"
+                    className="gap-1.5 pl-2 pr-1 py-0.5 text-xs font-normal bg-brand-primary/10 text-brand-primary dark:text-brand-accent border-0 hover:bg-brand-primary/15 transition-colors"
+                  >
+                    {f.color && (
+                      <span
+                        className="inline-block h-1.5 w-1.5 rounded-full shrink-0"
+                        style={{ backgroundColor: f.color }}
+                      />
+                    )}
+                    {f.label}
+                    <button
+                      onClick={() => {
+                        if (f.key === "nextActionDate") {
+                          clearDateFilters();
+                        } else {
+                          onFilterChange(f.key, "");
+                        }
+                      }}
+                      className="ml-0.5 rounded-sm p-0.5 hover:bg-brand-primary/20 transition-colors"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </Badge>
+                </motion.div>
+              ))}
+            </AnimatePresence>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

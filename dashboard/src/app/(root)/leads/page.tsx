@@ -2,6 +2,7 @@
 
 import { useState, useMemo, Suspense, useEffect } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
+import { motion } from 'framer-motion';
 import {
     useGetLeadsQuery,
     useCreateLeadMutation,
@@ -15,6 +16,8 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
+import { Card, CardContent } from '@/components/ui/card';
+import { Separator } from '@/components/ui/separator';
 import { Button } from '@/components/ui/button';
 import { Plus, Loader, FileDown, Settings } from 'lucide-react';
 import { toast } from 'sonner';
@@ -31,7 +34,7 @@ export default function LeadsPage() {
         <Suspense
             fallback={
                 <div className="flex h-[400px] items-center justify-center">
-                    <Loader className="h-8 w-8 animate-spin text-teal-600" />
+                    <Loader className="h-8 w-8 animate-spin text-brand-primary" />
                 </div>
             }
         >
@@ -224,17 +227,22 @@ function LeadsPageContent() {
     };
 
     return (
-        <div className="w-full min-h-screen pb-10">
+        <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+            className="w-full min-h-screen pb-10"
+        >
             {/* ── Page Header ──────────────────────────────────────────── */}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
                 <div>
-                    <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
+                    <h1 className="text-2xl font-bold tracking-tight text-foreground">
                         Leads
                     </h1>
-                    <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5 flex items-center gap-2">
+                    <p className="text-sm text-muted-foreground mt-0.5 flex items-center gap-2">
                         Manage your prospects and pipeline
                         {isFetching && (
-                            <Loader className="h-3 w-3 animate-spin text-teal-600" />
+                            <Loader className="h-3 w-3 animate-spin text-primary" />
                         )}
                     </p>
                 </div>
@@ -242,7 +250,7 @@ function LeadsPageContent() {
                     <Button
                         variant="outline"
                         size="sm"
-                        className="h-8 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400"
+                        className="h-8"
                         onClick={() => setIsSettingsOpen(true)}
                     >
                         <Settings className="h-3.5 w-3.5" />
@@ -251,7 +259,7 @@ function LeadsPageContent() {
                     <Button
                         variant="outline"
                         size="sm"
-                        className="h-8 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400"
+                        className="h-8"
                         onClick={() => toast.info('Export feature coming soon')}
                     >
                         <FileDown className="h-3.5 w-3.5" />
@@ -263,7 +271,7 @@ function LeadsPageContent() {
                             setServerErrors(undefined);
                             setIsAddDialogOpen(true);
                         }}
-                        className="h-8 bg-teal-600 hover:bg-teal-700 text-white shadow-sm"
+                        className="h-8"
                     >
                         <Plus className="h-3.5 w-3.5" />
                         Add Lead
@@ -281,9 +289,9 @@ function LeadsPageContent() {
             />
 
             {/* ── Main Content: Filters + Table ────────────────────────── */}
-            <div className="mt-5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 shadow-sm overflow-hidden">
+            <Card className="mt-5 py-0 gap-0 overflow-hidden">
                 {/* Filters */}
-                <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800">
+                <div className="px-5 py-4 border-b border-border">
                     <LeadFilters
                         search={search}
                         status={status}
@@ -310,15 +318,17 @@ function LeadsPageContent() {
                     />
                 </div>
 
+                <Separator />
+
                 {/* Footer: Count + Pagination */}
-                <div className="flex items-center justify-between px-5 py-3 border-t border-slate-100 dark:border-slate-800">
-                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                <CardContent className="flex items-center justify-between gap-4 px-5 py-3">
+                    <p className="hidden flex-1 text-sm text-muted-foreground lg:flex">
                         Showing{' '}
-                        <span className="font-medium text-slate-700 dark:text-slate-300">
+                        <span className="mx-1 font-medium text-foreground/80">
                             {leads.length}
                         </span>{' '}
                         of{' '}
-                        <span className="font-medium text-slate-700 dark:text-slate-300">
+                        <span className="mx-1 font-medium text-foreground/80">
                             {pagination.total}
                         </span>{' '}
                         leads
@@ -326,21 +336,23 @@ function LeadsPageContent() {
                     <LeadPagination
                         currentPage={page}
                         totalPages={pagination.totalPages}
+                        limit={limit}
                         onPageChange={(p) => updateFilters({ page: p })}
+                        onLimitChange={(l) => updateFilters({ limit: l, page: 1 })}
                         isLoading={isLoading}
                     />
-                </div>
-            </div>
+                </CardContent>
+            </Card>
 
             {/* ── Add Lead Dialog ──────────────────────────────────────── */}
             <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-                <DialogContent className="max-w-3xl h-[90vh] max-h-[90vh] flex flex-col p-0 overflow-hidden gap-0 bg-white dark:bg-slate-900">
-                    <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 shrink-0">
+                <DialogContent className="max-w-3xl h-[90vh] max-h-[90vh] flex flex-col p-0 overflow-hidden gap-0">
+                    <div className="px-6 py-4 border-b border-border shrink-0">
                         <DialogHeader>
-                            <DialogTitle className="text-xl font-semibold text-slate-900 dark:text-slate-100">
+                            <DialogTitle className="text-xl font-semibold">
                                 Add New Lead
                             </DialogTitle>
-                            <DialogDescription className="text-slate-500 dark:text-slate-400">
+                            <DialogDescription>
                                 Create a new prospect to begin tracking their journey.
                             </DialogDescription>
                         </DialogHeader>
@@ -359,13 +371,13 @@ function LeadsPageContent() {
 
             {/* ── Edit Lead Dialog ─────────────────────────────────────── */}
             <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-                <DialogContent className="max-w-3xl h-[90vh] max-h-[90vh] flex flex-col p-0 overflow-hidden gap-0 bg-white dark:bg-slate-900">
-                    <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 shrink-0">
+                <DialogContent className="max-w-3xl h-[90vh] max-h-[90vh] flex flex-col p-0 overflow-hidden gap-0">
+                    <div className="px-6 py-4 border-b border-border shrink-0">
                         <DialogHeader>
-                            <DialogTitle className="text-xl font-semibold text-slate-900 dark:text-slate-100">
+                            <DialogTitle className="text-xl font-semibold">
                                 Edit Lead
                             </DialogTitle>
-                            <DialogDescription className="text-slate-500 dark:text-slate-400">
+                            <DialogDescription>
                                 Update the prospect's information and pipeline status.
                             </DialogDescription>
                         </DialogHeader>
@@ -400,6 +412,6 @@ function LeadsPageContent() {
                 open={isSettingsOpen}
                 onOpenChange={setIsSettingsOpen}
             />
-        </div>
+        </motion.div>
     );
 }

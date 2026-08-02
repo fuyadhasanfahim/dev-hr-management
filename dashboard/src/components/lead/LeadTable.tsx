@@ -81,26 +81,26 @@ export function LeadTable({
         <TooltipProvider delayDuration={300}>
             <Table>
                 <TableHeader>
-                    <TableRow className="border-b border-slate-100 dark:border-slate-800 hover:bg-transparent">
-                        <TableHead className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 pl-6">
+                    <TableRow className="border-b border-border hover:bg-transparent">
+                        <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground pl-6">
                             Lead
                         </TableHead>
-                        <TableHead className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                        <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                             Contact
                         </TableHead>
-                        <TableHead className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                        <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                             Status
                         </TableHead>
-                        <TableHead className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                        <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                             Priority
                         </TableHead>
-                        <TableHead className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                        <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                             Source
                         </TableHead>
-                        <TableHead className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                        <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                             Next Action
                         </TableHead>
-                        <TableHead className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 text-right pr-6">
+                        <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground text-right pr-6">
                             Actions
                         </TableHead>
                     </TableRow>
@@ -110,7 +110,7 @@ export function LeadTable({
                         Array.from({ length: 6 }).map((_, index) => (
                             <TableRow
                                 key={index}
-                                className="border-b border-slate-50 dark:border-slate-800/50"
+                                className="border-b border-border/60"
                             >
                                 <TableCell className="pl-6">
                                     <div className="flex items-center gap-3">
@@ -141,10 +141,10 @@ export function LeadTable({
                                 className="h-40 text-center"
                             >
                                 <div className="flex flex-col items-center gap-2">
-                                    <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
-                                        <Users className="h-5 w-5 text-slate-400" />
+                                    <div className="w-12 h-12 rounded-full bg-brand-primary/10 flex items-center justify-center">
+                                        <Users className="h-5 w-5 text-brand-primary" />
                                     </div>
-                                    <p className="text-sm text-slate-500 dark:text-slate-400">
+                                    <p className="text-sm text-muted-foreground">
                                         No leads found matching your criteria.
                                     </p>
                                 </div>
@@ -154,23 +154,23 @@ export function LeadTable({
                         leads.map((lead) => (
                             <TableRow
                                 key={lead._id}
-                                className="group border-b border-slate-50 dark:border-slate-800/50 hover:bg-slate-50/80 dark:hover:bg-slate-800/30 transition-colors cursor-pointer"
+                                className="cursor-pointer"
                                 onClick={() => onView(lead)}
                             >
                                 {/* Lead name + email */}
                                 <TableCell className="pl-6">
                                     <div className="flex items-center gap-3">
-                                        <div className="h-9 w-9 rounded-full bg-gradient-to-br from-teal-500 to-teal-700 dark:from-teal-600 dark:to-teal-800 flex items-center justify-center shrink-0">
+                                        <div className="h-9 w-9 rounded-full bg-gradient-to-br from-brand-primary to-brand-secondary flex items-center justify-center shrink-0">
                                             <span className="text-xs font-semibold text-white">
                                                 {getInitials(lead.name)}
                                             </span>
                                         </div>
                                         <div className="min-w-0">
-                                            <p className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">
+                                            <p className="text-sm font-medium text-foreground truncate">
                                                 {lead.name || 'Unnamed Lead'}
                                             </p>
                                             {lead.email && (
-                                                <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
+                                                <p className="text-xs text-muted-foreground truncate">
                                                     {lead.email}
                                                 </p>
                                             )}
@@ -181,12 +181,12 @@ export function LeadTable({
                                 {/* Phone */}
                                 <TableCell>
                                     {lead.phone ? (
-                                        <span className="inline-flex items-center gap-1.5 text-sm text-slate-600 dark:text-slate-300">
-                                            <Phone className="h-3 w-3 text-slate-400" />
+                                        <span className="inline-flex items-center gap-1.5 text-sm text-foreground/80">
+                                            <Phone className="h-3 w-3 text-muted-foreground" />
                                             {lead.phone}
                                         </span>
                                     ) : (
-                                        <span className="text-xs text-slate-400">—</span>
+                                        <span className="text-xs text-muted-foreground">—</span>
                                     )}
                                 </TableCell>
 
@@ -209,7 +209,7 @@ export function LeadTable({
                                             {lead.status.name}
                                         </Badge>
                                     ) : (
-                                        <span className="text-xs text-slate-400">—</span>
+                                        <span className="text-xs text-muted-foreground">—</span>
                                     )}
                                 </TableCell>
 
@@ -228,7 +228,7 @@ export function LeadTable({
                                 {/* Source */}
                                 <TableCell>
                                     {lead.source ? (
-                                        <span className="inline-flex items-center gap-1.5 text-sm text-slate-600 dark:text-slate-300">
+                                        <span className="inline-flex items-center gap-1.5 text-sm text-foreground/80">
                                             {lead.source.color && (
                                                 <span
                                                     className="h-2 w-2 rounded-full shrink-0"
@@ -238,7 +238,7 @@ export function LeadTable({
                                             {lead.source.name}
                                         </span>
                                     ) : (
-                                        <span className="text-xs text-slate-400">—</span>
+                                        <span className="text-xs text-muted-foreground">—</span>
                                     )}
                                 </TableCell>
 
@@ -246,18 +246,18 @@ export function LeadTable({
                                 <TableCell>
                                     {lead.nextActionDate ? (
                                         <div className="flex items-center gap-1.5">
-                                            <Calendar className="h-3 w-3 text-slate-400 shrink-0" />
+                                            <Calendar className="h-3 w-3 text-muted-foreground shrink-0" />
                                             <div className="min-w-0">
-                                                <p className="text-xs font-medium text-slate-700 dark:text-slate-300 truncate">
+                                                <p className="text-xs font-medium text-foreground/80 truncate">
                                                     {lead.nextActionType?.name || 'Follow-up'}
                                                 </p>
-                                                <p className="text-[11px] text-slate-400">
+                                                <p className="text-[11px] text-muted-foreground">
                                                     {format(new Date(lead.nextActionDate), 'MMM dd')}
                                                 </p>
                                             </div>
                                         </div>
                                     ) : (
-                                        <span className="text-xs text-slate-400">—</span>
+                                        <span className="text-xs text-muted-foreground">—</span>
                                     )}
                                 </TableCell>
 
@@ -270,7 +270,7 @@ export function LeadTable({
                                                     variant="ghost"
                                                     size="icon"
                                                     onClick={() => onView(lead)}
-                                                    className="h-7 w-7 text-slate-500 hover:text-teal-600 hover:bg-teal-50 dark:hover:bg-teal-500/10"
+                                                    className="h-7 w-7 text-muted-foreground hover:text-brand-primary hover:bg-brand-primary/10"
                                                 >
                                                     <Eye className="h-3.5 w-3.5" />
                                                 </Button>
@@ -283,7 +283,7 @@ export function LeadTable({
                                                     variant="ghost"
                                                     size="icon"
                                                     onClick={() => onEdit(lead)}
-                                                    className="h-7 w-7 text-slate-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-500/10"
+                                                    className="h-7 w-7 text-muted-foreground hover:text-brand-accent hover:bg-brand-accent/10"
                                                 >
                                                     <Edit className="h-3.5 w-3.5" />
                                                 </Button>
@@ -298,7 +298,7 @@ export function LeadTable({
                                                         size="icon"
                                                         onClick={() => handleConvert(lead)}
                                                         disabled={activeConvertingId === lead._id}
-                                                        className="h-7 w-7 text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-500/10"
+                                                        className="h-7 w-7 text-muted-foreground hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-500/10"
                                                     >
                                                         {activeConvertingId === lead._id ? (
                                                             <Loader className="h-3.5 w-3.5 animate-spin" />
@@ -320,4 +320,3 @@ export function LeadTable({
         </TooltipProvider>
     );
 }
-

@@ -92,7 +92,7 @@ export function LeadSettingsDialog({ open, onOpenChange }: LeadSettingsDialogPro
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[550px] bg-white">
+      <DialogContent className="sm:max-w-[550px]">
         <DialogHeader>
           <DialogTitle>Lead Settings</DialogTitle>
           <DialogDescription>
@@ -107,27 +107,27 @@ export function LeadSettingsDialog({ open, onOpenChange }: LeadSettingsDialogPro
             <TabsTrigger value="ACTION_TYPE">Action Types</TabsTrigger>
           </TabsList>
           
-          <div className="mt-4 mb-2 text-sm text-slate-500">
+          <div className="mt-4 mb-2 text-sm text-muted-foreground">
             {getTabDescription(activeTab)}
           </div>
 
           <div className="space-y-6 mt-4">
             {/* Add New Form */}
-            <form onSubmit={handleCreate} className="flex items-end gap-3 p-4 bg-slate-50 rounded-xl border border-slate-100">
+            <form onSubmit={handleCreate} className="flex items-end gap-3 p-4 bg-muted/40 rounded-xl border border-border">
               <div className="flex-1 space-y-2">
                 <Label>New {activeTab.replace("_", " ").toLowerCase()} name</Label>
                 <Input
                   value={newItemName}
                   onChange={(e) => setNewItemName(e.target.value)}
                   placeholder="e.g., Facebook Ads"
-                  className="bg-white"
+                  className="bg-background"
                 />
               </div>
               
               {activeTab === "STATUS" && (
                 <div className="space-y-2">
                   <Label>Badge Color</Label>
-                  <div className="flex items-center gap-1.5 h-9 px-2 bg-white rounded-md border border-slate-200">
+                  <div className="flex items-center gap-1.5 h-9 px-2 bg-background rounded-md border border-border">
                     {predefinedColors.map((color) => (
                       <button
                         key={color}
@@ -153,20 +153,20 @@ export function LeadSettingsDialog({ open, onOpenChange }: LeadSettingsDialogPro
             <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2">
               {isLoading ? (
                 <div className="flex justify-center p-4">
-                  <Loader className="h-6 w-6 animate-spin text-teal-600" />
+                  <Loader className="h-6 w-6 animate-spin text-primary" />
                 </div>
               ) : currentItems.length === 0 ? (
-                <div className="text-center py-8 text-slate-500 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                <div className="text-center py-8 text-muted-foreground bg-muted/40 rounded-xl border border-dashed border-border">
                   No items added yet.
                 </div>
               ) : (
                 currentItems.map((item: any) => (
                   <div
                     key={item._id}
-                    className="flex items-center justify-between p-3 bg-white border border-slate-100 rounded-lg shadow-sm group hover:border-slate-200 transition-colors"
+                    className="flex items-center justify-between p-3 bg-card border border-border rounded-lg shadow-sm group hover:border-border transition-colors"
                   >
                     <div className="flex items-center gap-3">
-                      <GripVertical className="h-4 w-4 text-slate-300" />
+                      <GripVertical className="h-4 w-4 text-muted-foreground/50" />
                       {activeTab === "STATUS" ? (
                         <Badge
                           variant="outline"
@@ -179,7 +179,7 @@ export function LeadSettingsDialog({ open, onOpenChange }: LeadSettingsDialogPro
                           {item.name}
                         </Badge>
                       ) : (
-                        <span className="font-medium text-slate-700">{item.name}</span>
+                        <span className="font-medium text-foreground">{item.name}</span>
                       )}
                     </div>
                     <Button
@@ -187,7 +187,7 @@ export function LeadSettingsDialog({ open, onOpenChange }: LeadSettingsDialogPro
                       size="icon"
                       disabled={isDeleting}
                       onClick={() => handleDelete(item._id)}
-                      className="h-8 w-8 text-slate-400 hover:text-red-600 hover:bg-red-50"
+                      className="h-8 w-8 text-muted-foreground hover:text-red-600 hover:bg-red-50"
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
@@ -198,7 +198,7 @@ export function LeadSettingsDialog({ open, onOpenChange }: LeadSettingsDialogPro
           </div>
         </Tabs>
         
-        <div className="flex justify-end pt-4 border-t border-slate-100 mt-2">
+        <div className="flex justify-end pt-4 border-t border-border mt-2">
           <Button onClick={() => onOpenChange(false)}>Done</Button>
         </div>
       </DialogContent>
