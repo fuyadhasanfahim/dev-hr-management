@@ -16,6 +16,7 @@ import emailService from './email.service.js';
 import { sendClientSmsIfBDT } from './sms-notification.service.js';
 import { ReceiptService } from './receipt.service.js';
 import { QuotationPuppeteerPdfService } from './quotation-puppeteer-pdf.service.js';
+import { TOKEN_EXPIRY_DAYS, DUPLICATE_QUOTATION_WINDOW_MS } from '../constants/timing.js';
 
 import type { QuotationMilestoneEmailInfo } from '../templates/QuotationEmail.js';
 
@@ -35,7 +36,6 @@ type SendQuotationResult = {
 };
 
 const QUOTATION_TOKEN_SECRET = process.env.QUOTATION_TOKEN_SECRET;
-const TOKEN_EXPIRY_DAYS = 30;
 
 if (!QUOTATION_TOKEN_SECRET) {
     throw new Error('QUOTATION_TOKEN_SECRET env variable is required');
@@ -257,7 +257,7 @@ export class QuotationService {
             .update(stableStringify(fingerprintPayload))
             .digest('hex');
 
-        const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+        const fiveMinutesAgo = new Date(Date.now() - DUPLICATE_QUOTATION_WINDOW_MS);
         const existing = await QuotationModel.findOne({
             createdBy: new Types.ObjectId(userId),
             creationFingerprint,

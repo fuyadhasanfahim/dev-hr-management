@@ -15,6 +15,7 @@ import { AppError } from '../utils/AppError.js';
 import { InvoiceCounter } from '../models/invoice-counter.model.js';
 import type { IQuotation } from '../types/quotation.type.js';
 import { logger } from '../lib/logger.js';
+import { ASSET_ACCESS_WINDOW_DAYS } from '../constants/timing.js';
 
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -453,7 +454,7 @@ async function unlockAssets(orderId: string): Promise<IOrder> {
     if (!order) throw new AppError('Order not found', 404);
 
     const accessTokenExpiresAt = new Date();
-    accessTokenExpiresAt.setDate(accessTokenExpiresAt.getDate() + 7); // 7-day access window
+    accessTokenExpiresAt.setDate(accessTokenExpiresAt.getDate() + ASSET_ACCESS_WINDOW_DAYS);
 
     const { default: OrderAssetModel } = await import('../models/order-asset.model.js');
     const assets = await OrderAssetModel.find({ orderId: order._id });
