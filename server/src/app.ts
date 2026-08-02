@@ -5,6 +5,7 @@ import express, {
 } from "express";
 import cors from "cors";
 import helmet from "helmet";
+import compression from "compression";
 import rateLimit from "express-rate-limit";
 import mongoose from "mongoose";
 import envConfig from "./config/env.config.js";
@@ -74,6 +75,11 @@ app.use(
         crossOriginResourcePolicy: { policy: "cross-origin" },
     }),
 );
+
+// Gzip/deflate response bodies above the default 1KB threshold (E8-F2-T2).
+// Transparent to clients (Content-Encoding negotiated via Accept-Encoding);
+// no response shape or API contract change.
+app.use(compression());
 
 // SECURITY: Global rate limiter
 const globalLimiter = rateLimit({
