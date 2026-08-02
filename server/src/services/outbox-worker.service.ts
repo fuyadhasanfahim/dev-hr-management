@@ -1,7 +1,7 @@
 /**
  * E5-F1-T2 — Outbox worker: claim/dispatch/mark infrastructure (Phase 1a)
- * plus real business handlers where the E5-F1-T2 investigation could prove
- * intent from the existing codebase without guessing (Phase 1b).
+ * plus real business handlers for every currently-produced event type
+ * (Phase 1b/1c).
  *
  * This module is the first thing that ever calls `OutboxService.claimNext`/
  * `markProcessed`/`markFailed` (confirmed via full-tree grep during the
@@ -10,25 +10,27 @@
  * introduced). It provides the claim → dispatch → mark-processed/failed
  * loop and a name-based handler registry.
  *
- * Event-by-event status (Phase 1b investigation):
- * - `admin.quotation.regenerate_link` — real handler below. Reuses
- *   `QuotationService.sendQuotation()` unchanged (the same synchronous
- *   flow already used elsewhere to email a quotation link) rather than
- *   duplicating any of its token/email logic.
- * - `admin.outbox.replay` — removed entirely, producer and consumer both.
- *   It only ever wrapped a cheap, synchronous, idempotent DB operation
- *   (`OutboxService.replayMany`); `quotation-timeline.controller.ts`'s
- *   `requestReplay()` now calls that directly instead of round-tripping
- *   through this queue. No handler is registered for it here — nothing
- *   produces this event name anymore.
- * - `quotation.superseded` — still a placeholder, deliberately. Its
- *   business intent (should anything happen at all when a quotation
- *   version is superseded? notify staff? nothing?) could not be proven
- *   from the codebase — no code anywhere reacts to this event today, and
- *   the one plausible reading (notify staff) would require extending
- *   `NotificationModel`'s closed `type` enum, a schema change with no
- *   product sign-off yet. Left failing loudly (retry/backoff/dead-letter)
- *   rather than guessed at, per the E5-F1-T2 investigation.
+ * Event-by-event status:
+ * - `admin.quotation.regenerate_link` — real handler below (Phase 1b).
+ *   Reuses `QuotationService.sendQuotation()` unchanged (the same
+ *   synchronous flow already used elsewhere to email a quotation link)
+ *   rather than duplicating any of its token/email logic.
+ * - `admin.outbox.replay` — removed entirely, producer and consumer both
+ *   (Phase 1b). It only ever wrapped a cheap, synchronous, idempotent DB
+ *   operation (`OutboxService.replayMany`); `quotation-timeline.
+ *   controller.ts`'s `requestReplay()` now calls that directly instead of
+ *   round-tripping through this queue. No handler is registered for it
+ *   here — nothing produces this event name anymore.
+ * - `quotation.superseded` — real handler below (Phase 1c), per an
+ *   explicit, now-confirmed business decision: **"When a quotation is
+ *   superseded, no automatic business action is required."** This event
+ *   is informational only — it exists so the admin quotation timeline
+ *   (`getTimeline()` in `quotation-timeline.controller.ts`) can show that
+ *   a version was superseded and when, which it already does by reading
+ *   the `OutboxEvent` collection directly. The handler performs no side
+ *   effects and exists solely so the event is correctly marked
+ *   `processed` instead of sitting `pending` forever or being dead-lettered
+ *   for a business action that was never supposed to happen.
  *
  * Split into two layers for testability, mirroring lib/health.ts and
  * lib/gracefulShutdown.ts: `processNextOutboxEvent`/`drainOutboxEvents`
@@ -70,22 +72,35 @@ export function getRegisteredOutboxHandler(eventName: string): OutboxEventHandle
     return handlerRegistry.get(eventName);
 }
 
-function placeholderHandler(eventName: string): OutboxEventHandler {
-    return async () => {
-        throw new Error(
-            `Outbox event "${eventName}" has no business handler implemented yet ` +
-                '(E5-F1-T2: business intent could not be proven from the existing codebase ' +
-                'without guessing — see the E5-F1-T2 investigation). This failure is expected ' +
-                'and will retry/dead-letter like any other handler failure until a real handler ' +
-                'is registered.',
-        );
-    };
+/**
+ * `quotation.superseded` handler (Phase 1c) — informational only, by
+ * confirmed business decision: "When a quotation is superseded, no
+ * automatic business action is required."
+ *
+ * This function is intentionally a no-op. It exists (rather than simply
+ * leaving the event unregistered) for two reasons:
+ *   1. An unregistered event name would fall through to
+ *      `processNextOutboxEvent`'s "No handler registered" error path and
+ *      be marked `failed`/eventually `dead_letter` — which is the wrong
+ *      outcome for an event that was never supposed to trigger anything.
+ *      A confirmed "no action needed" event should complete successfully,
+ *      not look like a broken/missing consumer in the admin `/outbox` UI.
+ *   2. Registering it explicitly documents, in one place, that the
+ *      absence of behavior here is a deliberate decision, not an
+ *      oversight — the opposite intent from the Phase 1a/1b placeholder
+ *      (which threw specifically to make missing behavior loud and
+ *      visible while intent was still unconfirmed).
+ *
+ * Do not add side effects here without a new, separately-approved
+ * business decision — this event enqueues for every quotation-version
+ * revision, so anything added here runs on every one of them.
+ */
+async function handleQuotationSuperseded(_event: IOutboxEvent): Promise<void> {
+    // No-op by design. Nothing to do, nothing to await — see the
+    // doc comment above for why this is correct, not incomplete.
 }
 
-// `quotation.superseded` stays on the placeholder — see the module-level
-// comment above for why (unproven business intent, would need a schema
-// change to even guess at "notify staff").
-registerOutboxHandler('quotation.superseded', placeholderHandler('quotation.superseded'));
+registerOutboxHandler('quotation.superseded', handleQuotationSuperseded);
 
 /**
  * `admin.quotation.regenerate_link` real handler (Phase 1b).

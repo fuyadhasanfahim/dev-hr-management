@@ -1,8 +1,12 @@
 /**
- * Unit tests for E5-F1-T2 Phase 1: the Outbox worker's claim → dispatch →
+ * Unit tests for E5-F1-T2: the Outbox worker's claim → dispatch →
  * mark-processed/failed core (`processNextOutboxEvent`/`drainOutboxEvents`)
- * and the handler registry, including the placeholder handlers registered
- * for the three currently-produced event types.
+ * and the handler registry, including the real handlers for all
+ * currently-produced event types — `admin.quotation.regenerate_link`
+ * (delegates to `QuotationService.sendQuotation()`), `quotation.superseded`
+ * (confirmed no-op — "no automatic business action is required" — Phase
+ * 1c), and confirming `admin.outbox.replay` has no handler at all (removed
+ * as an event entirely, Phase 1b).
  *
  * `processNextOutboxEvent`/`drainOutboxEvents` take all their Mongo-backed
  * dependencies (`claimNext`/`markProcessed`/`markFailed`) as injected
@@ -196,19 +200,28 @@ describe('drainOutboxEvents', () => {
     });
 });
 
-describe('handler registry — quotation.superseded stays a placeholder (Phase 1b)', () => {
-    test('"quotation.superseded" has a registered placeholder handler that fails loudly, not silently', async () => {
+describe('handler registry — quotation.superseded is a confirmed no-op (Phase 1c)', () => {
+    test('"quotation.superseded" has a registered handler that resolves successfully, performing no side effects', async () => {
         const handler = getRegisteredOutboxHandler('quotation.superseded');
-        assert.ok(handler, 'expected a placeholder handler to be registered for "quotation.superseded"');
+        assert.ok(handler, 'expected a handler to be registered for "quotation.superseded"');
 
-        await assert.rejects(
-            () => handler!(fakeEvent({ eventName: 'quotation.superseded' })),
-            (err: unknown) => {
-                assert.ok(err instanceof Error);
-                assert.match(err.message, /no business handler implemented yet/i);
-                return true;
-            },
-        );
+        const result = await handler!(fakeEvent({ eventName: 'quotation.superseded' }));
+
+        assert.equal(result, undefined, 'the no-op handler must simply resolve, not throw or return a value');
+    });
+
+    test('end-to-end via processNextOutboxEvent: a quotation.superseded claim is marked processed, never failed', async () => {
+        const event = fakeEvent({ _id: 'evt-superseded-1', eventName: 'quotation.superseded' });
+        const { deps, processedCalls, failedCalls } = makeDeps({
+            queue: [event],
+            getHandler: getRegisteredOutboxHandler,
+        });
+
+        const claimed = await processNextOutboxEvent('lock-1', deps);
+
+        assert.equal(claimed, true);
+        assert.deepEqual(processedCalls, [{ id: 'evt-superseded-1', lockId: 'lock-1' }]);
+        assert.equal(failedCalls.length, 0);
     });
 });
 
