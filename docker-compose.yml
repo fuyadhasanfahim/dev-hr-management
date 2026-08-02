@@ -1,0 +1,92 @@
+# Local development stack (E3-F3-T1).
+#
+# `docker-compose up` should bring up Mongo (single-node replica set —
+# required for the transactional flows used throughout order.service.ts and
+# quotation.service.ts), Redis, and the server in watch mode.
+#
+# NOTE: this compose file could not be run end-to-end in the sandbox that
+# authored it (no Docker daemon available there) — see the E3-F3-T1 backlog
+# card for what was and wasn't verified before this shipped.
+#
+# All `server` environment values below are LOCAL-DEV-ONLY PLACEHOLDERS.
+# Do not reuse them anywhere real; they only need to be *present* to satisfy
+# env.config.ts's startup validation. SMTP/Cloudinary-dependent features
+# (email sending, image upload) will not actually work until replaced with
+# real credentials.
+
+services:
+  mongo:
+    image: mongo:7
+    command: ["--replSet", "rs0", "--bind_ip_all"]
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.runCommand('ping').ok"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  mongo-init-replica-set:
+    image: mongo:7
+    depends_on:
+      mongo:
+        condition: service_healthy
+    restart: "no"
+    entrypoint:
+      - mongosh
+      - --host
+      - mongo
+      - --eval
+      - >
+        try { rs.status().ok } catch (e) {
+          rs.initiate({ _id: "rs0", members: [{ _id: 0, host: "mongo:27017" }] });
+        }
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  server:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+      target: deps
+    working_dir: /app
+    command: npm run dev
+    depends_on:
+      mongo-init-replica-set:
+        condition: service_completed_successfully
+      redis:
+        condition: service_started
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./server:/app
+      - server-node-modules:/app/node_modules
+    environment:
+      NODE_ENV: development
+      PORT: "5000"
+      MONGO_URI: mongodb://mongo:27017/dev-hr-management?replicaSet=rs0
+      DB_NAME: dev-hr-management
+      BETTER_AUTH_SECRET: local-dev-only-placeholder-secret-change-me
+      BETTER_AUTH_URL: http://localhost:5000
+      TRUSTED_ORIGINS: http://localhost:3000
+      SMTP_USER: placeholder@example.com
+      SMTP_PASS: placeholder
+      SMTP_HOST: smtp.example.com
+      SMTP_PORT: "587"
+      SMTP_SECURE: "false"
+      CLOUDINARY_NAME: placeholder
+      CLOUDINARY_API_KEY: placeholder
+      CLOUDINARY_API_SECRET: placeholder
+      CLOUDINARY_UPLOAD_PATH: placeholder
+      QUOTATION_TOKEN_SECRET: local-dev-only-placeholder-secret-change-me
+      ENCRYPTION_KEY: "0000000000000000000000000000000000000000000000000000000000000000"
+
+volumes:
+  mongo-data:
+  server-node-modules:

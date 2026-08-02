@@ -3,7 +3,7 @@
 **Status:** LIVING DOCUMENT — this file is the permanent source of truth for backend engineering work from this point forward.
 **Baseline inputs:** Principal Engineer Audit Report (2026-08-01) + Execution Roadmap (2026-08-01).
 **Scope:** `server/` (Express/MongoDB backend). Frontend apps (`auth/`, `dashboard/`, `support/`) are referenced only where a backend change has a required frontend companion — they are not independently audited here.
-**Last updated:** 2026-08-02 · **Updated by:** Principal Engineer review — E7-F1-T1 deferred (test-framework architecture decision, pending sign-off); autonomous execution of remaining backlog continuing in priority order.
+**Last updated:** 2026-08-02 · **Updated by:** Principal Engineer review — E3-F3-T1 implemented (Docker local-dev stack authored; end-to-end run unverified, no Docker daemon in this environment); autonomous execution of remaining backlog continuing in priority order.
 
 ---
 
@@ -37,7 +37,7 @@
 | E1-F3-T1 | Fix Receipt zero-payment race condition | Data Integrity | P1 | Done* | 3–4 hrs | Low |
 | E5-F1-T2 | Implement Outbox event consumer (queue is currently write-only) | Reliability | P1 | Not Started | 1–2 days (Phase 1) | Low |
 | E7-F1-T1 | Test framework + state-machine test suite | Quality Engineering | P2 | Deferred | 4–6 days | Low |
-| E3-F3-T1 | Dockerize local dev | Ops Readiness | P2 | Not Started | 1–1.5 days | Low |
+| E3-F3-T1 | Dockerize local dev | Ops Readiness | P2 | Done* | 1–1.5 days | Low |
 | E5-F1-T1 | Move notifications onto BullMQ | Reliability | P2 | Not Started | 2–3 days | Medium |
 | E1-F2-T2 | Payroll mismatch → explicit confirmation | Data Integrity | P2 | Not Started | 1 day | Low |
 | E6-F1-T1 | Delete or wire orphaned controllers | Code Health | P2 | Done* | 3–5 hrs | Low |
@@ -50,7 +50,7 @@
 | E8-F1-T1 | API versioning + OpenAPI spec | API Platform | P3 | Not Started | 3–5 days | Low |
 | E8-F2-T2 | Compression middleware + cursor pagination | API Platform | P3 | Not Started | 1–2 days | Low |
 
-**Completion:** 12 / 25 Tasks done (4 fully `Done`, 8 marked `Done*` — see notes on each). **P0 remaining:** 0/5 — all P0 tasks addressed. **P1 status:** E3-F2-T1 and E6-F2-T3 both fully `Done`. E1-F3-T1, E4-F1-T1, E1-F2-T1 all `Done*` (open follow-ups documented on each). Remaining P1s: **E2-F3-T1** (deferred pending a future asset-creation write path) and **E5-F1-T2** (Outbox consumer — blocked on a required product decision, see its Subtask a). **P2 status:** E6-F1-T1 now `Done*` — `quotation-timeline.controller.ts` wired, `wallet-transaction.controller.ts` confirmed already live. **E7-F1-T1 `Deferred`** — needs a test-framework architecture decision before implementation.
+**Completion:** 13 / 25 Tasks done (4 fully `Done`, 9 marked `Done*` — see notes on each). 1 `Deferred` (E7-F1-T1). **P0 remaining:** 0/5 — all P0 tasks addressed. **P1 status:** E3-F2-T1 and E6-F2-T3 both fully `Done`. E1-F3-T1, E4-F1-T1, E1-F2-T1 all `Done*` (open follow-ups documented on each). Remaining P1s: **E2-F3-T1** (deferred pending a future asset-creation write path) and **E5-F1-T2** (Outbox consumer — blocked on a required product decision, see its Subtask a). **P2 status:** E6-F1-T1 now `Done*` — `quotation-timeline.controller.ts` wired, `wallet-transaction.controller.ts` confirmed already live. **E7-F1-T1 `Deferred`** — needs a test-framework architecture decision before implementation. **E3-F3-T1 now `Done*`** — Docker local-dev stack authored (Dockerfile, docker-compose.yml, README); the transactional-flow verification and the `docker-compose up` run itself are open follow-ups (no Docker daemon in this environment).
 
 *`Done*` on E1-F1-T1 = the guard clause, model, and unit test matrix are complete and verified; the HTTP-level integration test (Subtask d) is `Blocked`, not skipped — it has a hard dependency on DB test infrastructure that doesn't exist yet (E7-F1-T1). See the Task Detail Card in §3 for the full breakdown; this is not being counted as fully `Done` until that subtask either completes or is formally waived.
 
@@ -401,23 +401,31 @@ E8  API Platform Maturity
 ### E3-F3 — Containerization
 
 #### E3-F3-T1: Dockerize local dev
-- **Priority:** P2 · **Status:** Not Started
+- **Priority:** P2 · **Status:** Done*
 - **Business value:** Removes the bus-factor/onboarding risk of hand-configured local Mongo/Redis, and is the first real-world verification that Mongo is actually configured as a replica set (a load-bearing assumption for every transactional code path in this system).
-- **Engineering effort:** 1–1.5 days · **Regression risk:** Low, dev-tooling only.
-- **Dependencies:** Benefits from E3-F1-T1 (`/healthz`) for the compose healthcheck.
-- **Exact files:** new `server/Dockerfile`, new `docker-compose.yml`, new `.dockerignore`.
-- **Testing strategy:** `docker-compose up` completes a full quotation→order→receipt flow including a transactional call (`createNewVersion`) against the containerized Mongo.
-- **Rollout plan:** Additive tooling, no production path touched.
-- **Rollback plan:** N/A — no production impact either direction.
-- **Acceptance criteria:** One-command working local stack · transactional path confirmed working against replica-set Mongo, closing the audit's open question · README updated.
+- **Engineering effort:** 1–1.5 days (actual: ~2 hrs) · **Regression risk:** Low, dev-tooling only — confirmed via `git diff`: no application code touched, only new infra files + a README addition.
+- **Dependencies:** None blocking (E3-F1-T1's `/healthz` exists but wasn't wired into the compose healthcheck in this pass — see note below).
+- **Environment check performed before implementing:** `docker` CLI is present in this environment but the daemon isn't running (`failed to connect to the docker API ... daemon is running?`) — confirmed via `docker ps`. This is a genuine execution/verification limitation, not one of the four stop conditions (business decision, DB schema, public API, or architecture) — proceeded with authoring the files, documented what couldn't be run.
+- **Exact files:**
+  - New: `server/Dockerfile` — multi-stage (`base` → `deps` → `build` → `runtime`), Node 24 (`node:24-slim`, matching CI and this environment's own Node version). `PUPPETEER_SKIP_DOWNLOAD=true` is set deliberately — Puppeteer's Chrome download during `npm ci`'s postinstall would need additional Debian dependencies out of scope for this task; PDF-generation endpoints will not work in this container without further work, documented in-file, not silently broken.
+  - New: `docker-compose.yml` — `mongo` (single-node replica set via `--replSet rs0` + a one-shot `mongo-init-replica-set` service that calls `rs.initiate()`, gated on a healthcheck), `redis`, and `server` (built to the `deps` stage, running `npm run dev` with the local `server/` directory bind-mounted for hot reload — a dev-loop setup, not the static production build the `Dockerfile` alone would produce). All `server` environment values are explicit, labeled local-dev-only placeholders — just enough to satisfy `env.config.ts`'s presence checks, not real credentials.
+  - New: `server/.dockerignore`.
+  - `README.md` — new "Option A: Backend via Docker Compose" section ahead of the existing manual setup instructions (kept as "Option B", unmodified).
+- **Testing strategy:** What was verified: `docker compose config` (syntax/structure validation, no daemon needed) passed cleanly; `tsc --noEmit` and the full 134-test suite confirm zero impact on application code. **What could not be verified**, per the environment check above: actually running `docker-compose up`, and this task's own specified acceptance criterion — the quotation→order→receipt transactional flow (`createNewVersion`) actually succeeding against the containerized replica-set Mongo. This is the same class of limitation as every DB-dependent task this session, just one level further out (no daemon, not just no reachable Mongo).
+- **Rollout plan:** Additive tooling, no production path touched — unchanged from the original plan.
+- **Rollback plan:** N/A — no production impact either direction; delete the 3 new files and the README section to fully revert.
+- **Acceptance criteria:**
+  - [x] One-command working local stack — `docker-compose up` is the one command; structure validated via `docker compose config`, not run end-to-end (see above).
+  - [ ] ~~Transactional path confirmed working against replica-set Mongo, closing the audit's open question~~ — **not verified**, no Docker daemon available in this environment. Flagged as an open follow-up for whoever can run `docker-compose up` and exercise `createNewVersion`.
+  - [x] README updated.
 
 **Subtasks:**
 | ID | Description | Status |
 |---|---|---|
-| a | Write multi-stage `Dockerfile` | Not Started |
-| b | Write `docker-compose.yml` with Mongo (replica-set single-node), Redis, server | Not Started |
-| c | Verify transactional flow end-to-end against the container stack | Not Started |
-| d | Update `README.md` local-dev instructions | Not Started |
+| a | Write multi-stage `Dockerfile` | **Done** |
+| b | Write `docker-compose.yml` with Mongo (replica-set single-node), Redis, server | **Done** |
+| c | Verify transactional flow end-to-end against the container stack | **Blocked** — no Docker daemon available in this environment; open follow-up |
+| d | Update `README.md` local-dev instructions | **Done** |
 
 ### E3-F4 — Rate Limiting at Scale
 
@@ -710,6 +718,7 @@ E8  API Platform Maturity
 | 2026-08-02 | Investigated E6-F1-T1 (wiring up `quotation-timeline.controller.ts`) and, before implementing, traced its two admin actions' `OutboxService.enqueue()` calls back to the consumer side of the Outbox pattern. Found `claimNext()`/`markProcessed()`/`markFailed()` have zero callers anywhere in the codebase, confirmed via full-tree grep, a review of the only in-process job runner (`scheduler.service.ts`, 6 unrelated jobs), `package.json` (one entrypoint, no worker script), and git history (no evidence a consumer ever existed and was removed). The Outbox pattern has been write-only since its introduction — the one live producer, `quotation.service.ts`'s `quotation.superseded` event, has never triggered any downstream effect, and the intended effect is unknown (no consumer stub exists to infer it from). This also means the E4-F1-T1 replay API I shipped only resets a status field rather than reprocessing anything. Filed as new task **E5-F1-T2** (P1, under Epic E5/Feature F1) per governance rule 6 — investigation and full task card only, no code written or modified. Recommends a two-phase rollout (product decision on `quotation.superseded`'s intended behavior, then a minimal single-event-type consumer) rather than jumping directly to a generalized dispatcher, to avoid building for an unconfirmed requirement — the same discipline applied on E2-F3-T1. No other backlog item touched, no application code modified. | Principal Engineer review |
 | 2026-08-02 | E6-F1-T1 implemented: new `server/src/routes/quotation-timeline.route.ts` wires `GET /:quotationGroupId`, `POST /:quotationGroupId/replay`, `POST /:quotationGroupId/regenerate-link` to the already-implemented `QuotationTimelineController`, admin-gated via `authorize(Role.SUPER_ADMIN, Role.ADMIN)` (same idiom as E4-F1-T1's `outbox.route.ts`). Registered in `routes/index.ts` under `/quotation-timeline`. Investigation corrected the task's original premise: `wallet-transaction.controller.ts` was found already fully wired in `staff.route.ts` and consumed by the dashboard — not orphaned, no action taken, backlog corrected. The two POST actions are documented in-code (per E5-F1-T2) as enqueue-only until a consumer exists, so they aren't mistaken for fully functional. 21 new tests (router-stack registration + real wired `authorize(...)` middleware invocation, mirroring E4-F1-T1's approach), full suite 134/134 passing, typecheck clean, `git diff` confirmed strictly additive — no controller/service files touched. Marked `Done*` — the live HTTP+DB integration test for `getTimeline` needs infrastructure this sandbox doesn't have, same limitation as every DB-touching task this session. Committed separately from the E5-F1-T2 backlog-filing commit, per one-commit-per-task discipline. No other backlog item touched. | Principal Engineer review |
 | 2026-08-02 | E7-F1-T1 marked `Deferred` (not implemented): investigated ahead of implementation and found it requires an architecture decision — a new test framework (`vitest`) alongside the existing `node --test` suites, plus a new heavyweight dev dependency (`mongodb-memory-server`) that downloads and runs a real MongoDB binary. Per this session's workflow rule to pause for approval on framework/architecture changes, presented the plan and deferred rather than proceeding unapproved. Network probes suggest this may actually be feasible in this sandbox (npm registry reachable, MongoDB binary host responds) — unlike every other DB-dependent task this session — noted in the task card as a reason to revisit it specifically, not lump it in with the general "no DB access" limitation. No code changed. | Principal Engineer review |
+| 2026-08-02 | E3-F3-T1 implemented: new `server/Dockerfile` (multi-stage, Node 24, `PUPPETEER_SKIP_DOWNLOAD=true` to avoid headless-Chrome dependency complexity — PDF-generation endpoints documented as non-functional in this container, not silently broken), new `docker-compose.yml` (Mongo as a single-node replica set via a one-shot `rs.initiate()` init service, Redis, and the server running `npm run dev` with source bind-mounted for hot reload), new `server/.dockerignore`, and a new "Docker Compose" option added to `README.md` ahead of the existing manual setup (kept, unmodified, as "Option B"). Checked the environment first: `docker` CLI is present but no daemon is running here (`docker ps` fails) — a genuine execution limitation, not one of the four stop conditions, so proceeded with authoring the files. Verified what was possible: `docker compose config` validates the file's structure cleanly; `tsc --noEmit` and the full 134-test suite confirm zero impact on application code (expected — no app code was touched). **Not verified:** actually running `docker-compose up`, and the task's own specified acceptance criterion (the quotation→order→receipt transactional flow succeeding against the containerized replica-set Mongo) — flagged as an explicit open follow-up, not assumed working. Marked `Done*`. No other backlog item touched. | Principal Engineer review |
 
 ---
 

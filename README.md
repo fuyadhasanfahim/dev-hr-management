@@ -25,9 +25,28 @@ This project is a monorepo consisting of 4 main applications:
 
 ## 🚀 Getting Started
 
-### Prerequisites
+### Option A: Backend via Docker Compose (recommended for local backend dev)
+
+Brings up MongoDB (single-node replica set, required for the app's
+transactional flows), Redis, and the server in watch mode with one command
+— no local Mongo/Redis install needed.
+
+```bash
+docker-compose up
+```
+
+The server listens on `http://localhost:5000`. All server environment
+values in `docker-compose.yml` are local-dev-only placeholders — SMTP- and
+Cloudinary-dependent features (email sending, image upload) won't actually
+work until you replace those with real credentials. Only the backend is
+containerized; run the frontend apps (`dashboard`, `support`, `webbriks`)
+directly with `npm run dev` as described below.
+
+### Option B: Manual setup
+
+#### Prerequisites
 - Node.js (v18 or higher)
-- MongoDB instance (local or Atlas)
+- MongoDB instance (local or Atlas) — must be configured as a replica set for transactional flows to work
 - Redis (optional, for queuing)
 
 ### 1. Backend Server Setup
