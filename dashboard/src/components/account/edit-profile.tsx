@@ -12,7 +12,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader } from "lucide-react";
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { changeEmail, updateUser, useSession } from "@/lib/auth-client";
 import { toast } from "sonner";
@@ -33,6 +33,10 @@ import {
     SelectValue,
 } from "../ui/select";
 import { cn } from "@/lib/utils";
+
+function Required() {
+    return <span className="text-destructive">*</span>;
+}
 
 export default function EditProfile() {
     const { data: session, isPending } = useSession();
@@ -81,8 +85,9 @@ export default function EditProfile() {
         form.setValue("name", session?.user.name as string);
         form.setValue("email", session?.user.email as string);
 
-        // Check if staff exists and profile is completed
-        if (!data?.staff?.profileCompleted) return;
+        // Pre-fill with whatever staff data already exists, whether or not
+        // the profile has been marked complete yet
+        if (!data?.staff) return;
 
         form.setValue("phone", data.staff.phone || "");
 
@@ -251,7 +256,7 @@ export default function EditProfile() {
                     <div className="space-y-6">
                         <div className="grid grid-cols-2 gap-4">
                             <div className="grid gap-2">
-                                <Label>Name *</Label>
+                                <Label>Name <Required /></Label>
                                 <Input {...form.register("name")} />
                                 <p className="text-sm text-destructive">
                                     {form.formState.errors.name?.message}
@@ -259,7 +264,7 @@ export default function EditProfile() {
                             </div>
 
                             <div className="grid gap-2">
-                                <Label>Email *</Label>
+                                <Label>Email <Required /></Label>
                                 <Input {...form.register("email")} />
                                 <p className="text-sm text-destructive">
                                     {form.formState.errors.email?.message}
@@ -269,7 +274,7 @@ export default function EditProfile() {
 
                         <div className="grid gap-4 grid-cols-2">
                             <div className="grid gap-2">
-                                <Label>Phone *</Label>
+                                <Label>Phone <Required /></Label>
                                 <Input
                                     {...form.register("phone")}
                                     placeholder="Enter phone number"
@@ -281,7 +286,11 @@ export default function EditProfile() {
 
                             <div>
                                 <DatePicker
-                                    label="Date of Birth *"
+                                    label={
+                                        <>
+                                            Date of Birth <Required />
+                                        </>
+                                    }
                                     value={form.watch("dateOfBirth")}
                                     onChange={(date) => {
                                         if (date) {
@@ -299,7 +308,7 @@ export default function EditProfile() {
 
                         <div className="grid gap-4 grid-cols-2">
                             <div className="grid gap-2">
-                                <Label>National ID *</Label>
+                                <Label>National ID <Required /></Label>
                                 <Input {...form.register("nationalId")} />
                                 <p className="text-sm text-destructive">
                                     {form.formState.errors.nationalId?.message}
@@ -307,33 +316,40 @@ export default function EditProfile() {
                             </div>
 
                             <div className="grid gap-2">
-                                <Label>Blood Group *</Label>
-                                <Select
-                                    value={form.watch("bloodGroup")}
-                                    onValueChange={(v) =>
-                                        form.setValue("bloodGroup", v)
-                                    }
-                                >
-                                    <SelectTrigger className="w-full">
-                                        <SelectValue placeholder="Select blood group" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {[
-                                            "A+",
-                                            "A-",
-                                            "B+",
-                                            "B-",
-                                            "AB+",
-                                            "AB-",
-                                            "O+",
-                                            "O-",
-                                        ].map((bg) => (
-                                            <SelectItem key={bg} value={bg}>
-                                                {bg}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
+                                <Label>Blood Group <Required /></Label>
+                                <Controller
+                                    control={form.control}
+                                    name="bloodGroup"
+                                    render={({ field }) => (
+                                        <Select
+                                            value={field.value}
+                                            onValueChange={field.onChange}
+                                        >
+                                            <SelectTrigger className="w-full">
+                                                <SelectValue placeholder="Select blood group" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {[
+                                                    "A+",
+                                                    "A-",
+                                                    "B+",
+                                                    "B-",
+                                                    "AB+",
+                                                    "AB-",
+                                                    "O+",
+                                                    "O-",
+                                                ].map((bg) => (
+                                                    <SelectItem
+                                                        key={bg}
+                                                        value={bg}
+                                                    >
+                                                        {bg}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    )}
+                                />
                                 <p className="text-sm text-destructive">
                                     {form.formState.errors.bloodGroup?.message}
                                 </p>
@@ -343,54 +359,99 @@ export default function EditProfile() {
                         <div className="grid gap-2">
                             <Label>Emergency Contact Person</Label>
                             <div className="grid grid-cols-3 gap-4">
-                                <Input
-                                    placeholder="Name"
-                                    {...form.register("emergencyContact.name")}
-                                />
+                                <div className="grid gap-2">
+                                    <Label className="text-xs text-muted-foreground">
+                                        Name <Required />
+                                    </Label>
+                                    <Input
+                                        placeholder="Name"
+                                        {...form.register(
+                                            "emergencyContact.name",
+                                        )}
+                                    />
+                                    <p className="text-sm text-destructive">
+                                        {
+                                            form.formState.errors
+                                                .emergencyContact?.name
+                                                ?.message
+                                        }
+                                    </p>
+                                </div>
 
-                                <Select
-                                    value={form.watch(
-                                        "emergencyContact.relation",
-                                    )}
-                                    onValueChange={(v) =>
-                                        form.setValue(
-                                            "emergencyContact.relation",
-                                            v,
-                                        )
-                                    }
-                                >
-                                    <SelectTrigger className="w-full">
-                                        <SelectValue placeholder="Relation" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {[
-                                            "Father",
-                                            "Mother",
-                                            "Brother",
-                                            "Sister",
-                                            "Spouse",
-                                            "Friend",
-                                            "Uncle",
-                                            "Auntie",
-                                            "Grandfather",
-                                            "Grandmother",
-                                        ].map((r) => (
-                                            <SelectItem key={r} value={r}>
-                                                {r}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
+                                <div className="grid gap-2">
+                                    <Label className="text-xs text-muted-foreground">
+                                        Relation <Required />
+                                    </Label>
+                                    <Controller
+                                        control={form.control}
+                                        name="emergencyContact.relation"
+                                        render={({ field }) => (
+                                            <Select
+                                                value={field.value}
+                                                onValueChange={field.onChange}
+                                            >
+                                                <SelectTrigger className="w-full">
+                                                    <SelectValue placeholder="Relation" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {[
+                                                        "Father",
+                                                        "Mother",
+                                                        "Brother",
+                                                        "Sister",
+                                                        "Spouse",
+                                                        "Friend",
+                                                        "Uncle",
+                                                        "Auntie",
+                                                        "Grandfather",
+                                                        "Grandmother",
+                                                    ].map((r) => (
+                                                        <SelectItem
+                                                            key={r}
+                                                            value={r}
+                                                        >
+                                                            {r}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        )}
+                                    />
+                                    <p className="text-sm text-destructive">
+                                        {
+                                            form.formState.errors
+                                                .emergencyContact?.relation
+                                                ?.message
+                                        }
+                                    </p>
+                                </div>
 
-                                <Input
-                                    placeholder="Phone"
-                                    {...form.register("emergencyContact.phone")}
-                                />
+                                <div className="grid gap-2">
+                                    <Label className="text-xs text-muted-foreground">
+                                        Phone <Required />
+                                    </Label>
+                                    <Input
+                                        placeholder="Phone"
+                                        {...form.register(
+                                            "emergencyContact.phone",
+                                        )}
+                                    />
+                                    <p className="text-sm text-destructive">
+                                        {
+                                            form.formState.errors
+                                                .emergencyContact?.phone
+                                                ?.message
+                                        }
+                                    </p>
+                                </div>
                             </div>
                         </div>
 
                         <div className="grid grid-cols-2 gap-4">
-                            <div>
+                            <div className="grid gap-2">
+                                <Label>
+                                    Father&apos;s Name <Required />
+                                </Label>
                                 <Input
                                     placeholder="Father's Name"
                                     {...form.register("fathersName")}
@@ -400,7 +461,10 @@ export default function EditProfile() {
                                 </p>
                             </div>
 
-                            <div>
+                            <div className="grid gap-2">
+                                <Label>
+                                    Mother&apos;s Name <Required />
+                                </Label>
                                 <Input
                                     placeholder="Mother's Name"
                                     {...form.register("mothersName")}
@@ -419,28 +483,39 @@ export default function EditProfile() {
                         {/* Bank Account Section */}
                         <div className="pt-4">
                             <Label className="text-base font-semibold">
-                                Bank Account Information *
+                                Bank Account Information
                             </Label>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
                                 <div className="grid gap-2">
-                                    <Label>Bank Name *</Label>
-                                    <Select
-                                        value={form.watch("bank.bankName")}
-                                        onValueChange={(v) =>
-                                            form.setValue("bank.bankName", v)
-                                        }
-                                    >
-                                        <SelectTrigger className="w-full">
-                                            <SelectValue placeholder="Select bank" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {BANGLADESH_BANKS.map((b) => (
-                                                <SelectItem key={b} value={b}>
-                                                    {b}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
+                                    <Label>
+                                        Bank Name <Required />
+                                    </Label>
+                                    <Controller
+                                        control={form.control}
+                                        name="bank.bankName"
+                                        render={({ field }) => (
+                                            <Select
+                                                value={field.value}
+                                                onValueChange={field.onChange}
+                                            >
+                                                <SelectTrigger className="w-full">
+                                                    <SelectValue placeholder="Select bank" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {BANGLADESH_BANKS.map(
+                                                        (b) => (
+                                                            <SelectItem
+                                                                key={b}
+                                                                value={b}
+                                                            >
+                                                                {b}
+                                                            </SelectItem>
+                                                        ),
+                                                    )}
+                                                </SelectContent>
+                                            </Select>
+                                        )}
+                                    />
                                     <p className="text-sm text-destructive">
                                         {
                                             form.formState.errors.bank?.bankName
@@ -450,7 +525,9 @@ export default function EditProfile() {
                                 </div>
 
                                 <div className="grid gap-2">
-                                    <Label>Account Number *</Label>
+                                    <Label>
+                                        Account Number <Required />
+                                    </Label>
                                     <Input
                                         placeholder="Your account number"
                                         {...form.register("bank.accountNumber")}
@@ -464,7 +541,9 @@ export default function EditProfile() {
                                 </div>
 
                                 <div className="grid gap-2 md:col-span-2">
-                                    <Label>Account Holder Name *</Label>
+                                    <Label>
+                                        Account Holder Name <Required />
+                                    </Label>
                                     <Input
                                         placeholder="Name on account"
                                         {...form.register(
@@ -498,7 +577,11 @@ export default function EditProfile() {
                         </div>
 
                         <DatePicker
-                            label="Join Date *"
+                            label={
+                                <>
+                                    Join Date <Required />
+                                </>
+                            }
                             value={form.watch("joinDate")}
                             onChange={(date) => {
                                 if (date) {
@@ -513,7 +596,9 @@ export default function EditProfile() {
                     </div>
 
                     <div className="grid gap-2">
-                        <Label>Address *</Label>
+                        <Label>
+                            Address <Required />
+                        </Label>
                         <Input {...form.register("address")} />
                         <p className="text-sm text-destructive">
                             {form.formState.errors.address?.message}

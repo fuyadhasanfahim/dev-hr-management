@@ -161,7 +161,44 @@ export default function RootAccount() {
                     </CardContent>
                 </Card>
 
-                {showDefault && staff?._id && (
+                {showDefault && isLoading && (
+                    <div className="col-span-2 space-y-4">
+                        <Skeleton className="h-10 w-full" />
+                        <Skeleton className="h-64 w-full" />
+                    </div>
+                )}
+
+                {showDefault && !isLoading && !staff?._id && (
+                    <div className="col-span-2">
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>Profile Information</CardTitle>
+                                <CardDescription>
+                                    Your profile hasn&apos;t been completed
+                                    yet.
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                <p className="text-sm text-muted-foreground mb-4">
+                                    Complete your profile to see your personal
+                                    and official staff details here.
+                                </p>
+                                <Button
+                                    onClick={() =>
+                                        router.push(
+                                            `${pathname}?edit-profile=true`,
+                                        )
+                                    }
+                                >
+                                    <SquarePenIcon />
+                                    Complete Profile
+                                </Button>
+                            </CardContent>
+                        </Card>
+                    </div>
+                )}
+
+                {showDefault && !isLoading && staff?._id && (
                     <div className="col-span-2 space-y-6">
                         <Tabs defaultValue="overview" className="w-full">
                             <TabsList className="flex flex-wrap h-auto w-full sm:w-auto justify-start gap-1 p-1">
@@ -290,31 +327,33 @@ export default function RootAccount() {
                                                     {staff?.branch?.name ||
                                                         "N/A"}
                                                 </p>
-                                                <p>
+                                                <p className="capitalize">
                                                     <b>Status:</b>{" "}
-                                                    {staff?.status}
+                                                    {staff?.status || "N/A"}
                                                 </p>
 
                                                 <p>
                                                     <b>Join Date:</b>{" "}
-                                                    {staff?.joinDate &&
-                                                        format(
-                                                            new Date(
-                                                                staff.joinDate,
-                                                            ),
-                                                            "PPP",
-                                                        )}
+                                                    {staff?.joinDate
+                                                        ? format(
+                                                              new Date(
+                                                                  staff.joinDate,
+                                                              ),
+                                                              "PPP",
+                                                          )
+                                                        : "N/A"}
                                                 </p>
 
                                                 <p>
                                                     <b>Date of Birth:</b>{" "}
-                                                    {staff?.dateOfBirth &&
-                                                        format(
-                                                            new Date(
-                                                                staff.dateOfBirth,
-                                                            ),
-                                                            "PPP",
-                                                        )}
+                                                    {staff?.dateOfBirth
+                                                        ? format(
+                                                              new Date(
+                                                                  staff.dateOfBirth,
+                                                              ),
+                                                              "PPP",
+                                                          )
+                                                        : "N/A"}
                                                 </p>
 
                                                 <p>

@@ -4,6 +4,7 @@ import type IStaff from "../types/staff.type.js";
 import { startOfDay, endOfDay } from "date-fns";
 import { escapeRegex } from "../lib/sanitize.js";
 import auditService from "./audit.service.js";
+import { Designation } from "../constants/designation.js";
 
 export type IStaffQueryParams = {
     page?: number;
@@ -528,7 +529,7 @@ async function completeProfileInDB(payload: {
                 userId,
                 staffId,
                 phone: staff.phone || "",
-                designation: staff.designation || "Staff",
+                designation: staff.designation || Designation.OTHER,
                 department: staff.department || "General",
                 joinDate: staff.joinDate || new Date(),
                 status: "active",

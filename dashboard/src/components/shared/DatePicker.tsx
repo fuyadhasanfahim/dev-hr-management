@@ -15,7 +15,7 @@ import {
 import { cn } from '@/lib/utils';
 
 type DatePickerProps = {
-    label?: string;
+    label?: React.ReactNode;
     value: Date | undefined;
     onChange: (date: Date | undefined) => void;
     placeholder?: string;
