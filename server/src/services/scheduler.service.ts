@@ -19,6 +19,7 @@ import {
 } from '../utils/date.util.js';
 import envConfig from '../config/env.config.js';
 import { TelemetryService } from './telemetry.service.js';
+import { startOutboxWorker, stopOutboxWorker } from './outbox-worker.service.js';
 
 // ============================================
 // ATTENDANCE AUTO-CHECK (Every 10 minutes)
@@ -597,9 +598,13 @@ function startAllSchedulers() {
     telemetryInterval = setInterval(() => {
         TelemetryService.runHealthChecks().catch(console.error);
     }, TELEMETRY_INTERVAL_MS);
+
+    // Outbox worker (E5-F1-T2 Phase 1) — polls for claimable Outbox events.
+    // Owns its own interval internally; see outbox-worker.service.ts.
+    startOutboxWorker();
 }
 
-function stopAllSchedulers() {
+async function stopAllSchedulers() {
     if (attendanceInterval) {
         clearInterval(attendanceInterval);
         attendanceInterval = null;
@@ -613,6 +618,11 @@ function stopAllSchedulers() {
         clearInterval(telemetryInterval);
         telemetryInterval = null;
     }
+
+    // Awaited so a claim already in flight gets to finish (or hit the
+    // outer graceful-shutdown timeout) instead of being abandoned mid-tick.
+    await stopOutboxWorker();
+
     console.log('[Scheduler] All schedulers stopped');
 }
 

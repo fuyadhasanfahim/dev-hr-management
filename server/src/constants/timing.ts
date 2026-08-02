@@ -16,3 +16,6 @@ export const DUPLICATE_QUOTATION_WINDOW_MS = 5 * 60 * 1000;
 
 /** How long an unlocked order asset's access token stays valid after delivery payment. */
 export const ASSET_ACCESS_WINDOW_DAYS = 7;
+
+/** How often the in-process Outbox worker polls for claimable events (E5-F1-T2 Phase 1). */
+export const OUTBOX_POLL_INTERVAL_MS = 5 * 1000;

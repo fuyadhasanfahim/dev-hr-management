@@ -42,7 +42,13 @@ async function Server() {
         // indefinitely (deploys/restarts send SIGTERM and expect the
         // process to actually exit).
         const shutdown = createGracefulShutdown(server, {
-            closeResources: () => mongoose.connection.close(),
+            closeResources: async () => {
+                // Stop schedulers first (including the Outbox worker, E5-F1-T2
+                // Phase 1) so no new background work starts against a DB
+                // connection that's about to close, then close the connection.
+                await schedulerService.stopAllSchedulers();
+                await mongoose.connection.close();
+            },
             onLog: (level, event, meta) => logger[level](meta, event),
         });
         process.on('SIGTERM', () => shutdown('SIGTERM'));
