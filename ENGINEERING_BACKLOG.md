@@ -3,7 +3,7 @@
 **Status:** LIVING DOCUMENT — this file is the permanent source of truth for backend engineering work from this point forward.
 **Baseline inputs:** Principal Engineer Audit Report (2026-08-01) + Execution Roadmap (2026-08-01).
 **Scope:** `server/` (Express/MongoDB backend). Frontend apps (`auth/`, `dashboard/`, `support/`) are referenced only where a backend change has a required frontend companion — they are not independently audited here.
-**Last updated:** 2026-08-02 · **Updated by:** Principal Engineer review — E8-F2-T2 split: compression middleware implemented (no stop condition applies), cursor pagination stopped on (public API change, pending design sign-off). E8-F1-T1 also presented and stopped on (public API versioning). Autonomous backlog execution has now reached the end of the executable P3 tier — remaining work is all pending your input.
+**Last updated:** 2026-08-02 · **Updated by:** Principal Engineer review — E8-F2-T2 split: compression middleware implemented (no stop condition applies), cursor pagination stopped on (public API change, pending design sign-off). E8-F1-T1 also presented and stopped on (public API versioning). Autonomous backlog execution has now reached the end of the executable P3 tier — remaining work is all pending your input. **E2-F3-T1 closed by owner decision (2026-08-02):** production verification confirmed zero `OrderAsset` documents and no write path creates them; no migration is required; encryption will be implemented together with any future `OrderAsset` creation feature, not speculatively ahead of it.
 
 ---
 
@@ -11,7 +11,7 @@
 
 1. **Every piece of backend work maps to a Task ID here before it's implemented.** If work doesn't have an ID, it doesn't get merged — create the backlog entry first, even if it's two lines.
 2. **Hierarchy:** `Epic → Feature → Task → Subtask`. IDs are stable once assigned (`E2-F1-T3`) — never renumber, only append or mark `SUPERSEDED`.
-3. **Status values:** `Not Started` · `In Progress` · `Blocked` · `In Review` · `Done` · `Deferred` · `Superseded`. Update status in the Dashboard table (§1) *and* the Task Detail Card (§3–10) — they must never disagree; the Dashboard is the source of truth for "what's the state right now," the Detail Card is the source of truth for "why."
+3. **Status values:** `Not Started` · `In Progress` · `Blocked` · `In Review` · `Done` · `Deferred` · `Closed` · `Superseded`. `Closed` = a gating question resolved the task out of scope entirely (e.g. the risk it addresses doesn't currently exist) — distinct from `Deferred` (still relevant, revisit later) and `Superseded` (replaced by different work). Update status in the Dashboard table (§1) *and* the Task Detail Card (§3–10) — they must never disagree; the Dashboard is the source of truth for "what's the state right now," the Detail Card is the source of truth for "why."
 4. **Definition of Ready** (a Task may move to `In Progress`): exact files identified, dependencies satisfied or explicitly waived, testing strategy defined, rollback plan defined.
 5. **Definition of Done** (a Task may move to `Done`): acceptance criteria all checked, tests passing in CI, rollback plan validated as *theoretically* sound (not necessarily executed), Dashboard + Detail Card updated, and — if the task changed architecture, data model, or a cross-cutting convention — §11 (Architecture Decisions Log) is updated.
 6. **New issues discovered mid-implementation** (regressions, newly noticed debt, scope surprises) get filed as new Tasks under the most relevant existing Feature, or a new Feature under the most relevant Epic if none fits. They do not get silently folded into an in-flight Task's scope — scope creep inside a Task is exactly the kind of untracked risk this process exists to prevent.
@@ -29,7 +29,7 @@
 | E2-F1-T1 | Escape regex in Quotation/Receipt search | Security | P0 | Done | 1 hr | Very Low |
 | E2-F2-T1 | Validate security-critical env vars at boot | Security | P0 | Done | 1–2 hrs | Very Low |
 | E3-F1-T1 | Add `/healthz` + graceful shutdown | Ops Readiness | P0 | Done* | 2–3 hrs | Very Low |
-| E2-F3-T1 | Real encryption for order assets | Security | P1 | Not Started | 1.5–2.5 days | Medium |
+| E2-F3-T1 | Real encryption for order assets | Security | P1 | Closed | 1.5–2.5 days | Medium |
 | E4-F1-T1 | Wire up Outbox admin API | Observability | P1 | Done* | 4–6 hrs | Very Low |
 | E3-F2-T1 | Minimal CI (typecheck + build gate) | Ops Readiness | P1 | Done | 3–4 hrs | Very Low |
 | E6-F2-T3 | Fix pre-existing unused-import typecheck errors | Code Health | P1 | Done | ~15 min | Very Low |
@@ -51,7 +51,7 @@
 | E8-F1-T1 | API versioning + OpenAPI spec | API Platform | P3 | Not Started | 3–5 days | Low |
 | E8-F2-T2 | Compression middleware + cursor pagination | API Platform | P3 | Blocked (compression done, pagination needs API design sign-off) | 1–2 days | Low |
 
-**Completion:** 15 / 26 Tasks done (6 fully `Done`, 9 marked `Done*` — see notes on each). 2 `Deferred` (E7-F1-T1, E3-F4-T1), 2 `Blocked` (E6-F2-T1 — scale/practicality; E8-F2-T2 — half done, half pending API design). **Pending your decision (not blocked on this sandbox, blocked on you):** E5-F1-T2 (product decision), E5-F1-T1 (architecture), E1-F2-T2 (public API contract + frontend coordination), E4-F2-T1 (architecture), E8-F2-T1 (architecture — cache invalidation strategy), E4-F3-T1 (business — retention window approval), E8-F1-T1 (public API versioning), E8-F2-T2's cursor-pagination half (public API design). **Every remaining `Not Started` task in the backlog now requires your input — the autonomous pass is complete for this session.** **P0 remaining:** 0/5 — all P0 tasks addressed. **P1 status:** E3-F2-T1 and E6-F2-T3 both fully `Done`. E1-F3-T1, E4-F1-T1, E1-F2-T1 all `Done*` (open follow-ups documented on each). Remaining P1s: **E2-F3-T1** (deferred pending a future asset-creation write path) and **E5-F1-T2** (Outbox consumer — blocked on a required product decision, see its Subtask a). **P2 status:** E6-F1-T1 now `Done*` — `quotation-timeline.controller.ts` wired, `wallet-transaction.controller.ts` confirmed already live. **E7-F1-T1 `Deferred`** — needs a test-framework architecture decision before implementation. **E3-F3-T1 now `Done*`** — Docker local-dev stack authored (Dockerfile, docker-compose.yml, README); the transactional-flow verification and the `docker-compose up` run itself are open follow-ups (no Docker daemon in this environment).
+**Completion:** 15 / 26 Tasks done (6 fully `Done`, 9 marked `Done*` — see notes on each). 1 `Closed` (E2-F3-T1), 2 `Deferred` (E7-F1-T1, E3-F4-T1), 2 `Blocked` (E6-F2-T1 — scale/practicality; E8-F2-T2 — half done, half pending API design). **Pending your decision (not blocked on this sandbox, blocked on you):** E5-F1-T2 (product decision), E5-F1-T1 (architecture), E1-F2-T2 (public API contract + frontend coordination), E4-F2-T1 (architecture), E8-F2-T1 (architecture — cache invalidation strategy), E4-F3-T1 (business — retention window approval), E8-F1-T1 (public API versioning), E8-F2-T2's cursor-pagination half (public API design). **Every remaining `Not Started` task in the backlog now requires your input — the autonomous pass is complete for this session.** **P0 remaining:** 0/5 — all P0 tasks addressed. **P1 status:** E3-F2-T1 and E6-F2-T3 both fully `Done`. E1-F3-T1, E4-F1-T1, E1-F2-T1 all `Done*` (open follow-ups documented on each). **E2-F3-T1** is now `Closed` — production verification confirmed zero `OrderAsset` documents and no write path creates them; nothing to migrate; encryption will be built alongside any future asset-creation feature. Remaining open P1: **E5-F1-T2** (Outbox consumer — blocked on a required product decision, see its Subtask a). **P2 status:** E6-F1-T1 now `Done*` — `quotation-timeline.controller.ts` wired, `wallet-transaction.controller.ts` confirmed already live. **E7-F1-T1 `Deferred`** — needs a test-framework architecture decision before implementation. **E3-F3-T1 now `Done*`** — Docker local-dev stack authored (Dockerfile, docker-compose.yml, README); the transactional-flow verification and the `docker-compose up` run itself are open follow-ups (no Docker daemon in this environment).
 
 *`Done*` on E1-F1-T1 = the guard clause, model, and unit test matrix are complete and verified; the HTTP-level integration test (Subtask d) is `Blocked`, not skipped — it has a hard dependency on DB test infrastructure that doesn't exist yet (E7-F1-T1). See the Task Detail Card in §3 for the full breakdown; this is not being counted as fully `Done` until that subtask either completes or is formally waived.
 
@@ -315,26 +315,32 @@ E8  API Platform Maturity
 ### E2-F3 — Data-at-Rest Protection
 
 #### E2-F3-T1: Real encryption for order assets
-- **Priority:** P1 · **Status:** Not Started
-- **Business value:** The system stores `CREDENTIAL`-type order assets and currently returns them as plaintext with a `TODO: decrypt with AWS KMS` marker — the highest real-world-harm item in the whole backlog if that asset type is in active use.
-- **Engineering effort:** 1.5–2.5 days · **Regression risk:** Medium — live data path + conditional migration.
-- **Dependencies:** E2-F2-T1 must be `Done` first. **Gating question (Subtask a) must be answered before scoping the rest.**
-- **Exact files:** `server/src/services/order.service.ts` (asset create + `getAssetByAccessToken` ~L574–604), `server/src/models/order-asset.model.ts`, new `server/src/scripts/migrate-encrypt-order-assets.ts` (conditional).
-- **Testing strategy:** Round-trip encrypt/decrypt unit test; integration test confirming DB never holds plaintext post-fix; migration script dry-run against a staging snapshot with row-count + spot-check verification.
-- **Rollout plan:** Ship the write-path fix first, let it stabilize for several days, **then** run the backfill migration on old rows — decouples the two rollback risks.
-- **Rollback plan:** Safe **only before** the migration runs; once old rows are re-encrypted in place, code rollback would break reads of those rows — sequence accordingly.
-- **Acceptance criteria:** No new asset ever persists plaintext · `getAssetByAccessToken` correctly decrypts new-scheme values · pre-existing plaintext (if any) migrated and spot-checked · TODO comment replaced with accurate documentation.
+- **Priority:** P1 · **Status:** Closed (2026-08-02, owner decision)
+- **Business value:** The system stores `CREDENTIAL`-type order assets and currently returns them as plaintext with a `TODO: decrypt with AWS KMS` marker — the highest real-world-harm item in the whole backlog *if* that asset type is in active use. Production verification (below) found it is not.
+- **Closure reason (owner-confirmed, 2026-08-02):**
+  - Production verification confirmed **zero** `OrderAsset` documents exist in the database — there is nothing to protect today.
+  - No write path exists anywhere in the codebase that creates an `OrderAsset` document (confirmed by code + git-history search during this task's Subtask a investigation) — the plaintext-storage risk this task describes has no current attack surface.
+  - No migration is required as a consequence — there are no legacy rows to backfill.
+  - Encryption will be implemented together with any future feature that adds an `OrderAsset` creation path, rather than built speculatively ahead of one — consistent with this session's discipline on other unconfirmed-requirement items (E3-F4-T1, E5-F1-T2).
+  - The read-only investigation script used to confirm the zero-document count (`server/src/scripts/check-order-asset-encryption.ts`) was deliberately **not committed** — it served its one-time purpose and is not needed as standing tooling.
+- **Engineering effort:** 1.5–2.5 days (not spent — closed at the gating question) · **Regression risk:** N/A — no code changed.
+- **Dependencies:** E2-F2-T1 (`Done`). **Gating question (Subtask a) answered — see Closure reason.**
+- **Exact files:** None changed. (Original scope, now moot: `server/src/services/order.service.ts` asset create + `getAssetByAccessToken` ~L574–604, `server/src/models/order-asset.model.ts` — revisit these when an `OrderAsset` creation feature is actually built.)
+- **Testing strategy:** N/A — no implementation.
+- **Rollout plan:** N/A.
+- **Rollback plan:** N/A.
+- **Acceptance criteria:** Superseded by closure — see Closure reason above. The `TODO: decrypt with AWS KMS` marker in `order.service.ts` remains as-is and should be revisited when an `OrderAsset` write path is actually built, not before.
 
 **Subtasks:**
 | ID | Description | Status |
 |---|---|---|
-| a | **Gate:** confirm with product owner whether `AssetType.CREDENTIAL` has real production data | Not Started |
-| b | Wire `encryptPayload()`/`decryptPayload()` into asset create/read paths | Not Started |
-| c | Add `encryptionVersion` marker field to distinguish migrated vs. legacy rows | Not Started |
-| d | (Conditional on a) Write + dry-run the backfill migration script against staging | Not Started |
-| e | Round-trip + DB-inspection tests | Not Started |
-| f | Run backfill in production only after write-path has soaked, with a pre-migration snapshot | Not Started |
-| g | Replace TODO comment with accurate scheme documentation | Not Started |
+| a | **Gate:** confirm with product owner whether `AssetType.CREDENTIAL` has real production data | **Done** — confirmed zero `OrderAsset` documents in production; task closed as a direct result |
+| b | Wire `encryptPayload()`/`decryptPayload()` into asset create/read paths | **Closed — not applicable** (no write path exists to wire into; revisit if one is built) |
+| c | Add `encryptionVersion` marker field to distinguish migrated vs. legacy rows | **Closed — not applicable** (no legacy rows exist) |
+| d | (Conditional on a) Write + dry-run the backfill migration script against staging | **Closed — not applicable** (gate answered "no data"; migration not needed) |
+| e | Round-trip + DB-inspection tests | **Closed — not applicable** |
+| f | Run backfill in production only after write-path has soaked, with a pre-migration snapshot | **Closed — not applicable** |
+| g | Replace TODO comment with accurate scheme documentation | **Closed — deferred** to whenever an `OrderAsset` creation feature is built, since the comment describes intended future behavior, not a current defect |
 
 ---
 
@@ -750,6 +756,7 @@ E8  API Platform Maturity
 | 2026-08-02 | E6-F2-T2 implemented: new `server/src/constants/timing.ts` (`TOKEN_EXPIRY_DAYS`, `DUPLICATE_QUOTATION_WINDOW_MS`, `ASSET_ACCESS_WINDOW_DAYS`), replacing the 3 time-window magic numbers found in `quotation.service.ts`/`order.service.ts` (deliberately excluded HTTP status codes and percentage-division arithmetic — not "magic numbers" in the sense this task means; also confirmed no tolerance-shaped magic numbers exist in either file, the payroll ±2 tolerance mentioned elsewhere in this backlog lives in a different file outside this task's stated scope). All 3 extracted values confirmed byte-identical to what they replaced via `git diff`. 3 new tests pin each constant's exact value. Full suite 137/137 passing, typecheck clean. All acceptance criteria met, marked fully `Done`. No other backlog item touched. | Principal Engineer review |
 | 2026-08-02 | Presented investigation for E8-F1-T1 (API versioning — literally restructures the public route surface with an `/api/v1` prefix, 3-5 days) and stopped before implementing, matching the public-API-change stop condition. | Principal Engineer review |
 | 2026-08-02 | E8-F2-T2 split and partially implemented: compression is transparent to clients (no response shape change), so no stop condition applied — added the `compression` package and `app.use(compression())` in `app.ts` after `helmet`, before the global rate limiter. `tsc --noEmit` clean, full 137-test suite unaffected. Could not boot the actual app to verify live (importing `app.ts` triggers a real MongoDB connection via `lib/auth.ts` at module load — the same constraint documented on E3-F1-T1 near the start of this session); verified via code review instead (standard middleware, correct registration point) and flagged a live check as an open follow-up. Cursor pagination — the task's other half — was **not** implemented: it adds a new query parameter and response shape to existing list endpoints, a public API change requiring a design decision (cursor field per endpoint, encoding scheme, response shape) not made here. Task marked `Blocked`, not `Done`/`Done*`, since one of its two acceptance criteria is unmet pending your input. This is the last task in the executable P3 tier — every remaining `Not Started` item in the backlog now requires a business/schema/API/architecture decision from you; the autonomous execution pass ends here for this session. | Principal Engineer review |
+| 2026-08-02 | E2-F3-T1 marked `Closed` (not `Deferred`), by owner decision: production verification confirmed zero `OrderAsset` documents exist and no write path in the codebase creates them, so no migration is required; encryption will be built alongside any future `OrderAsset` creation feature rather than speculatively ahead of one. The read-only investigation script used to reach this conclusion (`server/src/scripts/check-order-asset-encryption.ts`) was deleted rather than committed, per instruction — it served its one-time purpose. No application code changed; this is a backlog-only update (task card, dashboard row, completion summary, status-values legend). | Owner decision |
 
 ---
 
