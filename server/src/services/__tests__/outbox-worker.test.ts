@@ -14,7 +14,7 @@
  * (run from the `server/` directory)
  */
 
-import { test, describe } from 'node:test';
+import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import type { IOutboxEvent } from '../../models/outbox-event.model.js';
 import {
@@ -24,6 +24,8 @@ import {
     getRegisteredOutboxHandler,
     type OutboxWorkerDeps,
 } from '../outbox-worker.service.js';
+import QuotationModel from '../../models/quotation.model.js';
+import { QuotationService } from '../quotation.service.js';
 
 function fakeEvent(overrides: Record<string, unknown> = {}): IOutboxEvent {
     return {
@@ -194,25 +196,124 @@ describe('drainOutboxEvents', () => {
     });
 });
 
-describe('handler registry — placeholders for currently-produced event types', () => {
-    const knownEventNames = ['quotation.superseded', 'admin.quotation.regenerate_link', 'admin.outbox.replay'];
+describe('handler registry — quotation.superseded stays a placeholder (Phase 1b)', () => {
+    test('"quotation.superseded" has a registered placeholder handler that fails loudly, not silently', async () => {
+        const handler = getRegisteredOutboxHandler('quotation.superseded');
+        assert.ok(handler, 'expected a placeholder handler to be registered for "quotation.superseded"');
 
-    for (const eventName of knownEventNames) {
-        test(`"${eventName}" has a registered placeholder handler that fails loudly, not silently`, async () => {
-            const handler = getRegisteredOutboxHandler(eventName);
-            assert.ok(handler, `expected a placeholder handler to be registered for "${eventName}"`);
+        await assert.rejects(
+            () => handler!(fakeEvent({ eventName: 'quotation.superseded' })),
+            (err: unknown) => {
+                assert.ok(err instanceof Error);
+                assert.match(err.message, /no business handler implemented yet/i);
+                return true;
+            },
+        );
+    });
+});
 
-            await assert.rejects(
-                () => handler!(fakeEvent({ eventName })),
-                (err: unknown) => {
-                    assert.ok(err instanceof Error);
-                    assert.match(err.message, new RegExp(`no business handler implemented yet`, 'i'));
-                    return true;
-                },
-            );
-        });
+describe('handler registry — admin.outbox.replay was removed entirely (Phase 1b)', () => {
+    test('no handler is registered for "admin.outbox.replay" — nothing produces this event anymore', () => {
+        assert.equal(getRegisteredOutboxHandler('admin.outbox.replay'), undefined);
+    });
+});
+
+describe('admin.quotation.regenerate_link — real handler (Phase 1b)', () => {
+    let originalFindOne: typeof QuotationModel.findOne;
+    let originalSendQuotation: typeof QuotationService.sendQuotation;
+
+    beforeEach(() => {
+        originalFindOne = QuotationModel.findOne;
+        originalSendQuotation = QuotationService.sendQuotation;
+    });
+
+    afterEach(() => {
+        QuotationModel.findOne = originalFindOne;
+        QuotationService.sendQuotation = originalSendQuotation;
+    });
+
+    function getHandler() {
+        const handler = getRegisteredOutboxHandler('admin.quotation.regenerate_link');
+        assert.ok(handler, 'expected a real handler to be registered for "admin.quotation.regenerate_link"');
+        return handler!;
     }
 
+    test('missing quotationGroupId in payload: throws a clear error, never calls sendQuotation', async () => {
+        let sendQuotationCalls = 0;
+        (QuotationService as any).sendQuotation = async () => {
+            sendQuotationCalls++;
+        };
+
+        await assert.rejects(
+            () => getHandler()(fakeEvent({ eventName: 'admin.quotation.regenerate_link', payload: {} })),
+            /missing a valid "quotationGroupId"/,
+        );
+        assert.equal(sendQuotationCalls, 0);
+    });
+
+    test('no latest quotation found for the group: throws a clear error, never calls sendQuotation', async () => {
+        let findOneCalls = 0;
+        let sendQuotationCalls = 0;
+        (QuotationModel as any).findOne = async (query: any) => {
+            findOneCalls++;
+            assert.deepEqual(query, { quotationGroupId: 'grp-1', isLatestVersion: true });
+            return null;
+        };
+        (QuotationService as any).sendQuotation = async () => {
+            sendQuotationCalls++;
+        };
+
+        await assert.rejects(
+            () =>
+                getHandler()(
+                    fakeEvent({
+                        eventName: 'admin.quotation.regenerate_link',
+                        payload: { quotationGroupId: 'grp-1' },
+                    }),
+                ),
+            /no latest quotation found for quotationGroupId "grp-1"/,
+        );
+        assert.equal(findOneCalls, 1);
+        assert.equal(sendQuotationCalls, 0);
+    });
+
+    test('happy path: resolves the latest quotation and delegates to QuotationService.sendQuotation unchanged', async () => {
+        const latest = { _id: { toString: () => 'quotation-id-42' } };
+        (QuotationModel as any).findOne = async () => latest;
+
+        let sendQuotationCalledWith: unknown[] = [];
+        (QuotationService as any).sendQuotation = async (...args: unknown[]) => {
+            sendQuotationCalledWith = args;
+        };
+
+        await getHandler()(
+            fakeEvent({
+                eventName: 'admin.quotation.regenerate_link',
+                payload: { quotationGroupId: 'grp-2', actorUserId: 'user-9' },
+            }),
+        );
+
+        assert.deepEqual(sendQuotationCalledWith, ['quotation-id-42', 'user-9']);
+    });
+
+    test('missing actorUserId in payload: still calls sendQuotation, with an empty-string userId', async () => {
+        const latest = { _id: { toString: () => 'quotation-id-7' } };
+        (QuotationModel as any).findOne = async () => latest;
+
+        let sendQuotationCalledWith: unknown[] = [];
+        (QuotationService as any).sendQuotation = async (...args: unknown[]) => {
+            sendQuotationCalledWith = args;
+        };
+
+        await getHandler()(
+            fakeEvent({ eventName: 'admin.quotation.regenerate_link', payload: { quotationGroupId: 'grp-3' } }),
+        );
+
+        assert.deepEqual(sendQuotationCalledWith, ['quotation-id-7', '']);
+    });
+});
+
+describe('handler registry — general round-trip behavior', () => {
     test('registerOutboxHandler + getRegisteredOutboxHandler round-trip for a fresh event name', async () => {
         let called = false;
         registerOutboxHandler('test.roundtrip.event', async () => {

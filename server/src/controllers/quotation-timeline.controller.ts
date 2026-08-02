@@ -112,37 +112,50 @@ async function getTimeline(req: Request, res: Response) {
     });
 }
 
+/**
+ * Replays failed/dead-lettered Outbox events for a quotation group,
+ * synchronously.
+ *
+ * This used to enqueue its own `admin.outbox.replay` Outbox event and
+ * rely on a (nonexistent, until E5-F1-T2 Phase 1a) consumer to eventually
+ * call `OutboxService.replayMany`. The E5-F1-T2 investigation found that
+ * indirection had no purpose: `replayMany` is already a cheap, synchronous,
+ * idempotent DB update — the sibling `/outbox/replay` admin route already
+ * calls it directly. Routing "please call replayMany" through the same
+ * queue it's asking to act on only added latency and a second failure
+ * point for zero benefit, so the event has been removed; this now does
+ * the same resolution + replay a real handler would have done, inline.
+ */
 async function requestReplay(req: Request, res: Response) {
     const { quotationGroupId } = req.params;
     const mode = String(req.body?.mode ?? 'failed_for_group');
-    const ids = (req.body?.ids ?? []) as string[];
+    const providedIds = (req.body?.ids ?? []) as string[];
 
     if (!quotationGroupId) {
         return res.status(400).json({ success: false, message: 'quotationGroupId is required' });
     }
 
-    const payload: Record<string, unknown> = {
-        quotationGroupId,
-        mode,
-        ids,
-        actorUserId: req.user?.id,
-    };
+    let idsToReplay: string[];
+    if (Array.isArray(providedIds) && providedIds.length > 0) {
+        idsToReplay = providedIds;
+    } else {
+        const staleEvents = await OutboxEventModel.find(
+            { aggregateId: quotationGroupId, status: { $in: ['failed', 'dead_letter'] } },
+            { _id: 1 },
+        ).lean();
+        idsToReplay = staleEvents.map((e) => e._id.toString());
+    }
 
-    const doc = await OutboxService.enqueue({
-        eventName: 'admin.outbox.replay',
-        aggregateType: 'quotationGroup',
-        aggregateId: quotationGroupId,
-        payload,
-    });
-
-    const outboxEventId = doc?._id?.toString?.();
+    if (idsToReplay.length > 0) {
+        await OutboxService.replayMany(idsToReplay);
+    }
 
     logger.info(
-        { quotationGroupId, mode, idsCount: Array.isArray(ids) ? ids.length : 0, outboxEventId },
-        'admin.replay.requested',
+        { quotationGroupId, mode, replayedCount: idsToReplay.length, actorUserId: req.user?.id },
+        'admin.replay.completed',
     );
 
-    return res.status(202).json({ success: true, data: { outboxEventId } });
+    return res.status(200).json({ success: true, data: { replayedCount: idsToReplay.length, ids: idsToReplay } });
 }
 
 async function requestRegenerateLink(req: Request, res: Response) {

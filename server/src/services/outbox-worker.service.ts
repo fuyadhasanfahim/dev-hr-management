@@ -1,19 +1,34 @@
 /**
- * E5-F1-T2 Phase 1 — Outbox worker infrastructure only.
+ * E5-F1-T2 — Outbox worker: claim/dispatch/mark infrastructure (Phase 1a)
+ * plus real business handlers where the E5-F1-T2 investigation could prove
+ * intent from the existing codebase without guessing (Phase 1b).
  *
  * This module is the first thing that ever calls `OutboxService.claimNext`/
  * `markProcessed`/`markFailed` (confirmed via full-tree grep during the
  * E5-F1-T2 design pass: those three methods previously had zero callers —
  * every enqueued event has sat in `pending` since the Outbox pattern was
  * introduced). It provides the claim → dispatch → mark-processed/failed
- * loop and a name-based handler registry; it deliberately does NOT
- * implement any business behavior for the event types currently produced
- * (`quotation.superseded`, `admin.quotation.regenerate_link`,
- * `admin.outbox.replay`) — each is registered with a placeholder handler
- * that fails loudly (visible via the admin `/outbox` UI, retried with the
- * existing backoff, eventually dead-lettered) rather than silently
- * marking real business events "processed" with no effect. Wiring real
- * handlers is explicitly out of scope for this phase.
+ * loop and a name-based handler registry.
+ *
+ * Event-by-event status (Phase 1b investigation):
+ * - `admin.quotation.regenerate_link` — real handler below. Reuses
+ *   `QuotationService.sendQuotation()` unchanged (the same synchronous
+ *   flow already used elsewhere to email a quotation link) rather than
+ *   duplicating any of its token/email logic.
+ * - `admin.outbox.replay` — removed entirely, producer and consumer both.
+ *   It only ever wrapped a cheap, synchronous, idempotent DB operation
+ *   (`OutboxService.replayMany`); `quotation-timeline.controller.ts`'s
+ *   `requestReplay()` now calls that directly instead of round-tripping
+ *   through this queue. No handler is registered for it here — nothing
+ *   produces this event name anymore.
+ * - `quotation.superseded` — still a placeholder, deliberately. Its
+ *   business intent (should anything happen at all when a quotation
+ *   version is superseded? notify staff? nothing?) could not be proven
+ *   from the codebase — no code anywhere reacts to this event today, and
+ *   the one plausible reading (notify staff) would require extending
+ *   `NotificationModel`'s closed `type` enum, a schema change with no
+ *   product sign-off yet. Left failing loudly (retry/backoff/dead-letter)
+ *   rather than guessed at, per the E5-F1-T2 investigation.
  *
  * Split into two layers for testability, mirroring lib/health.ts and
  * lib/gracefulShutdown.ts: `processNextOutboxEvent`/`drainOutboxEvents`
@@ -26,6 +41,8 @@
 import { randomUUID } from 'crypto';
 import type { IOutboxEvent } from '../models/outbox-event.model.js';
 import { OutboxService } from './outbox.service.js';
+import QuotationModel from '../models/quotation.model.js';
+import { QuotationService } from './quotation.service.js';
 import { logger } from '../lib/logger.js';
 import { OUTBOX_POLL_INTERVAL_MS } from '../constants/timing.js';
 
@@ -57,23 +74,62 @@ function placeholderHandler(eventName: string): OutboxEventHandler {
     return async () => {
         throw new Error(
             `Outbox event "${eventName}" has no business handler implemented yet ` +
-                '(E5-F1-T2 Phase 1 shipped worker infrastructure only — the business action ' +
-                'is a separate, not-yet-approved phase). This failure is expected and will ' +
-                'retry/dead-letter like any other handler failure until a real handler is registered.',
+                '(E5-F1-T2: business intent could not be proven from the existing codebase ' +
+                'without guessing — see the E5-F1-T2 investigation). This failure is expected ' +
+                'and will retry/dead-letter like any other handler failure until a real handler ' +
+                'is registered.',
         );
     };
 }
 
-// Placeholder registrations for every event type currently produced
-// (traced exhaustively during the E5-F1-T2 design pass — see that
-// proposal for the full producer audit). Registering explicit
-// placeholders, rather than leaving these names unregistered, keeps the
-// dispatch path exercised end-to-end for all three today, and documents
-// intent per event type rather than relying on the generic
-// "no handler registered" fallback below.
+// `quotation.superseded` stays on the placeholder — see the module-level
+// comment above for why (unproven business intent, would need a schema
+// change to even guess at "notify staff").
 registerOutboxHandler('quotation.superseded', placeholderHandler('quotation.superseded'));
-registerOutboxHandler('admin.quotation.regenerate_link', placeholderHandler('admin.quotation.regenerate_link'));
-registerOutboxHandler('admin.outbox.replay', placeholderHandler('admin.outbox.replay'));
+
+/**
+ * `admin.quotation.regenerate_link` real handler (Phase 1b).
+ *
+ * Reuses `QuotationService.sendQuotation()` verbatim — the same
+ * synchronous flow that already generates a fresh `secureToken`/
+ * `tokenExpiresAt` when needed and emails the quotation PDF/link to the
+ * client (`quotation.service.ts`'s `sendQuotation`, ~L416). No token
+ * generation, email rendering, or recipient-resolution logic is
+ * duplicated here — this handler's only job is resolving the event's
+ * `quotationGroupId` payload into the concrete quotation `_id` that
+ * `sendQuotation()` expects (the same `{ quotationGroupId,
+ * isLatestVersion: true }` lookup `createNewVersion()` already performs).
+ */
+async function handleAdminQuotationRegenerateLink(event: IOutboxEvent): Promise<void> {
+    const payload = (event.payload ?? {}) as { quotationGroupId?: unknown; actorUserId?: unknown };
+    const quotationGroupId =
+        typeof payload.quotationGroupId === 'string' ? payload.quotationGroupId : undefined;
+
+    if (!quotationGroupId) {
+        throw new Error(
+            `admin.quotation.regenerate_link event ${String(event._id)} is missing a valid "quotationGroupId" in its payload`,
+        );
+    }
+
+    const latest = await QuotationModel.findOne({ quotationGroupId, isLatestVersion: true });
+    if (!latest) {
+        throw new Error(
+            `admin.quotation.regenerate_link: no latest quotation found for quotationGroupId "${quotationGroupId}"`,
+        );
+    }
+
+    const actorUserId = typeof payload.actorUserId === 'string' ? payload.actorUserId : '';
+    await QuotationService.sendQuotation(latest._id.toString(), actorUserId);
+}
+
+registerOutboxHandler('admin.quotation.regenerate_link', handleAdminQuotationRegenerateLink);
+
+// `admin.outbox.replay` is intentionally NOT registered here — it has
+// been removed as an Outbox event entirely (Phase 1b). It only ever
+// wrapped a cheap, synchronous, idempotent DB operation
+// (`OutboxService.replayMany`); `quotation-timeline.controller.ts` now
+// calls that directly instead of producing this event. Nothing enqueues
+// it anymore, so no handler is needed.
 
 // ─── Pure core: claim → dispatch → mark (injectable, unit-testable) ────────
 

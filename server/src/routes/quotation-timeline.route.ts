@@ -11,13 +11,12 @@ const TIMELINE_ADMIN_ROLES = [Role.SUPER_ADMIN, Role.ADMIN];
 router.get('/:quotationGroupId', authorize(...TIMELINE_ADMIN_ROLES), QuotationTimelineController.getTimeline);
 
 // ── Admin actions ────────────────────────────────────────────────────────────
-// NOTE (E5-F1-T2): these enqueue an OutboxEvent, but no consumer currently
-// processes the Outbox queue anywhere in this codebase — see E5-F1-T2. Today
-// these return 202 Accepted and log the request; they do not yet cause any
-// downstream effect. Wiring them up now is still correct (the enqueue call
-// itself is harmless and consistent with the rest of the system's current
-// behavior), but do not present these as fully functional until E5-F1-T2
-// ships a consumer.
+// NOTE (E5-F1-T2): `replay` executes synchronously (direct
+// OutboxService.replayMany call — the "admin.outbox.replay" Outbox event
+// was removed, see quotation-timeline.controller.ts). `regenerate-link`
+// still enqueues an `admin.quotation.regenerate_link` Outbox event and
+// returns 202 Accepted — the Outbox worker (outbox-worker.service.ts) now
+// has a real handler for it, reusing QuotationService.sendQuotation().
 router.post('/:quotationGroupId/replay', authorize(...TIMELINE_ADMIN_ROLES), QuotationTimelineController.requestReplay);
 router.post(
     '/:quotationGroupId/regenerate-link',
