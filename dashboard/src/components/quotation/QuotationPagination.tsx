@@ -14,7 +14,7 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 
-interface ClientPaginationProps {
+interface QuotationPaginationProps {
     currentPage: number;
     totalPages: number;
     limit: number;
@@ -23,16 +23,16 @@ interface ClientPaginationProps {
     isLoading: boolean;
 }
 
-const PAGE_SIZE_OPTIONS = [20, 50, 100];
+const PAGE_SIZE_OPTIONS = [10, 20, 30, 40, 50];
 
-export function ClientPagination({
+export function QuotationPagination({
     currentPage,
     totalPages,
     limit,
     onPageChange,
     onLimitChange,
     isLoading,
-}: ClientPaginationProps) {
+}: QuotationPaginationProps) {
     const canPrevious = currentPage > 1 && !isLoading;
     const canNext = currentPage < totalPages && !isLoading;
 

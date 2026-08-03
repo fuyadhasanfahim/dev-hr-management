@@ -2,9 +2,19 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { Card, CardDescription, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import {
   AlertDialog,
@@ -16,36 +26,24 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import {
-  Plus,
-  Eye,
-  Ban,
-  Receipt,
-  Wallet,
-  CalendarClock,
-  Loader2,
-} from "lucide-react";
-import { format } from "date-fns";
+import { Plus, Loader, Loader2, TrendingUp, TrendingDown } from "lucide-react";
 import { toast } from "sonner";
 import { formatMoney } from "@/lib/money";
-import { getCategoryConfig } from "@/constants/quotation-templates";
+import { cn } from "@/lib/utils";
 import {
   useGetReceiptsQuery,
   useVoidReceiptMutation,
 } from "@/redux/features/receipt/receiptApi";
 import type { IReceipt } from "@/types/receipt.type";
-import ReceiptPuppeteerPdfBtn, {
-  receiptPdfFileStem,
-} from "@/components/receipt/ReceiptPuppeteerPdfBtn";
 import { AddPaymentDialog } from "@/components/receipt/AddPaymentDialog";
-import { TableContent } from "@/components/shared/table-content";
-import { ColumnDef } from "@tanstack/react-table";
+import { ReceiptFilters } from "@/components/receipt/ReceiptFilters";
+import { ReceiptTable } from "@/components/receipt/ReceiptTable";
+import { ReceiptPagination } from "@/components/receipt/ReceiptPagination";
 
-function resolveQuotationTotal(r: IReceipt): number {
-  if (!r.quotationId) return 0;
-  if (typeof r.quotationId === "string") return 0;
-  return (r.quotationId as any).totals?.grandTotal ?? 0;
-}
+const STATUS_OPTIONS = [
+  { label: "Issued", value: "issued" },
+  { label: "Void", value: "void" },
+];
 
 export default function ReceiptsPage() {
   const { data: qData, isLoading, refetch } = useGetReceiptsQuery({
@@ -58,7 +56,13 @@ export default function ReceiptsPage() {
   // ── Add Payment dialog target ────────────────────────────────────────────
   const [paymentTarget, setPaymentTarget] = useState<IReceipt | null>(null);
 
-  const receipts = qData?.items || [];
+  // ── Filters + pagination state ───────────────────────────────────────────
+  const [search, setSearch] = useState("");
+  const [status, setStatus] = useState("");
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(20);
+
+  const receipts = useMemo(() => qData?.items || [], [qData]);
 
   const stats = useMemo(() => {
     const issued = receipts.filter((r) => r.status === "issued");
@@ -88,6 +92,74 @@ export default function ReceiptsPage() {
     };
   }, [receipts, qData?.total]);
 
+  const receiptStats = useMemo(
+    () => [
+      {
+        description: "Total Receipts",
+        value: stats.total,
+        trend: "up" as const,
+        trendLabel: "All",
+        footerTitle: "All receipt logs",
+        isMoney: false,
+      },
+      {
+        description: "Total Collected",
+        value: formatMoney(stats.totalCollected, "৳"),
+        trend: "up" as const,
+        trendLabel: "Paid",
+        footerTitle: "Successfully collected",
+        isMoney: true,
+      },
+      {
+        description: "This Month",
+        value: formatMoney(stats.thisMonth, "৳"),
+        trend: "up" as const,
+        trendLabel: "Recent",
+        footerTitle: "Collected this month",
+        isMoney: true,
+      },
+      {
+        description: "Voided",
+        value: stats.voidCount,
+        trend: "down" as const,
+        trendLabel: "Void",
+        footerTitle: "Voided receipts",
+        isMoney: false,
+      },
+    ],
+    [stats],
+  );
+
+  const filteredReceipts = useMemo(() => {
+    return receipts.filter((r) => {
+      if (status && r.status !== status) return false;
+      if (search) {
+        const q = search.toLowerCase();
+        const haystack = `${r.receiptNumber || ""} ${r.clientName || ""} ${r.projectTitle || ""}`.toLowerCase();
+        if (!haystack.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [receipts, status, search]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredReceipts.length / limit));
+  const pagedReceipts = useMemo(
+    () => filteredReceipts.slice((page - 1) * limit, page * limit),
+    [filteredReceipts, page, limit],
+  );
+
+  const handleFilterChange = (key: string, value: string) => {
+    if (key === "search") setSearch(value);
+    if (key === "status") setStatus(value);
+    setPage(1);
+  };
+
+  const handleClearFilters = () => {
+    setSearch("");
+    setStatus("");
+    setPage(1);
+  };
+
   const confirmVoid = async () => {
     if (!voidTarget) return;
     try {
@@ -95,351 +167,172 @@ export default function ReceiptsPage() {
       toast.success("Receipt voided");
       setVoidTarget(null);
       setVoidReason("");
-    } catch (err: any) {
-      toast.error(err?.data?.message || "Failed to void receipt");
+    } catch (err: unknown) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const e = err as any;
+      toast.error(e?.data?.message || "Failed to void receipt");
     }
   };
 
-  const handleOpenAddPayment = (receipt: IReceipt) => {
-    setPaymentTarget(receipt);
-  };
-
-  const handleCloseAddPayment = () => {
-    setPaymentTarget(null);
-  };
-
-  const columns = useMemo<ColumnDef<IReceipt, any>[]>(
-    () => [
-      {
-        id: "lastPaymentDate",
-        header: "Last Payment",
-        accessorFn: (row) => row.paymentHistory?.[0]?.paymentDate ?? row.createdAt,
-        cell: ({ row }) => {
-          const r = row.original;
-          const last = r.paymentHistory?.[0];
-          return (
-            <span className="text-slate-500 dark:text-slate-400 text-sm">
-              {last ? format(new Date(last.paymentDate), "MMM dd, yyyy") : "—"}
-            </span>
-          );
-        },
-      },
-      {
-        accessorKey: "receiptNumber",
-        header: "Receipt #",
-        cell: ({ row }) => {
-          const r = row.original;
-          return (
-            <span className="font-mono font-bold text-slate-900 dark:text-white">
-              {r.receiptNumber}
-            </span>
-          );
-        },
-      },
-      {
-        accessorKey: "clientName",
-        header: "Client",
-        cell: ({ row }) => {
-          const r = row.original;
-          return (
-            <span className="font-semibold text-slate-900 dark:text-slate-100">
-              {r.clientName}
-            </span>
-          );
-        },
-      },
-      {
-        id: "project",
-        header: "Project",
-        accessorFn: (row) => row.projectTitle,
-        cell: ({ row }) => {
-          const r = row.original;
-          return (
-            <div className="flex flex-col gap-0.5">
-              <span className="font-semibold text-slate-900 dark:text-slate-100">
-                {r.projectTitle}
-              </span>
-              <Badge variant="secondary" className="w-fit text-[9px] font-semibold px-1.5 py-0">
-                {getCategoryConfig(r.category).label}
-              </Badge>
-            </div>
-          );
-        },
-      },
-      {
-        id: "stage",
-        header: "Payment Status",
-        accessorFn: (row) => row.paymentStatus,
-        cell: ({ row }) => {
-          const r = row.original;
-          const cfg: Record<string, { label: string; cls: string }> = {
-            pending:  { label: "Pending",  cls: "text-slate-500 border-slate-200 bg-slate-50 dark:bg-slate-900/30" },
-            partial:  { label: "Partial",  cls: "text-amber-600 border-amber-200 bg-amber-50 dark:bg-amber-900/20 dark:text-amber-400" },
-            paid:     { label: "Paid",     cls: "text-emerald-700 border-emerald-200 bg-emerald-50 dark:bg-emerald-900/20 dark:text-emerald-400" },
-            void:     { label: "Void",     cls: "text-red-600 border-red-200 bg-red-50 dark:bg-red-900/20 dark:text-red-400" },
-          };
-          const c = cfg[r.paymentStatus] ?? cfg.pending;
-          return (
-            <Badge variant="outline" className={`capitalize text-[11px] font-semibold px-2.5 py-0.5 ${c.cls}`}>
-              {c.label}
-            </Badge>
-          );
-        },
-      },
-      {
-        id: "quotationTotal",
-        header: "Total Amount",
-        accessorFn: (row) => resolveQuotationTotal(row),
-        cell: ({ row }) => {
-          const r = row.original;
-          const total = resolveQuotationTotal(r);
-          return (
-            <span className="font-bold text-slate-500 dark:text-slate-400">
-              {formatMoney(total, r.currency)}
-            </span>
-          );
-        },
-      },
-      {
-        id: "totalPaid",
-        header: () => <div className="text-right">Paid Amount</div>,
-        accessorFn: (row) => row.totalPaid,
-        cell: ({ row }) => {
-          const r = row.original;
-          return (
-            <div className="text-right">
-              <span className="font-black text-slate-900 dark:text-white">
-                {formatMoney(r.totalPaid ?? 0, r.currency)}
-              </span>
-              {(r.paymentHistory?.length ?? 0) > 0 && (
-                <span className="block text-[10px] text-slate-400">
-                  {r.paymentHistory.filter(p => p.status === "recorded").length} payment{r.paymentHistory.filter(p => p.status === "recorded").length !== 1 ? "s" : ""}
-                </span>
-              )}
-            </div>
-          );
-        },
-      },
-      {
-        accessorKey: "status",
-        header: "Status",
-        cell: ({ row }) => {
-          const r = row.original;
-          const isVoid = r.status === "void";
-          return isVoid ? (
-            <Badge variant="destructive" className="capitalize text-[11px] font-semibold px-2.5 py-0.5">Void</Badge>
-          ) : (
-            <Badge variant="outline" className="capitalize text-[11px] font-semibold px-2.5 py-0.5 text-emerald-700 border-emerald-200 bg-emerald-50 dark:bg-emerald-950/20 dark:text-emerald-300 dark:border-emerald-900/50">
-              Issued
-            </Badge>
-          );
-        },
-      },
-      {
-        id: "actions",
-        header: () => <div className="text-right">Actions</div>,
-        cell: ({ row }) => {
-          const r = row.original;
-          const isVoid = r.status === "void";
-          return (
-            <div className="flex items-center justify-end gap-1">
-              {!isVoid && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8.5 w-8.5 rounded-xl text-slate-400 hover:text-brand-primary dark:hover:text-purple-400"
-                  title="Add Payment"
-                  onClick={() => handleOpenAddPayment(r)}
-                >
-                  <Plus className="h-4.5 w-4.5" />
-                </Button>
-              )}
-              <Button
-                asChild
-                variant="ghost"
-                size="icon"
-                className="h-8.5 w-8.5 rounded-xl text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
-                title="View"
-              >
-                <Link href={`/receipts/${r._id}`}>
-                  <Eye className="h-4.5 w-4.5" />
-                </Link>
-              </Button>
-              <ReceiptPuppeteerPdfBtn
-                receiptId={r._id}
-                fileNameBase={receiptPdfFileStem(r.receiptNumber)}
-                variant="ghost"
-                className="h-8.5 w-8.5 p-0 rounded-xl text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
-                iconOnly
-              />
-              {!isVoid && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8.5 w-8.5 rounded-xl text-slate-400 hover:text-red-500 dark:hover:text-red-400"
-                  title="Void receipt"
-                  onClick={() => setVoidTarget(r)}
-                >
-                  <Ban className="h-4.5 w-4.5" />
-                </Button>
-              )}
-            </div>
-          );
-        },
-      },
-    ],
-    []
-  );
-
-  const statusOptions = [
-    { label: "Issued", value: "issued" },
-    { label: "Void", value: "void" },
-  ];
-
   return (
-    <div className="space-y-6 animate-in fade-in duration-300">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <span className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-[#4E12D4]/10 text-[#4E12D4] ring-1 ring-[#4E12D4]/20 animate-pulse">
-            <Receipt className="h-5 w-5" />
-          </span>
-          <div>
-            <h1 className="text-3xl font-black bg-gradient-to-r from-brand-primary to-brand-accent bg-clip-text text-transparent">
-              Payment Receipts
-            </h1>
-            <p className="text-slate-500 dark:text-slate-400 text-sm mt-0.5">
-              Track payments received against quotations.
-            </p>
-          </div>
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+      className="w-full min-h-screen pb-10"
+    >
+      {/* ── Page Header ──────────────────────────────────────────── */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">
+            Payment Receipts
+          </h1>
+          <p className="text-sm text-muted-foreground mt-0.5 flex items-center gap-2">
+            Track payments received against quotations
+            {isLoading && (
+              <Loader className="h-3 w-3 animate-spin text-primary" />
+            )}
+          </p>
         </div>
+        <Button size="sm" className="h-8" asChild>
+          <Link href="/receipts/new">
+            <Plus className="h-3.5 w-3.5" />
+            New Receipt
+          </Link>
+        </Button>
       </div>
 
-      {/* Stats */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {[
-          {
-            label: "Total Receipts",
-            value: stats.total,
-            icon: <Receipt className="h-5 w-5 text-[#4E12D4]" />,
-            color: "text-[#4E12D4] bg-[#4E12D4]/10",
-          },
-          {
-            label: "Total Collected",
-            value: formatMoney(stats.totalCollected, "৳"),
-            icon: <Wallet className="h-5 w-5 text-emerald-600" />,
-            color: "text-emerald-600 bg-emerald-50 dark:bg-emerald-950/20",
-          },
-          {
-            label: "This Month",
-            value: formatMoney(stats.thisMonth, "৳"),
-            icon: <CalendarClock className="h-5 w-5 text-teal-600" />,
-            color: "text-teal-600 bg-teal-50 dark:bg-teal-950/20",
-          },
-          {
-            label: "Voided",
-            value: stats.voidCount,
-            icon: <Ban className="h-5 w-5 text-amber-600" />,
-            color: "text-amber-600 bg-amber-50 dark:bg-amber-950/20",
-          },
-        ].map((stat, idx) => (
-          <div
-            key={idx}
-            className="rounded-3xl border border-slate-200/60 dark:border-slate-800/80 bg-white/70 dark:bg-slate-900/60 backdrop-blur-md p-5 transition-all duration-300 hover:shadow-md"
-          >
-            <div className="flex items-center justify-between mb-3">
-              <div
-                className={`flex h-10 w-10 items-center justify-center rounded-xl ${stat.color}`}
-              >
-                {stat.icon}
-              </div>
-              <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                {stat.label}
-              </span>
-            </div>
-            <div className="text-2xl font-black tracking-tight text-slate-900 dark:text-white">
-              {stat.value}
-            </div>
-          </div>
-        ))}
+      {/* ── Stats Strip ──────────────────────────────────────────── */}
+      <div className="*:data-[slot=card]:from-primary/5 *:data-[slot=card]:to-card dark:*:data-[slot=card]:bg-card grid grid-cols-1 gap-3 *:data-[slot=card]:bg-gradient-to-t *:data-[slot=card]:shadow-xs sm:grid-cols-2 lg:grid-cols-4">
+        {receiptStats.map((stat) => {
+          const TrendIcon = stat.trend === "up" ? TrendingUp : TrendingDown;
+          return (
+            <Card key={stat.description} className="@container/card">
+              <CardHeader>
+                <CardDescription>{stat.description}</CardDescription>
+                <CardTitle
+                  className={cn(
+                    "font-semibold tabular-nums whitespace-nowrap",
+                    stat.isMoney
+                      ? "text-lg @[250px]/card:text-xl"
+                      : "text-2xl @[250px]/card:text-3xl",
+                  )}
+                >
+                  {stat.value}
+                </CardTitle>
+                <CardAction>
+                  <Badge variant="outline" className="text-primary border-primary/30">
+                    <TrendIcon className="text-primary" />
+                    {stat.trendLabel}
+                  </Badge>
+                </CardAction>
+              </CardHeader>
+              <CardFooter className="flex-col items-start gap-1.5 text-sm">
+                <div className="line-clamp-1 flex gap-2 font-medium">
+                  {stat.footerTitle}
+                  <TrendIcon className="size-4 text-primary" />
+                </div>
+              </CardFooter>
+            </Card>
+          );
+        })}
       </div>
 
-      {/* Table Card */}
-      <Card className="border-0 bg-transparent shadow-none">
-        <div className="pb-5">
-          <CardTitle className="text-2xl font-black bg-gradient-to-r from-brand-primary to-brand-accent bg-clip-text text-transparent">
-            Receipt Logs
-          </CardTitle>
-          <CardDescription className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-            Audit-ready log of all customer transaction tokens
-          </CardDescription>
+      {/* ── Filters Card ─────────────────────────────────────────── */}
+      <Card className="mt-5 py-0 shadow-sm">
+        <div className="px-5 py-4">
+          <ReceiptFilters
+            search={search}
+            status={status}
+            statusOptions={STATUS_OPTIONS}
+            onFilterChange={handleFilterChange}
+            onClearFilters={handleClearFilters}
+          />
+        </div>
+      </Card>
+
+      {/* ── Table Card ───────────────────────────────────────────── */}
+      <Card className="mt-4 py-0 gap-0 overflow-hidden shadow-sm">
+        <div className="overflow-x-auto">
+          <ReceiptTable
+            receipts={pagedReceipts}
+            isLoading={isLoading}
+            onAddPayment={(r) => setPaymentTarget(r)}
+            onVoid={(r) => setVoidTarget(r)}
+          />
         </div>
 
-        <TableContent
-          data={receipts}
-          columns={columns}
-          isLoading={isLoading}
-          searchPlaceholder="Search by receipt #, client, or project..."
-          statusFilterKey="status"
-          statusOptions={statusOptions}
-          dateFilterKey="paymentDate"
-          actionHeader={
-            <Button asChild className="btn-premium">
-              <Link href="/receipts/new">
-                <Plus className="h-4 w-4" />
-                New Receipt
-              </Link>
-            </Button>
-          }
-        />
+        <Separator />
+
+        {/* Footer: Count + Pagination */}
+        <CardContent className="flex items-center justify-between gap-4 px-5 py-3">
+          <p className="hidden flex-1 text-sm text-muted-foreground lg:flex">
+            Showing{' '}
+            <span className="mx-1 font-medium text-foreground/80">
+              {pagedReceipts.length}
+            </span>{' '}
+            of{' '}
+            <span className="mx-1 font-medium text-foreground/80">
+              {filteredReceipts.length}
+            </span>{' '}
+            receipts
+          </p>
+          <ReceiptPagination
+            currentPage={page}
+            totalPages={totalPages}
+            limit={limit}
+            onPageChange={setPage}
+            onLimitChange={(l) => {
+              setLimit(l);
+              setPage(1);
+            }}
+            isLoading={isLoading}
+          />
+        </CardContent>
       </Card>
 
       {/* Add Payment Dialog */}
       <AddPaymentDialog
         quotationGroupId={paymentTarget?.quotationGroupId ?? null}
         quotationNumber={paymentTarget?.quotationNumber}
-        onClose={handleCloseAddPayment}
+        onClose={() => setPaymentTarget(null)}
         onRecorded={refetch}
       />
 
       {/* Void confirmation */}
       <AlertDialog open={!!voidTarget} onOpenChange={(open) => !open && setVoidTarget(null)}>
-        <AlertDialogContent className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 p-6 max-w-md">
+        <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-lg font-black text-slate-900 dark:text-white">
-              Void this receipt?
-            </AlertDialogTitle>
-            <AlertDialogDescription className="text-sm text-slate-500 dark:text-slate-400 mt-2">
+            <AlertDialogTitle>Void this receipt?</AlertDialogTitle>
+            <AlertDialogDescription>
               The receipt stays on record for audit purposes, but its amount will
               no longer count toward the paid balance for{" "}
-              <span className="font-semibold text-slate-900 dark:text-slate-100">
+              <span className="font-medium text-foreground">
                 {voidTarget?.projectTitle}
               </span>
               .
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <div className="space-y-1.5 mt-4 mb-5">
-            <label className="text-xs font-bold text-slate-500 dark:text-slate-400">
+          <div className="space-y-1.5 mt-2 mb-2">
+            <label className="text-xs font-medium text-muted-foreground">
               Reason (optional)
             </label>
             <Textarea
               value={voidReason}
               onChange={(e) => setVoidReason(e.target.value)}
               placeholder="e.g. Entered by mistake, duplicate entry..."
-              className="min-h-[80px] rounded-2xl border border-slate-200/80 dark:border-slate-800 focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary placeholder:text-slate-400 p-3 text-sm focus:outline-none"
+              className="min-h-[80px]"
             />
           </div>
-          <AlertDialogFooter className="flex gap-3 justify-end">
-            <AlertDialogCancel disabled={isVoiding} className="rounded-2xl border border-slate-200 dark:border-slate-800 text-xs font-bold px-4 py-2 hover:bg-slate-50 dark:hover:bg-slate-900">
-              Cancel
-            </AlertDialogCancel>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isVoiding}>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={(e) => {
                 e.preventDefault();
                 confirmVoid();
               }}
               disabled={isVoiding}
-              className="rounded-2xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold px-4 py-2 flex items-center gap-1.5"
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               {isVoiding ? (
                 <>
@@ -453,6 +346,6 @@ export default function ReceiptsPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </motion.div>
   );
 }

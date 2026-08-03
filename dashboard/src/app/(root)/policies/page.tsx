@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import { motion } from "framer-motion";
 import {
   useGetPoliciesQuery,
   useCreatePolicyMutation,
@@ -10,20 +11,16 @@ import {
 } from "@/redux/features/policy/policyApi";
 import {
   Card,
+  CardAction,
   CardContent,
   CardDescription,
+  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import {
   Dialog,
   DialogContent,
@@ -32,27 +29,15 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
-import { Switch } from "@/components/ui/switch";
-import { Badge } from "@/components/ui/badge";
-import { Plus, Trash2, Pencil, Info } from "lucide-react";
+import { Loader, Plus, TrendingUp, TrendingDown } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { PolicyForm } from "@/components/policy/PolicyForm";
-import { StackedAvatars } from "@/components/policy/StackedAvatars";
+import { PolicyFilters } from "@/components/policy/PolicyFilters";
+import { PolicyTable } from "@/components/policy/PolicyTable";
+import { PolicyPagination } from "@/components/policy/PolicyPagination";
 import { useSession } from "@/lib/auth-client";
 import { Role } from "@/constants/role";
-import { Skeleton } from "@/components/ui/skeleton";
 import { CreatePolicyData, IPolicy } from "@/types/policy.type";
 
 export default function PoliciesPage() {
@@ -74,7 +59,41 @@ export default function PoliciesPage() {
   const [editingPolicy, setEditingPolicy] = useState<IPolicy | null>(null);
   const [viewingPolicy, setViewingPolicy] = useState<IPolicy | null>(null);
 
-  const policies = data?.policies || [];
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(20);
+
+  const policies = useMemo(() => data?.policies || [], [data]);
+
+  const filteredPolicies = useMemo(() => {
+    return policies.filter((p) => {
+      if (isAdmin && statusFilter) {
+        const isActive = statusFilter === "active";
+        if (p.isActive !== isActive) return false;
+      }
+      if (search && !p.title.toLowerCase().includes(search.toLowerCase())) return false;
+      return true;
+    });
+  }, [policies, search, statusFilter, isAdmin]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredPolicies.length / limit));
+  const pagedPolicies = useMemo(
+    () => filteredPolicies.slice((page - 1) * limit, page * limit),
+    [filteredPolicies, page, limit],
+  );
+
+  const handleFilterChange = (key: string, value: string) => {
+    if (key === "search") setSearch(value);
+    if (key === "status") setStatusFilter(value);
+    setPage(1);
+  };
+
+  const handleClearFilters = () => {
+    setSearch("");
+    setStatusFilter("");
+    setPage(1);
+  };
 
   const handleCreate = async (formData: CreatePolicyData) => {
     try {
@@ -119,23 +138,61 @@ export default function PoliciesPage() {
     }
   };
 
+  const policyStats = useMemo(() => {
+    const total = policies.length;
+    const active = policies.filter((p) => p.isActive).length;
+    const requiresAcceptance = policies.filter((p) => p.requiresAcceptance).length;
+
+    return [
+      {
+        description: "Total Policies",
+        value: total,
+        trend: "up" as const,
+        trendLabel: "All",
+        footerTitle: "All policies defined",
+      },
+      {
+        description: "Active",
+        value: active,
+        trend: "up" as const,
+        trendLabel: "Active",
+        footerTitle: "Currently in effect",
+      },
+      {
+        description: "Requires Acceptance",
+        value: requiresAcceptance,
+        trend: "down" as const,
+        trendLabel: "Required",
+        footerTitle: "Employees must acknowledge",
+      },
+    ];
+  }, [policies]);
+
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+      className="w-full min-h-screen pb-10"
+    >
+      {/* ── Page Header ──────────────────────────────────────────── */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">
             Organization Policies
-          </h2>
-          <p className="text-muted-foreground">
-            View and manage company-wide or targeted policies and track
-            acceptance.
+          </h1>
+          <p className="text-sm text-muted-foreground mt-0.5 flex items-center gap-2">
+            View and manage company-wide or targeted policies and track acceptance
+            {isLoading && (
+              <Loader className="h-3 w-3 animate-spin text-primary" />
+            )}
           </p>
         </div>
         {isAdmin && (
           <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
             <DialogTrigger asChild>
-              <Button>
-                <Plus />
+              <Button size="sm" className="h-8">
+                <Plus className="h-3.5 w-3.5" />
                 Create Policy
               </Button>
             </DialogTrigger>
@@ -153,6 +210,93 @@ export default function PoliciesPage() {
         )}
       </div>
 
+      {/* ── Stats Strip ──────────────────────────────────────────── */}
+      <div className="*:data-[slot=card]:from-primary/5 *:data-[slot=card]:to-card dark:*:data-[slot=card]:bg-card grid grid-cols-1 gap-3 *:data-[slot=card]:bg-gradient-to-t *:data-[slot=card]:shadow-xs sm:grid-cols-3">
+        {policyStats.map((stat) => {
+          const TrendIcon = stat.trend === "up" ? TrendingUp : TrendingDown;
+          return (
+            <Card key={stat.description} className="@container/card">
+              <CardHeader>
+                <CardDescription>{stat.description}</CardDescription>
+                <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
+                  {stat.value}
+                </CardTitle>
+                <CardAction>
+                  <Badge variant="outline" className="text-primary border-primary/30">
+                    <TrendIcon className="text-primary" />
+                    {stat.trendLabel}
+                  </Badge>
+                </CardAction>
+              </CardHeader>
+              <CardFooter className="flex-col items-start gap-1.5 text-sm">
+                <div className="line-clamp-1 flex gap-2 font-medium">
+                  {stat.footerTitle}
+                  <TrendIcon className="size-4 text-primary" />
+                </div>
+              </CardFooter>
+            </Card>
+          );
+        })}
+      </div>
+
+      {/* ── Filters Card ─────────────────────────────────────────── */}
+      <Card className="mt-5 py-0 shadow-sm">
+        <div className="px-5 py-4">
+          <PolicyFilters
+            search={search}
+            status={statusFilter}
+            showStatusFilter={isAdmin}
+            onFilterChange={handleFilterChange}
+            onClearFilters={handleClearFilters}
+          />
+        </div>
+      </Card>
+
+      {/* ── Table Card ───────────────────────────────────────────── */}
+      <Card className="mt-4 py-0 gap-0 overflow-hidden shadow-sm">
+        <div className="overflow-x-auto">
+          <PolicyTable
+            policies={pagedPolicies}
+            isLoading={isLoading}
+            isAdmin={isAdmin}
+            isToggling={isToggling}
+            onView={setViewingPolicy}
+            onEdit={setEditingPolicy}
+            onDelete={handleDelete}
+            onToggleStatus={handleToggleStatus}
+          />
+        </div>
+
+        <Separator />
+
+        {/* Footer: Count + Pagination */}
+        <CardContent className="flex items-center justify-between gap-4 px-5 py-3">
+          <p className="hidden flex-1 text-sm text-muted-foreground lg:flex">
+            Showing{" "}
+            <span className="mx-1 font-medium text-foreground/80">
+              {pagedPolicies.length}
+            </span>{" "}
+            of{" "}
+            <span className="mx-1 font-medium text-foreground/80">
+              {filteredPolicies.length}
+            </span>{" "}
+            policies
+          </p>
+          <PolicyPagination
+            currentPage={page}
+            totalPages={totalPages}
+            limit={limit}
+            onPageChange={setPage}
+            onLimitChange={(l) => {
+              setLimit(l);
+              setPage(1);
+            }}
+            isLoading={isLoading}
+          />
+        </CardContent>
+      </Card>
+
+      {/* Edit Dialog */}
       <Dialog
         open={!!editingPolicy}
         onOpenChange={(open) => !open && setEditingPolicy(null)}
@@ -171,6 +315,7 @@ export default function PoliciesPage() {
         </DialogContent>
       </Dialog>
 
+      {/* View Dialog */}
       <Dialog
         open={!!viewingPolicy}
         onOpenChange={(open) => !open && setViewingPolicy(null)}
@@ -182,8 +327,7 @@ export default function PoliciesPage() {
             </DialogTitle>
             <DialogDescription>
               Published on{" "}
-              {viewingPolicy &&
-                format(new Date(viewingPolicy.createdAt), "PPP")}
+              {viewingPolicy && format(new Date(viewingPolicy.createdAt), "PPP")}
             </DialogDescription>
           </DialogHeader>
           <div className="mt-4 prose prose-slate dark:prose-invert max-w-none">
@@ -193,219 +337,6 @@ export default function PoliciesPage() {
           </div>
         </DialogContent>
       </Dialog>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>All Policies</CardTitle>
-          <CardDescription>
-            A list of all policies defined in the system.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="rounded-md border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-[300px]">Title</TableHead>
-                  {isAdmin ? (
-                    <>
-                      <TableHead>Targeting</TableHead>
-                      <TableHead>Accepted By</TableHead>
-                      <TableHead>Status</TableHead>
-                    </>
-                  ) : (
-                    <TableHead className="w-[400px]">Description</TableHead>
-                  )}
-                  <TableHead>Created At</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {isLoading ? (
-                  Array.from({ length: 5 }).map((_, i) => (
-                    <TableRow key={i}>
-                      <TableCell>
-                        <Skeleton className="h-4 w-40" />
-                      </TableCell>
-                      {isAdmin && (
-                        <>
-                          <TableCell>
-                            <Skeleton className="h-4 w-24" />
-                          </TableCell>
-                          <TableCell>
-                            <Skeleton className="h-6 w-20" />
-                          </TableCell>
-                          <TableCell>
-                            <Skeleton className="h-4 w-12" />
-                          </TableCell>
-                        </>
-                      )}
-                      {!isAdmin && (
-                        <TableCell>
-                          <Skeleton className="h-4 w-56" />
-                        </TableCell>
-                      )}
-                      <TableCell>
-                        <Skeleton className="h-4 w-24" />
-                      </TableCell>
-                      <TableCell>
-                        <Skeleton className="h-8 w-16 ml-auto" />
-                      </TableCell>
-                    </TableRow>
-                  ))
-                ) : policies.length === 0 ? (
-                  <TableRow>
-                    <TableCell
-                      colSpan={isAdmin ? 6 : 4}
-                      className="h-24 text-center"
-                    >
-                      No policies found.
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  policies.map((policy) => (
-                    <TableRow key={policy._id}>
-                      <TableCell className="font-medium">
-                        <div className="flex flex-col gap-1">
-                          <span>{policy.title}</span>
-                          {policy.requiresAcceptance && (
-                            <Badge variant="secondary" className="text-[10px]">
-                              Requires Acceptance
-                            </Badge>
-                          )}
-                        </div>
-                      </TableCell>
-                      {isAdmin ? (
-                        <>
-                          <TableCell>
-                            <div className="flex flex-col gap-1 text-xs">
-                              <span className="text-muted-foreground">
-                                Branch:{" "}
-                                {policy.branchId
-                                  ? (policy.branchId as { name: string }).name
-                                  : "Global"}
-                              </span>
-                              <span className="text-muted-foreground">
-                                Dept: {policy.department || "All"}
-                              </span>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex flex-col gap-2">
-                              <StackedAvatars
-                                users={policy.acceptedBy.map((a) => ({
-                                  _id: a.user._id,
-                                  name: a.user.name,
-                                  avatar: a.user.avatar,
-                                }))}
-                              />
-                              <span className="text-[10px] text-muted-foreground">
-                                {policy.acceptedBy.length} users accepted
-                              </span>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex items-center space-x-2">
-                              <Switch
-                                title={
-                                  policy.isActive ? "Deactivate" : "Activate"
-                                }
-                                checked={policy.isActive}
-                                onCheckedChange={() =>
-                                  handleToggleStatus(
-                                    policy._id,
-                                    policy.isActive,
-                                  )
-                                }
-                                disabled={isToggling}
-                              />
-                              <span className="text-xs">
-                                {policy.isActive ? "Active" : "Inactive"}
-                              </span>
-                            </div>
-                          </TableCell>
-                        </>
-                      ) : (
-                        <TableCell>
-                          <p className="text-sm text-muted-foreground line-clamp-1 max-w-[400px]">
-                            {policy.description}
-                          </p>
-                        </TableCell>
-                      )}
-                      <TableCell className="text-xs text-muted-foreground">
-                        {format(new Date(policy.createdAt), "PPP")}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => setViewingPolicy(policy)}
-                            className="h-8 w-8"
-                            title="View Content"
-                          >
-                            <Info className="h-4 w-4" />
-                          </Button>
-
-                          {isAdmin && (
-                            <>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => setEditingPolicy(policy)}
-                                className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                                title="Edit Policy"
-                              >
-                                <Pencil className="h-4 w-4" />
-                              </Button>
-
-                              <AlertDialog>
-                                <AlertDialogTrigger asChild>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
-                                    title="Delete Policy"
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                  </Button>
-                                </AlertDialogTrigger>
-                                <AlertDialogContent>
-                                  <AlertDialogHeader>
-                                    <AlertDialogTitle>
-                                      Are you absolutely sure?
-                                    </AlertDialogTitle>
-                                    <AlertDialogDescription>
-                                      This action cannot be undone. This will
-                                      permanently delete the policy and all
-                                      acceptance records.
-                                    </AlertDialogDescription>
-                                  </AlertDialogHeader>
-                                  <AlertDialogFooter>
-                                    <AlertDialogCancel>
-                                      Cancel
-                                    </AlertDialogCancel>
-                                    <AlertDialogAction
-                                      onClick={() => handleDelete(policy._id)}
-                                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                                    >
-                                      Delete
-                                    </AlertDialogAction>
-                                  </AlertDialogFooter>
-                                </AlertDialogContent>
-                              </AlertDialog>
-                            </>
-                          )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
+    </motion.div>
   );
 }

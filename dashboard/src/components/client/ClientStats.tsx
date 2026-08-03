@@ -1,85 +1,100 @@
-import { Users, UserCheck, UserX, UserPlus } from "lucide-react";
+import { TrendingUp, TrendingDown } from "lucide-react";
+import {
+  Card,
+  CardAction,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Card, CardContent } from "@/components/ui/card";
 
 interface ClientStatsProps {
-    total: number;
-    active: number;
-    inactive: number;
-    newClients?: number;
-    isLoading: boolean;
+  total: number;
+  active: number;
+  inactive: number;
+  newClients: number;
+  isLoading: boolean;
 }
 
-export function ClientStats({ total, active, inactive, newClients = 0, isLoading }: ClientStatsProps) {
-    return (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {/* Total Clients */}
-            <Card className="rounded-xl border-slate-200 dark:border-slate-800 shadow-sm">
-                <CardContent className="p-6 flex items-center gap-4">
-                    <div className="p-3 rounded-lg bg-slate-50 text-slate-700 dark:bg-slate-800 dark:text-slate-300">
-                        <Users className="w-5 h-5" />
-                    </div>
-                    <div>
-                        <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Total Clients</p>
-                        {isLoading ? (
-                            <Skeleton className="h-8 w-16 mt-1" />
-                        ) : (
-                            <h3 className="text-2xl font-bold text-slate-900 dark:text-slate-100">{total}</h3>
-                        )}
-                    </div>
-                </CardContent>
-            </Card>
+export function ClientStats({
+  total,
+  active,
+  inactive,
+  newClients,
+  isLoading,
+}: ClientStatsProps) {
+  const activeRate = total > 0 ? Math.round((active / total) * 100) : 0;
+  const inactiveRate = total > 0 ? Math.round((inactive / total) * 100) : 0;
 
-            {/* Active Clients */}
-            <Card className="rounded-xl border-slate-200 dark:border-slate-800 shadow-sm">
-                <CardContent className="p-6 flex items-center gap-4">
-                    <div className="p-3 rounded-lg bg-teal-50 text-teal-600 dark:bg-teal-950/40 dark:text-teal-400">
-                        <UserCheck className="w-5 h-5" />
-                    </div>
-                    <div>
-                        <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Active Clients</p>
-                        {isLoading ? (
-                            <Skeleton className="h-8 w-16 mt-1" />
-                        ) : (
-                            <h3 className="text-2xl font-bold text-slate-900 dark:text-slate-100">{active}</h3>
-                        )}
-                    </div>
-                </CardContent>
-            </Card>
+  const stats = [
+    {
+      description: "Total Clients",
+      value: total,
+      trend: "up" as const,
+      trendLabel: "All",
+      footerTitle: "All client relationships",
+      footerSubtitle: "Across every status",
+    },
+    {
+      description: "Active",
+      value: active,
+      trend: "up" as const,
+      trendLabel: `${activeRate}%`,
+      footerTitle: "Currently active clients",
+      footerSubtitle: "Engaged and in service",
+    },
+    {
+      description: "Inactive",
+      value: inactive,
+      trend: inactive > 0 ? ("down" as const) : ("up" as const),
+      trendLabel: `${inactiveRate}%`,
+      footerTitle: "Currently inactive clients",
+      footerSubtitle: "Paused or dormant accounts",
+    },
+    {
+      description: "New This Month",
+      value: newClients,
+      trend: "up" as const,
+      trendLabel: "30d",
+      footerTitle: "Recently onboarded",
+      footerSubtitle: "Added in the last 30 days",
+    },
+  ];
 
-            {/* Inactive Clients */}
-            <Card className="rounded-xl border-slate-200 dark:border-slate-800 shadow-sm">
-                <CardContent className="p-6 flex items-center gap-4">
-                    <div className="p-3 rounded-lg bg-orange-50 text-orange-500 dark:bg-orange-950/40 dark:text-orange-400">
-                        <UserX className="w-5 h-5" />
-                    </div>
-                    <div>
-                        <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Inactive Clients</p>
-                        {isLoading ? (
-                            <Skeleton className="h-8 w-16 mt-1" />
-                        ) : (
-                            <h3 className="text-2xl font-bold text-slate-900 dark:text-slate-100">{inactive}</h3>
-                        )}
-                    </div>
-                </CardContent>
-            </Card>
-
-            {/* New Clients */}
-            <Card className="rounded-xl border-slate-200 dark:border-slate-800 shadow-sm">
-                <CardContent className="p-6 flex items-center gap-4">
-                    <div className="p-3 rounded-lg bg-blue-50 text-blue-600 dark:bg-blue-950/40 dark:text-blue-400">
-                        <UserPlus className="w-5 h-5" />
-                    </div>
-                    <div>
-                        <p className="text-sm font-medium text-slate-500 dark:text-slate-400">New This Month</p>
-                        {isLoading ? (
-                            <Skeleton className="h-8 w-16 mt-1" />
-                        ) : (
-                            <h3 className="text-2xl font-bold text-slate-900 dark:text-slate-100">{newClients}</h3>
-                        )}
-                    </div>
-                </CardContent>
-            </Card>
-        </div>
-    );
+  return (
+    <div className="*:data-[slot=card]:from-primary/5 *:data-[slot=card]:to-card dark:*:data-[slot=card]:bg-card grid grid-cols-1 gap-3 *:data-[slot=card]:bg-gradient-to-t *:data-[slot=card]:shadow-xs sm:grid-cols-2 lg:grid-cols-4">
+      {stats.map((stat) => {
+        const TrendIcon = stat.trend === "up" ? TrendingUp : TrendingDown;
+        return (
+          <Card key={stat.description} className="@container/card">
+            <CardHeader>
+              <CardDescription>{stat.description}</CardDescription>
+              {isLoading ? (
+                <Skeleton className="h-8 w-16" />
+              ) : (
+                <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
+                  {stat.value}
+                </CardTitle>
+              )}
+              <CardAction>
+                <Badge variant="outline" className="text-primary border-primary/30">
+                  <TrendIcon className="text-primary" />
+                  {stat.trendLabel}
+                </Badge>
+              </CardAction>
+            </CardHeader>
+            <CardFooter className="flex-col items-start gap-1.5 text-sm">
+              <div className="line-clamp-1 flex gap-2 font-medium">
+                {stat.footerTitle}
+                <TrendIcon className="size-4 text-primary" />
+              </div>
+              <div className="text-muted-foreground">{stat.footerSubtitle}</div>
+            </CardFooter>
+          </Card>
+        );
+      })}
+    </div>
+  );
 }

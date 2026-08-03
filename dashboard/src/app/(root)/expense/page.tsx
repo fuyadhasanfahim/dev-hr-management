@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import { motion } from "framer-motion";
 import { useGetFinanceAnalyticsQuery } from "@/redux/features/analytics/analyticsApi";
 import {
     useGetExpensesQuery,
@@ -17,28 +18,17 @@ import {
 import { useGetAllBranchesQuery } from "@/redux/features/branch/branchApi";
 import {
     Card,
+    CardAction,
     CardContent,
     CardDescription,
+    CardFooter,
     CardHeader,
     CardTitle,
 } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select";
-import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
-} from "@/components/ui/table";
 import {
     Dialog,
     DialogContent,
@@ -58,66 +48,30 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import {
-    Popover,
-    PopoverContent,
-    PopoverTrigger,
-} from "@/components/ui/popover";
 import { Label } from "@/components/ui/label";
-import { Calendar } from "@/components/ui/calendar";
 import {
     Loader,
-    ChevronLeft,
-    ChevronRight,
     Plus,
-    Trash2,
     TrendingUp,
-    Calendar as CalendarIcon,
-    DollarSign,
-    BarChart3,
-    Edit2,
-    Filter,
+    TrendingDown,
     Download,
-    RefreshCcw,
 } from "lucide-react";
-import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
-import { format } from "date-fns";
 import {
     ExpenseForm,
     type ExpenseFormData,
 } from "@/components/expense/ExpenseForm";
 import { ExportExpenseDialog } from "@/components/expense/ExportExpenseDialog";
+import { ExpenseFilters, type FilterType } from "@/components/expense/ExpenseFilters";
+import { ExpenseTable } from "@/components/expense/ExpenseTable";
+import { ExpensePagination } from "@/components/expense/ExpensePagination";
+import { format } from "date-fns";
+import { cn } from "@/lib/utils";
 
-const statusOptions = [
-    {
-        value: "pending",
-        label: "Pending",
-        color: "text-yellow-600 bg-yellow-100",
-    },
-    { value: "paid", label: "Paid", color: "text-green-600 bg-green-100" },
-    {
-        value: "partial_paid",
-        label: "Partial Paid",
-        color: "text-orange-600 bg-orange-100",
-    },
-];
-
-type FilterType = "all" | "today" | "week" | "month" | "year" | "range";
-
-const MONTHS = [
-    { value: 1, label: "January" },
-    { value: 2, label: "February" },
-    { value: 3, label: "March" },
-    { value: 4, label: "April" },
-    { value: 5, label: "May" },
-    { value: 6, label: "June" },
-    { value: 7, label: "July" },
-    { value: 8, label: "August" },
-    { value: 9, label: "September" },
-    { value: 10, label: "October" },
-    { value: 11, label: "November" },
-    { value: 12, label: "December" },
+const STATUS_OPTIONS = [
+    { value: "pending", label: "Pending" },
+    { value: "paid", label: "Paid" },
+    { value: "partial_paid", label: "Partial Paid" },
 ];
 
 const currentYear = new Date().getFullYear();
@@ -130,11 +84,11 @@ interface Branch {
 export default function ExpensePage() {
     // Filter State
     const [page, setPage] = useState(1);
-    const [limit, setLimit] = useState(10);
+    const [limit, setLimit] = useState(20);
     const [search, setSearch] = useState("");
     const [filterType, setFilterType] = useState<FilterType>("all");
-    const [statusFilter, setStatusFilter] = useState<string>("all");
-    const [branchFilter, setBranchFilter] = useState<string>("all");
+    const [statusFilter, setStatusFilter] = useState<string>("");
+    const [branchFilter, setBranchFilter] = useState<string>("");
     const [selectedMonth, setSelectedMonth] = useState(
         new Date().getMonth() + 1,
     );
@@ -167,8 +121,8 @@ export default function ExpensePage() {
         };
 
         if (search) params.search = search;
-        if (statusFilter !== "all") params.status = statusFilter;
-        if (branchFilter !== "all") params.branchId = branchFilter;
+        if (statusFilter) params.status = statusFilter;
+        if (branchFilter) params.branchId = branchFilter;
 
         switch (filterType) {
             case "today":
@@ -221,7 +175,7 @@ export default function ExpensePage() {
     const statsParams = useMemo(() => {
         const params: { branchId?: string; year?: number; month?: number } = {};
 
-        if (branchFilter !== "all") params.branchId = branchFilter;
+        if (branchFilter) params.branchId = branchFilter;
 
         if (filterType === "month") {
             params.month = selectedMonth;
@@ -233,8 +187,7 @@ export default function ExpensePage() {
         return params;
     }, [branchFilter, filterType, selectedMonth, selectedYear]);
 
-    const { data: stats, isLoading: isLoadingStats } =
-        useGetExpenseStatsQuery(statsParams);
+    const { data: stats } = useGetExpenseStatsQuery(statsParams);
 
     const { data: categories } = useGetExpenseCategoriesQuery(undefined);
     const { data: branchesData } = useGetAllBranchesQuery(undefined);
@@ -311,6 +264,27 @@ export default function ExpensePage() {
         }
     };
 
+    const handleMarkPending = async (expense: Expense) => {
+        setSelectedExpense(expense);
+        try {
+            await updateExpense({
+                id: expense._id,
+                date: new Date(expense.date),
+                title: expense.title,
+                categoryId: expense.category?._id || "",
+                branchId: expense.branch?._id || "",
+                amount: expense.amount,
+                status: "pending",
+                note: expense.note || "",
+            }).unwrap();
+            toast.success("Expense marked as pending");
+        } catch (error) {
+            toast.error(
+                (error as Error)?.message || "Failed to update expense",
+            );
+        }
+    };
+
     const handleDeleteExpense = async () => {
         if (!selectedExpense) return;
         try {
@@ -356,6 +330,11 @@ export default function ExpensePage() {
         setIsEditDialogOpen(true);
     };
 
+    const openDeleteDialog = (expense: Expense) => {
+        setSelectedExpense(expense);
+        setIsDeleteDialogOpen(true);
+    };
+
     const formatCurrency = (amount: number) => {
         return new Intl.NumberFormat("en-IN", {
             style: "currency",
@@ -364,682 +343,232 @@ export default function ExpensePage() {
         }).format(amount);
     };
 
+    const handleClearFilters = () => {
+        setSearch("");
+        setFilterType("all");
+        setStatusFilter("");
+        setBranchFilter("");
+        setDateRange({});
+        setPage(1);
+    };
+
+    const expenseStats = useMemo(
+        () => [
+            {
+                description: "Today's Expense",
+                value: formatCurrency(stats?.today || 0),
+                trend: "up" as const,
+                trendLabel: "Today",
+                footerTitle: "Spent today",
+                isMoney: true,
+            },
+            {
+                description: "This Month",
+                value: formatCurrency(stats?.thisMonth || 0),
+                trend: "up" as const,
+                trendLabel: "Month",
+                footerTitle: "Spent this month",
+                isMoney: true,
+            },
+            {
+                description: "This Year",
+                value: formatCurrency(stats?.thisYear || 0),
+                trend: "up" as const,
+                trendLabel: "Year",
+                footerTitle: "Spent this year",
+                isMoney: true,
+            },
+            {
+                description: "Avg Monthly",
+                value: formatCurrency(stats?.avgMonthly || 0),
+                trend: "up" as const,
+                trendLabel: "Avg",
+                footerTitle: "Average monthly spend",
+                isMoney: true,
+            },
+        ],
+        [stats],
+    );
+
     return (
-        <div className="space-y-6">
-            {/* Stats Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                {/* Today's Expense Card */}
-                <div className="group relative overflow-hidden rounded-2xl border bg-linear-to-br from-violet-500/10 via-card to-card p-5 transition-all duration-300 hover:shadow-xl hover:shadow-violet-500/5 hover:border-violet-500/30">
-                    <div className="absolute -right-4 -top-4 h-20 w-20 rounded-full bg-violet-500/10 blur-2xl transition-all duration-300 group-hover:bg-violet-500/20" />
-                    <div className="relative">
-                        <div className="flex items-center justify-between mb-3">
-                            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-500/10 text-violet-500 transition-all duration-300 group-hover:scale-110 group-hover:bg-violet-500/20">
-                                <CalendarIcon className="h-5 w-5" />
-                            </div>
-                        </div>
-                        {isLoadingStats ? (
-                            <Skeleton className="h-8 w-24" />
-                        ) : (
-                            <h3 className="text-3xl font-bold tracking-tight text-violet-600 dark:text-violet-400">
-                                {formatCurrency(stats?.today || 0)}
-                            </h3>
+        <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+            className="w-full min-h-screen pb-10"
+        >
+            {/* ── Page Header ──────────────────────────────────────────── */}
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+                <div>
+                    <h1 className="text-2xl font-bold tracking-tight text-foreground">
+                        Expense Management
+                    </h1>
+                    <p className="text-sm text-muted-foreground mt-0.5 flex items-center gap-2">
+                        Track and manage company expenses
+                        {(isLoading || isFetching) && (
+                            <Loader className="h-3 w-3 animate-spin text-primary" />
                         )}
-                        <p className="text-xs text-muted-foreground mt-1">
-                            Today&apos;s Expense
-                        </p>
-                    </div>
+                    </p>
                 </div>
-
-                {/* This Month Card */}
-                <div className="group relative overflow-hidden rounded-2xl border bg-linear-to-br from-pink-500/10 via-card to-card p-5 transition-all duration-300 hover:shadow-xl hover:shadow-pink-500/5 hover:border-pink-500/30">
-                    <div className="absolute -right-4 -top-4 h-20 w-20 rounded-full bg-pink-500/10 blur-2xl transition-all duration-300 group-hover:bg-pink-500/20" />
-                    <div className="relative">
-                        <div className="flex items-center justify-between mb-3">
-                            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-pink-500/10 text-pink-500 transition-all duration-300 group-hover:scale-110 group-hover:bg-pink-500/20">
-                                <TrendingUp className="h-5 w-5" />
-                            </div>
-                        </div>
-                        {isLoadingStats ? (
-                            <Skeleton className="h-8 w-24" />
-                        ) : (
-                            <h3 className="text-3xl font-bold tracking-tight text-pink-600 dark:text-pink-400">
-                                {formatCurrency(stats?.thisMonth || 0)}
-                            </h3>
-                        )}
-                        <p className="text-xs text-muted-foreground mt-1">
-                            This Month
-                        </p>
-                    </div>
-                </div>
-
-                {/* This Year Card */}
-                <div className="group relative overflow-hidden rounded-2xl border bg-linear-to-br from-orange-500/10 via-card to-card p-5 transition-all duration-300 hover:shadow-xl hover:shadow-orange-500/5 hover:border-orange-500/30">
-                    <div className="absolute -right-4 -top-4 h-20 w-20 rounded-full bg-orange-500/10 blur-2xl transition-all duration-300 group-hover:bg-orange-500/20" />
-                    <div className="relative">
-                        <div className="flex items-center justify-between mb-3">
-                            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-orange-500/10 text-orange-500 transition-all duration-300 group-hover:scale-110 group-hover:bg-orange-500/20">
-                                <DollarSign className="h-5 w-5" />
-                            </div>
-                        </div>
-                        {isLoadingStats ? (
-                            <Skeleton className="h-8 w-24" />
-                        ) : (
-                            <h3 className="text-3xl font-bold tracking-tight text-orange-600 dark:text-orange-400">
-                                {formatCurrency(stats?.thisYear || 0)}
-                            </h3>
-                        )}
-                        <p className="text-xs text-muted-foreground mt-1">
-                            This Year
-                        </p>
-                    </div>
-                </div>
-
-                {/* Avg Monthly Card */}
-                <div className="group relative overflow-hidden rounded-2xl border bg-linear-to-br from-emerald-500/10 via-card to-card p-5 transition-all duration-300 hover:shadow-xl hover:shadow-emerald-500/5 hover:border-emerald-500/30">
-                    <div className="absolute -right-4 -top-4 h-20 w-20 rounded-full bg-emerald-500/10 blur-2xl transition-all duration-300 group-hover:bg-emerald-500/20" />
-                    <div className="relative">
-                        <div className="flex items-center justify-between mb-3">
-                            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-500 transition-all duration-300 group-hover:scale-110 group-hover:bg-emerald-500/20">
-                                <BarChart3 className="h-5 w-5" />
-                            </div>
-                        </div>
-                        {isLoadingStats ? (
-                            <Skeleton className="h-8 w-24" />
-                        ) : (
-                            <h3 className="text-3xl font-bold tracking-tight text-emerald-600 dark:text-emerald-400">
-                                {formatCurrency(stats?.avgMonthly || 0)}
-                            </h3>
-                        )}
-                        <p className="text-xs text-muted-foreground mt-1">
-                            Avg Monthly
-                        </p>
-                    </div>
+                <div className="flex items-center gap-2">
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8"
+                        onClick={() => setIsExportDialogOpen(true)}
+                    >
+                        <Download className="h-3.5 w-3.5" />
+                        Export
+                    </Button>
+                    <ExportExpenseDialog
+                        open={isExportDialogOpen}
+                        onOpenChange={setIsExportDialogOpen}
+                        availableYears={years}
+                        branches={branches}
+                    />
+                    <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+                        <DialogTrigger asChild>
+                            <Button size="sm" className="h-8">
+                                <Plus className="h-3.5 w-3.5" />
+                                Add Expense
+                            </Button>
+                        </DialogTrigger>
+                        <DialogContent className="max-w-md">
+                            <DialogHeader>
+                                <DialogTitle>Add New Expense</DialogTitle>
+                                <DialogDescription>
+                                    Fill in the details to add a new expense
+                                </DialogDescription>
+                            </DialogHeader>
+                            <ExpenseForm
+                                onSubmit={handleCreateExpense}
+                                isSubmitting={isCreating}
+                                categories={categories}
+                                branches={branches}
+                                onAddCategory={() =>
+                                    setIsAddCategoryDialogOpen(true)
+                                }
+                                submitLabel="Create"
+                                onCancel={() => setIsAddDialogOpen(false)}
+                            />
+                        </DialogContent>
+                    </Dialog>
                 </div>
             </div>
 
-            {/* Main Card */}
-            <Card>
-                <CardHeader className="flex flex-row items-center justify-between">
-                    <div>
-                        <CardTitle className="text-2xl">
-                            Expense Management
-                        </CardTitle>
-                        <CardDescription>
-                            Track and manage company expenses
-                        </CardDescription>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                        <Dialog>
-                            <Button
-                                onClick={() => setIsExportDialogOpen(true)}
-                                variant="outline"
-                            >
-                                <Download className="h-4 w-4" />
-                                Export
-                            </Button>
-                            <ExportExpenseDialog
-                                open={isExportDialogOpen}
-                                onOpenChange={setIsExportDialogOpen}
-                                availableYears={years}
-                                branches={branches}
-                            />
-                        </Dialog>
-                        <Dialog
-                            open={isAddDialogOpen}
-                            onOpenChange={setIsAddDialogOpen}
-                        >
-                            <DialogTrigger asChild>
-                                <Button>
-                                    <Plus className="h-4 w-4" />
-                                    Add Expense
-                                </Button>
-                            </DialogTrigger>
-                            <DialogContent className="max-w-md">
-                                <DialogHeader>
-                                    <DialogTitle>Add New Expense</DialogTitle>
-                                    <DialogDescription>
-                                        Fill in the details to add a new expense
-                                    </DialogDescription>
-                                </DialogHeader>
-                                <ExpenseForm
-                                    onSubmit={handleCreateExpense}
-                                    isSubmitting={isCreating}
-                                    categories={categories}
-                                    branches={branches}
-                                    onAddCategory={() =>
-                                        setIsAddCategoryDialogOpen(true)
-                                    }
-                                    submitLabel="Create"
-                                    onCancel={() => setIsAddDialogOpen(false)}
-                                />
-                            </DialogContent>
-                        </Dialog>
-                    </div>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                    {/* Filters Toolbar */}
-                    <div className="flex flex-wrap items-center gap-3 p-4 bg-muted/30 rounded-lg border border-border/50">
-                        <div className="flex items-center gap-2">
-                            <div className="bg-primary/10 p-2 rounded-full">
-                                <Filter className="h-4 w-4 text-primary" />
-                            </div>
-                            <span className="text-sm font-medium">
-                                Filters:
-                            </span>
-                        </div>
-
-                        {/* Search */}
-                        <Input
-                            placeholder="Search..."
-                            value={search}
-                            onChange={(e) => {
-                                setSearch(e.target.value);
-                                setPage(1);
-                            }}
-                            className="w-[200px] h-9 bg-background/60"
-                        />
-
-                        {/* Date Filter Type */}
-                        <Select
-                            value={filterType}
-                            onValueChange={(v) => {
-                                setFilterType(v as FilterType);
-                                setPage(1);
-                            }}
-                        >
-                            <SelectTrigger className="w-[140px] h-9 bg-background/60">
-                                <SelectValue placeholder="Date Range" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All Time</SelectItem>
-                                <SelectItem value="today">Today</SelectItem>
-                                <SelectItem value="week">This Week</SelectItem>
-                                <SelectItem value="month">Monthly</SelectItem>
-                                <SelectItem value="year">Yearly</SelectItem>
-                                <SelectItem value="range">Range</SelectItem>
-                            </SelectContent>
-                        </Select>
-
-                        {/* Contextual Date Filters */}
-                        {filterType === "month" && (
-                            <div className="flex gap-2 animate-in fade-in slide-in-from-left-2 duration-300">
-                                <Select
-                                    value={selectedMonth.toString()}
-                                    onValueChange={(v) =>
-                                        setSelectedMonth(parseInt(v))
-                                    }
-                                >
-                                    <SelectTrigger className="w-[120px] h-9 bg-background/60">
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {MONTHS.map((m) => (
-                                            <SelectItem
-                                                key={m.value}
-                                                value={m.value.toString()}
-                                            >
-                                                {m.label}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                                <Select
-                                    value={selectedYear.toString()}
-                                    onValueChange={(v) =>
-                                        setSelectedYear(parseInt(v))
-                                    }
-                                >
-                                    <SelectTrigger className="w-[90px] h-9 bg-background/60">
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {years.map((y: number) => (
-                                            <SelectItem
-                                                key={y}
-                                                value={y.toString()}
-                                            >
-                                                {y}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                        )}
-
-                        {filterType === "year" && (
-                            <Select
-                                value={selectedYear.toString()}
-                                onValueChange={(v) =>
-                                    setSelectedYear(parseInt(v))
-                                }
-                            >
-                                <SelectTrigger className="w-[100px] h-9 bg-background/60 animate-in fade-in slide-in-from-left-2">
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {years.map((y: number) => (
-                                        <SelectItem
-                                            key={y}
-                                            value={y.toString()}
-                                        >
-                                            {y}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        )}
-
-                        {filterType === "range" && (
-                            <Popover>
-                                <PopoverTrigger asChild>
-                                    <Button
-                                        variant="outline"
-                                        className="w-[240px] h-9 bg-background/60 justify-start text-left font-normal animate-in fade-in slide-in-from-left-2"
-                                    >
-                                        <CalendarIcon className="h-4 w-4" />
-                                        {dateRange.from ? (
-                                            dateRange.to ? (
-                                                <>
-                                                    {format(
-                                                        dateRange.from,
-                                                        "MMM dd",
-                                                    )}{" "}
-                                                    -{" "}
-                                                    {format(
-                                                        dateRange.to,
-                                                        "MMM dd",
-                                                    )}
-                                                </>
-                                            ) : (
-                                                format(dateRange.from, "PPP")
-                                            )
-                                        ) : (
-                                            "Pick a date range"
-                                        )}
-                                    </Button>
-                                </PopoverTrigger>
-                                <PopoverContent
-                                    className="w-auto p-0"
-                                    align="start"
-                                >
-                                    <Calendar
-                                        mode="range"
-                                        selected={{
-                                            from: dateRange.from,
-                                            to: dateRange.to,
-                                        }}
-                                        onSelect={(range) =>
-                                            setDateRange({
-                                                from: range?.from,
-                                                to: range?.to,
-                                            })
-                                        }
-                                        numberOfMonths={2}
-                                    />
-                                </PopoverContent>
-                            </Popover>
-                        )}
-
-                        <div className="w-px h-6 bg-border mx-1" />
-
-                        {/* Status Filter */}
-                        <Select
-                            value={statusFilter}
-                            onValueChange={(v) => {
-                                setStatusFilter(v);
-                                setPage(1);
-                            }}
-                        >
-                            <SelectTrigger className="w-[130px] h-9 bg-background/60">
-                                <SelectValue placeholder="Status" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All Status</SelectItem>
-                                {statusOptions.map((opt) => (
-                                    <SelectItem
-                                        key={opt.value}
-                                        value={opt.value}
-                                    >
-                                        {opt.label}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-
-                        {/* Branch Filter */}
-                        <Select
-                            value={branchFilter}
-                            onValueChange={(v) => {
-                                setBranchFilter(v);
-                                setPage(1);
-                            }}
-                        >
-                            <SelectTrigger className="w-[150px] h-9 bg-background/60">
-                                <SelectValue placeholder="Branch" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">
-                                    All Branches
-                                </SelectItem>
-                                {branches.map((branch) => (
-                                    <SelectItem
-                                        key={branch._id}
-                                        value={branch._id}
-                                    >
-                                        {branch.name}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => {
-                                setSearch("");
-                                setFilterType("all");
-                                setStatusFilter("all");
-                                setBranchFilter("all");
-                                setPage(1);
-                                setDateRange({});
-                            }}
-                            className="ml-auto"
-                        >
-                            Reset
-                        </Button>
-                    </div>
-
-                    {/* Table */}
-                    <div className="border rounded-md overflow-hidden">
-                        {isLoading ? (
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead className="border-r text-center">
-                                            Date
-                                        </TableHead>
-                                        <TableHead className="border-r text-center">
-                                            Title
-                                        </TableHead>
-                                        <TableHead className="border-r text-center">
-                                            Category
-                                        </TableHead>
-                                        <TableHead className="border-r text-center">
-                                            Branch
-                                        </TableHead>
-                                        <TableHead className="border-r text-center">
-                                            Amount
-                                        </TableHead>
-                                        <TableHead className="border-r text-center">
-                                            Status
-                                        </TableHead>
-                                        <TableHead className="border-r text-center">
-                                            Note
-                                        </TableHead>
-                                        <TableHead className="text-center">
-                                            Actions
-                                        </TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {[...Array(5)].map((_, i) => (
-                                        <TableRow key={i}>
-                                            <TableCell className="border-r">
-                                                <Skeleton className="h-4 w-20" />
-                                            </TableCell>
-                                            <TableCell className="border-r">
-                                                <Skeleton className="h-4 w-32" />
-                                            </TableCell>
-                                            <TableCell className="border-r">
-                                                <Skeleton className="h-4 w-20" />
-                                            </TableCell>
-                                            <TableCell className="border-r">
-                                                <Skeleton className="h-4 w-20" />
-                                            </TableCell>
-                                            <TableCell className="border-r">
-                                                <Skeleton className="h-4 w-16 ml-auto" />
-                                            </TableCell>
-                                            <TableCell className="border-r">
-                                                <Skeleton className="h-6 w-16 rounded-full" />
-                                            </TableCell>
-                                            <TableCell className="border-r">
-                                                <Skeleton className="h-4 w-24" />
-                                            </TableCell>
-                                            <TableCell className="text-right">
-                                                <div className="flex justify-end gap-2">
-                                                    <Skeleton className="h-8 w-8" />
-                                                    <Skeleton className="h-8 w-8" />
-                                                </div>
-                                            </TableCell>
-                                        </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
-                        ) : (
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead className="border-r text-center">
-                                            Date
-                                        </TableHead>
-                                        <TableHead className="border-r text-center">
-                                            Title
-                                        </TableHead>
-                                        <TableHead className="border-r text-center">
-                                            Category
-                                        </TableHead>
-                                        <TableHead className="border-r text-center">
-                                            Branch
-                                        </TableHead>
-                                        <TableHead className="border-r text-center">
-                                            Amount
-                                        </TableHead>
-                                        <TableHead className="border-r text-center">
-                                            Status
-                                        </TableHead>
-                                        <TableHead className="border-r text-center">
-                                            Note
-                                        </TableHead>
-                                        <TableHead className="text-center">
-                                            Actions
-                                        </TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {expenses.length === 0 ? (
-                                        <TableRow>
-                                            <TableCell
-                                                colSpan={8}
-                                                className="text-center py-8 text-muted-foreground"
-                                            >
-                                                No expenses found
-                                            </TableCell>
-                                        </TableRow>
-                                    ) : (
-                                        expenses.map((expense: Expense) => {
-                                            const statusOpt =
-                                                statusOptions.find(
-                                                    (s) =>
-                                                        s.value ===
-                                                        expense.status,
-                                                );
-                                            return (
-                                                <TableRow key={expense._id}>
-                                                    <TableCell className="border-r whitespace-nowrap">
-                                                        {format(
-                                                            new Date(
-                                                                expense.date,
-                                                            ),
-                                                            "PPP",
-                                                        )}
-                                                    </TableCell>
-                                                    <TableCell className="font-medium border-r">
-                                                        {expense.title}
-                                                    </TableCell>
-                                                    <TableCell className="border-r">
-                                                        {expense.category
-                                                            ?.name || "-"}
-                                                    </TableCell>
-                                                    <TableCell className="border-r">
-                                                        {expense.branch?.name ||
-                                                            "-"}
-                                                    </TableCell>
-                                                    <TableCell className="font-medium border-r text-right">
-                                                        {formatCurrency(
-                                                            expense.amount,
-                                                        )}
-                                                    </TableCell>
-                                                    <TableCell className="border-r text-center">
-                                                        <span
-                                                            className={`px-2 py-1 rounded-full text-xs font-medium ${statusOpt?.color}`}
-                                                        >
-                                                            {statusOpt?.label}
-                                                        </span>
-                                                    </TableCell>
-                                                    <TableCell className="max-w-[150px] truncate border-r">
-                                                        {expense.note || "-"}
-                                                    </TableCell>
-                                                    <TableCell className="text-right">
-                                                        <div className="flex items-center justify-end gap-2">
-                                                            {expense.status ===
-                                                                "paid" && (
-                                                                <Button
-                                                                    variant="ghost"
-                                                                    size="icon"
-                                                                    onClick={() => {
-                                                                        setSelectedExpense(
-                                                                            expense,
-                                                                        );
-                                                                        handleUpdateExpense(
-                                                                            {
-                                                                                ...expense,
-                                                                                amount: expense.amount.toString(),
-                                                                                categoryId:
-                                                                                    expense
-                                                                                        .category
-                                                                                        ?._id ||
-                                                                                    "",
-                                                                                branchId:
-                                                                                    expense
-                                                                                        .branch
-                                                                                        ?._id ||
-                                                                                    "",
-                                                                                date: new Date(
-                                                                                    expense.date,
-                                                                                ),
-                                                                                status: "pending",
-                                                                            },
-                                                                        );
-                                                                    }}
-                                                                    title="Mark as Pending"
-                                                                >
-                                                                    <RefreshCcw className="h-4 w-4 text-orange-500" />
-                                                                </Button>
-                                                            )}
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="icon"
-                                                                onClick={() =>
-                                                                    openEditDialog(
-                                                                        expense,
-                                                                    )
-                                                                }
-                                                            >
-                                                                <Edit2 className="h-4 w-4" />
-                                                            </Button>
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="icon"
-                                                                onClick={() => {
-                                                                    setSelectedExpense(
-                                                                        expense,
-                                                                    );
-                                                                    setIsDeleteDialogOpen(
-                                                                        true,
-                                                                    );
-                                                                }}
-                                                            >
-                                                                <Trash2 className="h-4 w-4 text-destructive" />
-                                                            </Button>
-                                                        </div>
-                                                    </TableCell>
-                                                </TableRow>
-                                            );
-                                        })
+            {/* ── Stats Strip ──────────────────────────────────────────── */}
+            <div className="*:data-[slot=card]:from-primary/5 *:data-[slot=card]:to-card dark:*:data-[slot=card]:bg-card grid grid-cols-1 gap-3 *:data-[slot=card]:bg-gradient-to-t *:data-[slot=card]:shadow-xs sm:grid-cols-2 lg:grid-cols-4">
+                {expenseStats.map((stat) => {
+                    const TrendIcon = stat.trend === "up" ? TrendingUp : TrendingDown;
+                    return (
+                        <Card key={stat.description} className="@container/card">
+                            <CardHeader>
+                                <CardDescription>{stat.description}</CardDescription>
+                                <CardTitle
+                                    className={cn(
+                                        "font-semibold tabular-nums whitespace-nowrap",
+                                        stat.isMoney
+                                            ? "text-lg @[250px]/card:text-xl"
+                                            : "text-2xl @[250px]/card:text-3xl",
                                     )}
-                                </TableBody>
-                            </Table>
-                        )}
-                    </div>
+                                >
+                                    {stat.value}
+                                </CardTitle>
+                                <CardAction>
+                                    <Badge variant="outline" className="text-primary border-primary/30">
+                                        <TrendIcon className="text-primary" />
+                                        {stat.trendLabel}
+                                    </Badge>
+                                </CardAction>
+                            </CardHeader>
+                            <CardFooter className="flex-col items-start gap-1.5 text-sm">
+                                <div className="line-clamp-1 flex gap-2 font-medium">
+                                    {stat.footerTitle}
+                                    <TrendIcon className="size-4 text-primary" />
+                                </div>
+                            </CardFooter>
+                        </Card>
+                    );
+                })}
+            </div>
 
-                    {/* Pagination */}
-                    {pagination && (
-                        <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-6">
-                                <div className="text-sm text-muted-foreground">
-                                    Page {pagination.page} of{" "}
-                                    {Math.max(1, pagination.pages)} (
-                                    {pagination.total} total)
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    <p className="text-sm font-medium">
-                                        Rows per page
-                                    </p>
-                                    <Select
-                                        value={`${limit}`}
-                                        onValueChange={(value) => {
-                                            setLimit(Number(value));
-                                            setPage(1);
-                                        }}
-                                    >
-                                        <SelectTrigger className="h-8 w-[70px]">
-                                            <SelectValue placeholder={limit} />
-                                        </SelectTrigger>
-                                        <SelectContent side="top">
-                                            {[10, 20, 30, 40, 50].map(
-                                                (pageSize) => (
-                                                    <SelectItem
-                                                        key={pageSize}
-                                                        value={`${pageSize}`}
-                                                    >
-                                                        {pageSize}
-                                                    </SelectItem>
-                                                ),
-                                            )}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                            </div>
-                            <div className="flex gap-2">
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() =>
-                                        setPage((p) => Math.max(1, p - 1))
-                                    }
-                                    disabled={page === 1 || isFetching}
-                                >
-                                    <ChevronLeft className="h-4 w-4" />
-                                    Previous
-                                </Button>
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() =>
-                                        setPage((p) =>
-                                            Math.min(pagination.pages, p + 1),
-                                        )
-                                    }
-                                    disabled={
-                                        page >= pagination.pages || isFetching
-                                    }
-                                >
-                                    Next
-                                    <ChevronRight className="h-4 w-4 ml-2" />
-                                </Button>
-                            </div>
-                        </div>
-                    )}
+            {/* ── Filters Card ─────────────────────────────────────────── */}
+            <Card className="mt-5 py-0 shadow-sm">
+                <div className="px-5 py-4">
+                    <ExpenseFilters
+                        search={search}
+                        status={statusFilter}
+                        branchId={branchFilter}
+                        filterType={filterType}
+                        selectedMonth={selectedMonth}
+                        selectedYear={selectedYear}
+                        dateRange={dateRange}
+                        years={years}
+                        branches={branches}
+                        statusOptions={STATUS_OPTIONS}
+                        onSearchChange={(v) => {
+                            setSearch(v);
+                            setPage(1);
+                        }}
+                        onStatusChange={(v) => {
+                            setStatusFilter(v);
+                            setPage(1);
+                        }}
+                        onBranchChange={(v) => {
+                            setBranchFilter(v);
+                            setPage(1);
+                        }}
+                        onFilterTypeChange={(v) => {
+                            setFilterType(v);
+                            setPage(1);
+                        }}
+                        onMonthChange={setSelectedMonth}
+                        onYearChange={setSelectedYear}
+                        onDateRangeChange={setDateRange}
+                        onClearFilters={handleClearFilters}
+                    />
+                </div>
+            </Card>
+
+            {/* ── Table Card ───────────────────────────────────────────── */}
+            <Card className="mt-4 py-0 gap-0 overflow-hidden shadow-sm">
+                <div className="overflow-x-auto">
+                    <ExpenseTable
+                        expenses={expenses}
+                        isLoading={isLoading}
+                        formatCurrency={formatCurrency}
+                        onEdit={openEditDialog}
+                        onDelete={openDeleteDialog}
+                        onMarkPending={handleMarkPending}
+                    />
+                </div>
+
+                <Separator />
+
+                {/* Footer: Count + Pagination */}
+                <CardContent className="flex items-center justify-between gap-4 px-5 py-3">
+                    <p className="hidden flex-1 text-sm text-muted-foreground lg:flex">
+                        Showing{" "}
+                        <span className="mx-1 font-medium text-foreground/80">
+                            {expenses.length}
+                        </span>{" "}
+                        of{" "}
+                        <span className="mx-1 font-medium text-foreground/80">
+                            {pagination?.total ?? 0}
+                        </span>{" "}
+                        expenses
+                    </p>
+                    <ExpensePagination
+                        currentPage={page}
+                        totalPages={pagination?.pages ?? 1}
+                        limit={limit}
+                        onPageChange={setPage}
+                        onLimitChange={(l) => {
+                            setLimit(l);
+                            setPage(1);
+                        }}
+                        isLoading={isFetching}
+                    />
                 </CardContent>
             </Card>
 
@@ -1145,6 +674,6 @@ export default function ExpensePage() {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
-        </div>
+        </motion.div>
     );
 }

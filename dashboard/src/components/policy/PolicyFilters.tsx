@@ -9,22 +9,23 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { CLIENT_STATUS_OPTIONS } from "@/lib/constants";
 import { useDebounce } from "@/hooks/use-debounce";
 
-interface ClientFiltersProps {
+interface PolicyFiltersProps {
   search: string;
   status: string;
+  showStatusFilter: boolean;
   onFilterChange: (key: string, value: string) => void;
   onClearFilters: () => void;
 }
 
-export function ClientFilters({
+export function PolicyFilters({
   search,
   status,
+  showStatusFilter,
   onFilterChange,
   onClearFilters,
-}: ClientFiltersProps) {
+}: PolicyFiltersProps) {
   const [localSearch, setLocalSearch] = useState(search);
   const debouncedSearch = useDebounce(localSearch, 500);
 
@@ -47,7 +48,7 @@ export function ClientFilters({
       <div className="relative w-full lg:max-w-sm">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
-          placeholder="Search by name, email, or client ID..."
+          placeholder="Search policies by title..."
           value={localSearch}
           onChange={(e) => setLocalSearch(e.target.value)}
           className="pl-9 h-9 bg-background border-input text-foreground focus-visible:ring-brand-primary"
@@ -63,39 +64,40 @@ export function ClientFilters({
       </div>
 
       {/* Filter dropdowns */}
-      <div className="flex flex-wrap items-center gap-2 shrink-0">
-        <Select
-          value={status || "all"}
-          onValueChange={(val) => onFilterChange("status", val === "all" ? "" : val)}
-        >
-          <SelectTrigger className="w-[130px] h-9 bg-background border-input text-foreground text-sm focus:ring-brand-primary">
-            <SelectValue placeholder="Status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Statuses</SelectItem>
-            {CLIENT_STATUS_OPTIONS.map((opt) => (
-              <SelectItem key={opt.value} value={opt.value}>
-                {opt.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+      {(showStatusFilter || hasActiveFilters) && (
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
+          {showStatusFilter && (
+            <Select
+              value={status || "all"}
+              onValueChange={(val) => onFilterChange("status", val === "all" ? "" : val)}
+            >
+              <SelectTrigger className="w-[130px] h-9 bg-background border-input text-foreground text-sm focus:ring-brand-primary">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Statuses</SelectItem>
+                <SelectItem value="active">Active</SelectItem>
+                <SelectItem value="inactive">Inactive</SelectItem>
+              </SelectContent>
+            </Select>
+          )}
 
-        {hasActiveFilters && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              setLocalSearch("");
-              onClearFilters();
-            }}
-            className="h-9 px-2.5 text-muted-foreground hover:text-foreground gap-1"
-          >
-            <X className="h-3.5 w-3.5" />
-            Clear
-          </Button>
-        )}
-      </div>
+          {hasActiveFilters && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setLocalSearch("");
+                onClearFilters();
+              }}
+              className="h-9 px-2.5 text-muted-foreground hover:text-foreground gap-1"
+            >
+              <X className="h-3.5 w-3.5" />
+              Clear
+            </Button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

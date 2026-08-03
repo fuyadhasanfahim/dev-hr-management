@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   useGetOrdersQuery,
   useCreateOrderMutation,
@@ -18,32 +18,22 @@ import { IconReceipt } from "@tabler/icons-react";
 import type {
   IOrder,
   OrderStatus,
-  OrderPriority,
   OrderFilters,
-  UpdateStatusInput,
 } from "@/types/order.type";
-import {
-  ORDER_STATUS_LABELS,
-  ORDER_PRIORITY_LABELS,
-  ORDER_STATUS_COLORS,
-} from "@/lib/constants";
+import { ORDER_STATUS_LABELS } from "@/lib/constants";
+import { motion } from "framer-motion";
 import {
   Card,
+  CardAction,
   CardContent,
   CardDescription,
+  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -58,7 +48,6 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
   DialogFooter,
 } from "@/components/ui/dialog";
 import {
@@ -71,22 +60,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Separator } from "@/components/ui/separator";
 import {
   Loader,
   Plus,
   Trash2,
   Edit2,
-  Package,
   Clock,
-  CheckCircle,
-  AlertCircle,
-  Eye,
-  RotateCcw,
-  AlertTriangle,
   FileText,
-  History,
-  Filter,
   X,
   CheckSquare,
   User,
@@ -95,31 +76,25 @@ import {
   Briefcase,
   Hash,
   ArrowRight,
-  Receipt,
+  TrendingUp,
+  TrendingDown,
 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import Link from "next/link";
 import { toast } from "sonner";
 import { OrderForm, type OrderFormData } from "@/components/order/OrderForm";
 import { OrderTimeline } from "@/components/order/OrderTimeline";
+import { OrderFilters as OrderFiltersBar } from "@/components/order/OrderFilters";
+import { OrderTable } from "@/components/order/OrderTable";
+import { OrderPagination } from "@/components/order/OrderPagination";
 import { AddPaymentDialog } from "@/components/receipt/AddPaymentDialog";
 import { Badge } from "@/components/ui/badge";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import { format } from "date-fns";
 import { DateTimePicker } from "@/components/shared/DateTimePicker";
 import { cn } from "@/lib/utils";
 import { useSession } from "@/lib/auth-client";
 import { useGetMeQuery } from "@/redux/features/staff/staffApi";
 import { Role } from "@/constants/role";
-import { TableContent } from "@/components/shared/table-content";
-import { ColumnDef } from "@tanstack/react-table";
-import { SelectContent as StatusPicker } from "@/components/shared/select-content";
-import { getFilteredStatusOptions } from "@/constants/orderStatusWorkflow";
 
 const safeFormat = (
   dateStr: string | undefined | null,
@@ -200,6 +175,10 @@ export default function OrdersPage() {
   const [selectedYear, setSelectedYear] = useState<string>("");
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
 
+  // Client-side pagination state (data is fetched up-front and filtered/paginated here)
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(20);
+
   // Queries
   const { data: yearsData } = useGetOrderYearsQuery();
   const sortedYears = useMemo(() => {
@@ -248,10 +227,11 @@ export default function OrdersPage() {
   const stats = statsData?.data;
   const clients = useMemo(() => clientsData?.clients || [], [clientsData]);
 
-  // Month / Year / Priority / Client filters, applied client-side
+  // Status / Priority / Client / Search / Month / Year filters, applied client-side
   const filteredOrders = useMemo(() => {
     return orders.filter((order) => {
       if (filters.priority && order.priority !== filters.priority) return false;
+      if (filters.status && order.status !== filters.status) return false;
       if (filters.clientId) {
         const cid =
           typeof order.clientId === "object" ? order.clientId._id : order.clientId;
@@ -262,9 +242,32 @@ export default function OrdersPage() {
         if (selectedMonth && d.getMonth() + 1 !== parseInt(selectedMonth)) return false;
         if (selectedYear && d.getFullYear() !== parseInt(selectedYear)) return false;
       }
+      if (filters.search) {
+        const q = filters.search.toLowerCase();
+        const clientName = typeof order.clientId === "object" ? order.clientId.name : "";
+        const project = order.quotationSnapshot?.templateName || order.orderName || "";
+        if (
+          !order._id.toLowerCase().includes(q) &&
+          !clientName.toLowerCase().includes(q) &&
+          !project.toLowerCase().includes(q)
+        ) {
+          return false;
+        }
+      }
       return true;
     });
-  }, [orders, filters.priority, filters.clientId, selectedMonth, selectedYear]);
+  }, [orders, filters, selectedMonth, selectedYear]);
+
+  // Reset to page 1 whenever the filtered set changes
+  useEffect(() => {
+    setPage(1);
+  }, [filters, selectedMonth, selectedYear]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredOrders.length / limit));
+  const pagedOrders = useMemo(
+    () => filteredOrders.slice((page - 1) * limit, page * limit),
+    [filteredOrders, page, limit],
+  );
 
   // Check if every currently-filtered order is selected
   const allOrdersSelected = useMemo(() => {
@@ -312,6 +315,33 @@ export default function OrdersPage() {
   ) => {
     setFilters((prev) => ({ ...prev, [key]: value || undefined }));
   };
+
+  // Bridges the OrderFilters component (search/status/priority/client/month/year)
+  // to the two underlying pieces of state: `filters` and the month/year strings.
+  const handleOrderFilterChange = (key: string, value: string) => {
+    if (key === "month") {
+      setSelectedMonth(value);
+      return;
+    }
+    if (key === "year") {
+      setSelectedYear(value);
+      return;
+    }
+    handleFilterChange(key as keyof OrderFilters, value);
+  };
+
+  const handleClearOrderFilters = () => {
+    setFilters({ priority: undefined, clientId: undefined, status: undefined, search: undefined });
+    setSelectedMonth("");
+    setSelectedYear("");
+  };
+
+  const canManageOrder = (order: IOrder) =>
+    !isTelemarketer ||
+    (isTelemarketer &&
+      (typeof order.clientId === "object"
+        ? order.clientId.createdBy?._id
+        : order.clientId) === session?.user?.id);
 
   const handleCreateOrder = async (data: OrderFormData) => {
     setServerErrors(undefined);
@@ -526,680 +556,270 @@ export default function OrdersPage() {
     [],
   );
 
-  const columns = useMemo<ColumnDef<IOrder, any>[]>(() => {
-    const cols: ColumnDef<IOrder, any>[] = [];
-
-    if (isSelectionMode) {
-      cols.push({
-        id: "select",
-        header: () => (
-          <Checkbox
-            checked={allOrdersSelected}
-            onCheckedChange={(checked) => toggleAllOrders(!!checked)}
-            aria-label="Select all orders"
-          />
-        ),
-        cell: ({ row }) => (
-          <Checkbox
-            checked={selectedOrderIds.has(row.original._id)}
-            onCheckedChange={() => toggleOrderSelection(row.original._id)}
-            aria-label={`Select ${row.original.quotationSnapshot?.templateName || row.original.orderName || "Order"}`}
-          />
-        ),
-      });
-    }
-
-    cols.push(
+  const orderStats = useMemo(
+    () => [
       {
-        id: "orderId",
-        header: "Order ID",
-        accessorFn: (row) => row._id,
-        cell: ({ row }) => (
-          <span className="font-mono text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
-            #{row.original._id.slice(-6)}
-          </span>
-        ),
+        description: "Total Orders",
+        value: stats?.total || 0,
+        trend: "up" as const,
+        trendLabel: "All",
+        footerTitle: "All orders placed",
       },
       {
-        id: "client",
-        header: "Client",
-        accessorFn: (row) =>
-          typeof row.clientId === "object" ? row.clientId.name : "",
-        cell: ({ row }) => {
-          const order = row.original;
-          return (
-            <span className="font-semibold text-sm">
-              {typeof order.clientId === "object" ? order.clientId.name : "N/A"}
-            </span>
-          );
-        },
+        description: "Pending",
+        value: stats?.pending || 0,
+        trend: "down" as const,
+        trendLabel: "Waiting",
+        footerTitle: "Awaiting action",
       },
       {
-        id: "project",
-        header: "Project / Service",
-        accessorFn: (row) => row.quotationSnapshot?.templateName || row.orderName,
-        cell: ({ row }) => (
-          <span className="font-medium text-sm line-clamp-1 max-w-[200px] block">
-            {row.original.quotationSnapshot?.templateName ||
-              row.original.orderName ||
-              "Untitled Project"}
-          </span>
-        ),
+        description: "In Progress",
+        value: stats?.inProgress || 0,
+        trend: "up" as const,
+        trendLabel: "Active",
+        footerTitle: "Currently in production",
       },
       {
-        id: "type",
-        header: "Type",
-        accessorFn: (row) => row.orderType,
-        cell: ({ row }) => (
-          <Badge
-            variant="secondary"
-            className="capitalize text-[10px] h-5 px-1.5 font-bold tracking-wide"
-          >
-            {row.original.orderType || "Service"}
-          </Badge>
-        ),
+        description: "Quality Check",
+        value: stats?.qualityCheck || 0,
+        trend: "up" as const,
+        trendLabel: "QC",
+        footerTitle: "Under review",
       },
       {
-        id: "items",
-        header: () => <div className="text-center">Items</div>,
-        accessorFn: (row) => row.quotationSnapshot?.scopeOfWork?.length || 0,
-        cell: ({ row }) => (
-          <div className="flex justify-center">
-            <div className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-muted text-[11px] font-bold">
-              {row.original.quotationSnapshot?.scopeOfWork?.length || 0}
-            </div>
-          </div>
-        ),
+        description: "Revision",
+        value: stats?.revision || 0,
+        trend: (stats?.revision ?? 0) > 0 ? ("down" as const) : ("up" as const),
+        trendLabel: "Rework",
+        footerTitle: "Sent back for changes",
       },
       {
-        id: "total",
-        header: () => <div className="text-right">Total</div>,
-        accessorFn: (row) =>
-          row.quotationSnapshot?.grandTotal || row.totalAmount || row.totalPrice || 0,
-        cell: ({ row }) => {
-          const order = row.original;
-          return (
-            <div className="text-right">
-              <span
-                className={cn(
-                  "font-bold text-sm",
-                  !canSeeFinancials && "blur-[4px] select-none pointer-events-none",
-                )}
-              >
-                {order.quotationSnapshot?.currency === "USD"
-                  ? "$"
-                  : order.quotationSnapshot?.currency || "$"}
-                {(
-                  order.quotationSnapshot?.grandTotal ||
-                  order.totalAmount ||
-                  order.totalPrice ||
-                  0
-                ).toLocaleString(undefined, {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2,
-                })}
-              </span>
-            </div>
-          );
-        },
+        description: "Completed",
+        value: stats?.completed || 0,
+        trend: "up" as const,
+        trendLabel: "Done",
+        footerTitle: "Finished orders",
       },
       {
-        id: "payment",
-        header: () => <div className="text-center">Payment</div>,
-        cell: ({ row }) => {
-          const phases = row.original.paymentPhases;
-          if (!phases)
-            return (
-              <div className="text-center text-[10px] text-muted-foreground font-medium italic bg-muted/30 rounded py-1 border border-dashed">
-                No Data
-              </div>
-            );
-
-          const due =
-            (phases.upfront?.amountDue || 0) +
-            (phases.delivery?.amountDue || 0) +
-            (phases.final?.amountDue || 0);
-          const paid =
-            (phases.upfront?.amountPaid || 0) +
-            (phases.delivery?.amountPaid || 0) +
-            (phases.final?.amountPaid || 0);
-          const pct =
-            typeof phases.totalPercentage === "number"
-              ? phases.totalPercentage
-              : due > 0
-                ? Math.min(100, Math.floor((paid / due) * 100))
-                : 0;
-
-          let stage = "Upfront";
-          let stageStyle =
-            "bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-950/30 dark:text-amber-400";
-
-          if (phases.upfront?.status === "paid") {
-            stage = "Delivery";
-            stageStyle =
-              "bg-sky-100 text-sky-800 border-sky-200 dark:bg-sky-950/30 dark:text-sky-400";
-          }
-          if (phases.delivery?.status === "paid") {
-            stage = "Final";
-            stageStyle =
-              "bg-indigo-100 text-indigo-800 border-indigo-200 dark:bg-indigo-950/30 dark:text-indigo-400";
-          }
-          if (phases.final?.status === "paid") {
-            stage = "Paid";
-            stageStyle =
-              "bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400";
-          }
-
-          return (
-            <div className="space-y-1 px-1 w-full max-w-[110px] mx-auto">
-              <div className="flex items-center justify-between gap-1 text-[9px] font-bold">
-                <span
-                  className={cn(
-                    "px-1 rounded-[4px] border tracking-tight truncate uppercase scale-[0.95] origin-left",
-                    stageStyle,
-                  )}
-                >
-                  {stage}
-                </span>
-                <span
-                  className={cn(
-                    "font-mono tracking-tight",
-                    pct === 100 ? "text-emerald-600" : "text-foreground/80",
-                  )}
-                >
-                  {pct}%
-                </span>
-              </div>
-              <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden ring-1 ring-inset ring-black/5 dark:ring-white/5">
-                <div
-                  className={cn(
-                    "h-full transition-all duration-700 ease-out rounded-full",
-                    pct === 100
-                      ? "bg-gradient-to-r from-emerald-500 to-emerald-400"
-                      : "bg-gradient-to-r from-primary/90 to-primary",
-                  )}
-                  style={{ width: `${pct}%` }}
-                />
-              </div>
-            </div>
-          );
-        },
+        description: "Delivered",
+        value: stats?.delivered || 0,
+        trend: "up" as const,
+        trendLabel: "Sent",
+        footerTitle: "Delivered to client",
       },
       {
-        id: "status",
-        header: () => <div className="text-center">Status</div>,
-        accessorFn: (row) => row.status,
-        cell: ({ row }) => {
-          const order = row.original;
-          return (
-            <div className="flex justify-center">
-              <StatusPicker
-                value={order.status}
-                onChange={(value) =>
-                  handleStatusChange(order._id, value as OrderStatus)
-                }
-                options={[
-                  {
-                    label: ORDER_STATUS_LABELS[order.status] ?? order.status,
-                    value: order.status,
-                  },
-                  ...getFilteredStatusOptions(order).map((s) => ({
-                    label: ORDER_STATUS_LABELS[s],
-                    value: s,
-                  })),
-                ]}
-                triggerClassName={cn(
-                  "h-7 text-[10px] font-bold uppercase tracking-wider justify-center",
-                  ORDER_STATUS_COLORS[order.status],
-                )}
-                className="w-[130px]"
-              />
-            </div>
-          );
-        },
+        description: "Overdue",
+        value: stats?.overdue || 0,
+        trend: (stats?.overdue ?? 0) > 0 ? ("down" as const) : ("up" as const),
+        trendLabel: "Alert",
+        footerTitle: "Past deadline",
       },
-      {
-        id: "createdDate",
-        header: "Created Date",
-        accessorFn: (row) => row.createdAt || row.orderDate,
-        cell: ({ row }) => (
-          <span className="text-muted-foreground text-[12px] whitespace-nowrap">
-            {safeFormat(row.original.createdAt || row.original.orderDate, "MMM dd, yyyy")}
-          </span>
-        ),
-      },
-      {
-        id: "actions",
-        header: () => <div className="text-center">Actions</div>,
-        cell: ({ row }) => {
-          const order = row.original;
-          return (
-            <TooltipProvider>
-              <div className="flex items-center justify-center gap-1">
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8"
-                      onClick={() => openViewDialog(order)}
-                    >
-                      <Eye className="h-4 w-4" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>View Details</p>
-                  </TooltipContent>
-                </Tooltip>
+    ],
+    [stats],
+  );
 
-                {order.quotationGroupId && (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8"
-                        onClick={() => setReceiptTarget(order)}
-                      >
-                        <Receipt className="h-4 w-4" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>Record a payment / create receipt</p>
-                    </TooltipContent>
-                  </Tooltip>
-                )}
-
-                {(!isTelemarketer ||
-                  (isTelemarketer &&
-                    (typeof order.clientId === "object"
-                      ? order.clientId.createdBy?._id
-                      : order.clientId) === session?.user?.id)) && (
-                  <>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8"
-                          onClick={() => openEditDialog(order)}
-                        >
-                          <Edit2 className="h-4 w-4" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>Edit Order</p>
-                      </TooltipContent>
-                    </Tooltip>
-
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-destructive hover:bg-destructive/10"
-                          onClick={() => {
-                            setSelectedOrder(order);
-                            setIsDeleteDialogOpen(true);
-                          }}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>Delete Order</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </>
-                )}
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => openTimelineDialog(order)}
-                    >
-                      <History className="h-4 w-4" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>View Timeline</p>
-                  </TooltipContent>
-                </Tooltip>
-              </div>
-            </TooltipProvider>
-          );
-        },
-      },
-    );
-
-    return cols;
-  }, [
-    isSelectionMode,
-    selectedOrderIds,
-    allOrdersSelected,
-    canSeeFinancials,
-    isTelemarketer,
-    session,
-  ]);
 
   return (
-    <div className="space-y-6">
-      {/* Stats Cards - Row 1 */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {/* Total Orders Card */}
-        <div className="group relative overflow-hidden rounded-2xl border bg-linear-to-br from-slate-500/10 via-card to-card p-5 transition-all duration-300 hover:shadow-xl hover:shadow-slate-500/5 hover:border-slate-500/30">
-          <div className="absolute -right-4 -top-4 h-20 w-20 rounded-full bg-slate-500/10 blur-2xl transition-all duration-300 group-hover:bg-slate-500/20" />
-          <div className="relative">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-500/10 text-slate-500 transition-all duration-300 group-hover:scale-110 group-hover:bg-slate-500/20">
-                <Package className="h-5 w-5" />
-              </div>
-            </div>
-            <h3 className="text-3xl font-bold tracking-tight text-slate-600 dark:text-slate-300">
-              {stats?.total || 0}
-            </h3>
-            <p className="text-xs text-muted-foreground mt-1">Total Orders</p>
-          </div>
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+      className="w-full min-h-screen pb-10"
+    >
+      {/* ── Page Header ──────────────────────────────────────────── */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">
+            Orders
+          </h1>
+          <p className="text-sm text-muted-foreground mt-0.5 flex items-center gap-2">
+            Manage graphic design orders and track their status
+            {isLoading && (
+              <Loader className="h-3 w-3 animate-spin text-primary" />
+            )}
+          </p>
         </div>
-
-        {/* Pending Card */}
-        <div className="group relative overflow-hidden rounded-2xl border bg-linear-to-br from-yellow-500/10 via-card to-card p-5 transition-all duration-300 hover:shadow-xl hover:shadow-yellow-500/5 hover:border-yellow-500/30">
-          <div className="absolute -right-4 -top-4 h-20 w-20 rounded-full bg-yellow-500/10 blur-2xl transition-all duration-300 group-hover:bg-yellow-500/20" />
-          <div className="relative">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-yellow-500/10 text-yellow-500 transition-all duration-300 group-hover:scale-110 group-hover:bg-yellow-500/20">
-                <Clock className="h-5 w-5" />
-              </div>
-            </div>
-            <h3 className="text-3xl font-bold tracking-tight text-yellow-600 dark:text-yellow-400">
-              {stats?.pending || 0}
-            </h3>
-            <p className="text-xs text-muted-foreground mt-1">Pending</p>
-          </div>
-        </div>
-
-        {/* In Progress Card */}
-        <div className="group relative overflow-hidden rounded-2xl border bg-linear-to-br from-blue-500/10 via-card to-card p-5 transition-all duration-300 hover:shadow-xl hover:shadow-blue-500/5 hover:border-blue-500/30">
-          <div className="absolute -right-4 -top-4 h-20 w-20 rounded-full bg-blue-500/10 blur-2xl transition-all duration-300 group-hover:bg-blue-500/20" />
-          <div className="relative">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-500/10 text-blue-500 transition-all duration-300 group-hover:scale-110 group-hover:bg-blue-500/20">
-                <Loader className="h-5 w-5" />
-              </div>
-            </div>
-            <h3 className="text-3xl font-bold tracking-tight text-blue-600 dark:text-blue-400">
-              {stats?.inProgress || 0}
-            </h3>
-            <p className="text-xs text-muted-foreground mt-1">In Progress</p>
-          </div>
-        </div>
-
-        {/* Quality Check Card */}
-        <div className="group relative overflow-hidden rounded-2xl border bg-linear-to-br from-purple-500/10 via-card to-card p-5 transition-all duration-300 hover:shadow-xl hover:shadow-purple-500/5 hover:border-purple-500/30">
-          <div className="absolute -right-4 -top-4 h-20 w-20 rounded-full bg-purple-500/10 blur-2xl transition-all duration-300 group-hover:bg-purple-500/20" />
-          <div className="relative">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-500/10 text-purple-500 transition-all duration-300 group-hover:scale-110 group-hover:bg-purple-500/20">
-                <AlertCircle className="h-5 w-5" />
-              </div>
-            </div>
-            <h3 className="text-3xl font-bold tracking-tight text-purple-600 dark:text-purple-400">
-              {stats?.qualityCheck || 0}
-            </h3>
-            <p className="text-xs text-muted-foreground mt-1">Quality Check</p>
-          </div>
+        <div className="flex items-center gap-2 flex-wrap justify-end">
+          {/* Select Mode Toggle Button (Hidden for telemarketers) */}
+          {!isTelemarketer &&
+            (!isSelectionMode ? (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8"
+                onClick={() => setIsSelectionMode(true)}
+              >
+                <CheckSquare className="h-3.5 w-3.5" />
+                Select
+              </Button>
+            ) : (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8"
+                onClick={clearSelection}
+              >
+                <X className="h-3.5 w-3.5" />
+                Cancel
+              </Button>
+            ))}
+          <Button variant="outline" size="sm" className="h-8" asChild>
+            <Link href="/orders/invoice">
+              <FileText className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Generate Invoice</span>
+            </Link>
+          </Button>
+          <Button variant="outline" size="sm" className="h-8" asChild>
+            <Link href="/quotations">
+              <IconReceipt className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Quotation Pipeline</span>
+            </Link>
+          </Button>
+          {/* Manual Add Order is disabled - redirect to Quotations */}
+          <Button size="sm" className="h-8" asChild>
+            <Link href="/quotations/new">
+              <Plus className="h-3.5 w-3.5" />
+              New Quotation
+            </Link>
+          </Button>
         </div>
       </div>
 
-      {/* Stats Cards - Row 2 */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {/* Revision Card */}
-        <div className="group relative overflow-hidden rounded-2xl border bg-linear-to-br from-orange-500/10 via-card to-card p-5 transition-all duration-300 hover:shadow-xl hover:shadow-orange-500/5 hover:border-orange-500/30">
-          <div className="absolute -right-4 -top-4 h-20 w-20 rounded-full bg-orange-500/10 blur-2xl transition-all duration-300 group-hover:bg-orange-500/20" />
-          <div className="relative">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-orange-500/10 text-orange-500 transition-all duration-300 group-hover:scale-110 group-hover:bg-orange-500/20">
-                <RotateCcw className="h-5 w-5" />
-              </div>
-            </div>
-            <h3 className="text-3xl font-bold tracking-tight text-orange-600 dark:text-orange-400">
-              {stats?.revision || 0}
-            </h3>
-            <p className="text-xs text-muted-foreground mt-1">Revision</p>
-          </div>
-        </div>
-
-        {/* Completed Card */}
-        <div className="group relative overflow-hidden rounded-2xl border bg-linear-to-br from-green-500/10 via-card to-card p-5 transition-all duration-300 hover:shadow-xl hover:shadow-green-500/5 hover:border-green-500/30">
-          <div className="absolute -right-4 -top-4 h-20 w-20 rounded-full bg-green-500/10 blur-2xl transition-all duration-300 group-hover:bg-green-500/20" />
-          <div className="relative">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-green-500/10 text-green-500 transition-all duration-300 group-hover:scale-110 group-hover:bg-green-500/20">
-                <CheckCircle className="h-5 w-5" />
-              </div>
-            </div>
-            <h3 className="text-3xl font-bold tracking-tight text-green-600 dark:text-green-400">
-              {stats?.completed || 0}
-            </h3>
-            <p className="text-xs text-muted-foreground mt-1">Completed</p>
-          </div>
-        </div>
-
-        {/* Delivered Card */}
-        <div className="group relative overflow-hidden rounded-2xl border bg-linear-to-br from-emerald-500/10 via-card to-card p-5 transition-all duration-300 hover:shadow-xl hover:shadow-emerald-500/5 hover:border-emerald-500/30">
-          <div className="absolute -right-4 -top-4 h-20 w-20 rounded-full bg-emerald-500/10 blur-2xl transition-all duration-300 group-hover:bg-emerald-500/20" />
-          <div className="relative">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-500 transition-all duration-300 group-hover:scale-110 group-hover:bg-emerald-500/20">
-                <CheckCircle className="h-5 w-5" />
-              </div>
-            </div>
-            <h3 className="text-3xl font-bold tracking-tight text-emerald-600 dark:text-emerald-400">
-              {stats?.delivered || 0}
-            </h3>
-            <p className="text-xs text-muted-foreground mt-1">Delivered</p>
-          </div>
-        </div>
-
-        {/* Overdue Card */}
-        <div className="group relative overflow-hidden rounded-2xl border bg-linear-to-br from-red-500/10 via-card to-card p-5 transition-all duration-300 hover:shadow-xl hover:shadow-red-500/5 hover:border-red-500/30">
-          <div className="absolute -right-4 -top-4 h-20 w-20 rounded-full bg-red-500/10 blur-2xl transition-all duration-300 group-hover:bg-red-500/20" />
-          <div className="relative">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-500/10 text-red-500 transition-all duration-300 group-hover:scale-110 group-hover:bg-red-500/20">
-                <AlertTriangle className="h-5 w-5" />
-              </div>
-            </div>
-            <h3 className="text-3xl font-bold tracking-tight text-red-600 dark:text-red-400">
-              {stats?.overdue || 0}
-            </h3>
-            <p className="text-xs text-muted-foreground mt-1">Overdue</p>
-          </div>
-        </div>
+      {/* ── Stats Strip ──────────────────────────────────────────── */}
+      <div className="*:data-[slot=card]:from-primary/5 *:data-[slot=card]:to-card dark:*:data-[slot=card]:bg-card grid grid-cols-2 gap-3 *:data-[slot=card]:bg-gradient-to-t *:data-[slot=card]:shadow-xs lg:grid-cols-4">
+        {orderStats.map((stat) => {
+          const TrendIcon = stat.trend === "up" ? TrendingUp : TrendingDown;
+          return (
+            <Card key={stat.description} className="@container/card">
+              <CardHeader>
+                <CardDescription>{stat.description}</CardDescription>
+                <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
+                  {stat.value}
+                </CardTitle>
+                <CardAction>
+                  <Badge variant="outline" className="text-primary border-primary/30">
+                    <TrendIcon className="text-primary" />
+                    {stat.trendLabel}
+                  </Badge>
+                </CardAction>
+              </CardHeader>
+              <CardFooter className="flex-col items-start gap-1.5 text-sm">
+                <div className="line-clamp-1 flex gap-2 font-medium">
+                  {stat.footerTitle}
+                  <TrendIcon className="size-4 text-primary" />
+                </div>
+              </CardFooter>
+            </Card>
+          );
+        })}
       </div>
 
-      {/* Main Card */}
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <div>
-            <CardTitle className="text-2xl">Order Management</CardTitle>
-            <CardDescription>
-              Manage graphic design orders and track their status
-            </CardDescription>
+      {/* ── Selection Action Bar ─────────────────────────────────── */}
+      {isSelectionMode && (
+        <div className="flex items-center justify-between p-3 rounded-lg border bg-primary/5 border-primary/20 mt-5">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium">
+              {selectedOrderIds.size} order
+              {selectedOrderIds.size !== 1 ? "s" : ""} selected
+            </span>
+            {selectedOrderIds.size > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setSelectedOrderIds(new Set())}
+                className="h-7 text-xs"
+              >
+                <X className="h-3 w-3" />
+                Clear Selection
+              </Button>
+            )}
           </div>
-          <div className="flex gap-3">
-            {/* Select Mode Toggle Button (Hidden for telemarketers) */}
-            {!isTelemarketer &&
-              (!isSelectionMode ? (
-                <Button
-                  variant="outline"
-                  onClick={() => setIsSelectionMode(true)}
-                >
-                  <CheckSquare className="h-4 w-4" />
-                  Select
-                </Button>
-              ) : (
-                <Button variant="outline" onClick={clearSelection}>
-                  <X className="h-4 w-4" />
-                  Cancel
-                </Button>
-              ))}
-            <Button variant="outline" asChild>
-              <Link href="/orders/invoice">
-                <FileText className="h-4 w-4" />
-                Generate Invoice
-              </Link>
-            </Button>
-            <Button variant="outline" asChild>
-              <Link href="/quotations">
-                <IconReceipt className="h-4 w-4" />
-                Quotation Pipeline
-              </Link>
-            </Button>
-            {/* Manual Add Order is disabled - redirect to Quotations */}
-            <Button asChild>
-              <Link href="/quotations/new">
-                <Plus />
-                New Quotation
-              </Link>
-            </Button>
+          <div className="flex items-center gap-2">
+            {!isTelemarketer && (
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => setIsBulkDeleteDialogOpen(true)}
+                disabled={selectedOrderIds.size === 0}
+              >
+                <Trash2 className="h-4 w-4" />
+                Delete ({selectedOrderIds.size})
+              </Button>
+            )}
           </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {/* Selection Action Bar */}
-          {isSelectionMode && (
-            <div className="flex items-center justify-between p-3 rounded-lg border bg-primary/5 border-primary/20">
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-medium">
-                  {selectedOrderIds.size} order
-                  {selectedOrderIds.size !== 1 ? "s" : ""} selected
-                </span>
-                {selectedOrderIds.size > 0 && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setSelectedOrderIds(new Set())}
-                    className="h-7 text-xs"
-                  >
-                    <X className="h-3 w-3" />
-                    Clear Selection
-                  </Button>
-                )}
-              </div>
-              <div className="flex items-center gap-2">
-                {!isTelemarketer && (
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    onClick={() => setIsBulkDeleteDialogOpen(true)}
-                    disabled={selectedOrderIds.size === 0}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                    Delete ({selectedOrderIds.size})
-                  </Button>
-                )}
-              </div>
-            </div>
-          )}
+        </div>
+      )}
 
-          {/* Table */}
-          <TableContent
-            data={filteredOrders}
-            columns={columns}
-            isLoading={isLoading}
-            searchPlaceholder="Search by order ID, client, or project..."
-            statusFilterKey="status"
+      {/* ── Filters Card ─────────────────────────────────────────── */}
+      <Card className="mt-5 py-0 shadow-sm">
+        <div className="px-5 py-4">
+          <OrderFiltersBar
+            search={filters.search || ""}
+            status={filters.status || ""}
+            priority={filters.priority || ""}
+            clientId={filters.clientId || ""}
+            month={selectedMonth}
+            year={selectedYear}
             statusOptions={statusFilterOptions}
-            extraFilters={
-              <>
-                <div className="hidden md:flex items-center gap-1.5 text-xs font-bold text-muted-foreground shrink-0">
-                  <Filter className="h-3.5 w-3.5" />
-                  Filters
-                </div>
-                <div className="w-full md:w-[130px] shrink-0">
-                  <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-                    <SelectTrigger className="bg-background w-full">
-                      <SelectValue placeholder="All Months" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {months.map((month) => (
-                        <SelectItem key={month.value} value={month.value}>
-                          {month.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="w-full md:w-[110px] shrink-0">
-                  <Select value={selectedYear} onValueChange={setSelectedYear}>
-                    <SelectTrigger className="bg-background w-full">
-                      <SelectValue placeholder="All Years" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {sortedYears.map((year) => (
-                        <SelectItem key={year} value={year.toString()}>
-                          {year}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="w-full md:w-[130px] shrink-0">
-                  <Select
-                    value={filters.priority || ""}
-                    onValueChange={(value) =>
-                      handleFilterChange("priority", value as OrderPriority)
-                    }
-                  >
-                    <SelectTrigger className="bg-background w-full">
-                      <SelectValue placeholder="All Priorities" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Object.entries(ORDER_PRIORITY_LABELS).map(
-                        ([value, label]) => (
-                          <SelectItem key={value} value={value}>
-                            {label}
-                          </SelectItem>
-                        ),
-                      )}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="w-full md:w-[150px] shrink-0">
-                  <Select
-                    value={filters.clientId || ""}
-                    onValueChange={(value) => handleFilterChange("clientId", value)}
-                  >
-                    <SelectTrigger className="bg-background w-full">
-                      <SelectValue placeholder="All Clients" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {clients.map((client) => (
-                        <SelectItem key={client._id} value={client._id}>
-                          {client.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                {(filters.priority || filters.clientId || selectedMonth || selectedYear) && (
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => {
-                      setFilters({ priority: undefined, clientId: undefined });
-                      setSelectedMonth("");
-                      setSelectedYear("");
-                    }}
-                    className="bg-background shrink-0"
-                    title="Clear filters"
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                )}
-              </>
-            }
+            clients={clients}
+            months={months}
+            years={sortedYears}
+            onFilterChange={handleOrderFilterChange}
+            onClearFilters={handleClearOrderFilters}
+          />
+        </div>
+      </Card>
+
+      {/* ── Table Card ───────────────────────────────────────────── */}
+      <Card className="mt-4 py-0 gap-0 overflow-hidden shadow-sm">
+        <div className="overflow-x-auto">
+          <OrderTable
+            orders={pagedOrders}
+            isLoading={isLoading}
+            isSelectionMode={isSelectionMode}
+            selectedOrderIds={selectedOrderIds}
+            allSelected={allOrdersSelected}
+            onToggleAll={toggleAllOrders}
+            onToggleOne={toggleOrderSelection}
+            canSeeFinancials={canSeeFinancials}
+            canManage={canManageOrder}
+            onView={openViewDialog}
+            onReceipt={(order) => setReceiptTarget(order)}
+            onEdit={openEditDialog}
+            onDelete={(order) => {
+              setSelectedOrder(order);
+              setIsDeleteDialogOpen(true);
+            }}
+            onTimeline={openTimelineDialog}
+            onStatusChange={handleStatusChange}
+          />
+        </div>
+
+        <Separator />
+
+        {/* Footer: Count + Pagination */}
+        <CardContent className="flex items-center justify-between gap-4 px-5 py-3">
+          <p className="hidden flex-1 text-sm text-muted-foreground lg:flex">
+            Showing{' '}
+            <span className="mx-1 font-medium text-foreground/80">
+              {pagedOrders.length}
+            </span>{' '}
+            of{' '}
+            <span className="mx-1 font-medium text-foreground/80">
+              {filteredOrders.length}
+            </span>{' '}
+            orders
+          </p>
+          <OrderPagination
+            currentPage={page}
+            totalPages={totalPages}
+            limit={limit}
+            onPageChange={setPage}
+            onLimitChange={(l) => {
+              setLimit(l);
+              setPage(1);
+            }}
+            isLoading={isLoading}
           />
         </CardContent>
       </Card>
@@ -1718,6 +1338,6 @@ export default function OrdersPage() {
         onClose={() => setReceiptTarget(null)}
         onRecorded={refetchOrders}
       />
-    </div>
+    </motion.div>
   );
 }

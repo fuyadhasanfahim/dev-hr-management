@@ -7,7 +7,9 @@ import {
 } from "@/redux/features/attendance/attendanceApi";
 import { AttendanceStatus } from "@/types/attendance.type";
 import { useGetStaffsQuery } from "@/redux/features/staff/staffApi";
+import { motion } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -32,11 +34,8 @@ import { useSession } from "@/lib/auth-client";
 import { Role } from "@/constants/role";
 
 import {
-    ChevronLeft,
-    ChevronRight,
+    Loader,
     Search,
-    ChevronsLeft,
-    ChevronsRight,
     Calendar as CalendarIcon,
     Users,
     UserCheck,
@@ -61,6 +60,7 @@ import { cn } from "@/lib/utils";
 import { DateRange } from "react-day-picker";
 import { Skeleton } from "@/components/ui/skeleton";
 import { BulkAttendanceDialog } from "@/components/dashboard/attendance/bulk-attendance-dialog";
+import { AttendancePagination } from "@/components/attendance/AttendancePagination";
 
 interface IStaffListItem {
     _id: string;
@@ -98,6 +98,7 @@ const statusOptions = [
         value: "all",
         label: "All Status",
         color: "text-green-600",
+        dot: "bg-slate-500",
         tabActive:
             "bg-slate-500/15 border-slate-500/40 text-slate-700 dark:text-slate-300",
         tabBadge: "bg-slate-500/20 text-slate-700 dark:text-slate-300",
@@ -106,6 +107,7 @@ const statusOptions = [
         value: "present",
         label: "Present",
         color: "text-green-600",
+        dot: "bg-emerald-500",
         tabActive:
             "bg-green-500/15 border-green-500/40 text-green-700 dark:text-green-300",
         tabBadge: "bg-green-500/20 text-green-700 dark:text-green-300",
@@ -114,6 +116,7 @@ const statusOptions = [
         value: "absent",
         label: "Absent",
         color: "text-red-600",
+        dot: "bg-red-500",
         tabActive:
             "bg-red-500/15 border-red-500/40 text-red-700 dark:text-red-300",
         tabBadge: "bg-red-500/20 text-red-700 dark:text-red-300",
@@ -122,6 +125,7 @@ const statusOptions = [
         value: "late",
         label: "Late",
         color: "text-yellow-600",
+        dot: "bg-amber-500",
         tabActive:
             "bg-yellow-500/15 border-yellow-500/40 text-yellow-700 dark:text-yellow-300",
         tabBadge: "bg-yellow-500/20 text-yellow-700 dark:text-yellow-300",
@@ -130,6 +134,7 @@ const statusOptions = [
         value: "half_day",
         label: "Half Day",
         color: "text-orange-600",
+        dot: "bg-orange-500",
         tabActive:
             "bg-orange-500/15 border-orange-500/40 text-orange-700 dark:text-orange-300",
         tabBadge: "bg-orange-500/20 text-orange-700 dark:text-orange-300",
@@ -138,6 +143,7 @@ const statusOptions = [
         value: "early_exit",
         label: "Early Exit",
         color: "text-purple-600",
+        dot: "bg-purple-500",
         tabActive:
             "bg-purple-500/15 border-purple-500/40 text-purple-700 dark:text-purple-300",
         tabBadge: "bg-purple-500/20 text-purple-700 dark:text-purple-300",
@@ -146,6 +152,7 @@ const statusOptions = [
         value: "on_leave",
         label: "On Leave",
         color: "text-blue-600",
+        dot: "bg-blue-500",
         tabActive:
             "bg-blue-500/15 border-blue-500/40 text-blue-700 dark:text-blue-300",
         tabBadge: "bg-blue-500/20 text-blue-700 dark:text-blue-300",
@@ -154,6 +161,7 @@ const statusOptions = [
         value: "weekend",
         label: "Weekend",
         color: "text-gray-600",
+        dot: "bg-slate-400",
         tabActive:
             "bg-gray-500/15 border-gray-500/40 text-gray-700 dark:text-gray-300",
         tabBadge: "bg-gray-500/20 text-gray-700 dark:text-gray-300",
@@ -162,6 +170,7 @@ const statusOptions = [
         value: "holiday",
         label: "Holiday",
         color: "text-pink-600",
+        dot: "bg-pink-500",
         tabActive:
             "bg-pink-500/15 border-pink-500/40 text-pink-700 dark:text-pink-300",
         tabBadge: "bg-pink-500/20 text-pink-700 dark:text-pink-300",
@@ -345,13 +354,21 @@ export default function AttendancePage() {
     const checkedInCount = checkedInStaffs.length;
 
     return (
-        <div className="p-6 space-y-6">
-            <div>
-                <h2 className="text-3xl font-bold tracking-tight bg-linear-to-r from-foreground to-foreground/70 bg-clip-text">
+        <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+            className="w-full min-h-screen pb-10"
+        >
+            <div className="mb-6">
+                <h1 className="text-2xl font-bold tracking-tight text-foreground">
                     Attendance
-                </h2>
-                <p className="text-muted-foreground mt-1">
-                    Track staff attendance, check-ins, and daily status.
+                </h1>
+                <p className="text-sm text-muted-foreground mt-0.5 flex items-center gap-2">
+                    Track staff attendance, check-ins, and daily status
+                    {(isLoading || isFetching) && (
+                        <Loader className="h-3 w-3 animate-spin text-primary" />
+                    )}
                 </p>
             </div>
 
@@ -416,14 +433,10 @@ export default function AttendancePage() {
                     </TabsList>
                 </div>
 
-                <TabsContent value="attendance" className="mt-0 space-y-6">
-                    <Card className="border-border/60 shadow-md">
-                        <CardHeader className="pb-3">
-                            <CardTitle className="flex items-center gap-2 text-xl">
-                                Attendance Records
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-6">
+                <TabsContent value="attendance" className="mt-0 space-y-4">
+                    {/* ── Filters Card ─────────────────────────────────── */}
+                    <Card className="py-0 shadow-sm">
+                        <CardContent className="px-5 py-4">
                             {/* Filters Toolbar */}
                             <div className="flex flex-col gap-4">
                                 <div className="flex flex-col xl:flex-row gap-4 justify-between bg-muted/30 p-4 rounded-lg border border-border/50">
@@ -716,41 +729,44 @@ export default function AttendancePage() {
                                     </Tabs>
                                 </div>
                             </div>
+                        </CardContent>
+                    </Card>
 
-                            {/* Table */}
-                            <div className="border rounded-lg overflow-hidden border-border/60">
-                                <Table>
-                                    <TableHeader>
-                                        <TableRow className="bg-muted/40 hover:bg-muted/40 border-b-border/60">
-                                            <TableHead className="font-semibold">
-                                                Employee ID
-                                            </TableHead>
-                                            <TableHead className="font-semibold">
-                                                Name
-                                            </TableHead>
-                                            <TableHead className="font-semibold">
-                                                Shift
-                                            </TableHead>
-                                            <TableHead className="font-semibold">
-                                                Branch
-                                            </TableHead>
-                                            <TableHead className="font-semibold">
-                                                Date
-                                            </TableHead>
-                                            <TableHead className="font-semibold">
-                                                Check In
-                                            </TableHead>
-                                            <TableHead className="font-semibold">
-                                                Check Out
-                                            </TableHead>
-                                            <TableHead className="font-semibold">
-                                                Status
-                                            </TableHead>
-                                            <TableHead className="text-right font-semibold">
-                                                Action
-                                            </TableHead>
-                                        </TableRow>
-                                    </TableHeader>
+                    {/* ── Table Card ───────────────────────────────────── */}
+                    <Card className="py-0 gap-0 overflow-hidden shadow-sm">
+                        <div className="overflow-x-auto">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow className="border-b border-border hover:bg-transparent bg-muted/40">
+                                        <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground pl-6">
+                                            Employee ID
+                                        </TableHead>
+                                        <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                                            Name
+                                        </TableHead>
+                                        <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                                            Shift
+                                        </TableHead>
+                                        <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                                            Branch
+                                        </TableHead>
+                                        <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                                            Date
+                                        </TableHead>
+                                        <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                                            Check In
+                                        </TableHead>
+                                        <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                                            Check Out
+                                        </TableHead>
+                                        <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                                            Status
+                                        </TableHead>
+                                        <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground text-right pr-6">
+                                            Action
+                                        </TableHead>
+                                    </TableRow>
+                                </TableHeader>
                                     <TableBody>
                                         {isLoading || isFetching ? (
                                             Array.from({ length: 10 }).map(
@@ -812,16 +828,13 @@ export default function AttendancePage() {
                                         ) : (
                                             // eslint-disable-next-line @typescript-eslint/no-explicit-any
                                             records.map((record: any) => (
-                                                <TableRow
-                                                    key={record._id}
-                                                    className="hover:bg-muted/30"
-                                                >
-                                                    <TableCell className="font-mono text-sm">
+                                                <TableRow key={record._id}>
+                                                    <TableCell className="pl-6 font-mono text-sm text-muted-foreground">
                                                         {record.staffId
                                                             ?.staffId || "-"}
                                                     </TableCell>
-                                                    <TableCell className="font-medium">
-                                                        <div className="text-sm font-semibold">
+                                                    <TableCell>
+                                                        <div className="text-sm text-foreground">
                                                             {record.staffId
                                                                 ?.name ||
                                                                 "Unknown Staff"}
@@ -870,10 +883,9 @@ export default function AttendancePage() {
                                                             : "-"}
                                                     </TableCell>
                                                     <TableCell>
-                                                        <Badge
-                                                            variant="outline"
+                                                        <span
                                                             className={cn(
-                                                                "capitalize font-medium shadow-none",
+                                                                "inline-flex items-center gap-1.5 text-sm",
                                                                 statusOptions.find(
                                                                     (o) =>
                                                                         o.value ===
@@ -881,13 +893,23 @@ export default function AttendancePage() {
                                                                 )?.color,
                                                             )}
                                                         >
+                                                            <span
+                                                                className={cn(
+                                                                    "h-1.5 w-1.5 rounded-full shrink-0",
+                                                                    statusOptions.find(
+                                                                        (o) =>
+                                                                            o.value ===
+                                                                            record.status,
+                                                                    )?.dot,
+                                                                )}
+                                                            />
                                                             {record.status.replace(
                                                                 "_",
                                                                 " ",
                                                             )}
-                                                        </Badge>
+                                                        </span>
                                                     </TableCell>
-                                                    <TableCell className="text-right">
+                                                    <TableCell className="text-right pr-6">
                                                         <Select
                                                             value={
                                                                 record.status
@@ -904,7 +926,7 @@ export default function AttendancePage() {
                                                                 isFetching
                                                             }
                                                         >
-                                                            <SelectTrigger className="h-8 text-xs font-medium w-[120px] ml-auto">
+                                                            <SelectTrigger className="h-8 text-xs w-[120px] ml-auto">
                                                                 <SelectValue />
                                                             </SelectTrigger>
                                                             <SelectContent>
@@ -940,175 +962,34 @@ export default function AttendancePage() {
                                         )}
                                     </TableBody>
                                 </Table>
-                            </div>
+                        </div>
 
-                            {/* Pagination */}
-                            {pagination && (
-                                <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4">
-                                    <p className="text-sm text-muted-foreground">
-                                        Showing {(page - 1) * limit + 1} to{" "}
-                                        {Math.min(
-                                            page * limit,
-                                            pagination.total,
-                                        )}{" "}
-                                        of{" "}
-                                        <span className="font-semibold text-foreground">
-                                            {pagination.total}
-                                        </span>{" "}
-                                        entries
-                                    </p>
+                        <Separator />
 
-                                    {pagination.pages > 1 && (
-                                        <div className="flex items-center gap-1">
-                                            <Button
-                                                variant="outline"
-                                                size="icon"
-                                                className="h-8 w-8"
-                                                onClick={() => setPage(1)}
-                                                disabled={
-                                                    page === 1 || isFetching
-                                                }
-                                            >
-                                                <ChevronsLeft className="h-4 w-4" />
-                                            </Button>
-                                            <Button
-                                                variant="outline"
-                                                size="icon"
-                                                className="h-8 w-8"
-                                                onClick={() =>
-                                                    setPage((p) =>
-                                                        Math.max(1, p - 1),
-                                                    )
-                                                }
-                                                disabled={
-                                                    page === 1 || isFetching
-                                                }
-                                            >
-                                                <ChevronLeft className="h-4 w-4" />
-                                            </Button>
-
-                                            {/* Page Numbers Logic */}
-                                            {(() => {
-                                                const totalPages =
-                                                    pagination.pages;
-                                                const pageNumbers: (
-                                                    | number
-                                                    | string
-                                                )[] = [];
-
-                                                if (totalPages <= 7) {
-                                                    for (
-                                                        let i = 1;
-                                                        i <= totalPages;
-                                                        i++
-                                                    )
-                                                        pageNumbers.push(i);
-                                                } else {
-                                                    if (page <= 3) {
-                                                        pageNumbers.push(
-                                                            1,
-                                                            2,
-                                                            3,
-                                                            4,
-                                                            "...",
-                                                            totalPages,
-                                                        );
-                                                    } else if (
-                                                        page >=
-                                                        totalPages - 2
-                                                    ) {
-                                                        pageNumbers.push(
-                                                            1,
-                                                            "...",
-                                                            totalPages - 3,
-                                                            totalPages - 2,
-                                                            totalPages - 1,
-                                                            totalPages,
-                                                        );
-                                                    } else {
-                                                        pageNumbers.push(
-                                                            1,
-                                                            "...",
-                                                            page - 1,
-                                                            page,
-                                                            page + 1,
-                                                            "...",
-                                                            totalPages,
-                                                        );
-                                                    }
-                                                }
-
-                                                return pageNumbers.map(
-                                                    (num, idx) =>
-                                                        num === "..." ? (
-                                                            <span
-                                                                key={`ellipsis-${idx}`}
-                                                                className="px-2 text-muted-foreground"
-                                                            >
-                                                                ...
-                                                            </span>
-                                                        ) : (
-                                                            <Button
-                                                                key={num}
-                                                                variant={
-                                                                    page === num
-                                                                        ? "default"
-                                                                        : "outline"
-                                                                }
-                                                                size="icon"
-                                                                className="h-8 w-8"
-                                                                onClick={() =>
-                                                                    setPage(
-                                                                        num as number,
-                                                                    )
-                                                                }
-                                                                disabled={
-                                                                    isFetching
-                                                                }
-                                                            >
-                                                                {num}
-                                                            </Button>
-                                                        ),
-                                                );
-                                            })()}
-
-                                            <Button
-                                                variant="outline"
-                                                size="icon"
-                                                className="h-8 w-8"
-                                                onClick={() =>
-                                                    setPage((p) =>
-                                                        Math.min(
-                                                            pagination.pages,
-                                                            p + 1,
-                                                        ),
-                                                    )
-                                                }
-                                                disabled={
-                                                    page === pagination.pages ||
-                                                    isFetching
-                                                }
-                                            >
-                                                <ChevronRight className="h-4 w-4" />
-                                            </Button>
-                                            <Button
-                                                variant="outline"
-                                                size="icon"
-                                                className="h-8 w-8"
-                                                onClick={() =>
-                                                    setPage(pagination.pages)
-                                                }
-                                                disabled={
-                                                    page === pagination.pages ||
-                                                    isFetching
-                                                }
-                                            >
-                                                <ChevronsRight className="h-4 w-4" />
-                                            </Button>
-                                        </div>
-                                    )}
-                                </div>
-                            )}
+                        {/* Pagination */}
+                        <CardContent className="flex items-center justify-between gap-4 px-5 py-3">
+                            <p className="hidden flex-1 text-sm text-muted-foreground lg:flex">
+                                Showing{" "}
+                                <span className="mx-1 font-medium text-foreground/80">
+                                    {records.length}
+                                </span>{" "}
+                                of{" "}
+                                <span className="mx-1 font-medium text-foreground/80">
+                                    {pagination?.total ?? 0}
+                                </span>{" "}
+                                entries
+                            </p>
+                            <AttendancePagination
+                                currentPage={page}
+                                totalPages={pagination?.pages ?? 1}
+                                limit={limit}
+                                onPageChange={setPage}
+                                onLimitChange={(l) => {
+                                    setLimit(l);
+                                    setPage(1);
+                                }}
+                                isLoading={isFetching}
+                            />
                         </CardContent>
                     </Card>
                 </TabsContent>
@@ -1388,6 +1269,6 @@ export default function AttendancePage() {
                     </Card>
                 </TabsContent>
             </Tabs>
-        </div>
+        </motion.div>
     );
 }

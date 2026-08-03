@@ -9,22 +9,23 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { CLIENT_STATUS_OPTIONS } from "@/lib/constants";
 import { useDebounce } from "@/hooks/use-debounce";
 
-interface ClientFiltersProps {
+interface ReceiptFiltersProps {
   search: string;
   status: string;
+  statusOptions: { label: string; value: string }[];
   onFilterChange: (key: string, value: string) => void;
   onClearFilters: () => void;
 }
 
-export function ClientFilters({
+export function ReceiptFilters({
   search,
   status,
+  statusOptions,
   onFilterChange,
   onClearFilters,
-}: ClientFiltersProps) {
+}: ReceiptFiltersProps) {
   const [localSearch, setLocalSearch] = useState(search);
   const debouncedSearch = useDebounce(localSearch, 500);
 
@@ -47,7 +48,7 @@ export function ClientFilters({
       <div className="relative w-full lg:max-w-sm">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
-          placeholder="Search by name, email, or client ID..."
+          placeholder="Search by receipt #, client, or project..."
           value={localSearch}
           onChange={(e) => setLocalSearch(e.target.value)}
           className="pl-9 h-9 bg-background border-input text-foreground focus-visible:ring-brand-primary"
@@ -73,7 +74,7 @@ export function ClientFilters({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Statuses</SelectItem>
-            {CLIENT_STATUS_OPTIONS.map((opt) => (
+            {statusOptions.map((opt) => (
               <SelectItem key={opt.value} value={opt.value}>
                 {opt.label}
               </SelectItem>

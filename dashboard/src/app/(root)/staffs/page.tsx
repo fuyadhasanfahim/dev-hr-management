@@ -1,591 +1,221 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { motion } from "framer-motion";
 import { useGetStaffsQuery } from "@/redux/features/staff/staffApi";
 import { useGetAllShiftsQuery } from "@/redux/features/shift/shiftApi";
-import { DESIGNATIONS, DEPARTMENTS } from "@/constants/metadata";
 import {
-    Card,
-    CardContent,
-    CardDescription,
-    CardHeader,
-    CardTitle,
+  Card,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
 } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
-} from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import {
-    Search,
-    Eye,
-    User,
-    ChevronLeft,
-    ChevronRight,
-    ChevronsLeft,
-    ChevronsRight,
-    X,
-} from "lucide-react";
-
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select";
-import { Skeleton } from "@/components/ui/skeleton";
-import { useDebounce } from "../../../hooks/use-debounce";
-import { useUpdateStaffMutation } from "@/redux/features/staff/staffApi";
-import { Role } from "@/constants/role";
-import { toast } from "sonner";
-import { Loader2, ShieldCheck } from "lucide-react";
-
-const statusColors: Record<string, string> = {
-    active: "bg-green-500",
-    inactive: "bg-red-500",
-    present: "bg-green-500",
-    absent: "bg-red-500",
-    late: "bg-yellow-500",
-    half_day: "bg-orange-500",
-    early_exit: "bg-purple-500",
-    on_leave: "bg-blue-500",
-    weekend: "bg-gray-500",
-    holiday: "bg-pink-500",
-};
-
-const statusLabels: Record<string, string> = {
-    active: "Active",
-    inactive: "Inactive",
-    present: "Present",
-    absent: "Absent",
-    late: "Late",
-    half_day: "Half Day",
-    early_exit: "Early Exit",
-    on_leave: "On Leave",
-    weekend: "Weekend",
-    holiday: "Holiday",
-};
-
-interface Staff {
-    _id: string;
-    staffId: string;
-    phone: string;
-    department: string;
-    designation: string;
-    joinDate: string;
-    status: string;
-    profileCompleted: boolean;
-    user?: {
-        _id: string;
-        name: string;
-        email: string;
-        image?: string;
-        role: string;
-    };
-    branch?: {
-        _id: string;
-        name: string;
-    };
-    todayAttendance?: {
-        status: string;
-        checkInAt?: string;
-        checkOutAt?: string;
-        lateMinutes?: number;
-    };
-    currentShift?: {
-        name: string;
-        startTime: string;
-        endTime: string;
-    };
-}
-
-function RoleSwitcher({ staff }: { staff: Staff }) {
-    const [updateStaff, { isLoading }] = useUpdateStaffMutation();
-    const currentRole = staff.user?.role || Role.STAFF;
-
-    const handleRoleChange = async (newRole: string) => {
-        if (newRole === currentRole) return;
-        try {
-            // Optimistically perform update, leveraging RTK queries invalidation
-            await updateStaff({
-                id: staff.staffId,
-                data: {
-                    role: newRole,
-                },
-            }).unwrap();
-            toast.success(`Role updated for ${staff.user?.name || 'Staff'}`);
-        } catch (error: any) {
-            toast.error(error?.data?.message || "Failed to update role");
-        }
-    };
-
-    return (
-        <Select 
-            value={currentRole} 
-            onValueChange={handleRoleChange}
-            disabled={isLoading}
-        >
-            <SelectTrigger className="h-8 w-[130px] text-xs bg-background border-muted shadow-sm">
-                <div className="flex items-center gap-2 truncate">
-                    {isLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <ShieldCheck className="h-3 w-3 text-primary/80" />}
-                    <SelectValue />
-                </div>
-            </SelectTrigger>
-            <SelectContent>
-                <SelectItem value={Role.STAFF} className="text-xs">Staff</SelectItem>
-                <SelectItem value={Role.TEAM_LEADER} className="text-xs">Team Leader</SelectItem>
-                <SelectItem value={Role.HR_MANAGER} className="text-xs">HR Manager</SelectItem>
-                <SelectItem value={Role.ADMIN} className="text-xs">Admin</SelectItem>
-                <SelectItem value={Role.SUPER_ADMIN} className="text-xs">Super Admin</SelectItem>
-            </SelectContent>
-        </Select>
-    );
-}
+import { Separator } from "@/components/ui/separator";
+import { Loader, TrendingUp, TrendingDown } from "lucide-react";
+import { useDebounce } from "@/hooks/use-debounce";
+import { StaffFilters } from "@/components/staff/StaffFilters";
+import { StaffTable, type Staff } from "@/components/staff/StaffTable";
+import { StaffPagination } from "@/components/staff/StaffPagination";
 
 export default function StaffsPage() {
-    const [page, setPage] = useState(1);
-    const [limit, setLimit] = useState(20);
-    const [searchQuery, setSearchQuery] = useState("");
-    const debouncedSearch = useDebounce(searchQuery, 500);
- interface StaffFilters {
-    page: number;
-    limit: number;
-    search?: string;
-    department?: string;
-    designation?: string;
-    shiftId?: string;
-    status?: string;
-}
+  const router = useRouter();
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(20);
+  const [searchQuery, setSearchQuery] = useState("");
+  const debouncedSearch = useDebounce(searchQuery, 500);
 
-    // Filters
-    const [departmentFilter, setDepartmentFilter] = useState("");
-    const [designationFilter, setDesignationFilter] = useState("");
-    const [shiftFilter, setShiftFilter] = useState<string>("all");
-    const [statusFilter, setStatusFilter] = useState<string>("all");
-    const router = useRouter();
+  const [departmentFilter, setDepartmentFilter] = useState("");
+  const [designationFilter, setDesignationFilter] = useState("");
+  const [shiftFilter, setShiftFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
 
-    const queryParams: StaffFilters = {
-        page,
-        limit,
-        search: debouncedSearch || undefined,
-        department: departmentFilter || undefined,
-        designation: designationFilter || undefined,
-        shiftId: shiftFilter !== "all" ? shiftFilter : undefined,
-        status: statusFilter !== "all" ? statusFilter : undefined,
-    };
+  const queryParams = {
+    page,
+    limit,
+    search: debouncedSearch || undefined,
+    department: departmentFilter || undefined,
+    designation: designationFilter || undefined,
+    shiftId: shiftFilter || undefined,
+    status: statusFilter || undefined,
+  };
 
-    const { data, isLoading, isFetching } = useGetStaffsQuery(queryParams);
-    const { data: shiftsData } = useGetAllShiftsQuery({});
+  const { data, isLoading, isFetching } = useGetStaffsQuery(queryParams);
+  const { data: shiftsData } = useGetAllShiftsQuery({});
 
-    const staffs: Staff[] = data?.staffs || [];
-    const meta = data?.meta;
-    const perPageOptions = [10, 20, 50, 100];
-    const shifts = shiftsData?.shifts || [];
+  const staffs: Staff[] = useMemo(() => data?.staffs || [], [data]);
+  const meta = data?.meta;
+  const shifts = shiftsData?.shifts || [];
 
-    const handleViewDetails = (staff: Staff) => {
-        router.push(`/staffs/${staff._id}`);
-    };
+  const handleViewDetails = (staff: Staff) => {
+    router.push(`/staffs/${staff._id}`);
+  };
 
-    const getStatusBadge = (status?: string) => {
-        if (!status) {
-            return <Badge variant="outline">No Record</Badge>;
-        }
-        return (
-            <Badge
-                className={`${statusColors[status] || "bg-gray-400"} text-white hover:${statusColors[status]}`}
-            >
-                {statusLabels[status] || status}
-            </Badge>
-        );
-    };
+  const handleFilterChange = (key: string, value: string) => {
+    if (key === "search") setSearchQuery(value);
+    if (key === "status") setStatusFilter(value);
+    if (key === "department") setDepartmentFilter(value);
+    if (key === "designation") setDesignationFilter(value);
+    if (key === "shiftId") setShiftFilter(value);
+    setPage(1);
+  };
 
-    const clearFilters = () => {
-        setSearchQuery("");
-        setDepartmentFilter("");
-        setDesignationFilter("");
-        setShiftFilter("all");
-        setStatusFilter("all");
-        setPage(1);
-    };
+  const handleClearFilters = () => {
+    setSearchQuery("");
+    setDepartmentFilter("");
+    setDesignationFilter("");
+    setShiftFilter("");
+    setStatusFilter("");
+    setPage(1);
+  };
 
-    return (
-        <div className="space-y-6">
-            <Card>
-                <CardHeader>
-                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                        <div>
-                            <CardTitle>Staff Management</CardTitle>
-                            <CardDescription>
-                                View and manage staff members, attendance, and
-                                details.
-                            </CardDescription>
-                        </div>
-                    </div>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                    {/* Filters */}
-                    <div className="flex flex-wrap items-center gap-3 p-4 bg-muted/30 rounded-lg border border-border/50">
-                        {/* Search */}
-                        <div className="relative w-full sm:w-72">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                            <Input
-                                placeholder="Search Name, ID..."
-                                value={searchQuery}
-                                onChange={(e) => {
-                                    setSearchQuery(e.target.value);
-                                    setPage(1);
-                                }}
-                                className="pl-9 h-9 bg-background/60"
-                            />
-                        </div>
+  const staffStats = useMemo(() => {
+    const total = meta?.total ?? staffs.length;
+    const active = staffs.filter((s) => s.status === "active").length;
+    const inactive = staffs.filter((s) => s.status === "inactive").length;
+    const presentToday = staffs.filter((s) => s.todayAttendance?.status === "present").length;
 
-                        {/* Department Filter */}
-                        <Select
-                            value={departmentFilter}
-                            onValueChange={(v) => {
-                                setDepartmentFilter(v === "all" ? "" : v);
-                                setPage(1);
-                            }}
-                        >
-                            <SelectTrigger className="w-full sm:w-40 h-9 bg-background/60">
-                                <SelectValue placeholder="Department" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">
-                                    All Departments
-                                </SelectItem>
-                                {DEPARTMENTS.map((dept) => (
-                                    <SelectItem
-                                        key={dept.value}
-                                        value={dept.value}
-                                    >
-                                        {dept.label}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+    return [
+      {
+        description: "Total Staff",
+        value: total,
+        trend: "up" as const,
+        trendLabel: "All",
+        footerTitle: "All registered staff members",
+      },
+      {
+        description: "Active",
+        value: active,
+        trend: "up" as const,
+        trendLabel: "Active",
+        footerTitle: "Currently active accounts",
+      },
+      {
+        description: "Inactive",
+        value: inactive,
+        trend: inactive > 0 ? ("down" as const) : ("up" as const),
+        trendLabel: "Inactive",
+        footerTitle: "Deactivated accounts",
+      },
+      {
+        description: "Present Today",
+        value: presentToday,
+        trend: "up" as const,
+        trendLabel: "Today",
+        footerTitle: "Checked in today",
+      },
+    ];
+  }, [meta, staffs]);
 
-                        {/* Designation Filter */}
-                        <Select
-                            value={designationFilter}
-                            onValueChange={(v) => {
-                                setDesignationFilter(v === "all" ? "" : v);
-                                setPage(1);
-                            }}
-                        >
-                            <SelectTrigger className="w-full sm:w-40 h-9 bg-background/60">
-                                <SelectValue placeholder="Designation" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">
-                                    All Designations
-                                </SelectItem>
-                                {DESIGNATIONS.map((desig) => (
-                                    <SelectItem
-                                        key={desig.value}
-                                        value={desig.value}
-                                    >
-                                        {desig.label}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-
-                        {/* Shift Filter */}
-                        <Select
-                            value={shiftFilter}
-                            onValueChange={(v) => {
-                                setShiftFilter(v);
-                                setPage(1);
-                            }}
-                        >
-                            <SelectTrigger className="w-full sm:w-36 h-9 bg-background/60">
-                                <SelectValue placeholder="Shift" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All Shifts</SelectItem>
-                                {shifts.map((shift: { _id: string; name: string; title: string }) => (
-                                    <SelectItem
-                                        key={shift._id}
-                                        value={shift._id}
-                                    >
-                                        {shift.name} - {shift.title}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-
-                        {/* Status Filter */}
-                        <Select
-                            value={statusFilter}
-                            onValueChange={(v) => {
-                                setStatusFilter(v);
-                                setPage(1);
-                            }}
-                        >
-                            <SelectTrigger className="w-full sm:w-36 h-9 bg-background/60">
-                                <SelectValue placeholder="Status" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All Status</SelectItem>
-                                <SelectItem value="active">Active</SelectItem>
-                                <SelectItem value="inactive">
-                                    Inactive
-                                </SelectItem>
-                            </SelectContent>
-                        </Select>
-
-                        {(searchQuery ||
-                            departmentFilter ||
-                            designationFilter ||
-                            shiftFilter !== "all" ||
-                            statusFilter !== "all") && (
-                            <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={clearFilters}
-                                className="h-9 px-2 text-muted-foreground hover:text-foreground"
-                            >
-                                <X className="h-4 w-4" />
-                                Clear
-                            </Button>
-                        )}
-                    </div>
-
-                    <div className="border rounded-lg overflow-hidden">
-                        <Table>
-                            <TableHeader className="bg-muted/40">
-                                <TableRow>
-                                    <TableHead>Staff Name</TableHead>
-                                    <TableHead>Staff ID</TableHead>
-                                    <TableHead>Department</TableHead>
-                                    <TableHead>Designation</TableHead>
-                                    <TableHead>Shift</TableHead>
-                                    <TableHead>Role</TableHead>
-                                    <TableHead>Today Status</TableHead>
-                                    <TableHead>Action</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {isLoading || isFetching ? (
-                                    [...Array(limit)].map((_, i) => (
-                                        <TableRow key={i}>
-                                            <TableCell>
-                                                <Skeleton className="h-4 w-32" />
-                                            </TableCell>
-                                            <TableCell>
-                                                <Skeleton className="h-4 w-20" />
-                                            </TableCell>
-                                            <TableCell>
-                                                <Skeleton className="h-4 w-24" />
-                                            </TableCell>
-                                            <TableCell>
-                                                <Skeleton className="h-4 w-24" />
-                                            </TableCell>
-                                            <TableCell>
-                                                <Skeleton className="h-8 w-full max-w-[150px]" />
-                                            </TableCell>
-                                            <TableCell>
-                                                <Skeleton className="h-8 w-28" />
-                                            </TableCell>
-                                            <TableCell>
-                                                <Skeleton className="h-6 w-20 rounded-full" />
-                                            </TableCell>
-                                            <TableCell>
-                                                <Skeleton className="h-8 w-16" />
-                                            </TableCell>
-                                        </TableRow>
-                                    ))
-                                ) : staffs.length === 0 ? (
-                                    <TableRow>
-                                        <TableCell
-                                            colSpan={8}
-                                            className="text-center py-12 text-muted-foreground"
-                                        >
-                                            <div className="flex flex-col items-center justify-center gap-2">
-                                                <User className="h-8 w-8 opacity-20" />
-                                                <p>
-                                                    No staff members found
-                                                    matching your criteria.
-                                                </p>
-                                            </div>
-                                        </TableCell>
-                                    </TableRow>
-                                ) : (
-                                    staffs.map((staff) => (
-                                        <TableRow
-                                            key={staff._id}
-                                            className="hover:bg-muted/20"
-                                        >
-                                            <TableCell className="font-medium">
-                                                {staff.user?.name || "N/A"}
-                                            </TableCell>
-                                            <TableCell className="font-mono text-xs text-muted-foreground">
-                                                {staff.staffId}
-                                            </TableCell>
-                                            <TableCell>
-                                                {staff.department || "N/A"}
-                                            </TableCell>
-                                            <TableCell>
-                                                {staff.designation || "N/A"}
-                                            </TableCell>
-                                            <TableCell>
-                                                {staff.currentShift ? (
-                                                    <div className="flex flex-col text-xs">
-                                                        <span className="font-medium">
-                                                            {
-                                                                staff
-                                                                    .currentShift
-                                                                    .name
-                                                            }
-                                                        </span>
-                                                        <span className="text-muted-foreground">
-                                                            {
-                                                                staff
-                                                                    .currentShift
-                                                                    .startTime
-                                                            }{" "}
-                                                            -{" "}
-                                                            {
-                                                                staff
-                                                                    .currentShift
-                                                                    .endTime
-                                                            }
-                                                        </span>
-                                                    </div>
-                                                ) : (
-                                                    <span className="text-xs text-muted-foreground italic">
-                                                        No Shift
-                                                    </span>
-                                                )}
-                                            </TableCell>
-                                            <TableCell>
-                                                <RoleSwitcher staff={staff} />
-                                            </TableCell>
-                                            <TableCell>
-                                                {getStatusBadge(
-                                                    staff.todayAttendance
-                                                        ?.status,
-                                                )}
-                                            </TableCell>
-                                            <TableCell>
-                                                <Button
-                                                    variant="outline"
-                                                    size="sm"
-                                                    onClick={() =>
-                                                        handleViewDetails(staff)
-                                                    }
-                                                    className="h-8"
-                                                >
-                                                    <Eye className="h-3.5 w-3.5 .5" />
-                                                    Details
-                                                </Button>
-                                            </TableCell>
-                                        </TableRow>
-                                    ))
-                                )}
-                            </TableBody>
-                        </Table>
-                    </div>
-
-                    {/* Pagination */}
-                    {meta && (
-                        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-2">
-                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                <span>Rows per page</span>
-                                <Select
-                                    value={limit.toString()}
-                                    onValueChange={(value) => {
-                                        setLimit(parseInt(value));
-                                        setPage(1);
-                                    }}
-                                >
-                                    <SelectTrigger className="h-8 w-[70px]">
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {perPageOptions.map((option) => (
-                                            <SelectItem
-                                                key={option}
-                                                value={option.toString()}
-                                            >
-                                                {option}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                                <span>
-                                    Showing {(page - 1) * limit + 1} to{" "}
-                                    {Math.min(page * limit, meta.total)} of{" "}
-                                    {meta.total} entries
-                                </span>
-                            </div>
-
-                            <div className="flex items-center gap-1">
-                                <Button
-                                    variant="outline"
-                                    size="icon"
-                                    className="h-8 w-8"
-                                    onClick={() => setPage(1)}
-                                    disabled={page === 1 || isFetching}
-                                >
-                                    <ChevronsLeft className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                    variant="outline"
-                                    size="icon"
-                                    className="h-8 w-8"
-                                    onClick={() =>
-                                        setPage((p) => Math.max(1, p - 1))
-                                    }
-                                    disabled={page === 1 || isFetching}
-                                >
-                                    <ChevronLeft className="h-4 w-4" />
-                                </Button>
-
-                                <span className="text-sm font-medium px-2">
-                                    Page {meta.page} of {meta.totalPage}
-                                </span>
-
-                                <Button
-                                    variant="outline"
-                                    size="icon"
-                                    className="h-8 w-8"
-                                    onClick={() =>
-                                        setPage((p) =>
-                                            Math.min(meta.totalPage, p + 1),
-                                        )
-                                    }
-                                    disabled={
-                                        page === meta.totalPage || isFetching
-                                    }
-                                >
-                                    <ChevronRight className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                    variant="outline"
-                                    size="icon"
-                                    className="h-8 w-8"
-                                    onClick={() => setPage(meta.totalPage)}
-                                    disabled={
-                                        page === meta.totalPage || isFetching
-                                    }
-                                >
-                                    <ChevronsRight className="h-4 w-4" />
-                                </Button>
-                            </div>
-                        </div>
-                    )}
-                </CardContent>
-            </Card>
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+      className="w-full min-h-screen pb-10"
+    >
+      {/* ── Page Header ──────────────────────────────────────────── */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">
+            Staff Management
+          </h1>
+          <p className="text-sm text-muted-foreground mt-0.5 flex items-center gap-2">
+            View and manage staff members, attendance, and details
+            {(isLoading || isFetching) && (
+              <Loader className="h-3 w-3 animate-spin text-primary" />
+            )}
+          </p>
         </div>
-    );
+      </div>
+
+      {/* ── Stats Strip ──────────────────────────────────────────── */}
+      <div className="*:data-[slot=card]:from-primary/5 *:data-[slot=card]:to-card dark:*:data-[slot=card]:bg-card grid grid-cols-1 gap-3 *:data-[slot=card]:bg-gradient-to-t *:data-[slot=card]:shadow-xs sm:grid-cols-2 lg:grid-cols-4">
+        {staffStats.map((stat) => {
+          const TrendIcon = stat.trend === "up" ? TrendingUp : TrendingDown;
+          return (
+            <Card key={stat.description} className="@container/card">
+              <CardHeader>
+                <CardDescription>{stat.description}</CardDescription>
+                <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
+                  {stat.value}
+                </CardTitle>
+                <CardAction>
+                  <Badge variant="outline" className="text-primary border-primary/30">
+                    <TrendIcon className="text-primary" />
+                    {stat.trendLabel}
+                  </Badge>
+                </CardAction>
+              </CardHeader>
+              <CardFooter className="flex-col items-start gap-1.5 text-sm">
+                <div className="line-clamp-1 flex gap-2 font-medium">
+                  {stat.footerTitle}
+                  <TrendIcon className="size-4 text-primary" />
+                </div>
+              </CardFooter>
+            </Card>
+          );
+        })}
+      </div>
+
+      {/* ── Filters Card ─────────────────────────────────────────── */}
+      <Card className="mt-5 py-0 shadow-sm">
+        <div className="px-5 py-4">
+          <StaffFilters
+            search={searchQuery}
+            status={statusFilter}
+            department={departmentFilter}
+            designation={designationFilter}
+            shiftId={shiftFilter}
+            shifts={shifts}
+            onFilterChange={handleFilterChange}
+            onClearFilters={handleClearFilters}
+          />
+        </div>
+      </Card>
+
+      {/* ── Table Card ───────────────────────────────────────────── */}
+      <Card className="mt-4 py-0 gap-0 overflow-hidden shadow-sm">
+        <div className="overflow-x-auto">
+          <StaffTable
+            staffs={staffs}
+            isLoading={isLoading || isFetching}
+            onView={handleViewDetails}
+          />
+        </div>
+
+        <Separator />
+
+        {/* Footer: Count + Pagination */}
+        <CardContent className="flex items-center justify-between gap-4 px-5 py-3">
+          <p className="hidden flex-1 text-sm text-muted-foreground lg:flex">
+            Showing{' '}
+            <span className="mx-1 font-medium text-foreground/80">
+              {staffs.length}
+            </span>{' '}
+            of{' '}
+            <span className="mx-1 font-medium text-foreground/80">
+              {meta?.total ?? staffs.length}
+            </span>{' '}
+            staff members
+          </p>
+          <StaffPagination
+            currentPage={page}
+            totalPages={meta?.totalPage ?? 1}
+            limit={limit}
+            onPageChange={setPage}
+            onLimitChange={(l) => {
+              setLimit(l);
+              setPage(1);
+            }}
+            isLoading={isLoading || isFetching}
+          />
+        </CardContent>
+      </Card>
+    </motion.div>
+  );
 }
