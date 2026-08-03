@@ -11,12 +11,6 @@ import {
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-    Tooltip,
-    TooltipContent,
-    TooltipProvider,
-    TooltipTrigger,
-} from '@/components/ui/tooltip';
 import { Eye, Edit, UserPlus, Loader, Phone, Calendar, Users } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Lead } from '@/types/lead.type';
@@ -27,13 +21,6 @@ interface LeadTableProps {
     isLoading: boolean;
     onEdit: (lead: Lead) => void;
     onView: (lead: Lead) => void;
-}
-
-function getInitials(name?: string) {
-    if (!name) return '?';
-    const parts = name.trim().split(' ');
-    if (parts.length === 1) return parts[0][0]?.toUpperCase() || '?';
-    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
 const PRIORITY_STYLES: Record<string, string> = {
@@ -78,15 +65,17 @@ export function LeadTable({
     };
 
     return (
-        <TooltipProvider delayDuration={300}>
-            <Table>
+        <Table>
                 <TableHeader>
-                    <TableRow className="border-b border-border hover:bg-transparent">
+                    <TableRow className="border-b border-border hover:bg-transparent bg-muted/40">
                         <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground pl-6">
-                            Lead
+                            Name
                         </TableHead>
                         <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                            Contact
+                            Email
+                        </TableHead>
+                        <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                            Phone
                         </TableHead>
                         <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                             Status
@@ -112,15 +101,8 @@ export function LeadTable({
                                 key={index}
                                 className="border-b border-border/60"
                             >
-                                <TableCell className="pl-6">
-                                    <div className="flex items-center gap-3">
-                                        <Skeleton className="h-9 w-9 rounded-full" />
-                                        <div className="space-y-1.5">
-                                            <Skeleton className="h-3.5 w-[100px]" />
-                                            <Skeleton className="h-3 w-[130px]" />
-                                        </div>
-                                    </div>
-                                </TableCell>
+                                <TableCell className="pl-6"><Skeleton className="h-3.5 w-[110px]" /></TableCell>
+                                <TableCell><Skeleton className="h-3.5 w-[140px]" /></TableCell>
                                 <TableCell><Skeleton className="h-3.5 w-[100px]" /></TableCell>
                                 <TableCell><Skeleton className="h-5 w-[70px] rounded-full" /></TableCell>
                                 <TableCell><Skeleton className="h-5 w-[60px] rounded-full" /></TableCell>
@@ -130,6 +112,7 @@ export function LeadTable({
                                     <div className="flex justify-end gap-1">
                                         <Skeleton className="h-7 w-7 rounded-md" />
                                         <Skeleton className="h-7 w-7 rounded-md" />
+                                        <Skeleton className="h-7 w-7 rounded-md" />
                                     </div>
                                 </TableCell>
                             </TableRow>
@@ -137,7 +120,7 @@ export function LeadTable({
                     ) : leads.length === 0 ? (
                         <TableRow>
                             <TableCell
-                                colSpan={7}
+                                colSpan={8}
                                 className="h-40 text-center"
                             >
                                 <div className="flex flex-col items-center gap-2">
@@ -157,25 +140,22 @@ export function LeadTable({
                                 className="cursor-pointer"
                                 onClick={() => onView(lead)}
                             >
-                                {/* Lead name + email */}
+                                {/* Name */}
                                 <TableCell className="pl-6">
-                                    <div className="flex items-center gap-3">
-                                        <div className="h-9 w-9 rounded-full bg-gradient-to-br from-brand-primary to-brand-secondary flex items-center justify-center shrink-0">
-                                            <span className="text-xs font-semibold text-white">
-                                                {getInitials(lead.name)}
-                                            </span>
-                                        </div>
-                                        <div className="min-w-0">
-                                            <p className="text-sm font-medium text-foreground truncate">
-                                                {lead.name || 'Unnamed Lead'}
-                                            </p>
-                                            {lead.email && (
-                                                <p className="text-xs text-muted-foreground truncate">
-                                                    {lead.email}
-                                                </p>
-                                            )}
-                                        </div>
-                                    </div>
+                                    <p className="text-sm font-medium text-foreground truncate max-w-[160px]">
+                                        {lead.name || 'Unnamed Lead'}
+                                    </p>
+                                </TableCell>
+
+                                {/* Email */}
+                                <TableCell>
+                                    {lead.email ? (
+                                        <span className="text-sm text-foreground/80 truncate">
+                                            {lead.email}
+                                        </span>
+                                    ) : (
+                                        <span className="text-xs text-muted-foreground">—</span>
+                                    )}
                                 </TableCell>
 
                                 {/* Phone */}
@@ -263,52 +243,40 @@ export function LeadTable({
 
                                 {/* Actions */}
                                 <TableCell className="pr-6" onClick={(e) => e.stopPropagation()}>
-                                    <div className="flex justify-end gap-0.5">
-                                        <Tooltip>
-                                            <TooltipTrigger asChild>
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    onClick={() => onView(lead)}
-                                                    className="h-7 w-7 text-muted-foreground hover:text-brand-primary hover:bg-brand-primary/10"
-                                                >
-                                                    <Eye className="h-3.5 w-3.5" />
-                                                </Button>
-                                            </TooltipTrigger>
-                                            <TooltipContent side="top" className="text-xs">View</TooltipContent>
-                                        </Tooltip>
-                                        <Tooltip>
-                                            <TooltipTrigger asChild>
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    onClick={() => onEdit(lead)}
-                                                    className="h-7 w-7 text-muted-foreground hover:text-brand-accent hover:bg-brand-accent/10"
-                                                >
-                                                    <Edit className="h-3.5 w-3.5" />
-                                                </Button>
-                                            </TooltipTrigger>
-                                            <TooltipContent side="top" className="text-xs">Edit</TooltipContent>
-                                        </Tooltip>
+                                    <div className="flex justify-end gap-1">
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            title="View"
+                                            onClick={() => onView(lead)}
+                                            className="h-7 w-7 text-muted-foreground hover:text-brand-primary hover:bg-brand-primary/10"
+                                        >
+                                            <Eye className="h-3.5 w-3.5" />
+                                        </Button>
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            title="Edit"
+                                            onClick={() => onEdit(lead)}
+                                            className="h-7 w-7 text-muted-foreground hover:text-brand-accent hover:bg-brand-accent/10"
+                                        >
+                                            <Edit className="h-3.5 w-3.5" />
+                                        </Button>
                                         {!lead.isConverted && (
-                                            <Tooltip>
-                                                <TooltipTrigger asChild>
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        onClick={() => handleConvert(lead)}
-                                                        disabled={activeConvertingId === lead._id}
-                                                        className="h-7 w-7 text-muted-foreground hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-500/10"
-                                                    >
-                                                        {activeConvertingId === lead._id ? (
-                                                            <Loader className="h-3.5 w-3.5 animate-spin" />
-                                                        ) : (
-                                                            <UserPlus className="h-3.5 w-3.5" />
-                                                        )}
-                                                    </Button>
-                                                </TooltipTrigger>
-                                                <TooltipContent side="top" className="text-xs">Convert to Client</TooltipContent>
-                                            </Tooltip>
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                title="Convert to Client"
+                                                onClick={() => handleConvert(lead)}
+                                                disabled={activeConvertingId === lead._id}
+                                                className="h-7 w-7 text-muted-foreground hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-500/10"
+                                            >
+                                                {activeConvertingId === lead._id ? (
+                                                    <Loader className="h-3.5 w-3.5 animate-spin" />
+                                                ) : (
+                                                    <UserPlus className="h-3.5 w-3.5" />
+                                                )}
+                                            </Button>
                                         )}
                                     </div>
                                 </TableCell>
@@ -317,6 +285,5 @@ export function LeadTable({
                     )}
                 </TableBody>
             </Table>
-        </TooltipProvider>
     );
 }

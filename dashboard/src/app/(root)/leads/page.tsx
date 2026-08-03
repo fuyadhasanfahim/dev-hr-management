@@ -288,10 +288,9 @@ function LeadsPageContent() {
                 isLoading={isLoading}
             />
 
-            {/* ── Main Content: Filters + Table ────────────────────────── */}
-            <Card className="mt-5 py-0 gap-0 overflow-hidden">
-                {/* Filters */}
-                <div className="px-5 py-4 border-b border-border">
+            {/* ── Filters Card ─────────────────────────────────────────── */}
+            <Card className="mt-5 py-0 shadow-sm">
+                <div className="px-5 py-4">
                     <LeadFilters
                         search={search}
                         status={status}
@@ -307,8 +306,10 @@ function LeadsPageContent() {
                         actionTypes={actionTypes}
                     />
                 </div>
+            </Card>
 
-                {/* Table */}
+            {/* ── Table Card ───────────────────────────────────────────── */}
+            <Card className="mt-4 py-0 gap-0 overflow-hidden shadow-sm">
                 <div className="overflow-x-auto">
                     <LeadTable
                         leads={leads}

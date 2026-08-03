@@ -63,5 +63,13 @@
         "react-dom": "^19.2.4",
         "socket.io": "^4.8.3",
         "zod": "^4.3.6"
+    },
+    "allowScripts": {
+        "bcrypt@6.0.0": true,
+        "esbuild@0.27.1": true,
+        "puppeteer@24.42.0": true,
+        "protobufjs@7.6.2": true,
+        "msgpackr-extract@3.0.3": true,
+        "@google/genai@2.7.0": true
     }
 }

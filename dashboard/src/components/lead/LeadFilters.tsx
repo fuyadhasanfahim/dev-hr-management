@@ -10,6 +10,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useEffect, useState } from "react";
 import { LeadSetting } from "@/types/lead.type";
@@ -191,6 +196,8 @@ export function LeadFilters({
   }
 
   const hasActiveFilters = activeFilters.length > 0 || search !== "";
+  const nextActionActiveCount =
+    (nextActionType ? 1 : 0) + (nextActionDateFrom || nextActionDateTo ? 1 : 0);
 
   const clearDateFilters = () => {
     setDatePreset("");
@@ -200,10 +207,10 @@ export function LeadFilters({
 
   return (
     <div className="space-y-3">
-      {/* ── Row 1: Search + Filter dropdowns ─────────────────────── */}
-      <div className="flex flex-col xl:flex-row gap-3 items-start xl:items-center">
+      {/* ── Search (left) + Filters (right) ──────────────────────── */}
+      <div className="flex flex-col lg:flex-row lg:items-center gap-3 lg:justify-between">
         {/* Search */}
-        <div className="relative w-full xl:w-64 shrink-0">
+        <div className="relative w-full lg:max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Search name, email, phone..."
@@ -222,15 +229,13 @@ export function LeadFilters({
         </div>
 
         {/* Filter dropdowns */}
-        <div className="flex flex-wrap items-center gap-2 w-full xl:w-auto">
-          <SlidersHorizontal className="h-4 w-4 text-muted-foreground hidden sm:block shrink-0" />
-
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
           {/* Status */}
           <Select
             value={status || "all"}
             onValueChange={(val) => onFilterChange("status", val === "all" ? "" : val)}
           >
-            <SelectTrigger className="w-[130px] h-9 bg-background border-input text-foreground text-sm focus:ring-brand-primary">
+            <SelectTrigger className="w-[120px] h-9 bg-background border-input text-foreground text-sm focus:ring-brand-primary">
               <SelectValue placeholder="Status" />
             </SelectTrigger>
             <SelectContent>
@@ -256,7 +261,7 @@ export function LeadFilters({
             value={priority || "all"}
             onValueChange={(val) => onFilterChange("priority", val === "all" ? "" : val)}
           >
-            <SelectTrigger className="w-[125px] h-9 bg-background border-input text-foreground text-sm focus:ring-brand-primary">
+            <SelectTrigger className="w-[115px] h-9 bg-background border-input text-foreground text-sm focus:ring-brand-primary">
               <SelectValue placeholder="Priority" />
             </SelectTrigger>
             <SelectContent>
@@ -277,7 +282,7 @@ export function LeadFilters({
             value={source || "all"}
             onValueChange={(val) => onFilterChange("source", val === "all" ? "" : val)}
           >
-            <SelectTrigger className="w-[130px] h-9 bg-background border-input text-foreground text-sm focus:ring-brand-primary">
+            <SelectTrigger className="w-[120px] h-9 bg-background border-input text-foreground text-sm focus:ring-brand-primary">
               <SelectValue placeholder="Source" />
             </SelectTrigger>
             <SelectContent>
@@ -298,6 +303,101 @@ export function LeadFilters({
             </SelectContent>
           </Select>
 
+          {/* More Filters (Next Action type + date) */}
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-9 gap-1.5 bg-background border-input text-foreground text-sm font-normal"
+              >
+                <SlidersHorizontal className="h-3.5 w-3.5 text-muted-foreground" />
+                More Filters
+                {nextActionActiveCount > 0 && (
+                  <Badge
+                    variant="secondary"
+                    className="ml-0.5 h-4 min-w-4 px-1 rounded-full bg-brand-primary/15 text-brand-primary dark:text-brand-accent text-[10px] font-semibold"
+                  >
+                    {nextActionActiveCount}
+                  </Badge>
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-72 space-y-3">
+              <div className="flex items-center gap-1.5">
+                <CalendarDays className="h-4 w-4 text-muted-foreground" />
+                <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  Next Action
+                </span>
+              </div>
+
+              {/* Action Type */}
+              {actionTypes.length > 0 && (
+                <Select
+                  value={nextActionType || "all"}
+                  onValueChange={(val) => onFilterChange("nextActionType", val === "all" ? "" : val)}
+                >
+                  <SelectTrigger className="w-full h-9 bg-background border-input text-foreground text-sm focus:ring-brand-primary">
+                    <SelectValue placeholder="Action Type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Types</SelectItem>
+                    {actionTypes.map((a) => (
+                      <SelectItem key={a._id} value={a._id}>
+                        <span className="flex items-center gap-2">
+                          {a.color && (
+                            <span
+                              className="inline-block h-2 w-2 rounded-full shrink-0"
+                              style={{ backgroundColor: a.color }}
+                            />
+                          )}
+                          {a.name}
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+
+              {/* Date Preset */}
+              <Select
+                value={datePreset || "all"}
+                onValueChange={(val) => handleDatePresetChange(val === "all" ? "all" : val)}
+              >
+                <SelectTrigger className="w-full h-9 bg-background border-input text-foreground text-sm focus:ring-brand-primary">
+                  <SelectValue placeholder="Date Range" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Any Date</SelectItem>
+                  {DATE_PRESET_OPTIONS.filter((p) => p.value !== "no_action").map((p) => (
+                    <SelectItem key={p.value} value={p.value}>
+                      {p.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              {/* Custom date inputs — only visible when "Custom Range" is selected */}
+              {datePreset === "custom" && (
+                <div className="flex items-center gap-1.5">
+                  <Input
+                    type="date"
+                    value={nextActionDateFrom}
+                    onChange={(e) => onFilterChange("nextActionDateFrom", e.target.value)}
+                    className="h-9 text-xs bg-background border-input text-foreground focus-visible:ring-brand-primary"
+                  />
+                  <span className="text-xs text-muted-foreground shrink-0">to</span>
+                  <Input
+                    type="date"
+                    value={nextActionDateTo}
+                    onChange={(e) => onFilterChange("nextActionDateTo", e.target.value)}
+                    className="h-9 text-xs bg-background border-input text-foreground focus-visible:ring-brand-primary"
+                  />
+                </div>
+              )}
+            </PopoverContent>
+          </Popover>
+
           {/* Clear all */}
           {hasActiveFilters && (
             <Button
@@ -316,84 +416,7 @@ export function LeadFilters({
         </div>
       </div>
 
-      {/* ── Row 2: Next Action filters ───────────────────────────── */}
-      <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-center">
-        <div className="flex items-center gap-1.5 shrink-0">
-          <CalendarDays className="h-4 w-4 text-muted-foreground" />
-          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-            Next Action
-          </span>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Action Type */}
-          {actionTypes.length > 0 && (
-            <Select
-              value={nextActionType || "all"}
-              onValueChange={(val) => onFilterChange("nextActionType", val === "all" ? "" : val)}
-            >
-              <SelectTrigger className="w-[140px] h-8 bg-background border-input text-foreground text-xs focus:ring-brand-primary">
-                <SelectValue placeholder="Action Type" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Types</SelectItem>
-                {actionTypes.map((a) => (
-                  <SelectItem key={a._id} value={a._id}>
-                    <span className="flex items-center gap-2">
-                      {a.color && (
-                        <span
-                          className="inline-block h-2 w-2 rounded-full shrink-0"
-                          style={{ backgroundColor: a.color }}
-                        />
-                      )}
-                      {a.name}
-                    </span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-
-          {/* Date Preset */}
-          <Select
-            value={datePreset || "all"}
-            onValueChange={(val) => handleDatePresetChange(val === "all" ? "all" : val)}
-          >
-            <SelectTrigger className="w-[140px] h-8 bg-background border-input text-foreground text-xs focus:ring-brand-primary">
-              <SelectValue placeholder="Date Range" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Any Date</SelectItem>
-              {DATE_PRESET_OPTIONS.filter((p) => p.value !== "no_action").map((p) => (
-                <SelectItem key={p.value} value={p.value}>
-                  {p.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          {/* Custom date inputs — only visible when "Custom Range" is selected */}
-          {datePreset === "custom" && (
-            <div className="flex items-center gap-1.5">
-              <Input
-                type="date"
-                value={nextActionDateFrom}
-                onChange={(e) => onFilterChange("nextActionDateFrom", e.target.value)}
-                className="w-[135px] h-8 text-xs bg-background border-input text-foreground focus-visible:ring-brand-primary"
-              />
-              <span className="text-xs text-muted-foreground">to</span>
-              <Input
-                type="date"
-                value={nextActionDateTo}
-                onChange={(e) => onFilterChange("nextActionDateTo", e.target.value)}
-                className="w-[135px] h-8 text-xs bg-background border-input text-foreground focus-visible:ring-brand-primary"
-              />
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* ── Row 3: Active filter pills (only when filters are active) ── */}
+      {/* ── Active filter pills (only when filters are active) ──────── */}
       <AnimatePresence>
         {activeFilters.length > 0 && (
           <motion.div
