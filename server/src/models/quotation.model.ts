@@ -1,4 +1,7 @@
 import { model, Schema } from 'mongoose';
+import './quotation-service.model.js';
+import './quotation-line-item.model.js';
+import './quotation-milestone.model.js';
 import type { IQuotation } from '../types/quotation.type.js';
 
 const quotationSchema = new Schema<IQuotation>(

@@ -1,4 +1,7 @@
 import { Schema, model, Document, Types } from 'mongoose';
+import './order-asset.model.js';
+import './order-milestone.model.js';
+import './order-status-history.model.js';
 
 // ─── Enums ────────────────────────────────────────────────────────────────────
 
