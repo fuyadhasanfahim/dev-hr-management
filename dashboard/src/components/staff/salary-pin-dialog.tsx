@@ -17,7 +17,7 @@ import {
     useVerifySalaryPinMutation,
 } from "@/redux/features/staff/staffApi";
 import { Loader2, ArrowLeft } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 interface SalaryPinDialogProps {
@@ -40,6 +40,14 @@ export function SalaryPinDialog({
     const [mode, setMode] = useState<"verify" | "set" | "forgot">(
         isPinSet ? "verify" : "set",
     );
+
+    useEffect(() => {
+        if (open) {
+            setMode(isPinSet ? "verify" : "set");
+            setPin("");
+            setConfirmPin("");
+        }
+    }, [open, isPinSet]);
 
     const [verifySalaryPin, { isLoading: isVerifying }] =
         useVerifySalaryPinMutation();
@@ -65,6 +73,9 @@ export function SalaryPinDialog({
             try {
                 await setSalaryPin({ staffId, pin }).unwrap();
                 toast.success("PIN set successfully");
+                setMode("verify");
+                setPin("");
+                setConfirmPin("");
                 onSuccess();
             } catch (error: any) {
                 toast.error(
@@ -76,6 +87,8 @@ export function SalaryPinDialog({
         } else if (mode === "verify") {
             try {
                 await verifySalaryPin({ staffId, pin }).unwrap();
+                toast.success("Salary unlocked successfully");
+                setPin("");
                 onSuccess();
             } catch (error: any) {
                 toast.error(
@@ -90,6 +103,7 @@ export function SalaryPinDialog({
                 await forgotSalaryPin({ staffId }).unwrap();
                 toast.success("Reset link sent to your email");
                 setMode("verify");
+                setPin("");
             } catch (error: any) {
                 toast.error(
                     error?.data?.message ||

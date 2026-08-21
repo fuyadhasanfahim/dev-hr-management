@@ -204,7 +204,7 @@ export default function StaffDashboard() {
             <SalaryPinDialog
                 open={showPinDialog}
                 onOpenChange={setShowPinDialog}
-                staffId={staff?.staffId || ''}
+                staffId={staff?.staffId || staff?._id || ''}
                 isPinSet={!!staff?.isSalaryPinSet}
                 onSuccess={handleUnlockSuccess}
             />
