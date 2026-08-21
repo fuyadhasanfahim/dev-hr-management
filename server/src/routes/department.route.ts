@@ -5,29 +5,9 @@ import DepartmentControllers from '../controllers/department.controller.js';
 
 const router: Router = Router();
 
-router.get(
-    '/',
-    authorize(
-        Role.ADMIN,
-        Role.SUPER_ADMIN,
-        Role.HR_MANAGER,
-        Role.TEAM_LEADER,
-        Role.STAFF,
-    ),
-    DepartmentControllers.getAllDepartments,
-);
+router.get('/', DepartmentControllers.getAllDepartments);
 
-router.get(
-    '/:id',
-    authorize(
-        Role.ADMIN,
-        Role.SUPER_ADMIN,
-        Role.HR_MANAGER,
-        Role.TEAM_LEADER,
-        Role.STAFF,
-    ),
-    DepartmentControllers.getDepartmentById,
-);
+router.get('/:id', DepartmentControllers.getDepartmentById);
 
 router.post(
     '/',

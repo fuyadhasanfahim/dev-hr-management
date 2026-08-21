@@ -5,29 +5,9 @@ import DesignationControllers from '../controllers/designation.controller.js';
 
 const router: Router = Router();
 
-router.get(
-    '/',
-    authorize(
-        Role.ADMIN,
-        Role.SUPER_ADMIN,
-        Role.HR_MANAGER,
-        Role.TEAM_LEADER,
-        Role.STAFF,
-    ),
-    DesignationControllers.getAllDesignations,
-);
+router.get('/', DesignationControllers.getAllDesignations);
 
-router.get(
-    '/:id',
-    authorize(
-        Role.ADMIN,
-        Role.SUPER_ADMIN,
-        Role.HR_MANAGER,
-        Role.TEAM_LEADER,
-        Role.STAFF,
-    ),
-    DesignationControllers.getDesignationById,
-);
+router.get('/:id', DesignationControllers.getDesignationById);
 
 router.post(
     '/',

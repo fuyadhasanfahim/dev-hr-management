@@ -5,29 +5,9 @@ import BranchControllers from '../controllers/branch.controller.js';
 
 const router: Router = Router();
 
-router.get(
-    '/',
-    authorize(
-        Role.ADMIN,
-        Role.SUPER_ADMIN,
-        Role.HR_MANAGER,
-        Role.TEAM_LEADER,
-        Role.STAFF,
-    ),
-    BranchControllers.getAllBranches,
-);
+router.get('/', BranchControllers.getAllBranches);
 
-router.get(
-    '/:id',
-    authorize(
-        Role.ADMIN,
-        Role.SUPER_ADMIN,
-        Role.HR_MANAGER,
-        Role.TEAM_LEADER,
-        Role.STAFF,
-    ),
-    BranchControllers.getBranchById,
-);
+router.get('/:id', BranchControllers.getBranchById);
 
 router.post(
     '/',
