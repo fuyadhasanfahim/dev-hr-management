@@ -16,7 +16,7 @@ import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { changeEmail, updateUser, useSession } from "@/lib/auth-client";
 import { toast } from "sonner";
-import { useEffect } from "react";
+import { useMemo } from "react";
 import {
     useGetMeQuery,
     useCompleteProfileMutation,
@@ -32,6 +32,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "../ui/select";
+import { Skeleton } from "../ui/skeleton";
 import { cn } from "@/lib/utils";
 
 function Required() {
@@ -68,65 +69,66 @@ export default function EditProfile() {
     const [completeProfile] = useCompleteProfileMutation();
     const [updateProfile] = useUpdateProfileMutation();
 
+    const staff = data?.staff;
+    const formValues = useMemo<ProfileFormValues>(() => ({
+        name: session?.user?.name || "",
+        email: session?.user?.email || "",
+        phone: staff?.phone || "",
+        dateOfBirth: staff?.dateOfBirth ? new Date(staff.dateOfBirth) : (undefined as any),
+        bloodGroup: staff?.bloodGroup || "",
+        nationalId: staff?.nationalId || "",
+        address: staff?.address || "",
+        emergencyContact: {
+            name: staff?.emergencyContact?.name || "",
+            relation: staff?.emergencyContact?.relation || "",
+            phone: staff?.emergencyContact?.phone || "",
+        },
+        fathersName: staff?.fathersName || "",
+        mothersName: staff?.mothersName || "",
+        spouseName: staff?.spouseName || "",
+        bank: {
+            bankName: staff?.bank?.bankName || "",
+            accountNumber: staff?.bank?.accountNumber || "",
+            accountHolderName: staff?.bank?.accountHolderName || "",
+            branch: staff?.bank?.branch || "",
+            routingNumber: staff?.bank?.routingNumber || "",
+        },
+        joinDate: staff?.joinDate ? new Date(staff.joinDate) : (undefined as any),
+    }), [session?.user?.name, session?.user?.email, staff]);
+
     const form = useForm<ProfileFormValues>({
         resolver: zodResolver(profileSchema),
-        defaultValues: {
-            name: "",
-            email: "",
-            phone: "",
-            nationalId: "",
-            bloodGroup: "",
-            address: "",
-            emergencyContact: {
-                name: "",
-                relation: "",
-                phone: "",
-            },
-            fathersName: "",
-            mothersName: "",
-            spouseName: "",
-            bank: {
-                bankName: "",
-                accountNumber: "",
-                accountHolderName: "",
-                branch: "",
-                routingNumber: "",
-            },
-            dateOfBirth: undefined,
-            joinDate: undefined,
+        values: formValues,
+        resetOptions: {
+            keepDirtyValues: true,
         },
     });
 
-    useEffect(() => {
-        if (!data?.staff && !session?.user) return;
-
-        const staff = data?.staff;
-        form.reset({
-            name: session?.user?.name || "",
-            email: session?.user?.email || "",
-            phone: staff?.phone || "",
-            dateOfBirth: staff?.dateOfBirth ? new Date(staff.dateOfBirth) : undefined,
-            bloodGroup: staff?.bloodGroup || "",
-            nationalId: staff?.nationalId || "",
-            address: staff?.address || "",
-            emergencyContact: {
-                name: staff?.emergencyContact?.name || "",
-                relation: staff?.emergencyContact?.relation || "",
-                phone: staff?.emergencyContact?.phone || "",
-            },
-            fathersName: staff?.fathersName || "",
-            mothersName: staff?.mothersName || "",
-            spouseName: staff?.spouseName || "",
-            bank: {
-                bankName: staff?.bank?.bankName || "",
-                accountNumber: staff?.bank?.accountNumber || "",
-                accountHolderName: staff?.bank?.accountHolderName || "",
-                branch: staff?.bank?.branch || "",
-                routingNumber: staff?.bank?.routingNumber || "",
-            },
-            joinDate: staff?.joinDate ? new Date(staff.joinDate) : undefined,
-        });
-    }, [session?.user, data?.staff, form]);
+    if (isPending || (isStaffLoading && !data)) {
+        return (
+            <Card className="col-span-2">
+                <CardHeader>
+                    <Skeleton className="h-7 w-36 mb-2" />
+                    <Skeleton className="h-4 w-64" />
+                </CardHeader>
+                <CardContent className="space-y-6">
+                    <div className="grid grid-cols-2 gap-4">
+                        <Skeleton className="h-10 w-full" />
+                        <Skeleton className="h-10 w-full" />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                        <Skeleton className="h-10 w-full" />
+                        <Skeleton className="h-10 w-full" />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                        <Skeleton className="h-10 w-full" />
+                        <Skeleton className="h-10 w-full" />
+                    </div>
+                    <Skeleton className="h-24 w-full" />
+                </CardContent>
+            </Card>
+        );
+    }
 
     const isLoading =
         form.formState.isSubmitting ||
@@ -315,6 +317,7 @@ export default function EditProfile() {
 
                                         return (
                                             <Select
+                                                key={`bloodGroup-${field.value || "none"}`}
                                                 value={field.value || undefined}
                                                 onValueChange={field.onChange}
                                             >
@@ -377,6 +380,7 @@ export default function EditProfile() {
 
                                             return (
                                                 <Select
+                                                    key={`relation-${field.value || "none"}`}
                                                     value={field.value || undefined}
                                                     onValueChange={field.onChange}
                                                 >
@@ -480,6 +484,7 @@ export default function EditProfile() {
 
                                             return (
                                                 <Select
+                                                    key={`bankName-${field.value || "none"}`}
                                                     value={field.value || undefined}
                                                     onValueChange={field.onChange}
                                                 >
