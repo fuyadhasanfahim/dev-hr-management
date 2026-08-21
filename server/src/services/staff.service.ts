@@ -660,6 +660,30 @@ async function viewSalaryWithPassword(payload: {
     };
 }
 
+async function findStaffByIdentifier(
+    identifier: string,
+    session?: mongoose.ClientSession,
+    select?: string,
+) {
+    const isObjectId = mongoose.Types.ObjectId.isValid(identifier);
+    const query: any = {
+        $or: [
+            { staffId: identifier },
+            ...(isObjectId
+                ? [
+                      { _id: new mongoose.Types.ObjectId(identifier) },
+                      { userId: identifier },
+                  ]
+                : []),
+        ],
+    };
+
+    let q = StaffModel.findOne(query);
+    if (session) q = q.session(session);
+    if (select) q = q.select(select);
+    return await q;
+}
+
 async function updateSalaryInDB(payload: {
     staffId: string;
     salary?: number;
@@ -738,8 +762,8 @@ async function getSalaryHistory(staffId: string) {
         await import("../models/salary-history.model.js")
     ).default;
     const isObjectId = mongoose.Types.ObjectId.isValid(staffId);
-    const query = isObjectId
-        ? { $or: [{ staffId }, { staffId: new mongoose.Types.ObjectId(staffId) as any }] }
+    const query: any = isObjectId
+        ? { $or: [{ staffId }, { staffId: new mongoose.Types.ObjectId(staffId) }] }
         : { staffId };
     return await SalaryHistoryModel.find(query)
         .sort({ effectiveDate: -1 })
