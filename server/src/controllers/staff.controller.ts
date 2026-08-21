@@ -285,7 +285,7 @@ async function updateStaff(req: Request, res: Response) {
                 .json({ success: false, message: 'Staff ID is required' });
         }
         const { role, salary, salaryVisibleToEmployee, ...staffData } =
-            req.body;
+            req.body || {};
         const changedBy = req.user?.id;
 
         const result = await StaffServices.updateStaffInDB({

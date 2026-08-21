@@ -66,12 +66,12 @@ export const staffApi = apiSlice.injectEndpoints({
             invalidatesTags: ["Staff"],
         }),
         updateStaff: builder.mutation({
-            query: ({ id, data }) => ({
+            query: ({ id, data, ...rest }: any) => ({
                 url: `/staffs/${id}`,
                 method: "PATCH",
-                body: data,
+                body: data !== undefined ? data : rest,
             }),
-            invalidatesTags: (_result, _error, { id }) => [
+            invalidatesTags: (_result, _error, { id }: any) => [
                 "Staff",
                 { type: "Staff", id },
             ],
