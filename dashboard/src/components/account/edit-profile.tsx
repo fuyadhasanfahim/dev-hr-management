@@ -38,6 +38,22 @@ function Required() {
     return <span className="text-destructive">*</span>;
 }
 
+const BLOOD_GROUPS = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"];
+const RELATIONS = [
+    "Father",
+    "Mother",
+    "Brother",
+    "Sister",
+    "Spouse",
+    "Friend",
+    "Uncle",
+    "Auntie",
+    "Grandfather",
+    "Grandmother",
+    "Relative",
+    "Other",
+];
+
 export default function EditProfile() {
     const { data: session, isPending } = useSession();
     const {
@@ -82,65 +98,35 @@ export default function EditProfile() {
     });
 
     useEffect(() => {
-        form.setValue("name", session?.user.name as string);
-        form.setValue("email", session?.user.email as string);
+        if (!data?.staff && !session?.user) return;
 
-        // Pre-fill with whatever staff data already exists, whether or not
-        // the profile has been marked complete yet
-        if (!data?.staff) return;
-
-        form.setValue("phone", data.staff.phone || "");
-
-        // Convert date strings to Date objects
-        if (data.staff.dateOfBirth) {
-            form.setValue("dateOfBirth", new Date(data.staff.dateOfBirth));
-        }
-
-        form.setValue("bloodGroup", data.staff.bloodGroup || "");
-        form.setValue("nationalId", data.staff.nationalId || "");
-        form.setValue("address", data.staff.address || "");
-
-        // Handle emergency contact - check if it exists and has values
-        if (data.staff.emergencyContact) {
-            form.setValue(
-                "emergencyContact.name",
-                data.staff.emergencyContact.name || "",
-            );
-            form.setValue(
-                "emergencyContact.phone",
-                data.staff.emergencyContact.phone || "",
-            );
-            form.setValue(
-                "emergencyContact.relation",
-                data.staff.emergencyContact.relation || "",
-            );
-        }
-
-        form.setValue("fathersName", data.staff.fathersName || "");
-        form.setValue("mothersName", data.staff.mothersName || "");
-        form.setValue("spouseName", data.staff.spouseName || "");
-        if (data.staff.bank) {
-            form.setValue("bank.bankName", data.staff.bank.bankName || "");
-            form.setValue(
-                "bank.accountNumber",
-                data.staff.bank.accountNumber || "",
-            );
-            form.setValue(
-                "bank.accountHolderName",
-                data.staff.bank.accountHolderName || "",
-            );
-            form.setValue("bank.branch", data.staff.bank.branch || "");
-            form.setValue(
-                "bank.routingNumber",
-                data.staff.bank.routingNumber || "",
-            );
-        }
-
-        // Convert joinDate string to Date object
-        if (data.staff.joinDate) {
-            form.setValue("joinDate", new Date(data.staff.joinDate));
-        }
-    }, [session, form, isPending, data]);
+        const staff = data?.staff;
+        form.reset({
+            name: session?.user?.name || "",
+            email: session?.user?.email || "",
+            phone: staff?.phone || "",
+            dateOfBirth: staff?.dateOfBirth ? new Date(staff.dateOfBirth) : undefined,
+            bloodGroup: staff?.bloodGroup || "",
+            nationalId: staff?.nationalId || "",
+            address: staff?.address || "",
+            emergencyContact: {
+                name: staff?.emergencyContact?.name || "",
+                relation: staff?.emergencyContact?.relation || "",
+                phone: staff?.emergencyContact?.phone || "",
+            },
+            fathersName: staff?.fathersName || "",
+            mothersName: staff?.mothersName || "",
+            spouseName: staff?.spouseName || "",
+            bank: {
+                bankName: staff?.bank?.bankName || "",
+                accountNumber: staff?.bank?.accountNumber || "",
+                accountHolderName: staff?.bank?.accountHolderName || "",
+                branch: staff?.bank?.branch || "",
+                routingNumber: staff?.bank?.routingNumber || "",
+            },
+            joinDate: staff?.joinDate ? new Date(staff.joinDate) : undefined,
+        });
+    }, [session?.user, data?.staff, form]);
 
     const isLoading =
         form.formState.isSubmitting ||
@@ -285,20 +271,22 @@ export default function EditProfile() {
                             </div>
 
                             <div>
-                                <DatePicker
-                                    label={
-                                        <>
-                                            Date of Birth <Required />
-                                        </>
-                                    }
-                                    value={form.watch("dateOfBirth")}
-                                    onChange={(date) => {
-                                        if (date) {
-                                            form.setValue("dateOfBirth", date);
-                                        }
-                                    }}
-                                    placeholder="Pick date of birth"
-                                    maxDate={new Date()}
+                                <Controller
+                                    control={form.control}
+                                    name="dateOfBirth"
+                                    render={({ field }) => (
+                                        <DatePicker
+                                            label={
+                                                <>
+                                                    Date of Birth <Required />
+                                                </>
+                                            }
+                                            value={field.value ? (field.value instanceof Date ? field.value : new Date(field.value)) : undefined}
+                                            onChange={field.onChange}
+                                            placeholder="Pick date of birth"
+                                            maxDate={new Date()}
+                                        />
+                                    )}
                                 />
                                 <p className="text-sm text-destructive">
                                     {form.formState.errors.dateOfBirth?.message}
@@ -320,35 +308,32 @@ export default function EditProfile() {
                                 <Controller
                                     control={form.control}
                                     name="bloodGroup"
-                                    render={({ field }) => (
-                                        <Select
-                                            value={field.value}
-                                            onValueChange={field.onChange}
-                                        >
-                                            <SelectTrigger className="w-full">
-                                                <SelectValue placeholder="Select blood group" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {[
-                                                    "A+",
-                                                    "A-",
-                                                    "B+",
-                                                    "B-",
-                                                    "AB+",
-                                                    "AB-",
-                                                    "O+",
-                                                    "O-",
-                                                ].map((bg) => (
-                                                    <SelectItem
-                                                        key={bg}
-                                                        value={bg}
-                                                    >
-                                                        {bg}
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                    )}
+                                    render={({ field }) => {
+                                        const bloodGroups = field.value && !BLOOD_GROUPS.includes(field.value)
+                                            ? [field.value, ...BLOOD_GROUPS]
+                                            : BLOOD_GROUPS;
+
+                                        return (
+                                            <Select
+                                                value={field.value || undefined}
+                                                onValueChange={field.onChange}
+                                            >
+                                                <SelectTrigger className="w-full">
+                                                    <SelectValue placeholder="Select blood group" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {bloodGroups.map((bg) => (
+                                                        <SelectItem
+                                                            key={bg}
+                                                            value={bg}
+                                                        >
+                                                            {bg}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        );
+                                    }}
                                 />
                                 <p className="text-sm text-destructive">
                                     {form.formState.errors.bloodGroup?.message}
@@ -385,37 +370,32 @@ export default function EditProfile() {
                                     <Controller
                                         control={form.control}
                                         name="emergencyContact.relation"
-                                        render={({ field }) => (
-                                            <Select
-                                                value={field.value}
-                                                onValueChange={field.onChange}
-                                            >
-                                                <SelectTrigger className="w-full">
-                                                    <SelectValue placeholder="Relation" />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    {[
-                                                        "Father",
-                                                        "Mother",
-                                                        "Brother",
-                                                        "Sister",
-                                                        "Spouse",
-                                                        "Friend",
-                                                        "Uncle",
-                                                        "Auntie",
-                                                        "Grandfather",
-                                                        "Grandmother",
-                                                    ].map((r) => (
-                                                        <SelectItem
-                                                            key={r}
-                                                            value={r}
-                                                        >
-                                                            {r}
-                                                        </SelectItem>
-                                                    ))}
-                                                </SelectContent>
-                                            </Select>
-                                        )}
+                                        render={({ field }) => {
+                                            const relations = field.value && !RELATIONS.includes(field.value)
+                                                ? [field.value, ...RELATIONS]
+                                                : RELATIONS;
+
+                                            return (
+                                                <Select
+                                                    value={field.value || undefined}
+                                                    onValueChange={field.onChange}
+                                                >
+                                                    <SelectTrigger className="w-full">
+                                                        <SelectValue placeholder="Relation" />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {relations.map((r) => (
+                                                            <SelectItem
+                                                                key={r}
+                                                                value={r}
+                                                            >
+                                                                {r}
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            );
+                                        }}
                                     />
                                     <p className="text-sm text-destructive">
                                         {
@@ -493,28 +473,34 @@ export default function EditProfile() {
                                     <Controller
                                         control={form.control}
                                         name="bank.bankName"
-                                        render={({ field }) => (
-                                            <Select
-                                                value={field.value}
-                                                onValueChange={field.onChange}
-                                            >
-                                                <SelectTrigger className="w-full">
-                                                    <SelectValue placeholder="Select bank" />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    {BANGLADESH_BANKS.map(
-                                                        (b) => (
-                                                            <SelectItem
-                                                                key={b}
-                                                                value={b}
-                                                            >
-                                                                {b}
-                                                            </SelectItem>
-                                                        ),
-                                                    )}
-                                                </SelectContent>
-                                            </Select>
-                                        )}
+                                        render={({ field }) => {
+                                            const bankList = field.value && !BANGLADESH_BANKS.includes(field.value)
+                                                ? [field.value, ...BANGLADESH_BANKS]
+                                                : BANGLADESH_BANKS;
+
+                                            return (
+                                                <Select
+                                                    value={field.value || undefined}
+                                                    onValueChange={field.onChange}
+                                                >
+                                                    <SelectTrigger className="w-full">
+                                                        <SelectValue placeholder="Select bank" />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {bankList.map(
+                                                            (b) => (
+                                                                <SelectItem
+                                                                    key={b}
+                                                                    value={b}
+                                                                >
+                                                                    {b}
+                                                                </SelectItem>
+                                                            ),
+                                                        )}
+                                                    </SelectContent>
+                                                </Select>
+                                            );
+                                        }}
                                     />
                                     <p className="text-sm text-destructive">
                                         {
@@ -576,19 +562,21 @@ export default function EditProfile() {
                             </div>
                         </div>
 
-                        <DatePicker
-                            label={
-                                <>
-                                    Join Date <Required />
-                                </>
-                            }
-                            value={form.watch("joinDate")}
-                            onChange={(date) => {
-                                if (date) {
-                                    form.setValue("joinDate", date);
-                                }
-                            }}
-                            placeholder="Pick join date"
+                        <Controller
+                            control={form.control}
+                            name="joinDate"
+                            render={({ field }) => (
+                                <DatePicker
+                                    label={
+                                        <>
+                                            Join Date <Required />
+                                        </>
+                                    }
+                                    value={field.value ? (field.value instanceof Date ? field.value : new Date(field.value)) : undefined}
+                                    onChange={field.onChange}
+                                    placeholder="Pick join date"
+                                />
+                            )}
                         />
                         <p className="text-sm text-destructive">
                             {form.formState.errors.joinDate?.message}
