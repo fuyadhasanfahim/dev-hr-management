@@ -679,7 +679,7 @@ async function updateSalaryInDB(payload: {
         userAgent,
     } = payload;
 
-    const staff = await StaffModel.findById(staffId);
+    const staff = await findStaffByIdentifier(staffId);
     if (!staff) throw new Error("Staff not found");
 
     // Save history if salary changed
@@ -690,7 +690,7 @@ async function updateSalaryInDB(payload: {
         await (SalaryHistoryModel.create as any)(
             [
                 {
-                    staffId,
+                    staffId: staff._id,
                     previousSalary: staff.salary,
                     newSalary: salary,
                     changedBy,
@@ -708,7 +708,7 @@ async function updateSalaryInDB(payload: {
         updateData.salaryVisibleToEmployee = salaryVisibleToEmployee;
 
     const updated = await StaffModel.findByIdAndUpdate(
-        staffId,
+        staff._id,
         { $set: updateData },
         { new: true },
     );
@@ -718,7 +718,7 @@ async function updateSalaryInDB(payload: {
             userId: changedBy,
             action: 'SALARY_UPDATE',
             entity: 'Staff',
-            entityId: staffId,
+            entityId: staff._id.toString(),
             ipAddress,
             userAgent,
             details: {
@@ -737,8 +737,12 @@ async function getSalaryHistory(staffId: string) {
     const SalaryHistoryModel = (
         await import("../models/salary-history.model.js")
     ).default;
-    return await SalaryHistoryModel.find({ staffId: staffId as any })
-        .sort({ createdAt: -1 })
+    const isObjectId = mongoose.Types.ObjectId.isValid(staffId);
+    const query = isObjectId
+        ? { $or: [{ staffId }, { staffId: new mongoose.Types.ObjectId(staffId) as any }] }
+        : { staffId };
+    return await SalaryHistoryModel.find(query)
+        .sort({ effectiveDate: -1 })
         .limit(50);
 }
 
@@ -763,20 +767,7 @@ async function updateStaffInDB(payload: {
     session.startTransaction();
 
     try {
-        const isObjectId = mongoose.Types.ObjectId.isValid(staffId);
-        const query: any = {
-            $or: [
-                { staffId },
-                ...(isObjectId
-                    ? [
-                          { _id: new mongoose.Types.ObjectId(staffId) },
-                          { userId: staffId },
-                      ]
-                    : []),
-            ],
-        };
-
-        const staff = await StaffModel.findOne(query).session(session);
+        const staff = await findStaffByIdentifier(staffId, session);
 
         if (!staff) {
             throw new Error("Staff not found");
@@ -861,7 +852,7 @@ async function setSalaryPin(
     session.startTransaction();
 
     try {
-        const staff = await StaffModel.findById(staffId).session(session);
+        const staff = await findStaffByIdentifier(staffId, session);
 
         if (!staff) {
             throw new Error("Staff not found");
@@ -873,8 +864,8 @@ async function setSalaryPin(
             Number(process.env.BCRYPT_SALT_ROUNDS) || 10,
         );
 
-        await StaffModel.updateOne(
-            { staffId },
+        await StaffModel.findByIdAndUpdate(
+            staff._id,
             { $set: { salaryPin: hashedPin } },
             { session },
         );
@@ -901,7 +892,7 @@ async function setSalaryPin(
 }
 
 async function verifySalaryPin(staffId: string, pin: string) {
-    const staff = await StaffModel.findById(staffId).select("+salaryPin");
+    const staff = await findStaffByIdentifier(staffId, undefined, "+salaryPin");
 
     if (!staff) {
         throw new Error("Staff not found");
@@ -922,7 +913,19 @@ async function verifySalaryPin(staffId: string, pin: string) {
 }
 
 async function forgotSalaryPin(staffId: string) {
-    const staff = await StaffModel.findById(staffId).populate("userId");
+    const isObjectId = mongoose.Types.ObjectId.isValid(staffId);
+    const query: any = {
+        $or: [
+            { staffId },
+            ...(isObjectId
+                ? [
+                      { _id: new mongoose.Types.ObjectId(staffId) },
+                      { userId: staffId },
+                  ]
+                : []),
+        ],
+    };
+    const staff = await StaffModel.findOne(query).populate("userId");
 
     if (!staff) {
         throw new Error("Staff not found");
@@ -944,8 +947,8 @@ async function forgotSalaryPin(staffId: string) {
 
     const resetExpires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
 
-    await StaffModel.updateOne(
-        { staffId },
+    await StaffModel.findByIdAndUpdate(
+        staff._id,
         {
             $set: {
                 salaryPinResetToken: resetTokenHash,

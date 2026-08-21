@@ -66,15 +66,23 @@ export function SalaryPinDialog({
                 await setSalaryPin({ staffId, pin }).unwrap();
                 toast.success("PIN set successfully");
                 onSuccess();
-            } catch (error) {
-                toast.error((error as Error).message || "Failed to set PIN");
+            } catch (error: any) {
+                toast.error(
+                    error?.data?.message ||
+                    error?.message ||
+                    "Failed to set PIN"
+                );
             }
         } else if (mode === "verify") {
             try {
                 await verifySalaryPin({ staffId, pin }).unwrap();
                 onSuccess();
-            } catch (error) {
-                toast.error((error as Error).message || "Invalid PIN");
+            } catch (error: any) {
+                toast.error(
+                    error?.data?.message ||
+                    error?.message ||
+                    "Invalid PIN"
+                );
                 setPin("");
             }
         } else if (mode === "forgot") {
@@ -82,9 +90,11 @@ export function SalaryPinDialog({
                 await forgotSalaryPin({ staffId }).unwrap();
                 toast.success("Reset link sent to your email");
                 setMode("verify");
-            } catch (error) {
+            } catch (error: any) {
                 toast.error(
-                    (error as Error).message || "Failed to send reset link",
+                    error?.data?.message ||
+                    error?.message ||
+                    "Failed to send reset link"
                 );
             }
         }
