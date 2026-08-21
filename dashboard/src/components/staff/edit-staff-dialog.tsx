@@ -231,7 +231,7 @@ export function EditStaffDialog({ staff }: EditStaffDialogProps) {
     const onSubmit = async (data: FormData) => {
         try {
             await updateStaff({
-                id: staff._id,
+                id: staff?._id || (staff as any)?.id || staff?.staffId,
                 ...data,
             }).unwrap();
 

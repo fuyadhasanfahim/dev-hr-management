@@ -289,8 +289,20 @@ async function getAllStaffsFromDB(query: IStaffQueryParams) {
 }
 
 async function getStaffByIdFromDB(id: string) {
+    const isObjectId = Types.ObjectId.isValid(id);
+    const matchStage = isObjectId
+        ? {
+              $match: {
+                  $or: [
+                      { _id: new Types.ObjectId(id) },
+                      { staffId: id },
+                  ],
+              },
+          }
+        : { $match: { staffId: id } };
+
     const pipeline: any[] = [
-        { $match: { _id: new Types.ObjectId(id) } },
+        matchStage,
         // Lookup User
         {
             $lookup: {
@@ -751,7 +763,20 @@ async function updateStaffInDB(payload: {
     session.startTransaction();
 
     try {
-        const staff = await StaffModel.findOne({ staffId }).session(session);
+        const isObjectId = mongoose.Types.ObjectId.isValid(staffId);
+        const query: any = {
+            $or: [
+                { staffId },
+                ...(isObjectId
+                    ? [
+                          { _id: new mongoose.Types.ObjectId(staffId) },
+                          { userId: staffId },
+                      ]
+                    : []),
+            ],
+        };
+
+        const staff = await StaffModel.findOne(query).session(session);
 
         if (!staff) {
             throw new Error("Staff not found");
@@ -782,8 +807,8 @@ async function updateStaffInDB(payload: {
         }
 
         // Update Staff
-        const updatedStaff = await StaffModel.findOneAndUpdate(
-            { staffId },
+        const updatedStaff = await StaffModel.findByIdAndUpdate(
+            staff._id,
             { $set: finalStaffData },
             { new: true, session },
         );
