@@ -21,10 +21,23 @@ import {
 } from '@/components/ui/card';
 import { toast } from 'sonner';
 import { Role } from '@/constants/role';
+import { useGetAllDepartmentsQuery } from '@/redux/features/department/departmentApi';
+import { useGetAllDesignationsQuery } from '@/redux/features/designation/designationApi';
 import { DESIGNATIONS, DEPARTMENTS } from '@/constants/metadata';
 
 export default function SendInvitation() {
     const [createInvitation, { isLoading }] = useCreateInvitationMutation();
+    const { data: deptData } = useGetAllDepartmentsQuery({ isActive: true });
+    const { data: desigData } = useGetAllDesignationsQuery({ isActive: true });
+
+    const availableDepartments = deptData?.departments?.length
+        ? deptData.departments.map((d) => ({ value: d.name, label: d.name }))
+        : DEPARTMENTS.map((d) => ({ value: d.label, label: d.label }));
+
+    const availableDesignations = desigData?.designations?.length
+        ? desigData.designations.map((d) => ({ value: d.code, label: d.name }))
+        : DESIGNATIONS;
+
     const [formData, setFormData] = useState({
         email: '',
         role: '',
@@ -154,7 +167,7 @@ export default function SendInvitation() {
                                     <SelectValue placeholder="Select designation" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    {DESIGNATIONS.map((designation) => (
+                                    {availableDesignations.map((designation) => (
                                         <SelectItem key={designation.value} value={designation.value}>
                                             {designation.label}
                                         </SelectItem>
@@ -175,7 +188,7 @@ export default function SendInvitation() {
                                     <SelectValue placeholder="Select department" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    {DEPARTMENTS.map((dept) => (
+                                    {availableDepartments.map((dept) => (
                                         <SelectItem key={dept.value} value={dept.value}>
                                             {dept.label}
                                         </SelectItem>

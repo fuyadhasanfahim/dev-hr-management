@@ -17,6 +17,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { useGetAllBranchesQuery } from "@/redux/features/branch/branchApi";
+import { useGetAllDepartmentsQuery } from "@/redux/features/department/departmentApi";
 import { DEPARTMENTS } from "@/constants/metadata";
 import { CreatePolicyData, IPolicy } from "@/types/policy.type";
 import { Spinner } from "../ui/spinner";
@@ -43,7 +44,12 @@ export function PolicyForm({
   isLoading,
 }: PolicyFormProps) {
   const { data: branchesData } = useGetAllBranchesQuery({});
+  const { data: deptData } = useGetAllDepartmentsQuery({ isActive: true });
   const branches = useMemo(() => branchesData?.branches || [], [branchesData]);
+
+  const availableDepartments = deptData?.departments?.length
+    ? deptData.departments.map((d) => ({ value: d.name, label: d.name }))
+    : DEPARTMENTS.map((d) => ({ value: d.label, label: d.label }));
 
   const {
     register,
@@ -134,7 +140,7 @@ export function PolicyForm({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Departments</SelectItem>
-            {DEPARTMENTS.map((dept: { value: string; label: string }) => (
+            {availableDepartments.map((dept: { value: string; label: string }) => (
               <SelectItem key={dept.value} value={dept.value}>
                 {dept.label}
               </SelectItem>

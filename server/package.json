@@ -10,6 +10,7 @@
         "start": "node dist/server.js",
         "dev": "nodemon --exec tsx src/server.ts",
         "build": "npx tsc",
+        "sync:org": "tsx src/scripts/sync-organization-staff.ts",
         "postinstall": "puppeteer browsers install chrome"
     },
     "devDependencies": {

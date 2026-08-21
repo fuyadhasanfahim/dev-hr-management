@@ -47,10 +47,9 @@ export function NavMain() {
                     (userRole === Role.STAFF) &&
                     item.requiredDesignation
                 ) {
-                    if (
-                        staff?.designation?.toLowerCase() !==
-                        item.requiredDesignation.toLowerCase()
-                    ) {
+                    const des = staff?.designation?.toLowerCase() || "";
+                    const req = item.requiredDesignation.toLowerCase();
+                    if (des !== req && !des.includes(req)) {
                         return false;
                     }
                 }

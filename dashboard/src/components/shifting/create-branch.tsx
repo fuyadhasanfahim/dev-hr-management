@@ -81,7 +81,8 @@ export default function CreateBranch() {
     const canCreate =
         session &&
         (session.user.role === Role.SUPER_ADMIN ||
-            session.user.role === Role.ADMIN);
+            session.user.role === Role.ADMIN ||
+            session.user.role === Role.HR_MANAGER);
 
     return (
         <Dialog open={!!open} onOpenChange={setOpen}>

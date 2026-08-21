@@ -16,6 +16,8 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { useDebounce } from "@/hooks/use-debounce";
+import { useGetAllDepartmentsQuery } from "@/redux/features/department/departmentApi";
+import { useGetAllDesignationsQuery } from "@/redux/features/designation/designationApi";
 import { DESIGNATIONS, DEPARTMENTS } from "@/constants/metadata";
 
 interface Shift {
@@ -47,6 +49,17 @@ export function StaffFilters({
 }: StaffFiltersProps) {
   const [localSearch, setLocalSearch] = useState(search);
   const debouncedSearch = useDebounce(localSearch, 500);
+
+  const { data: deptData } = useGetAllDepartmentsQuery({ isActive: true });
+  const { data: desigData } = useGetAllDesignationsQuery({ isActive: true });
+
+  const availableDepartments = deptData?.departments?.length
+    ? deptData.departments.map((d) => ({ value: d.name, label: d.name }))
+    : DEPARTMENTS.map((d) => ({ value: d.label, label: d.label }));
+
+  const availableDesignations = desigData?.designations?.length
+    ? desigData.designations.map((d) => ({ value: d.code, label: d.name }))
+    : DESIGNATIONS;
 
   useEffect(() => {
     if (debouncedSearch !== search) {
@@ -129,7 +142,7 @@ export function StaffFilters({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Departments</SelectItem>
-                {DEPARTMENTS.map((dept) => (
+                {availableDepartments.map((dept) => (
                   <SelectItem key={dept.value} value={dept.value}>
                     {dept.label}
                   </SelectItem>
@@ -146,7 +159,7 @@ export function StaffFilters({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Designations</SelectItem>
-                {DESIGNATIONS.map((desig) => (
+                {availableDesignations.map((desig) => (
                   <SelectItem key={desig.value} value={desig.value}>
                     {desig.label}
                   </SelectItem>

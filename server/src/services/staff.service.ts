@@ -49,8 +49,8 @@ async function getAllStaffsFromDB(query: IStaffQueryParams) {
         // OR better: do lookups first then match.
     }
 
-    if (department) matchStage.department = department;
-    if (designation) matchStage.designation = designation;
+    if (department) matchStage.department = { $regex: new RegExp(`^${escapeRegex(department)}$`, "i") };
+    if (designation) matchStage.designation = { $regex: new RegExp(`^${escapeRegex(designation)}$`, "i") };
     if (status) matchStage.status = status;
     if (hasBalance) matchStage.balance = { $gt: 0 };
     if (branchId) matchStage.branchId = new Types.ObjectId(branchId);

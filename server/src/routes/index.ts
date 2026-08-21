@@ -40,6 +40,8 @@ import { ConsultationRoutes } from "./consultation.route.js";
 import { testAiPdfRoute } from "./test-ai-pdf.route.js";
 import { outboxRoute } from "./outbox.route.js";
 import { quotationTimelineRoute } from "./quotation-timeline.route.js";
+import { departmentRoute } from "./department.route.js";
+import { designationRoute } from "./designation.route.js";
 
 const router: Router = Router();
 
@@ -205,6 +207,14 @@ const moduleRoutes = [
     {
         path: "/quotation-timeline",
         route: quotationTimelineRoute,
+    },
+    {
+        path: "/departments",
+        route: departmentRoute,
+    },
+    {
+        path: "/designations",
+        route: designationRoute,
     },
 ];
 

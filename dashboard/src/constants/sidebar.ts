@@ -22,6 +22,7 @@ import {
     IconClipboardList,
     IconMessageChatbot,
     IconFileInvoice,
+    IconBuildingCommunity,
 } from "@tabler/icons-react";
 
 
@@ -214,6 +215,12 @@ export const sidebarGroups: SidebarGroup[] = [
                 title: "Careers",
                 url: "/careers",
                 icon: IconBriefcase,
+                access: [Role.SUPER_ADMIN, Role.ADMIN, Role.HR_MANAGER],
+            },
+            {
+                title: "Organization",
+                url: "/organization",
+                icon: IconBuildingCommunity,
                 access: [Role.SUPER_ADMIN, Role.ADMIN, Role.HR_MANAGER],
             },
         ],

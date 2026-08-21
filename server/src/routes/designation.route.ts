@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { Role } from '../constants/role.js';
 import { authorize } from '../middlewares/authorize.js';
-import BranchControllers from '../controllers/branch.controller.js';
+import DesignationControllers from '../controllers/designation.controller.js';
 
 const router: Router = Router();
 
@@ -14,7 +14,7 @@ router.get(
         Role.TEAM_LEADER,
         Role.STAFF,
     ),
-    BranchControllers.getAllBranches,
+    DesignationControllers.getAllDesignations,
 );
 
 router.get(
@@ -26,31 +26,31 @@ router.get(
         Role.TEAM_LEADER,
         Role.STAFF,
     ),
-    BranchControllers.getBranchById,
+    DesignationControllers.getDesignationById,
 );
 
 router.post(
     '/',
     authorize(Role.ADMIN, Role.SUPER_ADMIN, Role.HR_MANAGER),
-    BranchControllers.createBranch,
+    DesignationControllers.createDesignation,
 );
 
 router.patch(
     '/:id',
     authorize(Role.ADMIN, Role.SUPER_ADMIN, Role.HR_MANAGER),
-    BranchControllers.updateBranch,
+    DesignationControllers.updateDesignation,
 );
 
 router.patch(
     '/:id/toggle-status',
     authorize(Role.ADMIN, Role.SUPER_ADMIN, Role.HR_MANAGER),
-    BranchControllers.toggleBranchStatus,
+    DesignationControllers.toggleDesignationStatus,
 );
 
 router.delete(
     '/:id',
     authorize(Role.ADMIN, Role.SUPER_ADMIN, Role.HR_MANAGER),
-    BranchControllers.deleteBranch,
+    DesignationControllers.deleteDesignation,
 );
 
-export const branchRoute = router;
+export const designationRoute = router;

@@ -22,6 +22,8 @@ import {
 import { useCreateInvitationMutation } from "@/redux/features/invitation/invitationApi";
 import { useGetAllBranchesQuery } from "@/redux/features/branch/branchApi";
 import { useGetAllShiftsQuery } from "@/redux/features/shift/shiftApi";
+import { useGetAllDepartmentsQuery } from "@/redux/features/department/departmentApi";
+import { useGetAllDesignationsQuery } from "@/redux/features/designation/designationApi";
 import { DESIGNATIONS, DEPARTMENTS } from "@/constants/metadata";
 import { useSession } from "@/lib/auth-client";
 import { Loader, UserPlus } from "lucide-react";
@@ -48,6 +50,16 @@ export default function InviteEmployeeDialog() {
     const [createInvitation, { isLoading }] = useCreateInvitationMutation();
     const { data: branchesData } = useGetAllBranchesQuery(undefined);
     const { data: shiftsData } = useGetAllShiftsQuery(undefined);
+    const { data: deptData } = useGetAllDepartmentsQuery({ isActive: true });
+    const { data: desigData } = useGetAllDesignationsQuery({ isActive: true });
+
+    const availableDepartments = deptData?.departments?.length
+        ? deptData.departments.map((d) => ({ value: d.name, label: d.name }))
+        : DEPARTMENTS.map((d) => ({ value: d.label, label: d.label }));
+
+    const availableDesignations = desigData?.designations?.length
+        ? desigData.designations.map((d) => ({ value: d.code, label: d.name }))
+        : DESIGNATIONS;
 
     const currentUserRole = session?.user?.role as RoleType | undefined;
 
@@ -205,7 +217,7 @@ export default function InviteEmployeeDialog() {
                                     <SelectValue placeholder="Select designation" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    {DESIGNATIONS.map((designation) => (
+                                    {availableDesignations.map((designation) => (
                                         <SelectItem key={designation.value} value={designation.value}>
                                             {designation.label}
                                         </SelectItem>
@@ -227,7 +239,7 @@ export default function InviteEmployeeDialog() {
                                     <SelectValue placeholder="Select department" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    {DEPARTMENTS.map((dept) => (
+                                    {availableDepartments.map((dept) => (
                                         <SelectItem key={dept.value} value={dept.value}>
                                             {dept.label}
                                         </SelectItem>

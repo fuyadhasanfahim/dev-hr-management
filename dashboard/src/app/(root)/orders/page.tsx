@@ -121,7 +121,7 @@ export default function OrdersPage() {
     return (
       (session?.user?.role === Role.STAFF ||
         session?.user?.role === Role.TEAM_LEADER) &&
-      meData?.staff?.designation?.toLowerCase() === "telemarketer"
+      Boolean(meData?.staff?.designation?.toLowerCase().includes("telemarketer"))
     );
   }, [session, meData]);
   const canSeeFinancials = useMemo(() => {

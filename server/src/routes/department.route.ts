@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { Role } from '../constants/role.js';
 import { authorize } from '../middlewares/authorize.js';
-import BranchControllers from '../controllers/branch.controller.js';
+import DepartmentControllers from '../controllers/department.controller.js';
 
 const router: Router = Router();
 
@@ -14,7 +14,7 @@ router.get(
         Role.TEAM_LEADER,
         Role.STAFF,
     ),
-    BranchControllers.getAllBranches,
+    DepartmentControllers.getAllDepartments,
 );
 
 router.get(
@@ -26,31 +26,31 @@ router.get(
         Role.TEAM_LEADER,
         Role.STAFF,
     ),
-    BranchControllers.getBranchById,
+    DepartmentControllers.getDepartmentById,
 );
 
 router.post(
     '/',
     authorize(Role.ADMIN, Role.SUPER_ADMIN, Role.HR_MANAGER),
-    BranchControllers.createBranch,
+    DepartmentControllers.createDepartment,
 );
 
 router.patch(
     '/:id',
     authorize(Role.ADMIN, Role.SUPER_ADMIN, Role.HR_MANAGER),
-    BranchControllers.updateBranch,
+    DepartmentControllers.updateDepartment,
 );
 
 router.patch(
     '/:id/toggle-status',
     authorize(Role.ADMIN, Role.SUPER_ADMIN, Role.HR_MANAGER),
-    BranchControllers.toggleBranchStatus,
+    DepartmentControllers.toggleDepartmentStatus,
 );
 
 router.delete(
     '/:id',
     authorize(Role.ADMIN, Role.SUPER_ADMIN, Role.HR_MANAGER),
-    BranchControllers.deleteBranch,
+    DepartmentControllers.deleteDepartment,
 );
 
-export const branchRoute = router;
+export const departmentRoute = router;
