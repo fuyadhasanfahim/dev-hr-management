@@ -1712,6 +1712,12 @@ export class QuotationPuppeteerPdfService {
     ): Promise<{ buffer: Buffer; filename: string }> {
         const q = await QuotationModel.findById(quotationId)
             .populate('clientId', 'name clientId emails')
+            .populate({
+                path: 'services',
+                populate: { path: 'lineItems' },
+            })
+            .populate('recurringCharges')
+            .populate('paymentMilestones')
             .lean();
         if (!q) throw new AppError('Quotation not found', 404);
 
