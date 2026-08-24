@@ -284,7 +284,7 @@ export function AddPaymentDialog({
               value={paymentType}
               onChange={(val) => setPaymentType(val as any)}
               options={paymentTypeOptions}
-              align={summaryData ? "down" : "up"}
+              align="down"
             />
           </div>
 
@@ -297,7 +297,7 @@ export function AddPaymentDialog({
               value={method}
               onChange={setMethod}
               options={methodOptions}
-              align={summaryData ? "down" : "up"}
+              align="down"
             />
           </div>
 
@@ -343,7 +343,7 @@ export function AddPaymentDialog({
             <CalendarContent
               value={paymentDate}
               onChange={setPaymentDate}
-              align={summaryData ? "down" : "up"}
+              align="down"
             />
           </div>
         </div>
