@@ -4,9 +4,9 @@ import Main from '@/components/providers/main';
 import { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 
-const inter = Inter({
+const fontSans = Inter({
     subsets: ['latin'],
-    variable: '--font-inter',
+    variable: '--font-sans',
 });
 
 export const metadata: Metadata = {
@@ -20,8 +20,14 @@ export default function RootLayout({
     children: React.ReactNode;
 }>) {
     return (
-        <html lang="en" className={inter.variable}>
-            <body className={cn('font-sans antialiased')}>
+        <html lang="en" suppressHydrationWarning>
+            <body
+                className={cn(
+                    'font-sans',
+                    'antialiased',
+                    fontSans.variable,
+                )}
+            >
                 <Main>{children}</Main>
             </body>
         </html>

@@ -8,6 +8,9 @@ Desktop.ini
 *.pem
 .claude
 .agents
+CODEBASE_GRAPH.json
+CODEBASE_GRAPH.md
+.codebase-graph/
 
 # Debug logs
 npm-debug.log*

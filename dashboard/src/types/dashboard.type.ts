@@ -43,10 +43,20 @@ export interface RecentActivity {
     timestamp: string;
 }
 
+export interface FinancialStats {
+    totalEarnings: number;
+    thisMonthEarnings: number;
+    totalExpenses: number;
+    thisMonthExpenses: number;
+    totalRevenue: number;
+    unpaidRevenue: number;
+    profit: number;
+}
+
 export interface DashboardStats {
     staffStats: StaffStats;
     attendanceOverview: AttendanceOverview;
     monthlyAttendanceStats: MonthlyAttendanceStats;
-
     recentActivities: RecentActivity[];
+    financialStats?: FinancialStats;
 }
