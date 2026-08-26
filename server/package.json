@@ -9,7 +9,7 @@
     "scripts": {
         "start": "node dist/server.js",
         "dev": "nodemon --exec tsx src/server.ts",
-        "build": "npx tsc && mkdir -p dist/generated && cp -r src/generated/prisma dist/generated/",
+        "build": "npx tsc && mkdir -p dist/generated dist/data && cp -r src/generated/prisma dist/generated/ && cp -r src/data/. dist/data/",
         "sync:org": "tsx src/scripts/sync-organization-staff.ts",
         "postinstall": "prisma generate && puppeteer browsers install chrome"
     },
