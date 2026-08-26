@@ -50,7 +50,11 @@ if (missing.length > 0) {
 // only when AI chat is actually invoked. Hard-requiring them would block
 // environments that don't use those features at all. Warn at startup
 // instead, so a misconfiguration is still visible without blocking boot.
-const softWarnVars = ['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'AWS_BUCKET_NAME', 'GEMINI_API_KEY'] as const;
+const softWarnVars = [
+    'AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'AWS_BUCKET_NAME', 'GEMINI_API_KEY',
+    'DATABASE_URL', 'GROQ_API_KEY', 'WHATSAPP_ACCESS_TOKEN', 'WHATSAPP_PHONE_NUMBER_ID',
+    'WHATSAPP_WEBHOOK_VERIFY_TOKEN',
+] as const;
 const missingSoft = softWarnVars.filter((key) => !process.env[key]);
 if (missingSoft.length > 0) {
     console.warn(
@@ -116,5 +120,16 @@ const envConfig = {
 
     // OpenAI (test-pdf tool)
     openai_api_key: process.env.OPENAI_API_KEY || '',
+
+    // Groq (WhatsApp AI auto-reply)
+    groq_api_key: process.env.GROQ_API_KEY || '',
+    groq_model: process.env.GROQ_MODEL || 'openai/gpt-oss-20b',
+
+    // WhatsApp Cloud API
+    whatsapp_api_version: process.env.WHATSAPP_API_VERSION || 'v21.0',
+    whatsapp_phone_number_id: process.env.WHATSAPP_PHONE_NUMBER_ID || '',
+    whatsapp_waba_id: process.env.WHATSAPP_WABA_ID || '',
+    whatsapp_access_token: process.env.WHATSAPP_ACCESS_TOKEN || '',
+    whatsapp_webhook_verify_token: process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN || '',
 };
 export default envConfig;
