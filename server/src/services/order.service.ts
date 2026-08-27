@@ -279,7 +279,11 @@ async function createOrderFromQuotation(
             quotationGroupId,
             isLatestVersion: true,
             status: { $nin: ['superseded', 'expired'] },
-        }).session(session);
+        })
+            .populate({ path: 'services', populate: { path: 'lineItems' } })
+            .populate('recurringCharges')
+            .populate('paymentMilestones')
+            .session(session);
 
         if (!quotation) {
             throw new AppError(
