@@ -116,6 +116,9 @@ export function QuotationTable({
         ) : (
           quotations.map((q) => {
             const isSuperseded = !q.isLatestVersion || q.status === "superseded";
+            // Legacy quotations created before the normalized service model have no
+            // `services` entries — they can never be converted to an order, so hide the action.
+            const hasServices = Array.isArray(q.services) && q.services.length > 0;
             const statusKey = (q.status ?? "draft") as QuotationStatus;
             const statusCfg = STATUS_CONFIG[statusKey] ?? STATUS_CONFIG.draft;
             const clientName = (q.clientId as unknown as { name?: string })?.name || q.client.contactName;
@@ -181,7 +184,7 @@ export function QuotationTable({
                 {/* Actions */}
                 <TableCell className="pr-6" onClick={(e) => e.stopPropagation()}>
                   <div className="flex items-center justify-end gap-1">
-                    {q.isLatestVersion !== false && !q.orderId && !["superseded", "expired"].includes(q.status || "") && (
+                    {q.isLatestVersion !== false && !q.orderId && hasServices && !["superseded", "expired"].includes(q.status || "") && (
                       <Button
                         variant="default"
                         size="sm"

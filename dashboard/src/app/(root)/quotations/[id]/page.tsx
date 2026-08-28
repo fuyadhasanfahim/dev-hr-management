@@ -572,6 +572,8 @@ export default function ViewQuotationPage() {
 
                     {data.isLatestVersion &&
                         !data.orderId &&
+                        Array.isArray(data.services) &&
+                        data.services.length > 0 &&
                         !['superseded', 'expired'].includes(
                             data.status || '',
                         ) && (
