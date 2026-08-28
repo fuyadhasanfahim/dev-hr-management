@@ -120,6 +120,7 @@ export function SelectContent({
             {isOpen && (
               <motion.div
                 ref={popupRef}
+                data-portal-popup=""
                 initial={{ opacity: 0, y: align === 'up' ? -10 : 10, scale: 0.95 }}
                 animate={{ opacity: 1, y: align === 'up' ? -6 : 4, scale: 1 }}
                 exit={{ opacity: 0, y: align === 'up' ? -10 : 10, scale: 0.95 }}
@@ -131,7 +132,7 @@ export function SelectContent({
                   left: position.left,
                   width: Math.max(position.width, 160),
                 }}
-                className="z-50 rounded-2xl border border-slate-200/80 dark:border-slate-850 bg-white dark:bg-slate-900 p-1.5 shadow-xl max-h-60 overflow-y-auto"
+                className="pointer-events-auto z-50 rounded-2xl border border-slate-200/80 dark:border-slate-850 bg-white dark:bg-slate-900 p-1.5 shadow-xl max-h-60 overflow-y-auto"
               >
                 {options.map((opt) => {
                   const isSelected = opt.value === value;

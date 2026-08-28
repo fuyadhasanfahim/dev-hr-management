@@ -167,12 +167,13 @@ export function CalendarContent({
             {isOpen && (
               <motion.div
                 ref={popupRef}
+                data-portal-popup=""
                 initial={{ opacity: 0, y: align === 'up' ? -10 : 10, scale: 0.95 }}
                 animate={{ opacity: 1, y: align === 'up' ? -6 : 4, scale: 1 }}
                 exit={{ opacity: 0, y: align === 'up' ? -10 : 10, scale: 0.95 }}
                 transition={{ duration: 0.15 }}
                 style={{ position: 'fixed', top: position.top, bottom: position.bottom, left: position.left }}
-                className="z-50 rounded-3xl border border-slate-200/80 dark:border-slate-850 bg-white dark:bg-slate-950 p-4 shadow-xl w-72"
+                className="pointer-events-auto z-50 rounded-3xl border border-slate-200/80 dark:border-slate-850 bg-white dark:bg-slate-950 p-4 shadow-xl w-72"
               >
                 {/* Header: Month Navigation */}
                 <div className="flex items-center justify-between mb-4">

@@ -40,6 +40,16 @@ export function DialogContentComponent({
         <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
             <DialogContent
                 showCloseButton={showCloseButton}
+                onInteractOutside={(e) => {
+                    // Popovers portaled to <body> (calendar / select dropdowns) live
+                    // outside this dialog's DOM subtree, so Radix treats a click on
+                    // them as an outside interaction and closes the dialog. Keep it
+                    // open when the interaction lands inside one of those popups.
+                    const target = e.target as Element | null;
+                    if (target?.closest('[data-portal-popup]')) {
+                        e.preventDefault();
+                    }
+                }}
                 className={cn(
                     'p-0 flex flex-col max-h-[85vh] h-auto overflow-hidden sm:max-w-lg md:max-w-xl gap-0 rounded-2xl border-border/80 shadow-2xl',
                     className
