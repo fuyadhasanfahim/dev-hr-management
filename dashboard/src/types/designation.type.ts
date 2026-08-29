@@ -4,6 +4,7 @@ export interface IDesignation {
     code: string;
     department?: string;
     description?: string;
+    permissions?: string[];
     isActive: boolean;
     createdBy?: string;
     createdAt: string;

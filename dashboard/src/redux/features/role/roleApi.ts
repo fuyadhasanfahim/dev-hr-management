@@ -94,6 +94,30 @@ export const roleApi = apiSlice.injectEndpoints({
             }),
             invalidatesTags: ['MyPermissions', 'User', 'Staff'],
         }),
+
+        // Phase 6 — department / designation permission grants
+        updateDepartmentPermissions: builder.mutation<
+            unknown,
+            { id: string; permissions: string[] }
+        >({
+            query: ({ id, permissions }) => ({
+                url: `/departments/${id}/permissions`,
+                method: 'PATCH',
+                body: { permissions },
+            }),
+            invalidatesTags: ['Department', 'MyPermissions'],
+        }),
+        updateDesignationPermissions: builder.mutation<
+            unknown,
+            { id: string; permissions: string[] }
+        >({
+            query: ({ id, permissions }) => ({
+                url: `/designations/${id}/permissions`,
+                method: 'PATCH',
+                body: { permissions },
+            }),
+            invalidatesTags: ['Designation', 'MyPermissions'],
+        }),
     }),
 });
 
@@ -104,4 +128,6 @@ export const {
     useUpdateRoleMutation,
     useDeleteRoleMutation,
     useAssignUserAccessMutation,
+    useUpdateDepartmentPermissionsMutation,
+    useUpdateDesignationPermissionsMutation,
 } = roleApi;

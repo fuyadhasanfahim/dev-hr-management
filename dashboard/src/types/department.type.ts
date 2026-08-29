@@ -3,6 +3,7 @@ export interface IDepartment {
     name: string;
     code: string;
     description?: string;
+    permissions?: string[];
     isActive: boolean;
     createdBy?: string;
     createdAt: string;
