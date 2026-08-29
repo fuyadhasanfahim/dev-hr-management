@@ -31,8 +31,10 @@ export default function Main({ children }: { children: ReactNode }) {
     const theme = (session?.user?.theme as ToasterProps['theme']) || 'system';
 
     return (
-        <AuthGuard>
-            <ReduxProvider>
+        // ReduxProvider must wrap AuthGuard: AuthGuard reads permissions via
+        // an RTK Query hook (usePermissions), which needs the store context.
+        <ReduxProvider>
+            <AuthGuard>
                 <ThemeProvider
                     attribute="class"
                     defaultTheme={theme}
@@ -49,7 +51,7 @@ export default function Main({ children }: { children: ReactNode }) {
                         closeButton
                     />
                 </ThemeProvider>
-            </ReduxProvider>
-        </AuthGuard>
+            </AuthGuard>
+        </ReduxProvider>
     );
 }

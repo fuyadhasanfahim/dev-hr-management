@@ -20,6 +20,7 @@ import { Search, X } from "lucide-react";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
 
 import { useGetMeQuery } from "@/redux/features/staff/staffApi";
+import { usePermissions } from "@/hooks/use-permissions";
 
 export function NavMain() {
     const {
@@ -27,6 +28,7 @@ export function NavMain() {
         isPending: isSessionPending,
     } = useSession();
     const { data: meData, isLoading: isMeLoading } = useGetMeQuery({});
+    const { can, isLoading: isPermsLoading } = usePermissions();
     const pathname = usePathname();
     const { state } = useSidebar();
 
@@ -39,8 +41,14 @@ export function NavMain() {
     const filteredGroups = React.useMemo(() => {
         return sidebarGroups.map(group => {
             const filteredItems = group.items.filter((item) => {
-                if (!userRole) return false;
-                if (!item.access.includes(userRole)) return false;
+                // Phase 4: a permission gate, when present, wins over the
+                // legacy role gate.
+                if (item.permission) {
+                    if (!can(item.permission)) return false;
+                } else {
+                    if (!userRole) return false;
+                    if (!item.access.includes(userRole)) return false;
+                }
 
                 // Restriction: STAFF must match requiredDesignation if specified
                 if (
@@ -67,7 +75,7 @@ export function NavMain() {
                 items: filteredItems,
             };
         }).filter(group => group.items.length > 0);
-    }, [userRole, staff, searchQuery]);
+    }, [userRole, staff, searchQuery, can]);
 
     const allGroupLabels = React.useMemo(
         () => sidebarGroups.map((g) => g.groupLabel),
@@ -86,7 +94,7 @@ export function NavMain() {
         }
     }, [searchQuery, filteredGroups, allGroupLabels]);
 
-    const isLoading = isSessionPending || isMeLoading;
+    const isLoading = isSessionPending || isMeLoading || isPermsLoading;
 
     if (isLoading) {
         return (

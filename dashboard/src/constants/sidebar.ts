@@ -30,7 +30,14 @@ export interface SidebarItem {
     title: string;
     url: string;
     icon: React.ComponentType<{ strokeWidth?: number; className?: string }>;
+    /** Legacy role gate — kept as the fallback when `permission` is unset. */
     access: Role[];
+    /**
+     * Phase 4 — permission gate. When set, the item shows only if the user
+     * holds this permission (or all of them, if an array). Takes precedence
+     * over `access`.
+     */
+    permission?: string | string[];
     requiredDesignation?: string;
     external?: boolean;
 }
@@ -47,6 +54,7 @@ export const sidebarGroups: SidebarGroup[] = [
             {
                 title: "Dashboard",
                 url: "/dashboard",
+                permission: 'dashboard.read',
                 icon: IconLayoutDashboard,
                 access: [
                     Role.SUPER_ADMIN,
@@ -71,6 +79,7 @@ export const sidebarGroups: SidebarGroup[] = [
             {
                 title: "Tasks & Kanban",
                 url: "/tasks",
+                permission: 'task.read',
                 icon: IconClipboardList,
                 access: [
                     Role.SUPER_ADMIN,
@@ -83,6 +92,7 @@ export const sidebarGroups: SidebarGroup[] = [
             {
                 title: "Analytics",
                 url: "/analytics",
+                permission: 'analytics.read',
                 icon: IconChartBar,
                 access: [Role.SUPER_ADMIN, Role.ADMIN],
             },
@@ -95,6 +105,7 @@ export const sidebarGroups: SidebarGroup[] = [
             {
                 title: "Leads",
                 url: "/leads",
+                permission: 'lead.read',
                 icon: IconTarget,
                 access: [
                     Role.SUPER_ADMIN,
@@ -107,6 +118,7 @@ export const sidebarGroups: SidebarGroup[] = [
             {
                 title: "Clients",
                 url: "/clients",
+                permission: 'client.read',
                 icon: IconUsers,
                 access: [
                     Role.SUPER_ADMIN,
@@ -119,6 +131,7 @@ export const sidebarGroups: SidebarGroup[] = [
             {
                 title: "Orders",
                 url: "/orders",
+                permission: 'order.read',
                 icon: IconPackage,
                 access: [
                     Role.SUPER_ADMIN,
@@ -130,6 +143,7 @@ export const sidebarGroups: SidebarGroup[] = [
             {
                 title: "Earnings",
                 url: "/earnings",
+                permission: 'earning.read',
                 icon: IconReceipt,
                 access: [Role.SUPER_ADMIN, Role.ADMIN],
             },
@@ -137,24 +151,28 @@ export const sidebarGroups: SidebarGroup[] = [
             {
                 title: "Quotations",
                 url: "/quotations",
+                permission: 'quotation.read',
                 icon: IconReceipt,
                 access: [Role.SUPER_ADMIN, Role.ADMIN, Role.TEAM_LEADER],
             },
             {
                 title: "Receipts",
                 url: "/receipts",
+                permission: 'receipt.read',
                 icon: IconFileInvoice,
                 access: [Role.SUPER_ADMIN, Role.ADMIN, Role.TEAM_LEADER],
             },
             {
                 title: "Meetings",
                 url: "/meetings",
+                permission: 'meeting.read',
                 icon: IconCalendarEvent,
                 access: [Role.SUPER_ADMIN, Role.ADMIN, Role.TEAM_LEADER],
             },
             {
                 title: "Consultations",
                 url: "/consultations",
+                permission: 'consultation.read',
                 icon: IconMessageChatbot,
                 access: [Role.SUPER_ADMIN, Role.ADMIN],
             },
@@ -162,6 +180,7 @@ export const sidebarGroups: SidebarGroup[] = [
             {
                 title: "Profit Share",
                 url: "/profit-share",
+                permission: 'profitShare.read',
                 icon: IconUserShare,
                 access: [Role.SUPER_ADMIN, Role.ADMIN],
             },
@@ -185,18 +204,21 @@ export const sidebarGroups: SidebarGroup[] = [
             {
                 title: "Staffs",
                 url: "/staffs",
+                permission: 'staff.read',
                 icon: IconUsers,
                 access: [Role.SUPER_ADMIN, Role.ADMIN, Role.HR_MANAGER],
             },
             {
                 title: "Invitations",
                 url: "/invitations",
+                permission: 'invitation.read',
                 icon: IconMail,
                 access: [Role.SUPER_ADMIN, Role.ADMIN, Role.HR_MANAGER],
             },
             {
                 title: "Shifting",
                 url: "/shifting",
+                permission: 'shift.read',
                 icon: IconArrowsShuffle,
                 access: [
                     Role.SUPER_ADMIN,
@@ -208,12 +230,14 @@ export const sidebarGroups: SidebarGroup[] = [
             {
                 title: "Attendance",
                 url: "/attendance",
+                permission: 'attendance.read',
                 icon: IconCalendarStats,
                 access: [Role.SUPER_ADMIN, Role.ADMIN, Role.HR_MANAGER, Role.TEAM_LEADER],
             },
             {
                 title: "Careers",
                 url: "/careers",
+                permission: 'career.read',
                 icon: IconBriefcase,
                 access: [Role.SUPER_ADMIN, Role.ADMIN, Role.HR_MANAGER],
             },
@@ -231,6 +255,7 @@ export const sidebarGroups: SidebarGroup[] = [
             {
                 title: "Leave Application",
                 url: "/leave/apply",
+                permission: 'leave.apply',
                 icon: IconCalendarOff,
                 access: [
                     Role.SUPER_ADMIN,
@@ -243,6 +268,7 @@ export const sidebarGroups: SidebarGroup[] = [
             {
                 title: "Leave Management",
                 url: "/leave/manage",
+                permission: 'leave.manage',
                 icon: IconCalendarStats,
                 access: [Role.SUPER_ADMIN, Role.ADMIN, Role.HR_MANAGER],
             },
@@ -255,18 +281,21 @@ export const sidebarGroups: SidebarGroup[] = [
             {
                 title: "Expense",
                 url: "/expense",
+                permission: 'expense.read',
                 icon: IconReceipt,
                 access: [Role.SUPER_ADMIN, Role.ADMIN, Role.HR_MANAGER],
             },
             {
                 title: "Debit",
                 url: "/debit",
+                permission: 'debit.read',
                 icon: IconCreditCard,
                 access: [Role.SUPER_ADMIN, Role.ADMIN],
             },
             {
                 title: "Payroll",
                 url: "/payroll",
+                permission: 'payroll.read',
                 icon: IconCash,
                 access: [Role.SUPER_ADMIN, Role.ADMIN, Role.HR_MANAGER],
             },
@@ -278,6 +307,7 @@ export const sidebarGroups: SidebarGroup[] = [
             {
                 title: "Notices",
                 url: "/notices",
+                permission: 'notice.read',
                 icon: IconSpeakerphone,
                 access: [
                     Role.SUPER_ADMIN,
@@ -290,6 +320,7 @@ export const sidebarGroups: SidebarGroup[] = [
             {
                 title: "Policies",
                 url: "/policies",
+                permission: 'policy.read',
                 icon: IconShieldLock,
                 access: [
                     Role.SUPER_ADMIN,
@@ -302,6 +333,7 @@ export const sidebarGroups: SidebarGroup[] = [
             {
                 title: "Notice Management",
                 url: "/notices/manage",
+                permission: 'notice.create',
                 icon: IconSpeakerphone,
                 access: [Role.SUPER_ADMIN, Role.ADMIN, Role.HR_MANAGER],
             },

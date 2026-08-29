@@ -3,9 +3,10 @@
 import { useSession } from '@/lib/auth-client';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef } from 'react';
-import { canAccess } from '@/utils/canAccess';
+import { canAccessRoute } from '@/utils/canAccessRoute';
 import { Role } from '@/constants/role';
 import { redirectToSignIn } from '@/lib/auth-redirect';
+import { usePermissions } from '@/hooks/use-permissions';
 
 const publicRoutes = new Set([
     '/sign-in',
@@ -22,6 +23,7 @@ const LoadingSpinner = () => (
 
 export default function AuthGuard({ children }: { children: React.ReactNode }) {
     const { data: session, isPending } = useSession();
+    const { can, isLoading: isPermsLoading } = usePermissions();
     const pathname = usePathname();
     const router = useRouter();
     const hasRedirected = useRef(false);
@@ -68,14 +70,27 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
             return;
         }
 
-        // 🔐 Role based access
+        // 🔐 Permission-based access (falls back to the legacy role map).
+        // Wait for permissions to load so we don't bounce a user who is
+        // actually allowed.
+        if (isPermsLoading) return;
+
         const role = session.user?.role as Role | undefined;
-        if (role && !canAccess(role, pathname)) {
+        if (!canAccessRoute(pathname, role, can)) {
             hasRedirected.current = true;
             router.replace('/dashboard');
             return;
         }
-    }, [session, isPending, pathname, router, isPublicRoute, isStaticRoute]);
+    }, [
+        session,
+        isPending,
+        isPermsLoading,
+        can,
+        pathname,
+        router,
+        isPublicRoute,
+        isStaticRoute,
+    ]);
 
     // Allow static routes immediately
     if (isStaticRoute) {
@@ -94,6 +109,12 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
 
     // ✅ Logged in on public route - show loading while redirect happens
     if (session && (isPublicRoute || pathname === '/')) {
+        return <LoadingSpinner />;
+    }
+
+    // ⏳ Logged in but permissions not resolved yet - avoid flashing a page
+    // the user may not be allowed to see.
+    if (session && isPermsLoading && !isPublicRoute) {
         return <LoadingSpinner />;
     }
 
