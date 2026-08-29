@@ -1,6 +1,6 @@
 import express from 'express';
+import { requirePermission } from '../middlewares/require-permission.js';
 import ConsultationController from '../controllers/consultation.controller.js';
-import { requireAuth, restrictTo } from '../middlewares/auth.middleware.js';
 
 const router = express.Router();
 
@@ -8,11 +8,11 @@ const router = express.Router();
 router.post('/', ConsultationController.create);
 
 // Admin only — manage consultations
-router.get('/', requireAuth, restrictTo('Admin', 'Super Admin'), ConsultationController.getAll);
-router.get('/stats', requireAuth, restrictTo('Admin', 'Super Admin'), ConsultationController.getStats);
-router.get('/:id', requireAuth, restrictTo('Admin', 'Super Admin'), ConsultationController.getById);
-router.patch('/:id', requireAuth, restrictTo('Admin', 'Super Admin'), ConsultationController.update);
-router.delete('/:id', requireAuth, restrictTo('Admin', 'Super Admin'), ConsultationController.remove);
+router.get('/', requirePermission('consultation.read'), ConsultationController.getAll);
+router.get('/stats', requirePermission('consultation.read'), ConsultationController.getStats);
+router.get('/:id', requirePermission('consultation.read'), ConsultationController.getById);
+router.patch('/:id', requirePermission('consultation.update'), ConsultationController.update);
+router.delete('/:id', requirePermission('consultation.delete'), ConsultationController.remove);
 
 export const ConsultationRoutes = router;
 export default ConsultationRoutes;

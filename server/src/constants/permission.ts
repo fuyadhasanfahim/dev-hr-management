@@ -162,6 +162,10 @@ export const PERMISSION_GROUPS = {
         label: 'Invitations',
         actions: ['read', 'create', 'delete'],
     },
+    outbox: {
+        label: 'Outbox / Event Log',
+        actions: ['read', 'replay'],
+    },
     role: {
         label: 'Roles & Permissions',
         // read  — view roles/permissions

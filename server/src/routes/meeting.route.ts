@@ -1,28 +1,25 @@
 import express from 'express';
+import { requirePermission } from '../middlewares/require-permission.js';
 import MeetingController from '../controllers/meeting.controller.js';
-import { authorize } from '../middlewares/authorize.js';
-import { Role } from '../constants/role.js';
 
 const router = express.Router();
 
-const MEETING_ROLES = [Role.SUPER_ADMIN, Role.ADMIN, Role.TEAM_LEADER];
-
 // POST /  — schedule a new meeting
-router.post('/', authorize(...MEETING_ROLES), MeetingController.createMeeting);
+router.post('/', requirePermission('meeting.create'), MeetingController.createMeeting);
 
 // GET /   — list meetings with filters
-router.get('/', authorize(...MEETING_ROLES), MeetingController.getMeetings);
+router.get('/', requirePermission('meeting.read'), MeetingController.getMeetings);
 
 // GET /:id — get meeting detail
-router.get('/:id', authorize(...MEETING_ROLES), MeetingController.getMeetingById);
+router.get('/:id', requirePermission('meeting.read'), MeetingController.getMeetingById);
 
 // PATCH /:id/cancel — cancel a meeting
-router.patch('/:id/cancel', authorize(...MEETING_ROLES), MeetingController.cancelMeeting);
+router.patch('/:id/cancel', requirePermission('meeting.update'), MeetingController.cancelMeeting);
 
 // PUT /:id — update a meeting
-router.put('/:id', authorize(...MEETING_ROLES), MeetingController.updateMeeting);
+router.put('/:id', requirePermission('meeting.update'), MeetingController.updateMeeting);
 
 // DELETE /:id — delete a meeting
-router.delete('/:id', authorize(...MEETING_ROLES), MeetingController.deleteMeeting);
+router.delete('/:id', requirePermission('meeting.delete'), MeetingController.deleteMeeting);
 
 export const meetingRoute = router;

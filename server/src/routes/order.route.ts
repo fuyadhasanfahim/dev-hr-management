@@ -1,12 +1,8 @@
 import express from 'express';
+import { requirePermission } from '../middlewares/require-permission.js';
 import OrderController from '../controllers/order.controller.js';
-import { authorize } from '../middlewares/authorize.js';
-import { Role } from '../constants/role.js';
 
 const router = express.Router();
-
-const STAFF_ROLES = [Role.SUPER_ADMIN, Role.ADMIN, Role.HR_MANAGER, Role.TEAM_LEADER, Role.STAFF];
-
 
 /**
  * POST / is intentionally BLOCKED.
@@ -22,17 +18,17 @@ router.post('/', (_req, res) => {
     });
 });
 
-router.get('/',         authorize(...STAFF_ROLES), OrderController.getAllOrders);
-router.get('/:id',      authorize(...STAFF_ROLES), OrderController.getOrderById);
+router.get('/',         requirePermission('order.read'), OrderController.getAllOrders);
+router.get('/:id',      requirePermission('order.read'), OrderController.getOrderById);
 
-router.patch('/:id/status',         authorize(...STAFF_ROLES), OrderController.updateOrderStatus);
-router.patch('/:id/team',           authorize(...STAFF_ROLES), OrderController.updateOrderTeam);
-router.post('/convert-quotation',    authorize(...STAFF_ROLES), OrderController.convertQuotationToOrder);
+router.patch('/:id/status',         requirePermission('order.changeStatus'), OrderController.updateOrderStatus);
+router.patch('/:id/team',           requirePermission('order.assign'), OrderController.updateOrderTeam);
+router.post('/convert-quotation',    requirePermission('order.create'), OrderController.convertQuotationToOrder);
 
 // Public asset delivery endpoint — accessToken is the credential (no JWT).
 router.get('/client/:id/assets/:assetId', OrderController.getAssetPublic);
 
 // Staff asset delivery endpoint (debug/admin use)
-router.get('/:id/assets/:assetId',  authorize(...STAFF_ROLES), OrderController.getAsset);
+router.get('/:id/assets/:assetId',  requirePermission('order.read'), OrderController.getAsset);
 
 export const OrderRoutes = router;

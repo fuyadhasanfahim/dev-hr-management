@@ -49,6 +49,7 @@ export const SYSTEM_ROLE_PERMISSIONS: Record<Role, readonly string[]> = {
         'dashboard.*',
         'notification.*',
         'invitation.*',
+        'outbox.*', // Phase 6d — was OUTBOX_ADMIN_ROLES
         // Role administration stays with super_admin only by default.
     ],
 
@@ -66,13 +67,21 @@ export const SYSTEM_ROLE_PERMISSIONS: Record<Role, readonly string[]> = {
         'policy.*',
         'notice.*',
         'invitation.*',
-        'branch.read',
-        'client.read',
+        'branch.*', // Phase 6d — branch write routes allowed HR
+        'client.*', // Phase 6d — authorizeTelemarketer allowed HR all client ops
         'meeting.read',
-        'task.read',
+        'task.*', // Phase 6d — HR was in ADMIN_LEAD_ROLES (task create/review/delete)
         'analytics.read',
         'dashboard.read',
         'notification.read',
+        // Phase 6d — HR was in quotation/order STAFF_ROLES
+        'quotation.read',
+        'quotation.create',
+        'quotation.update',
+        'order.read',
+        'order.create',
+        'order.assign',
+        'order.changeStatus',
     ],
 
     [Role.TEAM_LEADER]: [
@@ -80,6 +89,7 @@ export const SYSTEM_ROLE_PERMISSIONS: Record<Role, readonly string[]> = {
         'order.read',
         'order.assign',
         'order.changeStatus',
+        'order.create', // Phase 6d — convert-quotation was in STAFF_ROLES
         'project.read',
         'client.read',
         'attendance.read',
@@ -87,10 +97,24 @@ export const SYSTEM_ROLE_PERMISSIONS: Record<Role, readonly string[]> = {
         'leave.read',
         'shift.read',
         'shift.assign',
+        'shift.create', // Phase 6d — shift create/list allowed TL
         'meeting.read',
         'notice.read',
         'dashboard.read',
         'notification.read',
+        // Phase 6d — TL was in RECEIPT_ROLES / MEETING_ROLES / quotation
+        // STAFF_ROLES / payroll readAccess / expense summary
+        'receipt.read',
+        'receipt.create',
+        'receipt.update',
+        'meeting.create',
+        'meeting.update',
+        'meeting.delete',
+        'quotation.read',
+        'quotation.create',
+        'quotation.update',
+        'payroll.read',
+        'expense.read',
     ],
 
     [Role.STAFF]: [
@@ -106,6 +130,15 @@ export const SYSTEM_ROLE_PERMISSIONS: Record<Role, readonly string[]> = {
         'project.read',
         'policy.read',
         'notification.read',
+        // Phase 6d — STAFF was in order/quotation STAFF_ROLES and the
+        // expense-summary + payroll-preview allow-lists
+        'order.create',
+        'order.assign',
+        'order.changeStatus',
+        'quotation.read',
+        'quotation.create',
+        'quotation.update',
+        'expense.read',
     ],
 };
 

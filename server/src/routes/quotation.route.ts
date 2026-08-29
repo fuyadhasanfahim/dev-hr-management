@@ -1,18 +1,8 @@
 import { Router } from 'express';
+import { requirePermission } from '../middlewares/require-permission.js';
 import QuotationController from '../controllers/quotation.controller.js';
-import { authorize } from '../middlewares/authorize.js';
-import { Role } from '../constants/role.js';
 
 const router: Router = Router();
-
-const STAFF_ROLES = [
-    Role.SUPER_ADMIN,
-    Role.ADMIN,
-    Role.HR_MANAGER,
-    Role.TEAM_LEADER,
-    Role.STAFF,
-];
-const ADMIN_ROLES = [Role.SUPER_ADMIN, Role.ADMIN];
 
 // ─── Public client routes (no session / no staff authorize) ─────────────────
 router.get('/client/:token', QuotationController.viewQuotationByToken);
@@ -26,45 +16,45 @@ router.get(
 // ─── Staff / Admin Routes ─────────────────────────────────────────────────────
 router.get(
     '/',
-    authorize(...STAFF_ROLES),
+    requirePermission('quotation.read'),
     QuotationController.getAllQuotations,
 );
 router.get(
     '/group/:groupId/versions',
-    authorize(...STAFF_ROLES),
+    requirePermission('quotation.read'),
     QuotationController.getGroupVersions,
 );
 router.get(
     '/:id',
-    authorize(...STAFF_ROLES),
+    requirePermission('quotation.read'),
     QuotationController.getQuotationById,
 );
 
 router.post(
     '/',
-    authorize(...STAFF_ROLES),
+    requirePermission('quotation.create'),
     QuotationController.createQuotation,
 );
 router.post(
     '/:id/send',
-    authorize(...STAFF_ROLES),
+    requirePermission('quotation.create'),
     QuotationController.sendQuotation,
 );
 router.post(
     '/group/:groupId/version',
-    authorize(...STAFF_ROLES),
+    requirePermission('quotation.create'),
     QuotationController.createNewVersion,
 );
 
 router.patch(
     '/:id',
-    authorize(...STAFF_ROLES),
+    requirePermission('quotation.update'),
     QuotationController.updateQuotation,
 );
 
 router.delete(
     '/:id',
-    authorize(...ADMIN_ROLES),
+    requirePermission('quotation.delete'),
     QuotationController.deleteQuotation,
 );
 

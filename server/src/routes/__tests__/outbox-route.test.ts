@@ -29,7 +29,6 @@ import assert from 'node:assert/strict';
 import type { Request, Response, NextFunction } from 'express';
 import { outboxRoute } from '../outbox.route.js';
 import OutboxController from '../../controllers/outbox.controller.js';
-import { Role } from '../../constants/role.js';
 
 type RouteEntry = { path: string; methods: string[]; handlers: Function[] };
 
@@ -43,12 +42,12 @@ function getRoutes(): RouteEntry[] {
         }));
 }
 
-function callAuthorize(handler: Function, role: string | undefined) {
+function callAuthorize(handler: Function, permissions: string[] | undefined) {
     let statusCode: number | undefined;
     let jsonBody: unknown;
     let nextCalled = false;
 
-    const req = { user: role ? { id: 'u1', role } : undefined } as unknown as Request;
+    const req = { user: permissions ? { id: 'u1', role: 'x', permissions } : undefined } as unknown as Request;
     const res = {
         status(code: number) {
             statusCode = code;
@@ -101,22 +100,18 @@ describe('outboxRoute — registered endpoints (E4-F1-T1)', () => {
 
 describe('outboxRoute — AuthZ gate on every route (E4-F1-T1)', () => {
     const routes = getRoutes();
-    const NON_ADMIN_ROLES = [Role.STAFF, Role.TEAM_LEADER, Role.HR_MANAGER];
-    const ADMIN_ROLES = [Role.SUPER_ADMIN, Role.ADMIN];
 
     for (const route of routes) {
         const label = `${route.methods.join(',').toUpperCase()} ${route.path}`;
         const authorizeHandler = route.handlers[0];
         assert.ok(authorizeHandler, `${label} has no handlers registered`);
 
-        for (const role of NON_ADMIN_ROLES) {
-            test(`${label} — role "${role}" gets 403`, () => {
-                const { statusCode, jsonBody, nextCalled } = callAuthorize(authorizeHandler, role);
-                assert.equal(statusCode, 403);
-                assert.equal(nextCalled, false);
-                assert.match((jsonBody as any).message, /Forbidden/);
-            });
-        }
+        test(`${label} — no permissions gets 403`, () => {
+            const { statusCode, jsonBody, nextCalled } = callAuthorize(authorizeHandler, []);
+            assert.equal(statusCode, 403);
+            assert.equal(nextCalled, false);
+            assert.match((jsonBody as any).message, /Forbidden/);
+        });
 
         test(`${label} — unauthenticated (no req.user) gets 401`, () => {
             const { statusCode, nextCalled } = callAuthorize(authorizeHandler, undefined);
@@ -124,12 +119,10 @@ describe('outboxRoute — AuthZ gate on every route (E4-F1-T1)', () => {
             assert.equal(nextCalled, false);
         });
 
-        for (const role of ADMIN_ROLES) {
-            test(`${label} — role "${role}" is admitted (next() called, no response written)`, () => {
-                const { statusCode, nextCalled } = callAuthorize(authorizeHandler, role);
-                assert.equal(nextCalled, true);
-                assert.equal(statusCode, undefined);
-            });
-        }
+        test(`${label} — superuser ["*"] is admitted (next() called)`, () => {
+            const { statusCode, nextCalled } = callAuthorize(authorizeHandler, ['*']);
+            assert.equal(nextCalled, true);
+            assert.equal(statusCode, undefined);
+        });
     }
 });

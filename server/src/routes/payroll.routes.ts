@@ -1,7 +1,6 @@
 import { Router } from "express";
+import { requirePermission } from '../middlewares/require-permission.js';
 import payrollController from "../controllers/payroll.controller.js";
-import { authorize } from "../middlewares/authorize.js";
-import { Role } from "../constants/role.js";
 import {
     validate,
     payrollPreviewSchema,
@@ -15,13 +14,8 @@ import {
 
 const router: Router = Router();
 
-const readAccess = authorize(
-    Role.SUPER_ADMIN,
-    Role.ADMIN,
-    Role.HR_MANAGER,
-    Role.TEAM_LEADER,
-);
-const writeAccess = authorize(Role.SUPER_ADMIN, Role.ADMIN, Role.HR_MANAGER);
+const readAccess = requirePermission('payroll.read');
+const writeAccess = requirePermission('payroll.process');
 
 // Preview
 router.get(
@@ -73,13 +67,13 @@ router.post(
 router.get("/lock-status", readAccess, payrollController.getLockStatus);
 router.post(
     "/lock",
-    writeAccess,
+    requirePermission('payroll.lock'),
     validate(lockMonthSchema),
     payrollController.lockMonth,
 );
 router.post(
     "/unlock",
-    writeAccess,
+    requirePermission('payroll.lock'),
     validate(lockMonthSchema),
     payrollController.unlockMonth,
 );

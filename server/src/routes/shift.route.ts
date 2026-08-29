@@ -1,7 +1,6 @@
 import { Router } from 'express';
+import { requirePermission } from '../middlewares/require-permission.js';
 import ShiftControllers from '../controllers/shift.controller.js';
-import { authorize } from '../middlewares/authorize.js';
-import { Role } from '../constants/role.js';
 
 const router: Router = Router();
 
@@ -9,25 +8,25 @@ router.get('/my-shift', ShiftControllers.getMyShift);
 
 router.post(
     '/',
-    authorize(Role.ADMIN, Role.SUPER_ADMIN, Role.HR_MANAGER, Role.TEAM_LEADER),
+    requirePermission('shift.create'),
     ShiftControllers.createShift,
 );
 
 router.get(
     '/',
-    authorize(Role.ADMIN, Role.SUPER_ADMIN, Role.HR_MANAGER, Role.TEAM_LEADER),
+    requirePermission('shift.read'),
     ShiftControllers.getAllShifts,
 );
 
 router.patch(
     '/:id',
-    authorize(Role.ADMIN, Role.SUPER_ADMIN, Role.HR_MANAGER),
+    requirePermission('shift.update'),
     ShiftControllers.updateShift,
 );
 
 router.delete(
     '/:id',
-    authorize(Role.ADMIN, Role.SUPER_ADMIN),
+    requirePermission('shift.delete'),
     ShiftControllers.deleteShift,
 );
 

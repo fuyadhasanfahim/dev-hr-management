@@ -1,18 +1,15 @@
 import { Router } from 'express';
 import OutboxController from '../controllers/outbox.controller.js';
-import { authorize } from '../middlewares/authorize.js';
-import { Role } from '../constants/role.js';
+import { requirePermission } from '../middlewares/require-permission.js';
 
 const router: Router = Router();
 
-const OUTBOX_ADMIN_ROLES = [Role.SUPER_ADMIN, Role.ADMIN];
-
 // ── List & detail ────────────────────────────────────────────────────────────
-router.get('/', authorize(...OUTBOX_ADMIN_ROLES), OutboxController.listOutbox);
-router.get('/:id', authorize(...OUTBOX_ADMIN_ROLES), OutboxController.getOutboxById);
+router.get('/', requirePermission('outbox.read'), OutboxController.listOutbox);
+router.get('/:id', requirePermission('outbox.read'), OutboxController.getOutboxById);
 
 // ── Replay (recover a dead-lettered/failed event) ───────────────────────────
-router.post('/replay', authorize(...OUTBOX_ADMIN_ROLES), OutboxController.replayOutboxMany);
-router.post('/:id/replay', authorize(...OUTBOX_ADMIN_ROLES), OutboxController.replayOutboxById);
+router.post('/replay', requirePermission('outbox.replay'), OutboxController.replayOutboxMany);
+router.post('/:id/replay', requirePermission('outbox.replay'), OutboxController.replayOutboxById);
 
 export const outboxRoute = router;

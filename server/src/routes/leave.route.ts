@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { requirePermission } from '../middlewares/require-permission.js';
 import {
     applyForLeave,
     getAllLeaveApplications,
@@ -14,34 +15,30 @@ import {
     uploadMedicalDocument,
 } from "../controllers/leave.controller.js";
 import { upload } from "../middlewares/upload.middleware.js";
-import { authorize } from "../middlewares/authorize.js";
-import { Role } from "../constants/role.js";
 
 const router = Router();
 
-const adminRoles = [Role.SUPER_ADMIN, Role.ADMIN, Role.HR_MANAGER];
-const allRoles = [...adminRoles, Role.TEAM_LEADER, Role.STAFF];
 
 // Staff routes — any authenticated user can apply for leave and view their own
-router.post("/", authorize(...allRoles), applyForLeave);
-router.get("/my", authorize(...allRoles), getMyLeaveApplications);
-router.get("/balance", authorize(...allRoles), getLeaveBalance);
-router.get("/balance/:staffId", authorize(...allRoles), getLeaveBalance);
-router.get("/calculate-days", authorize(...allRoles), calculateWorkingDays);
-router.patch("/:id/cancel", authorize(...allRoles), cancelLeaveApplication);
+router.post("/", requirePermission('leave.apply'), applyForLeave);
+router.get("/my", requirePermission('leave.read'), getMyLeaveApplications);
+router.get("/balance", requirePermission('leave.read'), getLeaveBalance);
+router.get("/balance/:staffId", requirePermission('leave.read'), getLeaveBalance);
+router.get("/calculate-days", requirePermission('leave.read'), calculateWorkingDays);
+router.patch("/:id/cancel", requirePermission('leave.apply'), cancelLeaveApplication);
 router.post(
     "/:id/upload-document",
-    authorize(...allRoles),
+    requirePermission('leave.apply'),
     upload.single("document"),
     uploadMedicalDocument,
 );
 
 // Admin routes — only managers and admins can approve/reject/revoke
-router.get("/", authorize(...adminRoles), getAllLeaveApplications);
-router.get("/pending", authorize(...adminRoles), getPendingLeaves);
-router.get("/:id", authorize(...adminRoles), getLeaveApplicationById);
-router.patch("/:id/approve", authorize(...adminRoles), approveLeave);
-router.patch("/:id/reject", authorize(...adminRoles), rejectLeave);
-router.patch("/:id/revoke", authorize(...adminRoles), revokeLeave);
+router.get("/", requirePermission('leave.manage'), getAllLeaveApplications);
+router.get("/pending", requirePermission('leave.manage'), getPendingLeaves);
+router.get("/:id", requirePermission('leave.manage'), getLeaveApplicationById);
+router.patch("/:id/approve", requirePermission('leave.approve'), approveLeave);
+router.patch("/:id/reject", requirePermission('leave.approve'), rejectLeave);
+router.patch("/:id/revoke", requirePermission('leave.approve'), revokeLeave);
 
 export { router as leaveRoute };

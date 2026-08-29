@@ -1,34 +1,33 @@
 import { Router } from 'express';
 import { PayrollBankSettingsController } from '../controllers/payroll-bank-settings.controller.js';
-import { authorize } from '../middlewares/authorize.js';
-import { Role } from '../constants/role.js';
+import { requirePermission } from '../middlewares/require-permission.js';
 
 const router = Router();
 
 // All routes require authorization
 router.get(
     '/',
-    authorize(Role.ADMIN, Role.HR_MANAGER, Role.SUPER_ADMIN),
+    requirePermission('payroll.bankSettings'),
     PayrollBankSettingsController.getAllBankSettings,
 );
 router.get(
     '/:id',
-    authorize(Role.ADMIN, Role.HR_MANAGER, Role.SUPER_ADMIN),
+    requirePermission('payroll.bankSettings'),
     PayrollBankSettingsController.getBankSettingById,
 );
 router.post(
     '/',
-    authorize(Role.ADMIN, Role.HR_MANAGER, Role.SUPER_ADMIN),
+    requirePermission('payroll.bankSettings'),
     PayrollBankSettingsController.createBankSetting,
 );
 router.put(
     '/:id',
-    authorize(Role.ADMIN, Role.HR_MANAGER, Role.SUPER_ADMIN),
+    requirePermission('payroll.bankSettings'),
     PayrollBankSettingsController.updateBankSetting,
 );
 router.delete(
     '/:id',
-    authorize(Role.ADMIN, Role.HR_MANAGER, Role.SUPER_ADMIN),
+    requirePermission('payroll.bankSettings'),
     PayrollBankSettingsController.deleteBankSetting,
 );
 

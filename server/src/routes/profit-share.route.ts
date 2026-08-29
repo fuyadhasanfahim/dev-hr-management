@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { requirePermission } from '../middlewares/require-permission.js';
 import {
     createShareholder,
     getAllShareholders,
@@ -9,29 +10,25 @@ import {
     distributeProfit,
     getDistributions,
 } from "../controllers/profit-share.controller.js";
-import { authorize } from "../middlewares/authorize.js";
-import { Role } from "../constants/role.js";
 
 const router = Router();
 
-const allowedRoles = [Role.SUPER_ADMIN, Role.ADMIN];
-
 // Shareholder routes
-router.post("/shareholders", authorize(...allowedRoles), createShareholder);
-router.get("/shareholders", authorize(...allowedRoles), getAllShareholders);
-router.get("/shareholders/:id", authorize(...allowedRoles), getShareholderById);
-router.put("/shareholders/:id", authorize(...allowedRoles), updateShareholder);
+router.post("/shareholders", requirePermission('profitShare.manage'), createShareholder);
+router.get("/shareholders", requirePermission('profitShare.read'), getAllShareholders);
+router.get("/shareholders/:id", requirePermission('profitShare.read'), getShareholderById);
+router.put("/shareholders/:id", requirePermission('profitShare.manage'), updateShareholder);
 router.delete(
     "/shareholders/:id",
-    authorize(...allowedRoles),
+    requirePermission('profitShare.manage'),
     deleteShareholder,
 );
 
 // Profit summary
-router.get("/summary", authorize(...allowedRoles), getProfitSummary);
+router.get("/summary", requirePermission('profitShare.read'), getProfitSummary);
 
 // Distribution routes
-router.post("/distribute", authorize(...allowedRoles), distributeProfit);
-router.get("/distributions", authorize(...allowedRoles), getDistributions);
+router.post("/distribute", requirePermission('profitShare.manage'), distributeProfit);
+router.get("/distributions", requirePermission('profitShare.read'), getDistributions);
 
 export const profitShareRoute = router;

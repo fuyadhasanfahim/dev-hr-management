@@ -1,9 +1,9 @@
 import { Router } from 'express';
+import { requirePermission } from '../middlewares/require-permission.js';
 import {
     getRatesForMonth,
     updateRatesForMonth,
 } from '../controllers/currency-rate.controller.js';
-import { authorize } from '../middlewares/authorize.js';
 
 const currencyRateRoute: Router = Router();
 
@@ -13,7 +13,7 @@ currencyRateRoute.get('/:month/:year', getRatesForMonth);
 // Update rates for a specific month/year (super_admin only)
 currencyRateRoute.put(
     '/:month/:year',
-    authorize('super_admin'),
+    requirePermission('currencyRate.manage'),
     updateRatesForMonth
 );
 

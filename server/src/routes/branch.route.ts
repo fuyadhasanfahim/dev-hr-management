@@ -1,6 +1,5 @@
 import { Router } from 'express';
-import { Role } from '../constants/role.js';
-import { authorize } from '../middlewares/authorize.js';
+import { requirePermission } from '../middlewares/require-permission.js';
 import BranchControllers from '../controllers/branch.controller.js';
 
 const router: Router = Router();
@@ -11,25 +10,25 @@ router.get('/:id', BranchControllers.getBranchById);
 
 router.post(
     '/',
-    authorize(Role.ADMIN, Role.SUPER_ADMIN, Role.HR_MANAGER),
+    requirePermission('branch.manage'),
     BranchControllers.createBranch,
 );
 
 router.patch(
     '/:id',
-    authorize(Role.ADMIN, Role.SUPER_ADMIN, Role.HR_MANAGER),
+    requirePermission('branch.manage'),
     BranchControllers.updateBranch,
 );
 
 router.patch(
     '/:id/toggle-status',
-    authorize(Role.ADMIN, Role.SUPER_ADMIN, Role.HR_MANAGER),
+    requirePermission('branch.manage'),
     BranchControllers.toggleBranchStatus,
 );
 
 router.delete(
     '/:id',
-    authorize(Role.ADMIN, Role.SUPER_ADMIN, Role.HR_MANAGER),
+    requirePermission('branch.manage'),
     BranchControllers.deleteBranch,
 );
 
