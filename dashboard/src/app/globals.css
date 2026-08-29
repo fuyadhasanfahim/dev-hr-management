@@ -198,15 +198,3 @@
     cursor: pointer;
   }
 }
-
-@utility btn-premium {
-  @apply inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-2xl bg-gradient-to-br from-brand-primary to-brand-secondary text-white font-bold text-sm tracking-wide transition-all duration-300 hover:scale-[1.03] active:scale-95 disabled:pointer-events-none disabled:opacity-50 cursor-pointer;
-}
-
-@utility input-premium {
-  @apply w-full px-4 py-2.5 rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white/70 dark:bg-slate-900/50 backdrop-blur-md text-sm font-medium text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary transition-all duration-200;
-}
-
-@utility premium-glass-card {
-  @apply rounded-3xl border border-slate-200/75 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 backdrop-blur-xl transition-all duration-300;
-}

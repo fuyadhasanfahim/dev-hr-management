@@ -3,7 +3,7 @@
 import { useMemo } from 'react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
-import { ScrollArea } from '@/components/ui/scroll-area';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import type { PermissionCatalog } from '@/redux/features/role/roleApi';
 
@@ -16,11 +16,13 @@ interface PermissionMatrixProps {
 }
 
 /**
- * Phase 5 — grouped checkbox grid for editing a role's permissions.
+ * Grouped checkbox grid for editing a role / department / designation
+ * permission list. Every group is a card, all shown at once (no inner
+ * scrollbar).
  *
- * Wildcards from built-in roles are handled read-only-ish: `*` locks the
- * whole matrix ("superuser"), and `resource.*` shows that group as fully
- * granted. Toggling within a wildcard group converts it to concrete keys.
+ * Wildcards from built-in roles are handled: `*` locks the whole matrix
+ * ("superuser"), and `resource.*` shows that group as fully granted and
+ * expands to concrete keys on the first edit.
  */
 export function PermissionMatrix({
     catalog,
@@ -38,7 +40,10 @@ export function PermissionMatrix({
         onChange([...next]);
     };
 
-    const toggleGroup = (group: PermissionCatalog['groups'][number], on: boolean) => {
+    const toggleGroup = (
+        group: PermissionCatalog['groups'][number],
+        on: boolean,
+    ) => {
         const next = new Set(selected);
         next.delete(`${group.resource}.*`);
         for (const p of group.permissions) {
@@ -56,6 +61,8 @@ export function PermissionMatrix({
         return 'some' as const;
     };
 
+    const selectedCount = value.filter((v) => v !== '*').length;
+
     return (
         <div className="space-y-3">
             {isSuperuser && (
@@ -67,22 +74,22 @@ export function PermissionMatrix({
                         type="button"
                         className="ml-2 underline"
                         disabled={disabled}
-                        onClick={() =>
-                            onChange(value.filter((v) => v !== '*'))
-                        }
+                        onClick={() => onChange(value.filter((v) => v !== '*'))}
                     >
                         Remove <code>*</code>
                     </button>
                 </div>
             )}
 
-            <ScrollArea className="h-[420px] rounded-md border">
-                <div className="divide-y">
-                    {catalog.groups.map((group) => {
-                        const state = groupState(group);
-                        const groupDisabled = disabled || isSuperuser;
-                        return (
-                            <div key={group.resource} className="p-3">
+            <div className="grid gap-3">
+                {catalog.groups.map((group) => {
+                    const state = groupState(group);
+                    const groupDisabled = disabled || isSuperuser;
+                    const hasWildcard = selected.has(`${group.resource}.*`);
+
+                    return (
+                        <Card key={group.resource}>
+                            <CardHeader className="pb-3">
                                 <label className="flex items-center gap-2 font-medium">
                                     <Checkbox
                                         checked={
@@ -104,18 +111,19 @@ export function PermissionMatrix({
                                     >
                                         {group.resource}
                                     </Badge>
-                                    {selected.has(`${group.resource}.*`) && (
+                                    {hasWildcard && (
                                         <Badge className="text-[10px]">
                                             {group.resource}.*
                                         </Badge>
                                     )}
                                 </label>
-
-                                <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1.5 pl-6 sm:grid-cols-3">
+                            </CardHeader>
+                            <CardContent>
+                                <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 pl-6 sm:grid-cols-3 lg:grid-cols-4">
                                     {group.permissions.map((perm) => {
                                         const checked =
                                             isSuperuser ||
-                                            selected.has(`${group.resource}.*`) ||
+                                            hasWildcard ||
                                             selected.has(perm.key);
                                         return (
                                             <label
@@ -131,11 +139,7 @@ export function PermissionMatrix({
                                                     disabled={groupDisabled}
                                                     onCheckedChange={(c) => {
                                                         // expand a group wildcard to concrete keys first
-                                                        if (
-                                                            selected.has(
-                                                                `${group.resource}.*`,
-                                                            )
-                                                        ) {
+                                                        if (hasWildcard) {
                                                             const next = new Set(
                                                                 selected,
                                                             );
@@ -165,17 +169,17 @@ export function PermissionMatrix({
                                         );
                                     })}
                                 </div>
-                            </div>
-                        );
-                    })}
-                </div>
-            </ScrollArea>
+                            </CardContent>
+                        </Card>
+                    );
+                })}
+            </div>
 
             <p className="text-xs text-muted-foreground">
                 {isSuperuser
                     ? 'All permissions'
-                    : `${value.filter((v) => v !== '*').length} permission${
-                          value.length === 1 ? '' : 's'
+                    : `${selectedCount} permission${
+                          selectedCount === 1 ? '' : 's'
                       } selected`}
             </p>
         </div>
