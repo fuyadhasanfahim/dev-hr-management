@@ -17,8 +17,49 @@ import { Button } from '../ui/button';
 import { Spinner } from '../ui/spinner';
 import { sendVerificationEmail, signIn } from '@/lib/auth-client';
 import { useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import Link from 'next/link';
+
+/**
+ * Cross-app sign-in: the support app (and payment portal) redirect
+ * unauthenticated users here with `?callbackUrl=<their-origin>`. After a
+ * successful sign-in the shared `.webbriks.com` session cookie means they
+ * are already authenticated there, so we just bounce them back.
+ *
+ * Only same-origin or explicitly trusted origins are honoured, so an
+ * attacker cannot craft a link that logs a victim in and forwards them to
+ * a phishing page.
+ */
+function getTrustedOrigins(): string[] {
+    const origins = [
+        typeof window !== 'undefined' ? window.location.origin : undefined,
+        process.env.NEXT_PUBLIC_FRONTEND_URL,
+        process.env.NEXT_PUBLIC_SUPPORT_URL,
+        process.env.NEXT_PUBLIC_PAYMENT_URL,
+    ].filter(Boolean) as string[];
+
+    return origins
+        .map((o) => {
+            try {
+                return new URL(o).origin;
+            } catch {
+                return '';
+            }
+        })
+        .filter(Boolean);
+}
+
+function resolveCallbackUrl(raw: string | null): string {
+    const fallback = `${window.location.origin}/dashboard`;
+    if (!raw) return fallback;
+    try {
+        const url = new URL(raw, window.location.origin);
+        return getTrustedOrigins().includes(url.origin) ? url.toString() : fallback;
+    } catch {
+        return fallback;
+    }
+}
 
 const signinValidationSchema = z.object({
     email: z
@@ -32,6 +73,9 @@ const signinValidationSchema = z.object({
 });
 
 export default function SigninForm() {
+    const router = useRouter();
+    const searchParams = useSearchParams();
+
     const form = useForm<z.infer<typeof signinValidationSchema>>({
         resolver: zodResolver(signinValidationSchema),
         defaultValues: {
@@ -49,11 +93,13 @@ export default function SigninForm() {
     };
 
     const onSubmit = async (data: z.infer<typeof signinValidationSchema>) => {
+        const callbackUrl = resolveCallbackUrl(searchParams.get('callbackUrl'));
+
         try {
             const res = await signIn.email({
                 email: data.email,
                 password: data.password,
-                callbackURL: `${process.env.NEXT_PUBLIC_FRONTEND_URL}/dashboard`,
+                callbackURL: callbackUrl,
             });
 
             if (res.error) {
@@ -73,6 +119,15 @@ export default function SigninForm() {
             if (res.data) {
                 toast.success('Signed in successfully.');
                 form.reset();
+
+                const target = new URL(callbackUrl);
+                if (target.origin === window.location.origin) {
+                    router.replace(target.pathname + target.search);
+                } else {
+                    // Cross-app (support / payment): full navigation so the
+                    // shared session cookie is picked up on the other origin.
+                    window.location.href = callbackUrl;
+                }
             }
         } catch (error) {
             toast.error((error as Error).message || 'Something went wrong.');

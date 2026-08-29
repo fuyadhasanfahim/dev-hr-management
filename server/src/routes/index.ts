@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { staffRoute } from "./staff.route.js";
 import { userRoute } from "./user.route.js";
+import { meRoute } from "./me.route.js";
 import { shiftRoute } from "./shift.route.js";
 import { branchRoute } from "./branch.route.js";
 import { attendanceRoute } from "./attendance.route.js";
@@ -38,7 +39,6 @@ import { SupportRoutes } from "./support.route.js";
 import { WhatsAppRoutes } from "./whatsapp.route.js";
 import { AIChatRoutes } from "./ai-chat.route.js";
 import { ConsultationRoutes } from "./consultation.route.js";
-import { testAiPdfRoute } from "./test-ai-pdf.route.js";
 import { outboxRoute } from "./outbox.route.js";
 import { quotationTimelineRoute } from "./quotation-timeline.route.js";
 import { departmentRoute } from "./department.route.js";
@@ -50,6 +50,10 @@ const moduleRoutes = [
     {
         path: "/users",
         route: userRoute,
+    },
+    {
+        path: "/me",
+        route: meRoute,
     },
     {
         path: "/staffs",
@@ -200,10 +204,6 @@ const moduleRoutes = [
     {
         path: "/consultations",
         route: ConsultationRoutes,
-    },
-    {
-        path: "/test",
-        route: testAiPdfRoute,
     },
     {
         path: "/outbox",

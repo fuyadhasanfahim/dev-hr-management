@@ -76,19 +76,6 @@ apps/dashboard/next-env.d.ts
 apps/dashboard/.vercel
 
 # ================================
-# APPS — AUTH (apps/auth/)
-# ================================
-apps/auth/.env
-apps/auth/.env.*
-apps/auth/node_modules/
-apps/auth/.next/
-apps/auth/out/
-apps/auth/build/
-apps/auth/coverage/
-apps/auth/next-env.d.ts
-apps/auth/.vercel
-
-# ================================
 # APPS — SUPPORT (apps/support/)
 # ================================
 apps/support/.env

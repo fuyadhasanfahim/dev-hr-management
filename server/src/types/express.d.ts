@@ -9,6 +9,16 @@ declare module 'express-serve-static-core' {
             role?: string;
             name?: string;
             email?: string;
+            /** Phase 1 — per-user permission overrides (see auth.ts additionalFields). */
+            extraPermissions?: string[];
+            deniedPermissions?: string[];
+            /**
+             * Effective permission keys for the request user, resolved from
+             * the user's role + per-user overrides. Populated by the auth
+             * middleware in Phase 2; consumed by `requirePermission` in
+             * Phase 3.
+             */
+            permissions?: string[];
         };
     }
 }
@@ -21,6 +31,11 @@ declare global {
         interface Request {
             user?: User & {
                 role: string;
+                /** Phase 1 — per-user permission overrides (see auth.ts additionalFields). */
+                extraPermissions?: string[];
+                deniedPermissions?: string[];
+                /** Phase 2 — effective, fully-resolved permission keys for this request. */
+                permissions?: string[];
             };
         }
     }

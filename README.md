@@ -25,29 +25,14 @@ This project is a monorepo consisting of 4 main applications:
 
 ## 🚀 Getting Started
 
-### Option A: Backend via Docker Compose (recommended for local backend dev)
-
-Brings up MongoDB (single-node replica set, required for the app's
-transactional flows), Redis, and the server in watch mode with one command
-— no local Mongo/Redis install needed.
-
-```bash
-docker-compose up
-```
-
-The server listens on `http://localhost:5000`. All server environment
-values in `docker-compose.yml` are local-dev-only placeholders — SMTP- and
-Cloudinary-dependent features (email sending, image upload) won't actually
-work until you replace those with real credentials. Only the backend is
-containerized; run the frontend apps (`dashboard`, `support`, `webbriks`)
-directly with `npm run dev` as described below.
-
-### Option B: Manual setup
-
 #### Prerequisites
 - Node.js (v18 or higher)
-- MongoDB instance (local or Atlas) — must be configured as a replica set for transactional flows to work
-- Redis (optional, for queuing)
+- MongoDB instance (local or Atlas) — **must** be a replica set; the app's order/quotation flows use multi-document transactions
+- Redis — used for queues/caching (`REDIS_URL`, defaults to `redis://localhost:6379`)
+
+Each app reads its config from a local `.env` file (see the keys referenced
+in `server/src/config/env.config.ts` and each frontend's `NEXT_PUBLIC_*`
+usage). Run every app with `npm run dev`.
 
 ### 1. Backend Server Setup
 ```bash
@@ -92,7 +77,7 @@ Each application can be built for production using standard Next.js and TypeScri
 
 ## 💡 Key Features
 
-- **Unified Authentication:** Seamless single sign-on experience across the dashboard and support apps using Better Auth.
+- **Unified Authentication:** The dashboard app hosts the sign-in / sign-up / password-reset pages. The backend issues a session cookie scoped to `.webbriks.com`, so signing in on the dashboard also authenticates the support app (single sign-on). The support app redirects unauthenticated users to the dashboard's `/sign-in`.
 - **Live Support System:** Visitors on the Webbriks site can chat with an AI assistant or escalate to a live human agent. Agents manage these chats in real-time via the Support app.
 - **Client Recognition:** The system automatically recognizes existing clients based on their email when they request support.
 - **Comprehensive HR:** Full suite of HR tools including attendance tracking, payroll processing, leave management, and staff performance metrics.

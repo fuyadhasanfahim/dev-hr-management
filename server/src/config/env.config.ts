@@ -77,7 +77,15 @@ const envConfig = {
 
     // client
     client_url: process.env.CLIENT_URL || 'http://localhost:3000',
-    auth_app_url: process.env.AUTH_APP_URL || process.env.CLIENT_URL || 'http://localhost:3000',
+    // Base URL of the dashboard app, which now hosts the sign-in / sign-up /
+    // reset-password pages (the standalone `auth` app was removed). Used to
+    // build the links in invitation and password-reset emails.
+    // `AUTH_APP_URL` is still read for backward compatibility.
+    dashboard_url:
+        process.env.DASHBOARD_URL ||
+        process.env.AUTH_APP_URL ||
+        process.env.CLIENT_URL ||
+        'http://localhost:3000',
 
     // nodemailer
     smtp_user: process.env.SMTP_USER!,
@@ -117,9 +125,6 @@ const envConfig = {
 
     // Gemini AI
     gemini_api_key: process.env.GEMINI_API_KEY || '',
-
-    // OpenAI (test-pdf tool)
-    openai_api_key: process.env.OPENAI_API_KEY || '',
 
     // Groq (WhatsApp AI auto-reply)
     groq_api_key: process.env.GROQ_API_KEY || '',

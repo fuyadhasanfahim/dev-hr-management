@@ -140,10 +140,6 @@ app.use(
             (req.method === "POST" && req.path === "/ai-chat/chat") ||
             (req.method === "GET" && req.path === "/ai-chat/info");
 
-        // Public: AI test-PDF tool (no session required)
-        const isPublicTestPdfRoute =
-            req.method === "POST" && req.path === "/test/pdf";
-
         if (
             isPublicInvitationRoute ||
             isPublicMetadataRoute ||
@@ -152,8 +148,7 @@ app.use(
             isPublicQuotationTokenRoute ||
             isPublicQuotationPdfPuppeteerRoute ||
             isSupportRoute ||
-            isPublicAIChatRoute ||
-            isPublicTestPdfRoute
+            isPublicAIChatRoute
         ) {
             return next();
         }

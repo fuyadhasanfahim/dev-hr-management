@@ -70,7 +70,7 @@ const createInvitation = async (data: IInvitationCreate) => {
     });
 
     // Send email
-    const baseUrl = envConfig.auth_app_url || envConfig.client_url;
+    const baseUrl = envConfig.dashboard_url;
     const signupUrl = `${baseUrl}/sign-up/${token}?callbackUrl=${encodeURIComponent(envConfig.client_url)}`;
     await emailService.sendInvitationEmail({
         to: data.email,
@@ -300,7 +300,7 @@ const resendInvitation = async (invitationId: string) => {
     await invitation.save();
 
     // Resend email
-    const baseUrl = envConfig.auth_app_url || envConfig.client_url;
+    const baseUrl = envConfig.dashboard_url;
     const signupUrl = `${baseUrl}/sign-up/${invitation.token}`;
     await emailService.sendInvitationEmail({
         to: invitation.email,

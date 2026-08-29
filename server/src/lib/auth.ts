@@ -29,6 +29,23 @@ export const auth = betterAuth({
                 required: false,
                 defaultValue: Role.STAFF,
             },
+            // Phase 1 — per-user permission overrides layered on top of the
+            // user's role. `input: false` so a client can never set these at
+            // sign-up / update; only server-side admin flows (Phase 5) write
+            // them. Resolved by `lib/permissions.ts` (Phase 2) as:
+            //   effective = (role.permissions ∪ extraPermissions) − deniedPermissions
+            extraPermissions: {
+                type: 'string[]',
+                required: false,
+                defaultValue: [],
+                input: false,
+            },
+            deniedPermissions: {
+                type: 'string[]',
+                required: false,
+                defaultValue: [],
+                input: false,
+            },
             theme: {
                 type: 'string',
                 required: false,
@@ -49,7 +66,7 @@ export const auth = betterAuth({
                     const parsedUrl = new URL(data.url);
                     const token = parsedUrl.searchParams.get('token');
                     if (token) {
-                        const baseUrl = envConfig.auth_app_url || envConfig.client_url;
+                        const baseUrl = envConfig.dashboard_url;
                         resetPasswordUrl = `${baseUrl}/reset-password?token=${token}`;
                     }
                 } catch (e) {
@@ -73,10 +90,14 @@ export const auth = betterAuth({
         sendOnSignUp: false,
         async sendVerificationEmail({ url, user }) {
             try {
-                // Ensure callbackUrl is included so the auth app redirects correctly
+                // Ensure callbackUrl is included so the user lands on the
+                // dashboard sign-in page after verifying their email.
                 const verifyUrl = new URL(url);
                 if (!verifyUrl.searchParams.has('callbackUrl')) {
-                    verifyUrl.searchParams.set('callbackUrl', envConfig.client_url);
+                    verifyUrl.searchParams.set(
+                        'callbackUrl',
+                        `${envConfig.dashboard_url}/sign-in`,
+                    );
                 }
                 const finalUrl = verifyUrl.toString();
 

@@ -11,6 +11,7 @@
         "dev": "nodemon --exec tsx src/server.ts",
         "build": "npx tsc && mkdir -p dist/generated dist/data && cp -r src/generated/prisma dist/generated/ && cp -r src/data/. dist/data/",
         "sync:org": "tsx src/scripts/sync-organization-staff.ts",
+        "seed:roles": "tsx src/scripts/seed-roles.ts",
         "postinstall": "prisma generate && puppeteer browsers install chrome"
     },
     "devDependencies": {
@@ -74,6 +75,9 @@
         "puppeteer@24.42.0": true,
         "protobufjs@7.6.2": true,
         "msgpackr-extract@3.0.3": true,
-        "@google/genai@2.7.0": true
+        "@google/genai@2.7.0": true,
+        "prisma@6.19.3": true,
+        "@prisma/client@6.19.3": true,
+        "@prisma/engines@6.19.3": true
     }
 }

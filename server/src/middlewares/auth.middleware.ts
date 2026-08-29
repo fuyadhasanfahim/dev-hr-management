@@ -1,6 +1,7 @@
 import type { Request, Response, NextFunction } from 'express';
 import { auth } from '../lib/auth.js';
 import { AppError } from '../utils/AppError.js';
+import { getEffectivePermissions } from '../lib/permissions.js';
 
 export async function requireAuth(
     req: Request,
@@ -30,9 +31,28 @@ export async function requireAuth(
             return next(new AppError('Unauthorized. Please login.', 401));
         }
 
+        const sessionUser = session.user as typeof session.user & {
+            extraPermissions?: string[];
+            deniedPermissions?: string[];
+        };
+
+        const role = (sessionUser.role as string) || 'staff';
+
+        // Phase 2 — resolve the user's effective permissions once per request
+        // so route guards (Phase 3) and controllers can read req.user.permissions
+        // without another lookup. getEffectivePermissions never throws.
+        const permissions = await getEffectivePermissions({
+            role,
+            extraPermissions: sessionUser.extraPermissions,
+            deniedPermissions: sessionUser.deniedPermissions,
+        });
+
         req.user = {
             ...session.user,
-            role: (session.user.role as string) || 'staff',
+            role,
+            extraPermissions: sessionUser.extraPermissions ?? [],
+            deniedPermissions: sessionUser.deniedPermissions ?? [],
+            permissions,
         };
 
         next();
