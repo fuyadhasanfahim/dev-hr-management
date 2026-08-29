@@ -247,6 +247,13 @@ export const sidebarGroups: SidebarGroup[] = [
                 icon: IconBuildingCommunity,
                 access: [Role.SUPER_ADMIN, Role.ADMIN, Role.HR_MANAGER],
             },
+            {
+                title: "Roles & Permissions",
+                url: "/roles",
+                permission: 'role.read',
+                icon: IconShieldLock,
+                access: [Role.SUPER_ADMIN, Role.ADMIN],
+            },
         ],
     },
     {
