@@ -5,6 +5,12 @@ export interface IDesignation extends Document {
     code: string;
     department?: string;
     description?: string;
+    /**
+     * Phase 6 — permission keys granted to every staff member with this
+     * designation, on top of their role + department permissions. Same
+     * catalog / wildcard rules as a role's `permissions`.
+     */
+    permissions: string[];
     isActive: boolean;
     createdBy: Types.ObjectId;
     createdAt: Date;
@@ -33,6 +39,10 @@ const designationSchema = new Schema<IDesignation>(
         description: {
             type: String,
             trim: true,
+        },
+        permissions: {
+            type: [String],
+            default: [],
         },
         isActive: {
             type: Boolean,

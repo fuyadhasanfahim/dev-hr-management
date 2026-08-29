@@ -4,6 +4,12 @@ export interface IDepartment extends Document {
     name: string;
     code: string;
     description?: string;
+    /**
+     * Phase 6 — permission keys granted to every staff member in this
+     * department, on top of their role's permissions. Same catalog /
+     * wildcard rules as a role's `permissions`.
+     */
+    permissions: string[];
     isActive: boolean;
     createdBy: Types.ObjectId;
     createdAt: Date;
@@ -28,6 +34,10 @@ const departmentSchema = new Schema<IDepartment>(
         description: {
             type: String,
             trim: true,
+        },
+        permissions: {
+            type: [String],
+            default: [],
         },
         isActive: {
             type: Boolean,

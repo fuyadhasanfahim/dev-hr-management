@@ -38,10 +38,12 @@ export async function requireAuth(
 
         const role = (sessionUser.role as string) || 'staff';
 
-        // Phase 2 — resolve the user's effective permissions once per request
-        // so route guards (Phase 3) and controllers can read req.user.permissions
-        // without another lookup. getEffectivePermissions never throws.
+        // Phase 2 / 6 — resolve the user's effective permissions once per
+        // request (role ∪ department ∪ designation ∪ extra − denied) so
+        // route guards and controllers can read req.user.permissions without
+        // another lookup. getEffectivePermissions never throws.
         const permissions = await getEffectivePermissions({
+            userId: sessionUser.id,
             role,
             extraPermissions: sessionUser.extraPermissions,
             deniedPermissions: sessionUser.deniedPermissions,

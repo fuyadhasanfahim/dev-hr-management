@@ -17,6 +17,7 @@ router.get('/permissions', async (req: Request, res: Response) => {
     const permissions =
         req.user?.permissions ??
         (await getEffectivePermissions({
+            userId: req.user?.id,
             role: req.user?.role,
             extraPermissions: req.user?.extraPermissions,
             deniedPermissions: req.user?.deniedPermissions,
