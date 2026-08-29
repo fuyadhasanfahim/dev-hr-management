@@ -2,6 +2,7 @@ import { Router } from "express";
 import { staffRoute } from "./staff.route.js";
 import { userRoute } from "./user.route.js";
 import { meRoute } from "./me.route.js";
+import { roleRoute } from "./role.route.js";
 import { shiftRoute } from "./shift.route.js";
 import { branchRoute } from "./branch.route.js";
 import { attendanceRoute } from "./attendance.route.js";
@@ -54,6 +55,10 @@ const moduleRoutes = [
     {
         path: "/me",
         route: meRoute,
+    },
+    {
+        path: "/roles",
+        route: roleRoute,
     },
     {
         path: "/staffs",
