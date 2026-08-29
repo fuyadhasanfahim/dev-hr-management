@@ -38,6 +38,11 @@ export const UpdateRoleValidation = z.object({
         }),
 });
 
+export const ScopePermissionsValidation = z.object({
+    params: z.object({ id: z.string().min(1) }),
+    body: z.object({ permissions: permissionList }),
+});
+
 export const AssignUserAccessValidation = z.object({
     params: z.object({ userId: z.string().min(1) }),
     body: z
