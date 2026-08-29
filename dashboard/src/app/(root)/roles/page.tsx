@@ -31,7 +31,7 @@ import { RoleFormDialog } from '@/components/roles/role-form-dialog';
 import { usePermissions } from '@/hooks/use-permissions';
 
 export default function RolesPage() {
-    const { data: roles, isLoading } = useGetRolesQuery();
+    const { data: roles, isLoading, isError, refetch } = useGetRolesQuery();
     const [deleteRole, { isLoading: deleting }] = useDeleteRoleMutation();
     const { can } = usePermissions();
 
@@ -84,6 +84,35 @@ export default function RolesPage() {
                 <div className="flex h-40 items-center justify-center">
                     <Loader className="h-6 w-6 animate-spin text-primary" />
                 </div>
+            ) : isError ? (
+                <Card>
+                    <CardContent className="flex flex-col items-center gap-3 py-10 text-center">
+                        <p className="text-sm text-muted-foreground">
+                            Couldn&apos;t load roles.
+                        </p>
+                        <Button variant="outline" size="sm" onClick={() => refetch()}>
+                            Retry
+                        </Button>
+                    </CardContent>
+                </Card>
+            ) : (roles ?? []).length === 0 ? (
+                <Card>
+                    <CardContent className="flex flex-col items-center gap-2 py-10 text-center">
+                        <ShieldCheck className="h-8 w-8 text-muted-foreground" />
+                        <p className="text-sm font-medium">No roles yet</p>
+                        <p className="max-w-sm text-xs text-muted-foreground">
+                            Seed the built-in roles by running{' '}
+                            <code className="font-mono">npm run seed:roles</code>{' '}
+                            in <code className="font-mono">/server</code>, or
+                            create one now.
+                        </p>
+                        {canManage && (
+                            <Button size="sm" className="mt-1" onClick={openCreate}>
+                                <Plus className="h-4 w-4" /> New role
+                            </Button>
+                        )}
+                    </CardContent>
+                </Card>
             ) : (
                 <div className="grid gap-3">
                     {(roles ?? []).map((role) => (
