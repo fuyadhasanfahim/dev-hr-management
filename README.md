@@ -1,86 +1,144 @@
-# Dev HR Management & Webbriks Monorepo
+# Dev HR Management
 
-Welcome to the Dev HR Management monorepo! This repository contains the complete suite of applications that power the Webbriks platform, including the main corporate website, the core ERP/HR dashboard, a dedicated customer support application, and a robust Node.js backend.
+A full-stack **ERP / HR management platform** for a digital agency — staff and
+payroll, attendance and shifts, leads and clients, quotations and orders,
+receipts and invoices, plus a real-time customer-support console. Built as a
+small monorepo with a shared Node.js API and two Next.js front-ends.
 
-## 🏗️ Architecture & Apps
+<br/>
 
-This project is a monorepo consisting of 4 main applications:
+## Applications
 
-1. **Dashboard (`/dashboard`)**: The core ERP and HR management system for internal staff. Built with Next.js, featuring real-time features, payroll, attendance, client management, and extensive analytics.
-2. **Support (`/support`)**: A dedicated live chat and ticketing application for customer support agents. Built with Next.js, integrating Socket.io for real-time messaging with visitors from the main website.
-3. **Webbriks (`/webbriks`)**: The public-facing corporate website and portfolio. Built with Next.js, it includes a floating AI chat widget that connects visitors to live support agents in real-time.
-4. **Server (`/server`)**: The unified backend API powering all frontend applications. Built with Node.js, Express, TypeScript, and MongoDB. Handles authentication, real-time sockets (Socket.io), database operations, and third-party integrations (S3, Cloudinary).
+| Path | Stack | Description |
+| --- | --- | --- |
+| **`server/`** | Node.js · Express · TypeScript · MongoDB | Unified REST + Socket.io API for every front-end. Owns authentication, the permission engine, all database access, and third-party integrations (S3, Cloudinary, WhatsApp Cloud API, Google Calendar, SMTP). |
+| **`dashboard/`** | Next.js (App Router) · React · Redux Toolkit | The internal ERP / HR application **and the auth host** — it serves the sign-in, sign-up and password-reset pages for the whole platform. |
+| **`support/`** | Next.js · Socket.io | Live-chat and ticketing console for support agents. Shares the platform session, so agents sign in once on the dashboard. |
 
-## 🛠️ Technology Stack
+> The public marketing site (**webbriks.com**) and payment portal live in
+> separate repositories and consume this API.
 
-- **Frontend Framework:** Next.js (App Router), React
-- **Styling:** Tailwind CSS, Shadcn UI
-- **State Management:** Redux Toolkit (RTK Query)
-- **Backend Framework:** Node.js, Express.js
-- **Database:** MongoDB (Mongoose)
-- **Authentication:** Better Auth, JWT
-- **Real-time:** Socket.io
-- **Storage:** AWS S3 (Presigned URLs), Cloudinary
-- **Language:** TypeScript across the entire stack
+<br/>
 
-## 🚀 Getting Started
+## Tech Stack
 
-#### Prerequisites
-- Node.js (v18 or higher)
-- MongoDB instance (local or Atlas) — **must** be a replica set; the app's order/quotation flows use multi-document transactions
-- Redis — used for queues/caching (`REDIS_URL`, defaults to `redis://localhost:6379`)
+- **Frontend** — Next.js (App Router), React 19, Tailwind CSS, shadcn/ui, Redux Toolkit + RTK Query
+- **Backend** — Node.js, Express 5, TypeScript, Mongoose
+- **Database** — MongoDB (replica set — order/quotation flows use multi-document transactions)
+- **Auth** — Better Auth, session cookies scoped to `.webbriks.com` for cross-app SSO
+- **Realtime** — Socket.io
+- **Infra** — Redis (cache + cross-instance invalidation + queues), AWS S3 (presigned uploads), Cloudinary, Pino structured logging, Sentry
 
-Each app reads its config from a local `.env` file (see the keys referenced
-in `server/src/config/env.config.ts` and each frontend's `NEXT_PUBLIC_*`
-usage). Run every app with `npm run dev`.
+<br/>
 
-### 1. Backend Server Setup
+## Key Features
+
+- **Layered RBAC** — access is the union of four grant sources, minus a
+  per-user deny list:
+
+  ```
+  effective = role.permissions
+            ∪ department.permissions      (the user's staff department)
+            ∪ designation.permissions     (the user's staff designation)
+            ∪ user.extraPermissions       (per-user override)
+            − user.deniedPermissions
+  ```
+
+  Permissions are typed `resource.action` keys defined in code
+  (`server/src/constants/permission.ts`); roles are stored in the database and
+  editable from the **Roles & Permissions** admin UI. Route guards and API
+  responses are permission-driven — e.g. prices and client identity are
+  stripped from order / quotation payloads unless the caller holds
+  `order.viewFinancials` / `order.viewClient`.
+
+- **Unified authentication (SSO)** — the dashboard hosts sign-in; the backend
+  issues a `.webbriks.com`-scoped session cookie, so a single login covers the
+  dashboard and the support console.
+
+- **Quotation → Order pipeline** — orders are created only by converting an
+  accepted quotation, with an enforced status state machine.
+
+- **HR suite** — attendance, shift assignment, leave workflow, payroll runs
+  with amount-confirmation guards, and per-staff wallets / balances.
+
+- **Live support** — visitors on the marketing site chat with an AI assistant
+  and can escalate to a human agent in real time; existing clients are
+  recognised by email.
+
+- **WhatsApp Cloud API inbox** — inbound messages with optional AI auto-reply.
+
+<br/>
+
+## Getting Started
+
+### Prerequisites
+
+- **Node.js 20+**
+- **MongoDB** (local or Atlas) — **must be a replica set**
+- **Redis** — `REDIS_URL`, defaults to `redis://localhost:6379`
+
+Each app reads its own `.env`. Backend keys are declared in
+`server/src/config/env.config.ts`; front-end keys are the `NEXT_PUBLIC_*`
+values referenced in each app's source.
+
+### Run (development)
+
 ```bash
-cd server
-npm install
-# Configure your .env file
-npm run dev
+# 1 — API
+cd server && npm install && npm run dev
+
+# 2 — Dashboard
+cd dashboard && npm install && npm run dev
+
+# 3 — Support console
+cd support && npm install && npm run dev
 ```
 
-### 2. Main Dashboard Setup
+### Seed RBAC defaults
+
+Run once after the first boot, and again after changing the built-in role
+definitions or the department / designation grant defaults:
+
 ```bash
-cd dashboard
-npm install
-# Configure your .env file
-npm run dev
+cd server && npm run seed:roles
 ```
 
-### 3. Support App Setup
+This upserts the five built-in roles (`super_admin`, `admin`, `hr_manager`,
+`team_leader`, `staff`), ensures the **Telemarketing** department exists with
+its grant, and moves telemarketer staff into it. Custom roles are never
+touched.
+
+<br/>
+
+## Build
+
 ```bash
-cd support
-npm install
-# Configure your .env file
-npm run dev
+cd server    && npm run build   # tsc → dist/
+cd dashboard && npm run build   # next build
+cd support   && npm run build   # next build
 ```
 
-### 4. Webbriks Website Setup
+<br/>
+
+## Testing
+
 ```bash
-cd webbriks
-npm install
-# Configure your .env file
-npm run dev
+cd server && node --import tsx --test $(find src -name '*.test.ts')
 ```
 
-## 📦 Build Commands
+Covers the permission resolver, role-escalation guards, the order/quotation
+field-masking policy, payroll day-counting, and the order status state
+machine.
 
-Each application can be built for production using standard Next.js and TypeScript build commands:
-
-- Server: `cd server && npm run build` (Compiles TypeScript)
-- Dashboard: `cd dashboard && npm run build` (Next.js build)
-- Support: `cd support && npm run build` (Next.js build)
-- Webbriks: `cd webbriks && npm run build` (Next.js build)
-
-## 💡 Key Features
-
-- **Unified Authentication:** The dashboard app hosts the sign-in / sign-up / password-reset pages. The backend issues a session cookie scoped to `.webbriks.com`, so signing in on the dashboard also authenticates the support app (single sign-on). The support app redirects unauthenticated users to the dashboard's `/sign-in`.
-- **Live Support System:** Visitors on the Webbriks site can chat with an AI assistant or escalate to a live human agent. Agents manage these chats in real-time via the Support app.
-- **Client Recognition:** The system automatically recognizes existing clients based on their email when they request support.
-- **Comprehensive HR:** Full suite of HR tools including attendance tracking, payroll processing, leave management, and staff performance metrics.
+<br/>
 
 ---
-*Developed and maintained by the Webbriks Engineering Team.*
+
+## Author
+
+**Fuyad Hasan Fahim** — Full-Stack Developer
+
+[![Portfolio](https://img.shields.io/badge/Portfolio-fuyadhasanfahim.com-4F46E5?style=for-the-badge&logo=googlechrome&logoColor=white)](https://fuyadhasanfahim.com)
+[![LinkedIn](https://img.shields.io/badge/LinkedIn-fuyadhasanfahim-0A66C2?style=for-the-badge&logo=linkedin&logoColor=white)](https://linkedin.com/in/fuyadhasanfahim)
+[![X](https://img.shields.io/badge/X-@codewithfuyad-000000?style=for-the-badge&logo=x&logoColor=white)](https://x.com/codewithfuyad)
+[![Instagram](https://img.shields.io/badge/Instagram-@codewithfuyad-E4405F?style=for-the-badge&logo=instagram&logoColor=white)](https://instagram.com/codewithfuyad)
