@@ -4,8 +4,10 @@ import ConsultationController from '../controllers/consultation.controller.js';
 
 const router = express.Router();
 
-// Public — AI chat creates consultation requests (no auth)
-router.post('/', ConsultationController.create);
+// The public site (webbriks) and this app's own AI chat both create
+// consultations by writing to the DB directly — nothing calls this HTTP
+// endpoint anonymously, so it is guarded like the rest of the resource.
+router.post('/', requirePermission('consultation.create'), ConsultationController.create);
 
 // Admin only — manage consultations
 router.get('/', requirePermission('consultation.read'), ConsultationController.getAll);

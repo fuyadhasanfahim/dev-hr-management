@@ -94,8 +94,15 @@ export const PERMISSION_GROUPS = {
         label: 'Profit Share',
         actions: ['read', 'manage'],
     },
-    currencyRate: {
-        label: 'Currency Rates',
+    wallet: {
+        label: 'Wallet / Balances',
+        // read   — see the Balances page (own wallet + transactions)
+        // manage — see every staff member's balance, all transactions, and
+        //          process admin withdrawals
+        actions: ['read', 'manage'],
+    },
+    returnFileFormat: {
+        label: 'Return File Formats',
         actions: ['read', 'manage'],
     },
     department: {
@@ -136,7 +143,7 @@ export const PERMISSION_GROUPS = {
     },
     consultation: {
         label: 'Consultations',
-        actions: ['read', 'update', 'delete'],
+        actions: ['read', 'create', 'update', 'delete'],
     },
     career: {
         label: 'Careers / Job Positions',

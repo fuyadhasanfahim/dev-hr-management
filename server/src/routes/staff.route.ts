@@ -19,12 +19,12 @@ router.get("/me", StaffController.getStaff);
 router.get("/wallet-transactions/me", getMyTransactions);
 router.get(
     "/wallet-transactions/all",
-    requirePermission('staff.read'),
+    requirePermission('wallet.manage'),
     getAllTransactions
 );
 router.post(
     "/wallet-transactions/withdraw",
-    requirePermission('staff.update'),
+    requirePermission('wallet.manage'),
     adminWithdraw
 );
 

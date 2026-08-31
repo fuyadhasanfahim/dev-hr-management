@@ -10,12 +10,13 @@ import {
 
 const router = Router();
 
-// Return-file formats are part of the service configuration — gate writes
-// with the same permissions as services.
-router.post('/', requirePermission('service.create'), createReturnFileFormat);
+// Creating a format is an inline step of the order-creation form, so it
+// rides on `order.create`; editing/removing an existing one is an admin
+// config action.
+router.post('/', requirePermission('order.create'), createReturnFileFormat);
 router.get('/', getAllReturnFileFormats);
 router.get('/:id', getReturnFileFormatById);
-router.patch('/:id', requirePermission('service.update'), updateReturnFileFormat);
-router.delete('/:id', requirePermission('service.delete'), deleteReturnFileFormat);
+router.patch('/:id', requirePermission('returnFileFormat.manage'), updateReturnFileFormat);
+router.delete('/:id', requirePermission('returnFileFormat.manage'), deleteReturnFileFormat);
 
 export { router as returnFileFormatRoute };

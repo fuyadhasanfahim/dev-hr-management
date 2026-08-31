@@ -106,11 +106,6 @@ app.use(
             (req.method === "POST" &&
                 /^\/invitations\/[^/]+\/accept$/.test(req.path));
 
-        // Allow public access to metadata, department, designation, and branch GET routes
-        const isPublicMetadataRoute =
-            req.method === "GET" &&
-            /^\/(metadata\/type\/(department|designation)|departments|designations|branches)/.test(req.path);
-
         // Allow public access to career routes
         const isPublicCareerRoute =
             (req.method === "GET" &&
@@ -142,7 +137,6 @@ app.use(
 
         if (
             isPublicInvitationRoute ||
-            isPublicMetadataRoute ||
             isPublicCareerRoute ||
             isPublicInvoiceRoute ||
             isPublicQuotationTokenRoute ||

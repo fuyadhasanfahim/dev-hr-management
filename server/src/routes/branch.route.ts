@@ -4,9 +4,9 @@ import BranchControllers from '../controllers/branch.controller.js';
 
 const router: Router = Router();
 
-router.get('/', BranchControllers.getAllBranches);
+router.get('/', requirePermission('branch.read'), BranchControllers.getAllBranches);
 
-router.get('/:id', BranchControllers.getBranchById);
+router.get('/:id', requirePermission('branch.read'), BranchControllers.getBranchById);
 
 router.post(
     '/',

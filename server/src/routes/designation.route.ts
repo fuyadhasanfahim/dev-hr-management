@@ -7,9 +7,17 @@ import GrantControllers from '../controllers/grant.controller.js';
 
 const router: Router = Router();
 
-router.get('/', DesignationControllers.getAllDesignations);
+router.get(
+    '/',
+    requirePermission('designation.read'),
+    DesignationControllers.getAllDesignations,
+);
 
-router.get('/:id', DesignationControllers.getDesignationById);
+router.get(
+    '/:id',
+    requirePermission('designation.read'),
+    DesignationControllers.getDesignationById,
+);
 
 // Phase 6 — permission grant for everyone with this designation
 router.patch(

@@ -24,7 +24,6 @@ import { leaveRoute } from "./leave.route.js";
 import { noticeRoute } from "./notice.route.js";
 import externalBusinessRoute from "./external-business.routes.js";
 import { careerRoute } from "./career.route.js";
-import { currencyRateRoute } from "./currency-rate.route.js";
 import { payrollRoute } from "./payroll.routes.js";
 import shiftOffDateRoute from "./shift-off-date.route.js";
 import payrollBankSettingsRoute from "./payroll-bank-settings.route.js";
@@ -152,10 +151,6 @@ const moduleRoutes = [
     {
         path: "/careers",
         route: careerRoute,
-    },
-    {
-        path: "/currency-rates",
-        route: currencyRateRoute,
     },
     {
         path: "/payroll",

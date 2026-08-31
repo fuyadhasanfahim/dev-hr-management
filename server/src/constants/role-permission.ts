@@ -50,7 +50,11 @@ export const SYSTEM_ROLE_PERMISSIONS: Record<Role, readonly string[]> = {
         'notification.*',
         'invitation.*',
         'outbox.*', // Phase 6d — was OUTBOX_ADMIN_ROLES
-        // Role administration stays with super_admin only by default.
+        'wallet.*',
+        'returnFileFormat.*',
+        // Admin may VIEW roles/permissions but not create/edit/assign them —
+        // role administration stays with super_admin.
+        'role.read',
     ],
 
     [Role.HR_MANAGER]: [
@@ -68,6 +72,10 @@ export const SYSTEM_ROLE_PERMISSIONS: Record<Role, readonly string[]> = {
         'notice.*',
         'invitation.*',
         'career.*', // recruiting is an HR function — job positions + applications
+        'service.*',
+        'invoice.*', // invoice / billing writes: admin, super_admin, hr_manager
+        'wallet.*',
+        'returnFileFormat.*',
         'branch.*', // Phase 6d — branch write routes allowed HR
         'client.*', // Phase 6d — authorizeTelemarketer allowed HR all client ops
         'meeting.read',
@@ -103,6 +111,11 @@ export const SYSTEM_ROLE_PERMISSIONS: Record<Role, readonly string[]> = {
         'notice.read',
         'dashboard.read',
         'notification.read',
+        // reference lists used by dropdowns across the app
+        'department.read',
+        'designation.read',
+        'branch.read',
+        'wallet.read',
         // Phase 6d — TL was in RECEIPT_ROLES / MEETING_ROLES / quotation
         // STAFF_ROLES / payroll readAccess / expense summary
         'receipt.read',
@@ -131,6 +144,11 @@ export const SYSTEM_ROLE_PERMISSIONS: Record<Role, readonly string[]> = {
         'project.read',
         'policy.read',
         'notification.read',
+        // reference lists used by dropdowns across the app
+        'department.read',
+        'designation.read',
+        'branch.read',
+        'wallet.read',
         // Phase 6d — STAFF was in order/quotation STAFF_ROLES and the
         // expense-summary + payroll-preview allow-lists
         'order.create',

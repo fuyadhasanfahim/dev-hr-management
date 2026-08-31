@@ -7,9 +7,17 @@ import GrantControllers from '../controllers/grant.controller.js';
 
 const router: Router = Router();
 
-router.get('/', DepartmentControllers.getAllDepartments);
+router.get(
+    '/',
+    requirePermission('department.read'),
+    DepartmentControllers.getAllDepartments,
+);
 
-router.get('/:id', DepartmentControllers.getDepartmentById);
+router.get(
+    '/:id',
+    requirePermission('department.read'),
+    DepartmentControllers.getDepartmentById,
+);
 
 // Phase 6 — permission grant for everyone in this department
 router.patch(
