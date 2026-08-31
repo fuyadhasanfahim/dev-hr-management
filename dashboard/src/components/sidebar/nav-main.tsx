@@ -27,7 +27,7 @@ export function NavMain() {
         data: session,
         isPending: isSessionPending,
     } = useSession();
-    const { data: meData, isLoading: isMeLoading } = useGetMeQuery({});
+    const { isLoading: isMeLoading } = useGetMeQuery({});
     const { can, isLoading: isPermsLoading } = usePermissions();
     const pathname = usePathname();
     const { state } = useSidebar();
