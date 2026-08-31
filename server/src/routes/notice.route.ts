@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import NoticeController from '../controllers/notice.controller.js';
+import { requirePermission } from '../middlewares/require-permission.js';
 
 const router = Router();
 
@@ -11,12 +12,12 @@ router.post('/:id/view', NoticeController.markAsViewed);
 router.post('/mark-viewed', NoticeController.markMultipleAsViewed);
 
 // Admin routes
-router.get('/', NoticeController.getAllNotices);
-router.post('/', NoticeController.createNotice);
-router.put('/:id', NoticeController.updateNotice);
-router.post('/:id/publish', NoticeController.publishNotice);
-router.post('/:id/unpublish', NoticeController.unpublishNotice);
-router.delete('/:id', NoticeController.deleteNotice);
-router.get('/:id/stats', NoticeController.getNoticeStats);
+router.get('/', requirePermission('notice.read'), NoticeController.getAllNotices);
+router.post('/', requirePermission('notice.create'), NoticeController.createNotice);
+router.put('/:id', requirePermission('notice.update'), NoticeController.updateNotice);
+router.post('/:id/publish', requirePermission('notice.update'), NoticeController.publishNotice);
+router.post('/:id/unpublish', requirePermission('notice.update'), NoticeController.unpublishNotice);
+router.delete('/:id', requirePermission('notice.delete'), NoticeController.deleteNotice);
+router.get('/:id/stats', requirePermission('notice.read'), NoticeController.getNoticeStats);
 
 export const noticeRoute = router;

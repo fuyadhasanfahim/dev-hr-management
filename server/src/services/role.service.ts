@@ -244,6 +244,23 @@ const assignUserAccess = async (
         }
         // the actor must be able to grant every permission the role carries
         assertAssignablePermissions(actor.permissions, roleDoc.permissions);
+
+        // Lockout protection: never let the last super admin be demoted.
+        if (
+            (user.role as string) === 'super_admin' &&
+            roleDoc.slug !== 'super_admin'
+        ) {
+            const remaining = await UserModel.countDocuments({
+                role: 'super_admin',
+            });
+            if (remaining <= 1) {
+                throw new AppError(
+                    'Cannot change the role of the last super admin.',
+                    400,
+                );
+            }
+        }
+
         set.role = roleDoc.slug;
     }
 
@@ -255,6 +272,11 @@ const assignUserAccess = async (
     }
 
     if (input.deniedPermissions !== undefined) {
+        // Not escalation-guarded on purpose: `role.assign` is a super-admin
+        // permission by default, and taking access away is never an
+        // escalation. If `role.assign` is ever delegated to a non-super-admin
+        // custom role, revisit whether clearing an existing deny entry (which
+        // can re-expose a role-granted permission) needs a check here.
         set.deniedPermissions = sanitizePermissions(input.deniedPermissions);
     }
 

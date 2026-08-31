@@ -1,5 +1,21 @@
 import type { Request, Response } from 'express';
 import DesignationServices from '../services/designation.service.js';
+import { userCan } from '../middlewares/require-permission.js';
+
+/**
+ * The `permissions` grant array is RBAC configuration, not general metadata —
+ * these GET routes are reachable unauthenticated (see the public-metadata
+ * allow-list in app.ts), so strip it for anyone without `role.assign`.
+ */
+function stripGrants(req: Request, doc: unknown): unknown {
+    if (userCan(req, 'role.assign')) return doc;
+    const plain =
+        doc && typeof (doc as { toObject?: unknown }).toObject === 'function'
+            ? (doc as { toObject: () => Record<string, unknown> }).toObject()
+            : ({ ...(doc as Record<string, unknown>) });
+    delete (plain as Record<string, unknown>).permissions;
+    return plain;
+}
 
 const getAllDesignations = async (req: Request, res: Response) => {
     try {
@@ -16,7 +32,7 @@ const getAllDesignations = async (req: Request, res: Response) => {
 
         return res.status(200).json({
             success: true,
-            designations,
+            designations: (designations as unknown[]).map((d) => stripGrants(req, d)),
         });
     } catch (error) {
         return res.status(500).json({
@@ -36,7 +52,7 @@ const getDesignationById = async (req: Request, res: Response) => {
 
         return res.status(200).json({
             success: true,
-            designation,
+            designation: stripGrants(req, designation),
         });
     } catch (error) {
         return res.status(404).json({

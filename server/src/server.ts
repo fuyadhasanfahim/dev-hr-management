@@ -9,6 +9,7 @@ import { initSocket } from "./socket.js";
 import { logger } from "./lib/logger.js";
 import { initSentry } from "./lib/sentry.js";
 import { createGracefulShutdown } from "./lib/gracefulShutdown.js";
+import { initPermissionCacheSync } from "./lib/permissions.js";
 
 import { cleanupDuplicateOverviewInDB } from './utils/cleanupDuplicateOverview.js';
 
@@ -20,6 +21,9 @@ async function Server() {
         await client();
 
         logger.info("db.connected");
+
+        // Cross-instance RBAC grant-cache invalidation (Redis pub/sub).
+        initPermissionCacheSync();
 
         // Run database overview deduplication
         await cleanupDuplicateOverviewInDB();

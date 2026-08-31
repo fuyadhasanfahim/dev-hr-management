@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { requirePermission } from '../middlewares/require-permission.js';
 import {
     createBusiness,
     getAllBusinesses,
@@ -13,17 +14,20 @@ import {
 
 const router = Router();
 
+const canRead = requirePermission('externalBusiness.read');
+const canManage = requirePermission('externalBusiness.manage');
+
 // Business routes
-router.post('/businesses', createBusiness);
-router.get('/businesses', getAllBusinesses);
-router.get('/businesses/:id', getBusinessById);
-router.put('/businesses/:id', updateBusiness);
-router.delete('/businesses/:id', deleteBusiness);
+router.post('/businesses', canManage, createBusiness);
+router.get('/businesses', canRead, getAllBusinesses);
+router.get('/businesses/:id', canRead, getBusinessById);
+router.put('/businesses/:id', canManage, updateBusiness);
+router.delete('/businesses/:id', canManage, deleteBusiness);
 
 // Transfer routes
-router.post('/transfers', transferProfit);
-router.get('/transfers', getTransfers);
-router.get('/transfers/stats', getTransferStats);
-router.delete('/transfers/:id', deleteTransfer);
+router.post('/transfers', canManage, transferProfit);
+router.get('/transfers', canRead, getTransfers);
+router.get('/transfers/stats', canRead, getTransferStats);
+router.delete('/transfers/:id', canManage, deleteTransfer);
 
 export default router;

@@ -53,6 +53,16 @@ describe('resolvePermissions', () => {
         assert.deepEqual(resolvePermissions(['*'], [], ['order.delete']), ['*']);
     });
 
+    test('a wildcard in the deny list subtracts the concrete keys', () => {
+        const out = resolvePermissions(['order.*', 'client.read'], [], ['order.*']);
+        assert.ok(!out.some((p) => p.startsWith('order.')));
+        assert.ok(out.includes('client.read'));
+    });
+
+    test('a bare "*" deny removes everything', () => {
+        assert.deepEqual(resolvePermissions(['order.*', 'client.*'], [], ['*']), []);
+    });
+
     test('unknown wildcard resource expands to nothing', () => {
         assert.deepEqual(resolvePermissions(['bogus.*']), []);
     });

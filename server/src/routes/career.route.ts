@@ -2,6 +2,7 @@ import { Router } from 'express';
 import jobPositionController from '../controllers/job-position.controller.js';
 import jobApplicationController from '../controllers/job-application.controller.js';
 import { upload } from '../middlewares/upload.middleware.js';
+import { requirePermission } from '../middlewares/require-permission.js';
 
 const router = Router();
 
@@ -16,10 +17,10 @@ router.get('/positions/public/:slug', jobPositionController.getPositionBySlug);
 // Admin routes (auth required)
 router.get('/positions', jobPositionController.getAllPositions);
 router.get('/positions/:id', jobPositionController.getPositionById);
-router.post('/positions', jobPositionController.createPosition);
-router.put('/positions/:id', jobPositionController.updatePosition);
-router.patch('/positions/:id/toggle', jobPositionController.togglePosition);
-router.delete('/positions/:id', jobPositionController.deletePosition);
+router.post('/positions', requirePermission('career.manage'), jobPositionController.createPosition);
+router.put('/positions/:id', requirePermission('career.manage'), jobPositionController.updatePosition);
+router.patch('/positions/:id/toggle', requirePermission('career.manage'), jobPositionController.togglePosition);
+router.delete('/positions/:id', requirePermission('career.manage'), jobPositionController.deletePosition);
 
 // ============================================
 // JOB APPLICATIONS
@@ -33,10 +34,10 @@ router.post(
 );
 
 // Admin routes (auth required)
-router.get('/applications', jobApplicationController.getAllApplications);
-router.get('/applications/stats', jobApplicationController.getApplicationsStats);
-router.get('/applications/:id', jobApplicationController.getApplicationById);
-router.patch('/applications/:id/status', jobApplicationController.updateApplicationStatus);
-router.delete('/applications/:id', jobApplicationController.deleteApplication);
+router.get('/applications', requirePermission('career.read'), jobApplicationController.getAllApplications);
+router.get('/applications/stats', requirePermission('career.read'), jobApplicationController.getApplicationsStats);
+router.get('/applications/:id', requirePermission('career.read'), jobApplicationController.getApplicationById);
+router.patch('/applications/:id/status', requirePermission('career.manage'), jobApplicationController.updateApplicationStatus);
+router.delete('/applications/:id', requirePermission('career.manage'), jobApplicationController.deleteApplication);
 
 export const careerRoute = router;

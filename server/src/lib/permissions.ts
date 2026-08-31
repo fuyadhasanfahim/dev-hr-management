@@ -23,6 +23,7 @@ import DesignationModel from '../models/designation.model.js';
 import StaffModel from '../models/staff.model.js';
 import { escapeRegex } from './sanitize.js';
 import { logger } from './logger.js';
+import getRedisClient from './redis.js';
 import {
     PERMISSION_GROUPS,
     WILDCARD_ALL,
@@ -55,25 +56,121 @@ const departmentCache = new Map<string, GrantEntry>();
 const designationCache = new Map<string, GrantEntry>();
 const userScopeCache = new Map<string, ScopeEntry>();
 
+// --------------------------------------------------------------------------
+// cross-instance cache invalidation (Redis pub/sub)
+//
+// The grant caches above live in-process. With more than one server
+// instance, an admin editing a role / department / designation on instance A
+// would leave instance B serving stale permissions until its TTL lapses
+// (up to 5 min). We fan every local invalidation out over a Redis channel so
+// all instances drop the same key. Redis being unavailable is non-fatal —
+// we simply fall back to local-only invalidation + TTL.
+// --------------------------------------------------------------------------
+
+const RBAC_INVALIDATION_CHANNEL = 'rbac:cache:invalidate';
+
+type InvalidationKind = 'role' | 'department' | 'designation' | 'userScope';
+interface InvalidationMsg {
+    kind: InvalidationKind;
+    key?: string;
+    /** Random per-process id so we can ignore our own echo. */
+    origin: string;
+}
+
+const INVALIDATION_ORIGIN = Math.random().toString(36).slice(2);
+
+function applyLocalInvalidation(kind: InvalidationKind, key?: string): void {
+    switch (kind) {
+        case 'role':
+            if (key) roleCache.delete(key.toLowerCase());
+            else roleCache.clear();
+            break;
+        case 'department':
+            if (key) departmentCache.delete(key.trim().toLowerCase());
+            else departmentCache.clear();
+            break;
+        case 'designation':
+            if (key) designationCache.delete(key.trim().toLowerCase());
+            else designationCache.clear();
+            break;
+        case 'userScope':
+            if (key) userScopeCache.delete(key);
+            else userScopeCache.clear();
+            break;
+    }
+}
+
+function publishInvalidation(kind: InvalidationKind, key?: string): void {
+    try {
+        const payload: InvalidationMsg = { kind, key, origin: INVALIDATION_ORIGIN };
+        void getRedisClient().publish(
+            RBAC_INVALIDATION_CHANNEL,
+            JSON.stringify(payload),
+        );
+    } catch (err) {
+        logger.warn({ err }, '[permissions] cache-invalidation publish failed');
+    }
+}
+
+let invalidationSubscriberStarted = false;
+
+/**
+ * Wire up cross-instance grant-cache invalidation over Redis pub/sub.
+ * Call once from the server bootstrap. Idempotent, and safe to skip
+ * entirely (unit tests do) — invalidation then falls back to local +
+ * TTL only. Never throws.
+ */
+export function initPermissionCacheSync(): void {
+    if (invalidationSubscriberStarted) return;
+    invalidationSubscriberStarted = true;
+    try {
+        const subscriber = getRedisClient().duplicate();
+        subscriber.on('error', (err) => {
+            logger.warn({ err }, '[permissions] invalidation subscriber error');
+        });
+        subscriber.subscribe(RBAC_INVALIDATION_CHANNEL).catch((err) => {
+            logger.warn(
+                { err },
+                '[permissions] could not subscribe to RBAC invalidation channel; running local-only',
+            );
+        });
+        subscriber.on('message', (channel, raw) => {
+            if (channel !== RBAC_INVALIDATION_CHANNEL) return;
+            try {
+                const msg = JSON.parse(raw) as InvalidationMsg;
+                if (msg.origin === INVALIDATION_ORIGIN) return; // our own echo
+                applyLocalInvalidation(msg.kind, msg.key);
+            } catch {
+                /* ignore malformed messages */
+            }
+        });
+    } catch (err) {
+        logger.warn(
+            { err },
+            '[permissions] Redis unavailable — RBAC cache invalidation is local-only',
+        );
+    }
+}
+
 /** Drop one role (by slug) or the whole role cache. Call after a role edit. */
 export function invalidateRoleCache(slug?: string): void {
-    if (slug) roleCache.delete(slug.toLowerCase());
-    else roleCache.clear();
+    applyLocalInvalidation('role', slug);
+    publishInvalidation('role', slug);
 }
 /** Drop one department's cached grant (by name/code) or all of them. */
 export function invalidateDepartmentCache(key?: string): void {
-    if (key) departmentCache.delete(key.trim().toLowerCase());
-    else departmentCache.clear();
+    applyLocalInvalidation('department', key);
+    publishInvalidation('department', key);
 }
 /** Drop one designation's cached grant (by name/code) or all of them. */
 export function invalidateDesignationCache(key?: string): void {
-    if (key) designationCache.delete(key.trim().toLowerCase());
-    else designationCache.clear();
+    applyLocalInvalidation('designation', key);
+    publishInvalidation('designation', key);
 }
 /** Drop a user's cached department/designation lookup. */
 export function invalidateUserScope(userId?: string): void {
-    if (userId) userScopeCache.delete(userId);
-    else userScopeCache.clear();
+    applyLocalInvalidation('userScope', userId);
+    publishInvalidation('userScope', userId);
 }
 
 async function loadRoleGrants(slug: string): Promise<string[]> {
@@ -97,7 +194,8 @@ async function loadNamedGrants(
     model: any,
     rawValue: string,
 ): Promise<string[]> {
-    const key = rawValue.trim().toLowerCase();
+    const raw = rawValue.trim();
+    const key = raw.toLowerCase();
     if (!key) return [];
     const hit = cache.get(key);
     if (hit && hit.expiresAt > Date.now()) return hit.permissions;
@@ -106,6 +204,10 @@ async function loadNamedGrants(
         .findOne({
             isActive: true,
             $or: [
+                // department codes are stored upper-cased; designation codes
+                // are not — match both so a `staff.department` holding a code
+                // still resolves its grant.
+                { code: raw.toUpperCase() },
                 { code: key },
                 { name: { $regex: `^${escapeRegex(key)}$`, $options: 'i' } },
             ],
@@ -179,7 +281,12 @@ export function resolvePermissions(
     if (merged[0] === WILDCARD_ALL) return [WILDCARD_ALL];
 
     if (deniedPermissions.length === 0) return merged;
-    const denied = new Set(deniedPermissions);
+    // Expand the deny list the same way as grants so `order.*` (or `*`)
+    // actually subtracts the concrete keys instead of looking for a literal
+    // "order.*" entry that expansion has already removed.
+    const deniedExpanded = expandWildcards(deniedPermissions);
+    if (deniedExpanded[0] === WILDCARD_ALL) return [];
+    const denied = new Set(deniedExpanded);
     return merged.filter((p) => !denied.has(p));
 }
 
@@ -239,13 +346,18 @@ export async function getEffectivePermissions(
     } catch (err) {
         logger.error(
             { err },
-            `[permissions] grant lookup failed for role "${user.role}", using built-in defaults`,
+            `[permissions] grant lookup failed for role "${user.role}", using cached / built-in defaults`,
         );
-        return resolvePermissions(
-            user.role ? (SYSTEM_FALLBACK[user.role] ?? []) : [],
-            extra,
-            denied,
-        );
+        // Prefer a previously-loaded (possibly expired) role grant over the
+        // built-in defaults: the built-ins can re-introduce a permission an
+        // admin has explicitly removed from a system role in the DB.
+        const staleRole = user.role
+            ? roleCache.get(user.role.toLowerCase())?.permissions
+            : undefined;
+        const fallbackGrants =
+            staleRole ??
+            (user.role ? (SYSTEM_FALLBACK[user.role] ?? []) : []);
+        return resolvePermissions(fallbackGrants, extra, denied);
     }
 }
 

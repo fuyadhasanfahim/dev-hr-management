@@ -38,7 +38,6 @@ export interface SidebarItem {
      * over `access`.
      */
     permission?: string | string[];
-    requiredDesignation?: string;
     external?: boolean;
 }
 
@@ -113,7 +112,6 @@ export const sidebarGroups: SidebarGroup[] = [
                     Role.TEAM_LEADER,
                     Role.STAFF,
                 ],
-                requiredDesignation: "telemarketer",
             },
             {
                 title: "Clients",
@@ -126,7 +124,6 @@ export const sidebarGroups: SidebarGroup[] = [
                     Role.TEAM_LEADER,
                     Role.STAFF,
                 ],
-                requiredDesignation: "telemarketer",
             },
             {
                 title: "Orders",
@@ -187,6 +184,13 @@ export const sidebarGroups: SidebarGroup[] = [
             {
                 title: "Balances",
                 url: "/balances",
+                // `client.read` stands in for "telemarketer-ish" visibility:
+                // telemarketers get it via their designation grant, so the
+                // same people who saw this under the old
+                // `requiredDesignation: "telemarketer"` check still do, plus
+                // admins / team leads. Personal wallet data on the page is
+                // always self-scoped by the API.
+                permission: 'client.read',
                 icon: IconWallet,
                 access: [
                     Role.SUPER_ADMIN,
@@ -194,7 +198,6 @@ export const sidebarGroups: SidebarGroup[] = [
                     Role.TEAM_LEADER,
                     Role.STAFF,
                 ],
-                requiredDesignation: "telemarketer",
             },
         ],
     },

@@ -9,6 +9,9 @@ import {
 
 const router: Router = Router();
 
+// Intentionally only `requireAuth` (the /api gate), no `staff.read`: task /
+// shift / leave assignment pickers need a staff list for team leaders and
+// staff, who do not hold `staff.read`. Detail (`/:id`) stays gated.
 router.get("/", StaffController.getStaffs);
 router.get("/me", StaffController.getStaff);
 
@@ -25,15 +28,16 @@ router.post(
     adminWithdraw
 );
 
-router.get(
-    "/:id",
-    requirePermission('staff.read'),
-    StaffController.getStaffById,
-);
+// `/export` must precede `/:id` or Express routes it to getStaffById with id="export".
 router.get(
     "/export",
     requirePermission('staff.read'),
     StaffController.exportStaffs,
+);
+router.get(
+    "/:id",
+    requirePermission('staff.read'),
+    StaffController.getStaffById,
 );
 
 router.post(

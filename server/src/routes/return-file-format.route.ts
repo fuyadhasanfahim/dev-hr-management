@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { requirePermission } from '../middlewares/require-permission.js';
 import {
     createReturnFileFormat,
     getAllReturnFileFormats,
@@ -9,10 +10,12 @@ import {
 
 const router = Router();
 
-router.post('/', createReturnFileFormat);
+// Return-file formats are part of the service configuration — gate writes
+// with the same permissions as services.
+router.post('/', requirePermission('service.create'), createReturnFileFormat);
 router.get('/', getAllReturnFileFormats);
 router.get('/:id', getReturnFileFormatById);
-router.patch('/:id', updateReturnFileFormat);
-router.delete('/:id', deleteReturnFileFormat);
+router.patch('/:id', requirePermission('service.update'), updateReturnFileFormat);
+router.delete('/:id', requirePermission('service.delete'), deleteReturnFileFormat);
 
 export { router as returnFileFormatRoute };

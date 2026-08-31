@@ -67,6 +67,7 @@ export const SYSTEM_ROLE_PERMISSIONS: Record<Role, readonly string[]> = {
         'policy.*',
         'notice.*',
         'invitation.*',
+        'career.*', // recruiting is an HR function — job positions + applications
         'branch.*', // Phase 6d — branch write routes allowed HR
         'client.*', // Phase 6d — authorizeTelemarketer allowed HR all client ops
         'meeting.read',

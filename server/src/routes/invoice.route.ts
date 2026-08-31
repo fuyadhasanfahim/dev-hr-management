@@ -8,14 +8,15 @@ import {
     getInvoices,
 } from "../controllers/invoice.controller.js";
 import { upload } from "../middlewares/upload.middleware.js";
+import { requirePermission } from "../middlewares/require-permission.js";
 
 const router = express.Router();
 
-router.get("/next-number", getNextInvoiceNumber);
-router.get("/current-number", getCurrentInvoiceNumber);
-router.post("/send-email", upload.single("file"), sendInvoiceEmailHandler);
-router.post("/record", recordInvoice);
-router.get("/", getInvoices);
+router.get("/next-number", requirePermission('invoice.read'), getNextInvoiceNumber);
+router.get("/current-number", requirePermission('invoice.read'), getCurrentInvoiceNumber);
+router.post("/send-email", requirePermission('invoice.create'), upload.single("file"), sendInvoiceEmailHandler);
+router.post("/record", requirePermission('invoice.create'), recordInvoice);
+router.get("/", requirePermission('invoice.read'), getInvoices);
 router.get("/public/:invoiceNumber", getInvoiceByNumber);
 
 export default router;

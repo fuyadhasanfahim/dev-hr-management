@@ -35,9 +35,10 @@ export function NavMain() {
     const [searchQuery, setSearchQuery] = React.useState("");
 
     const userRole = session?.user?.role as Role | undefined;
-    const staff = meData?.staff;
 
-    // Filter items based on user role, designation, and search query
+    // Filter items based on the resolved permission set (role ∪ department ∪
+    // designation ∪ extra − denied), falling back to the legacy role list for
+    // items that have no `permission` gate yet.
     const filteredGroups = React.useMemo(() => {
         return sidebarGroups.map(group => {
             const filteredItems = group.items.filter((item) => {
@@ -48,18 +49,6 @@ export function NavMain() {
                 } else {
                     if (!userRole) return false;
                     if (!item.access.includes(userRole)) return false;
-                }
-
-                // Restriction: STAFF must match requiredDesignation if specified
-                if (
-                    (userRole === Role.STAFF) &&
-                    item.requiredDesignation
-                ) {
-                    const des = staff?.designation?.toLowerCase() || "";
-                    const req = item.requiredDesignation.toLowerCase();
-                    if (des !== req && !des.includes(req)) {
-                        return false;
-                    }
                 }
 
                 // Search query filter
@@ -75,7 +64,7 @@ export function NavMain() {
                 items: filteredItems,
             };
         }).filter(group => group.items.length > 0);
-    }, [userRole, staff, searchQuery, can]);
+    }, [userRole, searchQuery, can]);
 
     const allGroupLabels = React.useMemo(
         () => sidebarGroups.map((g) => g.groupLabel),

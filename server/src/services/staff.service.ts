@@ -5,6 +5,7 @@ import { startOfDay, endOfDay } from "date-fns";
 import { escapeRegex } from "../lib/sanitize.js";
 import auditService from "./audit.service.js";
 import { Designation } from "../constants/designation.js";
+import { invalidateUserScope } from "../lib/permissions.js";
 
 export type IStaffQueryParams = {
     page?: number;
@@ -839,6 +840,18 @@ async function updateStaffInDB(payload: {
         }
 
         await session.commitTransaction();
+
+        // Department / designation / role feed the permission resolver's
+        // per-user scope cache — drop it so the change takes effect now
+        // instead of after the 2-min TTL.
+        if (
+            staff.userId &&
+            (role !== undefined ||
+                finalStaffData.department !== undefined ||
+                finalStaffData.designation !== undefined)
+        ) {
+            invalidateUserScope(String(staff.userId));
+        }
 
         if (changedBy) {
             const isSalaryChange = finalStaffData.salary !== undefined && finalStaffData.salary !== staff.salary;
