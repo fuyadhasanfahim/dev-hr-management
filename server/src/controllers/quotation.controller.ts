@@ -13,7 +13,7 @@ const createQuotation = async (req: Request, res: Response, next: NextFunction) 
         // `category` is part of req.body and is persisted by the service
         // (enforced by the schema enum on save).
         const result = await QuotationService.createQuotation(req.body, userId);
-        const sanitized = maskQuotation(result, req.user?.role);
+        const sanitized = maskQuotation(result, req.user);
         res.status(201).json({ success: true, message: 'Quotation created successfully', data: sanitized });
     } catch (err) {
         next(err);
@@ -29,7 +29,7 @@ const updateQuotation = async (req: Request, res: Response, next: NextFunction) 
         // `category` (when present in req.body) is persisted by the service
         // (enforced by the schema enum on save).
         const result = await QuotationService.updateQuotation(id, req.body, userId);
-        const sanitized = maskQuotation(result, req.user?.role);
+        const sanitized = maskQuotation(result, req.user);
 
         res.status(200).json({ success: true, message: 'Quotation updated successfully', data: sanitized });
     } catch (err) {
@@ -102,7 +102,7 @@ const createNewVersion = async (req: Request, res: Response, next: NextFunction)
             idempotencyKey,
         );
 
-        const sanitized = maskQuotation(result, req.user?.role);
+        const sanitized = maskQuotation(result, req.user);
 
         res.status(201).json({
             success: true,
@@ -132,7 +132,7 @@ const getAllQuotations = async (req: Request, res: Response, next: NextFunction)
         const result = await QuotationService.getQuotations(filters, options);
         
         if (result.items && Array.isArray(result.items)) {
-            result.items = maskQuotations(result.items, req.user?.role);
+            result.items = maskQuotations(result.items, req.user);
         }
 
         res.status(200).json({ success: true, data: result });
@@ -148,7 +148,7 @@ const getQuotationById = async (req: Request, res: Response, next: NextFunction)
         const result = await QuotationService.getQuotationById(id);
         if (!result) return res.status(404).json({ success: false, message: 'Quotation not found' });
         
-        const sanitized = maskQuotation(result, req.user?.role);
+        const sanitized = maskQuotation(result, req.user);
         return res.status(200).json({ success: true, data: sanitized });
 
     } catch (err) {
@@ -174,7 +174,7 @@ const getGroupVersions = async (req: Request, res: Response, next: NextFunction)
         const { groupId } = req.params;
         if (!groupId) return next(new Error('groupId is required'));
         const result = await QuotationService.getGroupVersions(groupId);
-        const sanitized = maskQuotations(result, req.user?.role);
+        const sanitized = maskQuotations(result, req.user);
         return res.status(200).json({ success: true, data: sanitized });
 
     } catch (err) {

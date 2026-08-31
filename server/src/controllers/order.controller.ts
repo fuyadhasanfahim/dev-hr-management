@@ -18,7 +18,7 @@ async function getAllOrders(req: Request, res: Response, next: NextFunction): Pr
         
         // Inject logic masking for staff
         if (result.data && Array.isArray(result.data)) {
-            result.data = maskOrders(result.data, req.user?.role);
+            result.data = maskOrders(result.data, req.user);
         }
 
         res.status(200).json({
@@ -45,7 +45,7 @@ async function getOrderById(req: Request, res: Response, next: NextFunction): Pr
             return;
         }
         
-        const sanitized = maskOrder(result, req.user?.role);
+        const sanitized = maskOrder(result, req.user);
         res.status(200).json({ success: true, data: sanitized });
     } catch (err) {
         next(err);
@@ -79,7 +79,7 @@ async function updateOrderStatus(req: Request, res: Response, next: NextFunction
             userId,
             note,
         );
-        const sanitized = maskOrder(result, req.user?.role);
+        const sanitized = maskOrder(result, req.user);
         res.status(200).json({ success: true, data: sanitized });
     } catch (err) {
         next(err);
@@ -165,7 +165,7 @@ async function convertQuotationToOrder(req: Request, res: Response, next: NextFu
         }
 
         const result = await OrderService.createOrderFromQuotation(quotationGroupId, userId);
-        const sanitized = maskOrder(result, req.user?.role);
+        const sanitized = maskOrder(result, req.user);
 
         res.status(201).json({
             success: true,
@@ -188,7 +188,7 @@ async function updateOrderTeam(req: Request, res: Response, next: NextFunction):
         }
 
         const result = await OrderService.updateOrderTeam(id, { assignedTeam, teamLeader });
-        const sanitized = maskOrder(result, req.user?.role);
+        const sanitized = maskOrder(result, req.user);
 
         res.status(200).json({
             success: true,

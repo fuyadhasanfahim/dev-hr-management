@@ -32,7 +32,21 @@ export interface PermissionGroupDef {
 export const PERMISSION_GROUPS = {
     order: {
         label: 'Orders',
-        actions: ['read', 'create', 'update', 'delete', 'assign', 'changeStatus'],
+        // viewFinancials — see prices / amounts on orders + quotations
+        // viewClient     — see client identity (name, email, requirements) on
+        //                  orders + quotations
+        // Without these the API strips those fields from the response
+        // (see utils/masking.ts) — it is not a UI-only mask.
+        actions: [
+            'read',
+            'create',
+            'update',
+            'delete',
+            'assign',
+            'changeStatus',
+            'viewFinancials',
+            'viewClient',
+        ],
     },
     quotation: {
         label: 'Quotations',
@@ -224,6 +238,8 @@ export const ACTION_LABELS: Record<string, string> = {
     bankSettings: 'Bank settings',
     apply: 'Apply',
     terminate: 'Terminate',
+    viewFinancials: 'View amounts',
+    viewClient: 'View client info',
 };
 
 /**

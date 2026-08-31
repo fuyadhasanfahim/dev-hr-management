@@ -91,6 +91,8 @@ export const SYSTEM_ROLE_PERMISSIONS: Record<Role, readonly string[]> = {
         'order.create',
         'order.assign',
         'order.changeStatus',
+        'order.viewFinancials', // HR sees amounts + client identity (management)
+        'order.viewClient',
     ],
 
     [Role.TEAM_LEADER]: [
@@ -124,9 +126,12 @@ export const SYSTEM_ROLE_PERMISSIONS: Record<Role, readonly string[]> = {
         'meeting.create',
         'meeting.update',
         'meeting.delete',
+        // quotation: read-only. TL can still turn a quotation into an order
+        // (that runs on `order.create`, above). Amounts + client identity on
+        // quotations/orders are masked for TL unless they are in the
+        // Telemarketing department (its grant adds order.viewFinancials /
+        // order.viewClient).
         'quotation.read',
-        'quotation.create',
-        'quotation.update',
         'payroll.read',
         'expense.read',
     ],
