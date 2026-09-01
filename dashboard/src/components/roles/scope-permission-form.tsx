@@ -1,12 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { Loader } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { PermissionMatrix } from './permission-matrix';
+import { FormActionDock } from './form-action-dock';
 import { useGetPermissionCatalogQuery } from '@/redux/features/role/roleApi';
 
 interface ScopePermissionFormProps {
@@ -28,6 +28,14 @@ export function ScopePermissionForm({
     const { data: catalog, isLoading } = useGetPermissionCatalogQuery();
     const [draft, setDraft] = useState<string[]>(value);
     const [saving, setSaving] = useState(false);
+
+    const dirty = useMemo(
+        () =>
+            JSON.stringify([...value].sort()) !==
+            JSON.stringify([...draft].sort()),
+        [value, draft],
+    );
+    const selectedCount = draft.filter((p) => p !== '*').length;
 
     const submit = async () => {
         setSaving(true);
@@ -63,19 +71,19 @@ export function ScopePermissionForm({
                 )}
             </div>
 
-            <div className="flex justify-end gap-2">
-                <Button
-                    variant="outline"
-                    onClick={() => router.push(callbackUrl)}
-                    disabled={saving}
-                >
-                    Cancel
-                </Button>
-                <Button onClick={submit} disabled={saving}>
-                    {saving && <Loader className="h-4 w-4 animate-spin" />}
-                    Save
-                </Button>
-            </div>
+            <FormActionDock
+                saving={saving}
+                dirty={dirty}
+                onSave={submit}
+                onCancel={() => router.push(callbackUrl)}
+                status={
+                    <span className="text-muted-foreground">
+                        {draft.includes('*')
+                            ? 'All permissions'
+                            : `${selectedCount} permission${selectedCount === 1 ? '' : 's'}`}
+                    </span>
+                }
+            />
         </div>
     );
 }

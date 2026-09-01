@@ -91,11 +91,14 @@ export function EditStaffDialog({ staff }: EditStaffDialogProps) {
         const list: { value: string; label: string }[] = [];
         if (desigData?.designations?.length) {
             desigData.designations.forEach((d) => {
-                list.push({ value: d.name, label: d.name });
+                // Store the designation *code* (lower_snake_case) so it matches
+                // what the invite flow saves and what the permission resolver
+                // looks grants up by.
+                list.push({ value: d.code, label: d.name });
             });
         } else {
             DESIGNATIONS.forEach((d) => {
-                list.push({ value: d.label, label: d.label });
+                list.push({ value: d.value, label: d.label });
             });
         }
 

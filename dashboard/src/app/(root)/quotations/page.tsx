@@ -208,7 +208,7 @@ export default function QuotationsPage() {
       if (search) {
         const query = search.toLowerCase();
         const clientName =
-          (q.clientId as unknown as { name?: string })?.name || q.client.contactName || "";
+          (q.clientId as unknown as { name?: string })?.name || q.client?.contactName || "";
         const haystack = `${q.quotationNumber || ""} ${q.details?.title || ""} ${clientName}`.toLowerCase();
         if (!haystack.includes(query)) return false;
       }

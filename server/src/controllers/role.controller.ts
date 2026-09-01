@@ -90,6 +90,15 @@ const assignUserAccess = async (req: Request, res: Response) => {
     }
 };
 
+const getUserAccess = async (req: Request, res: Response) => {
+    try {
+        const result = await RoleServices.getUserAccess(req.params.userId ?? '');
+        return res.status(200).json({ success: true, data: result });
+    } catch (error) {
+        return fail(res, error);
+    }
+};
+
 export default {
     listRoles,
     getPermissionCatalog,
@@ -98,4 +107,5 @@ export default {
     updateRole,
     deleteRole,
     assignUserAccess,
+    getUserAccess,
 };

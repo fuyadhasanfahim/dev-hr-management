@@ -26,6 +26,7 @@ import {
     HeartHandshake,
     ShieldCheck,
     IdCard,
+    KeyRound,
 } from 'lucide-react';
 
 import { useGetStaffByIdQuery } from '@/redux/features/staff/staffApi';
@@ -48,6 +49,8 @@ import { PaymentHistoryTab } from '@/app/(root)/staffs/[id]/_components/payment-
 import { useSession } from '@/lib/auth-client';
 import { Role } from '@/constants/role';
 import { EditStaffDialog } from '@/components/staff/edit-staff-dialog';
+import { usePermissions } from '@/hooks/use-permissions';
+import { UserAccessForm } from '@/components/roles/user-access-form';
 
 function StaffDetailsSkeleton() {
     return (
@@ -91,6 +94,9 @@ export default function StaffDetailsPage() {
     const staff = data?.staff;
 
     const [copiedField, setCopiedField] = useState<string | null>(null);
+
+    const { can } = usePermissions();
+    const canManageAccess = can('role.assign');
 
     const userRole = session?.user?.role;
     const isOwner = session?.user?.id === staff?.userId;
@@ -434,6 +440,15 @@ export default function StaffDetailsPage() {
                                 Payments
                             </TabsTrigger>
                         )}
+                        {canManageAccess && (
+                            <TabsTrigger
+                                value="permissions"
+                                className="gap-2 px-4"
+                            >
+                                <KeyRound className="size-4" />
+                                Permissions
+                            </TabsTrigger>
+                        )}
                     </TabsList>
                 </div>
 
@@ -772,6 +787,37 @@ export default function StaffDetailsPage() {
                                     staffId={id}
                                     isPinSet={staff.isSalaryPinSet || false}
                                 />
+                            </CardContent>
+                        </Card>
+                    </TabsContent>
+                )}
+
+                {/* Tab 5: Permissions (role.assign only) */}
+                {canManageAccess && (
+                    <TabsContent value="permissions" className="outline-none">
+                        <Card className="border-border/60 shadow-xs">
+                            <CardHeader className="pb-4">
+                                <CardTitle className="text-lg font-bold">
+                                    Permission Overrides
+                                </CardTitle>
+                                <CardDescription>
+                                    Grant or revoke individual permissions for{' '}
+                                    {user?.name || 'this user'}, on top of their
+                                    role, department and designation.
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                {staff.userId ? (
+                                    <UserAccessForm
+                                        userId={staff.userId}
+                                        embedded
+                                    />
+                                ) : (
+                                    <p className="text-sm text-muted-foreground">
+                                        This staff record has no linked user
+                                        account.
+                                    </p>
+                                )}
                             </CardContent>
                         </Card>
                     </TabsContent>

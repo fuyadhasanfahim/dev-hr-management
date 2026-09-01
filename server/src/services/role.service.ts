@@ -294,6 +294,45 @@ const assignUserAccess = async (
     return { userId, ...set };
 };
 
+/**
+ * Read a user's role + per-user permission overrides. Powers the admin UI
+ * (staff detail "Permissions" tab / Roles & Permissions "Users" tab) so it
+ * can pre-fill the editor before calling {@link assignUserAccess}.
+ */
+const getUserAccess = async (userId: string) => {
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+        throw new AppError('Invalid user id.', 400);
+    }
+    const user = (await UserModel.findOne(
+        { _id: new mongoose.Types.ObjectId(userId) },
+        {
+            projection: {
+                name: 1,
+                email: 1,
+                role: 1,
+                extraPermissions: 1,
+                deniedPermissions: 1,
+            },
+        },
+    )) as {
+        name?: string;
+        email?: string;
+        role?: string;
+        extraPermissions?: string[];
+        deniedPermissions?: string[];
+    } | null;
+    if (!user) throw new AppError('User not found.', 404);
+
+    return {
+        userId,
+        name: user.name ?? null,
+        email: user.email ?? null,
+        role: user.role ?? null,
+        extraPermissions: user.extraPermissions ?? [],
+        deniedPermissions: user.deniedPermissions ?? [],
+    };
+};
+
 export default {
     listRoles,
     getRoleBySlug,
@@ -302,4 +341,5 @@ export default {
     updateRole,
     deleteRole,
     assignUserAccess,
+    getUserAccess,
 };

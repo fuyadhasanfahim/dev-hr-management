@@ -12,6 +12,7 @@
         "build": "npx tsc && mkdir -p dist/generated dist/data && cp -r src/generated/prisma dist/generated/ && cp -r src/data/. dist/data/",
         "sync:org": "tsx src/scripts/sync-organization-staff.ts",
         "seed:roles": "tsx src/scripts/seed-roles.ts",
+        "normalize:staff-scope": "tsx src/scripts/normalize-staff-scope.ts",
         "postinstall": "prisma generate && puppeteer browsers install chrome"
     },
     "devDependencies": {

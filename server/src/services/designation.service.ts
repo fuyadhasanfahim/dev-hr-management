@@ -56,7 +56,13 @@ const getDesignationById = async (id: string) => {
 
 const createDesignation = async (payload: Partial<IDesignation>, userId: string) => {
     const name = payload.name?.trim();
-    const code = (payload.code || name?.toLowerCase().replace(/\s+/g, '_'))?.trim();
+    // Keep designation codes normalised (lower_snake_case) so the permission
+    // resolver's `staff.designation` -> grant lookup matches regardless of how
+    // the value was entered. Seeded rows already follow this shape.
+    const code = (payload.code || name)
+        ?.trim()
+        .toLowerCase()
+        .replace(/\s+/g, '_');
 
     if (!name) {
         throw new Error('Designation name is required');
@@ -110,15 +116,21 @@ const updateDesignation = async (id: string, payload: Partial<IDesignation>) => 
         designation.name = payload.name.trim();
     }
 
-    if (payload.code && payload.code.trim() !== designation.code) {
-        const codeExist = await DesignationModel.findOne({
-            _id: { $ne: id },
-            code: payload.code.trim(),
-        });
-        if (codeExist) {
-            throw new Error('Designation code already exists');
+    if (payload.code) {
+        const nextCode = payload.code
+            .trim()
+            .toLowerCase()
+            .replace(/\s+/g, '_');
+        if (nextCode !== designation.code) {
+            const codeExist = await DesignationModel.findOne({
+                _id: { $ne: id },
+                code: nextCode,
+            });
+            if (codeExist) {
+                throw new Error('Designation code already exists');
+            }
+            designation.code = nextCode;
         }
-        designation.code = payload.code.trim();
     }
 
     if (payload.department !== undefined) {

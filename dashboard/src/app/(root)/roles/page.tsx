@@ -35,9 +35,10 @@ import {
 } from '@/redux/features/role/roleApi';
 import { useGetAllDepartmentsQuery } from '@/redux/features/department/departmentApi';
 import { useGetAllDesignationsQuery } from '@/redux/features/designation/designationApi';
+import { useGetStaffsQuery } from '@/redux/features/staff/staffApi';
 
 const PER_PAGE = 20;
-const TABS = ['roles', 'departments', 'designations'] as const;
+const TABS = ['roles', 'departments', 'designations', 'users'] as const;
 type TabKey = (typeof TABS)[number];
 
 function listUrl(tab: TabKey, page: number) {
@@ -89,6 +90,10 @@ function RolesContent() {
     const { data: deptData, isLoading: deptLoading } = useGetAllDepartmentsQuery();
     const { data: desigData, isLoading: desigLoading } =
         useGetAllDesignationsQuery();
+    const { data: staffData, isLoading: staffLoading } = useGetStaffsQuery(
+        { limit: 500 },
+        { skip: tab !== 'users' },
+    );
 
     const [deleteRole, { isLoading: deleting }] = useDeleteRoleMutation();
     const [toDelete, setToDelete] = useState<RoleDoc | null>(null);
@@ -113,19 +118,23 @@ function RolesContent() {
                 ? (roles ?? [])
                 : tab === 'departments'
                   ? (deptData?.departments ?? [])
-                  : (desigData?.designations ?? []);
+                  : tab === 'designations'
+                    ? (desigData?.designations ?? [])
+                    : (staffData?.staffs ?? []);
         const totalPages = Math.max(1, Math.ceil(src.length / PER_PAGE));
         const clamped = Math.min(page, totalPages);
         const start = (clamped - 1) * PER_PAGE;
         return { slice: src.slice(start, start + PER_PAGE), totalPages, total: src.length };
-    }, [tab, page, roles, deptData, desigData]);
+    }, [tab, page, roles, deptData, desigData, staffData]);
 
     const loading =
         tab === 'roles'
             ? rolesLoading
             : tab === 'departments'
               ? deptLoading
-              : desigLoading;
+              : tab === 'designations'
+                ? desigLoading
+                : staffLoading;
 
     return (
         <div className="w-full space-y-4">
@@ -133,7 +142,8 @@ function RolesContent() {
                 <div>
                     <h1 className="text-xl font-semibold">Roles &amp; Permissions</h1>
                     <p className="text-sm text-muted-foreground">
-                        Permission bundles for roles, departments and designations.
+                        Permission bundles for roles, departments and
+                        designations, plus per-user overrides.
                     </p>
                 </div>
                 {tab === 'roles' && canManageRoles && (
@@ -150,6 +160,7 @@ function RolesContent() {
                     <TabsTrigger value="roles">Roles</TabsTrigger>
                     <TabsTrigger value="departments">Departments</TabsTrigger>
                     <TabsTrigger value="designations">Designations</TabsTrigger>
+                    <TabsTrigger value="users">Users</TabsTrigger>
                 </TabsList>
             </Tabs>
 
@@ -165,10 +176,18 @@ function RolesContent() {
                                 <TableRow>
                                     <TableHead>Name</TableHead>
                                     <TableHead>
-                                        {tab === 'roles' ? 'Slug' : 'Code'}
+                                        {tab === 'roles'
+                                            ? 'Slug'
+                                            : tab === 'users'
+                                              ? 'Role'
+                                              : 'Code'}
                                     </TableHead>
                                     {tab === 'roles' && <TableHead>Type</TableHead>}
-                                    <TableHead>Permissions</TableHead>
+                                    <TableHead>
+                                        {tab === 'users'
+                                            ? 'Email'
+                                            : 'Permissions'}
+                                    </TableHead>
                                     <TableHead className="w-24 text-right">
                                         Actions
                                     </TableHead>
@@ -258,7 +277,59 @@ function RolesContent() {
                                         </TableRow>
                                     ))}
 
-                                {tab !== 'roles' &&
+                                {tab === 'users' &&
+                                    (
+                                        rows.slice as {
+                                            _id: string;
+                                            userId: string;
+                                            user?: {
+                                                name?: string;
+                                                email?: string;
+                                                role?: string;
+                                            };
+                                        }[]
+                                    ).map((item) => (
+                                        <TableRow key={item._id}>
+                                            <TableCell className="font-medium">
+                                                {item.user?.name ?? '—'}
+                                            </TableCell>
+                                            <TableCell>
+                                                <Badge
+                                                    variant="secondary"
+                                                    className="capitalize"
+                                                >
+                                                    {item.user?.role?.replace(
+                                                        /_/g,
+                                                        ' ',
+                                                    ) ?? 'staff'}
+                                                </Badge>
+                                            </TableCell>
+                                            <TableCell className="text-xs text-muted-foreground">
+                                                {item.user?.email ?? '—'}
+                                            </TableCell>
+                                            <TableCell className="text-right">
+                                                {canAssign && item.userId && (
+                                                    <Button
+                                                        asChild
+                                                        variant="ghost"
+                                                        size="icon"
+                                                    >
+                                                        <Link
+                                                            href={withCb(
+                                                                `/roles/users/${item.userId}`,
+                                                            )}
+                                                            aria-label="Edit permission overrides"
+                                                        >
+                                                            <Pencil className="h-4 w-4" />
+                                                        </Link>
+                                                    </Button>
+                                                )}
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+
+                                {(tab === 'departments' ||
+                                    tab === 'designations') &&
                                     (
                                         rows.slice as {
                                             _id: string;

@@ -121,7 +121,10 @@ export function QuotationTable({
             const hasServices = Array.isArray(q.services) && q.services.length > 0;
             const statusKey = (q.status ?? "draft") as QuotationStatus;
             const statusCfg = STATUS_CONFIG[statusKey] ?? STATUS_CONFIG.draft;
-            const clientName = (q.clientId as unknown as { name?: string })?.name || q.client.contactName;
+            const clientName =
+              (q.clientId as unknown as { name?: string })?.name ||
+              q.client?.contactName ||
+              "—";
 
             return (
               <TableRow key={q._id} className="cursor-pointer" onClick={() => onView(q)}>

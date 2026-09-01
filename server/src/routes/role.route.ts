@@ -32,6 +32,12 @@ router.post(
     RoleControllers.createRole,
 );
 
+router.get(
+    '/users/:userId/access',
+    requirePermission('role.assign'),
+    RoleControllers.getUserAccess,
+);
+
 router.put(
     '/users/:userId/access',
     requirePermission('role.assign'),

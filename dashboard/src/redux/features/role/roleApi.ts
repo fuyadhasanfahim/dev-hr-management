@@ -49,6 +49,15 @@ interface AssignUserAccessBody {
     deniedPermissions?: string[];
 }
 
+export interface UserAccess {
+    userId: string;
+    name: string | null;
+    email: string | null;
+    role: string | null;
+    extraPermissions: string[];
+    deniedPermissions: string[];
+}
+
 export const roleApi = apiSlice.injectEndpoints({
     endpoints: (builder) => ({
         getRoles: builder.query<RoleDoc[], void>({
@@ -83,6 +92,13 @@ export const roleApi = apiSlice.injectEndpoints({
             query: (slug) => ({ url: `/roles/${slug}`, method: 'DELETE' }),
             invalidatesTags: ['Role'],
         }),
+        getUserAccess: builder.query<UserAccess, string>({
+            query: (userId) => `/roles/users/${userId}/access`,
+            transformResponse: (res: { data: UserAccess }) => res.data,
+            providesTags: (_result, _error, userId) => [
+                { type: 'User', id: userId },
+            ],
+        }),
         assignUserAccess: builder.mutation<
             unknown,
             { userId: string; body: AssignUserAccessBody }
@@ -92,7 +108,11 @@ export const roleApi = apiSlice.injectEndpoints({
                 method: 'PUT',
                 body,
             }),
-            invalidatesTags: ['MyPermissions', 'User', 'Staff'],
+            invalidatesTags: (_result, _error, { userId }) => [
+                'MyPermissions',
+                'Staff',
+                { type: 'User', id: userId },
+            ],
         }),
 
         // Phase 6 — department / designation permission grants
@@ -127,6 +147,7 @@ export const {
     useCreateRoleMutation,
     useUpdateRoleMutation,
     useDeleteRoleMutation,
+    useGetUserAccessQuery,
     useAssignUserAccessMutation,
     useUpdateDepartmentPermissionsMutation,
     useUpdateDesignationPermissionsMutation,

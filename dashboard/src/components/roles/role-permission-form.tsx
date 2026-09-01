@@ -1,15 +1,15 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { Loader } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent } from '@/components/ui/card';
 import { PermissionMatrix } from './permission-matrix';
+import { FormActionDock } from './form-action-dock';
 import {
     useCreateRoleMutation,
     useGetPermissionCatalogQuery,
@@ -47,6 +47,18 @@ export function RolePermissionForm({ role, callbackUrl }: RolePermissionFormProp
     );
 
     const saving = creating || updating;
+
+    const dirty = useMemo(() => {
+        if (!role) return name.trim().length > 0 || permissions.length > 0;
+        return (
+            name.trim() !== role.name ||
+            description.trim() !== (role.description ?? '') ||
+            JSON.stringify([...permissions].sort()) !==
+                JSON.stringify([...(role.permissions ?? [])].sort())
+        );
+    }, [role, name, description, permissions]);
+
+    const selectedCount = permissions.filter((p) => p !== '*').length;
 
     const submit = async () => {
         if (name.trim().length < 2) {
@@ -135,19 +147,22 @@ export function RolePermissionForm({ role, callbackUrl }: RolePermissionFormProp
                 )}
             </div>
 
-            <div className="flex justify-end gap-2">
-                <Button
-                    variant="outline"
-                    onClick={() => router.push(callbackUrl)}
-                    disabled={saving}
-                >
-                    Cancel
-                </Button>
-                <Button onClick={submit} disabled={saving}>
-                    {saving && <Loader className="h-4 w-4 animate-spin" />}
-                    {isEdit ? 'Save changes' : 'Create role'}
-                </Button>
-            </div>
+            <FormActionDock
+                saving={saving}
+                dirty={isEdit ? dirty : undefined}
+                canSave={name.trim().length >= 2 && (!isEdit || dirty)}
+                onSave={submit}
+                onCancel={() => router.push(callbackUrl)}
+                saveLabel={isEdit ? 'Save changes' : 'Create role'}
+                cancelLabel={isEdit ? 'Cancel' : 'Discard'}
+                status={
+                    <span className="text-muted-foreground">
+                        {permissions.includes('*')
+                            ? 'All permissions'
+                            : `${selectedCount} permission${selectedCount === 1 ? '' : 's'}`}
+                    </span>
+                }
+            />
         </div>
     );
 }
