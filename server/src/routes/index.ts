@@ -34,7 +34,6 @@ import { leadRoute } from "./lead.route.js";
 import { leadSettingRoute } from "./lead-setting.route.js";
 import { TaskRoutes } from "./task.route.js";
 import { SupportRoutes } from "./support.route.js";
-import { WhatsAppRoutes } from "./whatsapp.route.js";
 import { AIChatRoutes } from "./ai-chat.route.js";
 import { ConsultationRoutes } from "./consultation.route.js";
 import { outboxRoute } from "./outbox.route.js";
@@ -182,10 +181,6 @@ const moduleRoutes = [
     {
         path: "/support",
         route: SupportRoutes,
-    },
-    {
-        path: "/support/whatsapp",
-        route: WhatsAppRoutes,
     },
     {
         path: "/ai-chat",

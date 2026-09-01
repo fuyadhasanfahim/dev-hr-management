@@ -487,47 +487,8 @@ const notifyTaskActivity = async (data: {
     });
 };
 
-// ============================================
-// WHATSAPP SUPPORT NOTIFICATION HELPERS
-// ============================================
-
-// Notify support-facing staff that a WhatsApp conversation needs a human.
-const notifyWhatsAppEscalation = async (data: {
-    conversationId: string;
-    customerPhone: string;
-    customerName?: string;
-    reason?: string;
-}) => {
-    const { default: UserModel } = await import("../models/user.model.js");
-
-    const agents = await UserModel.find({
-        role: { $in: ["super_admin", "admin", "manager", "staff"] },
-    }).toArray();
-
-    const notifications = agents.map((agent: any) => ({
-        userId: agent._id,
-        title: "💬 WhatsApp: Customer needs a human",
-        message: `${data.customerName || data.customerPhone} needs help${data.reason ? ` — ${data.reason}` : ""}`,
-        type: "support" as const,
-        priority: "high" as const,
-        resourceType: "support" as const,
-        actionUrl: `/live-chat?whatsapp=${data.conversationId}`,
-        actionLabel: "Open Chat",
-    }));
-
-    if (notifications.length > 0) {
-        const createdDocs = await NotificationModel.insertMany(notifications);
-        createdDocs.forEach((doc: any) => {
-            if (doc.userId) {
-                emitToUser(doc.userId.toString(), "notification:new", doc);
-            }
-        });
-    }
-};
-
 export default {
     createNotification,
-    notifyWhatsAppEscalation,
     getUserNotifications,
     getUnreadCount,
     markAsRead,

@@ -11,7 +11,7 @@ small monorepo with a shared Node.js API and two Next.js front-ends.
 
 | Path | Stack | Description |
 | --- | --- | --- |
-| **`server/`** | Node.js · Express · TypeScript · MongoDB | Unified REST + Socket.io API for every front-end. Owns authentication, the permission engine, all database access, and third-party integrations (S3, Cloudinary, WhatsApp Cloud API, Google Calendar, SMTP). |
+| **`server/`** | Node.js · Express · TypeScript · MongoDB | Unified REST + Socket.io API for every front-end. Owns authentication, the permission engine, all database access, and third-party integrations (S3, Cloudinary, Google Calendar, SMTP). |
 | **`dashboard/`** | Next.js (App Router) · React · Redux Toolkit | The internal ERP / HR application **and the auth host** — it serves the sign-in, sign-up and password-reset pages for the whole platform. |
 | **`support/`** | Next.js · Socket.io | Live-chat and ticketing console for support agents. Shares the platform session, so agents sign in once on the dashboard. |
 
@@ -64,8 +64,6 @@ small monorepo with a shared Node.js API and two Next.js front-ends.
 - **Live support** — visitors on the marketing site chat with an AI assistant
   and can escalate to a human agent in real time; existing clients are
   recognised by email.
-
-- **WhatsApp Cloud API inbox** — inbound messages with optional AI auto-reply.
 
 <br/>
 

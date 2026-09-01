@@ -9,11 +9,11 @@
     "scripts": {
         "start": "node dist/server.js",
         "dev": "nodemon --exec tsx src/server.ts",
-        "build": "npx tsc && mkdir -p dist/generated dist/data && cp -r src/generated/prisma dist/generated/ && cp -r src/data/. dist/data/",
+        "build": "npx tsc",
         "sync:org": "tsx src/scripts/sync-organization-staff.ts",
         "seed:roles": "tsx src/scripts/seed-roles.ts",
         "normalize:staff-scope": "tsx src/scripts/normalize-staff-scope.ts",
-        "postinstall": "prisma generate && puppeteer browsers install chrome"
+        "postinstall": "puppeteer browsers install chrome"
     },
     "devDependencies": {
         "@types/bcrypt": "^6.0.0",
@@ -35,7 +35,6 @@
         "@aws-sdk/client-s3": "^3.1048.0",
         "@aws-sdk/s3-request-presigner": "^3.1048.0",
         "@google/genai": "^2.7.0",
-        "@prisma/client": "^6.19.3",
         "@react-email/components": "^1.0.6",
         "@react-email/render": "^2.0.4",
         "@react-pdf/renderer": "^4.5.1",
@@ -52,7 +51,6 @@
         "express": "^5.2.1",
         "express-rate-limit": "^8.2.1",
         "googleapis": "^171.4.0",
-        "groq-sdk": "^1.6.0",
         "helmet": "^8.1.0",
         "ioredis": "^5.10.1",
         "jsonwebtoken": "^9.0.3",
@@ -63,7 +61,6 @@
         "pdf-lib": "^1.17.1",
         "pino": "^10.3.1",
         "pino-http": "^11.0.0",
-        "prisma": "^6.19.3",
         "puppeteer": "^24.42.0",
         "react": "^19.2.4",
         "react-dom": "^19.2.4",
@@ -76,9 +73,6 @@
         "puppeteer@24.42.0": true,
         "protobufjs@7.6.2": true,
         "msgpackr-extract@3.0.3": true,
-        "@google/genai@2.7.0": true,
-        "prisma@6.19.3": true,
-        "@prisma/client@6.19.3": true,
-        "@prisma/engines@6.19.3": true
+        "@google/genai@2.7.0": true
     }
 }

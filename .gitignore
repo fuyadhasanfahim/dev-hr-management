@@ -113,4 +113,3 @@ server/logs/
 server/uploads/
 server/backups/
 server/.cache/
-server/src/generated/
