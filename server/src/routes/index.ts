@@ -16,7 +16,6 @@ import { expenseRoute } from "./expense.route.js";
 import { clientRoute } from "./client.route.js";
 import { OrderRoutes } from "./order.route.js";
 import { ServiceRoutes } from "./service.route.js";
-import { ProjectRoutes } from "./project.route.js";
 import { profitShareRoute } from "./profit-share.route.js";
 import { debitRoute } from "./debit.route.js";
 import { leaveRoute } from "./leave.route.js";
@@ -118,10 +117,6 @@ const moduleRoutes = [
     {
         path: "/services",
         route: ServiceRoutes,
-    },
-    {
-        path: "/projects",
-        route: ProjectRoutes,
     },
     {
         path: "/profit-share",
