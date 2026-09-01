@@ -7,14 +7,7 @@ import { toast } from 'sonner';
 import { Loader, Pencil, Plus, ShieldCheck, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
-} from '@/components/ui/table';
+import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
     AlertDialog,
@@ -165,211 +158,203 @@ function RolesContent() {
             </Tabs>
 
             {loading ? (
-                <div className="flex h-40 items-center justify-center">
-                    <Loader className="h-6 w-6 animate-spin text-primary" />
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                    {Array.from({ length: 6 }).map((_, i) => (
+                        <div
+                            key={i}
+                            className="h-32 animate-pulse rounded-xl border bg-muted/30"
+                        />
+                    ))}
+                </div>
+            ) : rows.slice.length === 0 ? (
+                <div className="rounded-xl border border-dashed py-16 text-center text-sm text-muted-foreground">
+                    Nothing here yet.
                 </div>
             ) : (
                 <div className="space-y-4">
-                    <div className="rounded-md border">
-                        <Table>
-                            <TableHeader>
-                                <TableRow>
-                                    <TableHead>Name</TableHead>
-                                    <TableHead>
-                                        {tab === 'roles'
-                                            ? 'Slug'
-                                            : tab === 'users'
-                                              ? 'Role'
-                                              : 'Code'}
-                                    </TableHead>
-                                    {tab === 'roles' && <TableHead>Type</TableHead>}
-                                    <TableHead>
-                                        {tab === 'users'
-                                            ? 'Email'
-                                            : 'Permissions'}
-                                    </TableHead>
-                                    <TableHead className="w-24 text-right">
-                                        Actions
-                                    </TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {rows.slice.length === 0 && (
-                                    <TableRow>
-                                        <TableCell
-                                            colSpan={tab === 'roles' ? 5 : 4}
-                                            className="py-10 text-center text-sm text-muted-foreground"
-                                        >
-                                            Nothing here yet.
-                                        </TableCell>
-                                    </TableRow>
-                                )}
-
-                                {tab === 'roles' &&
-                                    (rows.slice as RoleDoc[]).map((role) => (
-                                        <TableRow key={role._id}>
-                                            <TableCell className="font-medium">
-                                                {role.name}
-                                                {!role.isActive && (
-                                                    <Badge
-                                                        variant="outline"
-                                                        className="ml-2"
+                    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                        {tab === 'roles' &&
+                            (rows.slice as RoleDoc[]).map((role) => (
+                                <Card key={role._id} className="flex flex-col">
+                                    <CardContent className="flex flex-1 flex-col gap-3 p-4">
+                                        <div className="flex items-start justify-between gap-2">
+                                            <div className="min-w-0">
+                                                <div className="flex items-center gap-2">
+                                                    <h3 className="truncate font-semibold">
+                                                        {role.name}
+                                                    </h3>
+                                                    {!role.isActive && (
+                                                        <Badge
+                                                            variant="outline"
+                                                            className="shrink-0 text-[10px]"
+                                                        >
+                                                            Inactive
+                                                        </Badge>
+                                                    )}
+                                                </div>
+                                                <p className="mt-0.5 font-mono text-xs text-muted-foreground">
+                                                    {role.slug}
+                                                </p>
+                                            </div>
+                                            {canManageRoles && (
+                                                <div className="flex shrink-0 gap-0.5">
+                                                    <Button
+                                                        asChild
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="h-8 w-8"
                                                     >
-                                                        Inactive
-                                                    </Badge>
-                                                )}
-                                            </TableCell>
-                                            <TableCell className="font-mono text-xs text-muted-foreground">
-                                                {role.slug}
-                                            </TableCell>
-                                            <TableCell>
-                                                {role.isSystem ? (
-                                                    <Badge
-                                                        variant="secondary"
-                                                        className="gap-1"
-                                                    >
-                                                        <ShieldCheck className="h-3 w-3" />
-                                                        Built-in
-                                                    </Badge>
-                                                ) : (
-                                                    <Badge variant="outline">
-                                                        Custom
-                                                    </Badge>
-                                                )}
-                                            </TableCell>
-                                            <TableCell>
-                                                {permBadges(role.permissions)}
-                                            </TableCell>
-                                            <TableCell className="text-right">
-                                                {canManageRoles && (
-                                                    <div className="flex justify-end gap-1">
+                                                        <Link
+                                                            href={withCb(
+                                                                `/roles/${role.slug}`,
+                                                            )}
+                                                            aria-label="Edit role"
+                                                        >
+                                                            <Pencil className="h-4 w-4" />
+                                                        </Link>
+                                                    </Button>
+                                                    {!role.isSystem && (
                                                         <Button
-                                                            asChild
                                                             variant="ghost"
                                                             size="icon"
+                                                            className="h-8 w-8"
+                                                            aria-label="Delete role"
+                                                            onClick={() =>
+                                                                setToDelete(role)
+                                                            }
                                                         >
-                                                            <Link
-                                                                href={withCb(
-                                                                    `/roles/${role.slug}`,
-                                                                )}
-                                                                aria-label="Edit role"
-                                                            >
-                                                                <Pencil className="h-4 w-4" />
-                                                            </Link>
+                                                            <Trash2 className="h-4 w-4 text-destructive" />
                                                         </Button>
-                                                        {!role.isSystem && (
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="icon"
-                                                                aria-label="Delete role"
-                                                                onClick={() =>
-                                                                    setToDelete(
-                                                                        role,
-                                                                    )
-                                                                }
-                                                            >
-                                                                <Trash2 className="h-4 w-4 text-destructive" />
-                                                            </Button>
-                                                        )}
-                                                    </div>
-                                                )}
-                                            </TableCell>
-                                        </TableRow>
-                                    ))}
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
 
-                                {tab === 'users' &&
-                                    (
-                                        rows.slice as {
-                                            _id: string;
-                                            userId: string;
-                                            user?: {
-                                                name?: string;
-                                                email?: string;
-                                                role?: string;
-                                            };
-                                        }[]
-                                    ).map((item) => (
-                                        <TableRow key={item._id}>
-                                            <TableCell className="font-medium">
-                                                {item.user?.name ?? '—'}
-                                            </TableCell>
-                                            <TableCell>
+                                        <div>
+                                            {role.isSystem ? (
                                                 <Badge
                                                     variant="secondary"
-                                                    className="capitalize"
+                                                    className="gap-1"
                                                 >
-                                                    {item.user?.role?.replace(
-                                                        /_/g,
-                                                        ' ',
-                                                    ) ?? 'staff'}
+                                                    <ShieldCheck className="h-3 w-3" />
+                                                    Built-in
                                                 </Badge>
-                                            </TableCell>
-                                            <TableCell className="text-xs text-muted-foreground">
-                                                {item.user?.email ?? '—'}
-                                            </TableCell>
-                                            <TableCell className="text-right">
-                                                {canAssign && item.userId && (
-                                                    <Button
-                                                        asChild
-                                                        variant="ghost"
-                                                        size="icon"
-                                                    >
-                                                        <Link
-                                                            href={withCb(
-                                                                `/roles/users/${item.userId}`,
-                                                            )}
-                                                            aria-label="Edit permission overrides"
-                                                        >
-                                                            <Pencil className="h-4 w-4" />
-                                                        </Link>
-                                                    </Button>
-                                                )}
-                                            </TableCell>
-                                        </TableRow>
-                                    ))}
+                                            ) : (
+                                                <Badge variant="outline">
+                                                    Custom
+                                                </Badge>
+                                            )}
+                                        </div>
 
-                                {(tab === 'departments' ||
-                                    tab === 'designations') &&
-                                    (
-                                        rows.slice as {
-                                            _id: string;
-                                            name: string;
-                                            code?: string;
-                                            permissions?: string[];
-                                        }[]
-                                    ).map((item) => (
-                                        <TableRow key={item._id}>
-                                            <TableCell className="font-medium">
-                                                {item.name}
-                                            </TableCell>
-                                            <TableCell className="font-mono text-xs text-muted-foreground">
-                                                {item.code ?? '—'}
-                                            </TableCell>
-                                            <TableCell>
-                                                {permBadges(item.permissions ?? [])}
-                                            </TableCell>
-                                            <TableCell className="text-right">
-                                                {canAssign && (
-                                                    <Button
-                                                        asChild
-                                                        variant="ghost"
-                                                        size="icon"
+                                        <div className="mt-auto border-t pt-3">
+                                            {permBadges(role.permissions)}
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                            ))}
+
+                        {(tab === 'departments' || tab === 'designations') &&
+                            (
+                                rows.slice as {
+                                    _id: string;
+                                    name: string;
+                                    code?: string;
+                                    permissions?: string[];
+                                }[]
+                            ).map((item) => (
+                                <Card key={item._id} className="flex flex-col">
+                                    <CardContent className="flex flex-1 flex-col gap-3 p-4">
+                                        <div className="flex items-start justify-between gap-2">
+                                            <div className="min-w-0">
+                                                <h3 className="truncate font-semibold">
+                                                    {item.name}
+                                                </h3>
+                                                <p className="mt-0.5 font-mono text-xs text-muted-foreground">
+                                                    {item.code ?? '—'}
+                                                </p>
+                                            </div>
+                                            {canAssign && (
+                                                <Button
+                                                    asChild
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="h-8 w-8 shrink-0"
+                                                >
+                                                    <Link
+                                                        href={withCb(
+                                                            `/roles/${tab}/${item._id}`,
+                                                        )}
+                                                        aria-label="Edit permissions"
                                                     >
-                                                        <Link
-                                                            href={withCb(
-                                                                `/roles/${tab}/${item._id}`,
-                                                            )}
-                                                            aria-label="Edit permissions"
-                                                        >
-                                                            <Pencil className="h-4 w-4" />
-                                                        </Link>
-                                                    </Button>
-                                                )}
-                                            </TableCell>
-                                        </TableRow>
-                                    ))}
-                            </TableBody>
-                        </Table>
+                                                        <Pencil className="h-4 w-4" />
+                                                    </Link>
+                                                </Button>
+                                            )}
+                                        </div>
+
+                                        <div className="mt-auto border-t pt-3">
+                                            {permBadges(item.permissions ?? [])}
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                            ))}
+
+                        {tab === 'users' &&
+                            (
+                                rows.slice as {
+                                    _id: string;
+                                    userId: string;
+                                    user?: {
+                                        name?: string;
+                                        email?: string;
+                                        role?: string;
+                                    };
+                                }[]
+                            ).map((item) => (
+                                <Card key={item._id} className="flex flex-col">
+                                    <CardContent className="flex flex-1 flex-col gap-3 p-4">
+                                        <div className="flex items-start justify-between gap-2">
+                                            <div className="min-w-0">
+                                                <h3 className="truncate font-semibold">
+                                                    {item.user?.name ?? '—'}
+                                                </h3>
+                                                <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                                                    {item.user?.email ?? '—'}
+                                                </p>
+                                            </div>
+                                            {canAssign && item.userId && (
+                                                <Button
+                                                    asChild
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="h-8 w-8 shrink-0"
+                                                >
+                                                    <Link
+                                                        href={withCb(
+                                                            `/roles/users/${item.userId}`,
+                                                        )}
+                                                        aria-label="Edit permission overrides"
+                                                    >
+                                                        <Pencil className="h-4 w-4" />
+                                                    </Link>
+                                                </Button>
+                                            )}
+                                        </div>
+
+                                        <div className="mt-auto">
+                                            <Badge
+                                                variant="secondary"
+                                                className="capitalize"
+                                            >
+                                                {item.user?.role?.replace(
+                                                    /_/g,
+                                                    ' ',
+                                                ) ?? 'staff'}
+                                            </Badge>
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                            ))}
                     </div>
 
                     <TablePagination
