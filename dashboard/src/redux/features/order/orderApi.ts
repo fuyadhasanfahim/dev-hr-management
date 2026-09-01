@@ -2,11 +2,7 @@ import { apiSlice } from '../../api/apiSlice';
 import type {
     IOrder,
     IOrderStats,
-    CreateOrderInput,
-    UpdateOrderInput,
     UpdateStatusInput,
-    ExtendDeadlineInput,
-    AddRevisionInput,
     OrderFilters,
 } from '@/types/order.type';
 
@@ -30,6 +26,12 @@ interface OrderStatsResponse {
     data: IOrderStats;
 }
 
+/**
+ * Orders are created only by converting an accepted quotation
+ * (`convertQuotationToOrder`). The `quotationSnapshot` on an order is
+ * immutable — there is no update / delete / revision / deadline mutation.
+ * "Revision" is a status transition; deadlines live on the quotation.
+ */
 export const orderApi = apiSlice.injectEndpoints({
     endpoints: (builder) => ({
         getOrders: builder.query<OrdersResponse, OrderFilters | void>({
@@ -79,34 +81,6 @@ export const orderApi = apiSlice.injectEndpoints({
             },
         ),
 
-        createOrder: builder.mutation<OrderResponse, CreateOrderInput>({
-            query: (data) => ({
-                url: '/orders',
-                method: 'POST',
-                body: data,
-            }),
-            invalidatesTags: [
-                { type: 'Order', id: 'LIST' },
-                { type: 'Order', id: 'STATS' },
-            ],
-        }),
-
-        updateOrder: builder.mutation<
-            OrderResponse,
-            { id: string; data: UpdateOrderInput }
-        >({
-            query: ({ id, data }) => ({
-                url: `/orders/${id}`,
-                method: 'PATCH',
-                body: data,
-            }),
-            invalidatesTags: (_result, _error, { id }) => [
-                { type: 'Order', id },
-                { type: 'Order', id: 'LIST' },
-                { type: 'Order', id: 'STATS' },
-            ],
-        }),
-
         updateOrderStatus: builder.mutation<
             OrderResponse,
             { id: string; data: UpdateStatusInput }
@@ -138,48 +112,6 @@ export const orderApi = apiSlice.injectEndpoints({
             ],
         }),
 
-        extendDeadline: builder.mutation<
-            OrderResponse,
-            { id: string; data: ExtendDeadlineInput }
-        >({
-            query: ({ id, data }) => ({
-                url: `/orders/${id}/extend-deadline`,
-                method: 'PATCH',
-                body: data,
-            }),
-            invalidatesTags: (_result, _error, { id }) => [
-                { type: 'Order', id },
-                { type: 'Order', id: 'LIST' },
-            ],
-        }),
-
-        addRevision: builder.mutation<
-            OrderResponse,
-            { id: string; data: AddRevisionInput }
-        >({
-            query: ({ id, data }) => ({
-                url: `/orders/${id}/revision`,
-                method: 'POST',
-                body: data,
-            }),
-            invalidatesTags: (_result, _error, { id }) => [
-                { type: 'Order', id },
-                { type: 'Order', id: 'LIST' },
-                { type: 'Order', id: 'STATS' },
-            ],
-        }),
-
-        deleteOrder: builder.mutation<{ message: string }, string>({
-            query: (id) => ({
-                url: `/orders/${id}`,
-                method: 'DELETE',
-            }),
-            invalidatesTags: [
-                { type: 'Order', id: 'LIST' },
-                { type: 'Order', id: 'STATS' },
-            ],
-        }),
-
         convertQuotationToOrder: builder.mutation<
             OrderResponse,
             { quotationGroupId: string }
@@ -205,12 +137,7 @@ export const {
     useGetOrderStatsQuery,
     useGetOrdersByClientQuery,
     useGetOrderYearsQuery,
-    useCreateOrderMutation,
-    useUpdateOrderMutation,
     useUpdateOrderStatusMutation,
     useUpdateOrderTeamMutation,
-    useExtendDeadlineMutation,
-    useAddRevisionMutation,
-    useDeleteOrderMutation,
     useConvertQuotationToOrderMutation,
 } = orderApi;

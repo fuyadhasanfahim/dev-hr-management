@@ -9,7 +9,6 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -23,7 +22,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { Eye, Edit2, Trash2, History, Receipt, Package } from "lucide-react";
+import { Eye, Receipt, Package } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { getFilteredStatusOptions } from "@/constants/orderStatusWorkflow";
@@ -53,60 +52,31 @@ const safeFormat = (
 interface OrderTableProps {
   orders: IOrder[];
   isLoading: boolean;
-  isSelectionMode: boolean;
-  selectedOrderIds: Set<string>;
-  allSelected: boolean;
-  onToggleAll: (checked: boolean) => void;
-  onToggleOne: (id: string) => void;
   canSeeFinancials: boolean;
-  canManage: (order: IOrder) => boolean;
   onView: (order: IOrder) => void;
   onReceipt: (order: IOrder) => void;
-  onEdit: (order: IOrder) => void;
-  onDelete: (order: IOrder) => void;
-  onTimeline: (order: IOrder) => void;
   onStatusChange: (orderId: string, status: OrderStatus) => void;
 }
 
 export function OrderTable({
   orders,
   isLoading,
-  isSelectionMode,
-  selectedOrderIds,
-  allSelected,
-  onToggleAll,
-  onToggleOne,
   canSeeFinancials,
-  canManage,
   onView,
   onReceipt,
-  onEdit,
-  onDelete,
-  onTimeline,
   onStatusChange,
 }: OrderTableProps) {
   const { can } = usePermissions();
   const canChangeStatus = can("order.changeStatus");
-  const canUpdate = can("order.update");
-  const canDelete = can("order.delete");
   const canReceipt = can("receipt.create");
-  const colCount = (isSelectionMode ? 1 : 0) + 10;
+  const colCount = 9;
 
   return (
     <TooltipProvider delayDuration={300}>
       <Table>
         <TableHeader>
           <TableRow className="border-b border-border hover:bg-transparent bg-muted/40">
-            {isSelectionMode && (
-              <TableHead className="w-10 pl-6">
-                <Checkbox
-                  checked={allSelected}
-                  onCheckedChange={(checked) => onToggleAll(!!checked)}
-                  aria-label="Select all orders"
-                />
-              </TableHead>
-            )}
-            <TableHead className={cn("text-xs font-semibold uppercase tracking-wider text-muted-foreground", !isSelectionMode && "pl-6")}>
+            <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground pl-6">
               Order ID
             </TableHead>
             <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -142,12 +112,7 @@ export function OrderTable({
           {isLoading ? (
             Array.from({ length: 6 }).map((_, index) => (
               <TableRow key={index} className="border-b border-border/60">
-                {isSelectionMode && (
-                  <TableCell className="pl-6">
-                    <Skeleton className="h-4 w-4" />
-                  </TableCell>
-                )}
-                <TableCell className={!isSelectionMode ? "pl-6" : undefined}>
+                <TableCell className="pl-6">
                   <Skeleton className="h-3.5 w-[70px]" />
                 </TableCell>
                 <TableCell><Skeleton className="h-3.5 w-[100px]" /></TableCell>
@@ -228,18 +193,8 @@ export function OrderTable({
                   className="cursor-pointer"
                   onClick={() => onView(order)}
                 >
-                  {isSelectionMode && (
-                    <TableCell className="pl-6" onClick={(e) => e.stopPropagation()}>
-                      <Checkbox
-                        checked={selectedOrderIds.has(order._id)}
-                        onCheckedChange={() => onToggleOne(order._id)}
-                        aria-label={`Select ${order.orderName || "Order"}`}
-                      />
-                    </TableCell>
-                  )}
-
                   {/* Order ID */}
-                  <TableCell className={!isSelectionMode ? "pl-6" : undefined}>
+                  <TableCell className="pl-6">
                     <span className="font-mono text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
                       #{order._id.slice(-6)}
                     </span>
@@ -411,50 +366,6 @@ export function OrderTable({
                         </Tooltip>
                       )}
 
-                      {canManage(order) && canUpdate && (
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => onEdit(order)}
-                              className="h-7 w-7 text-muted-foreground hover:text-brand-accent hover:bg-brand-accent/10"
-                            >
-                              <Edit2 className="h-3.5 w-3.5" />
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent side="top" className="text-xs">Edit Order</TooltipContent>
-                        </Tooltip>
-                      )}
-                      {canManage(order) && canDelete && (
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => onDelete(order)}
-                              className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent side="top" className="text-xs">Delete Order</TooltipContent>
-                        </Tooltip>
-                      )}
-
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => onTimeline(order)}
-                            className="h-7 w-7 text-muted-foreground hover:text-brand-primary hover:bg-brand-primary/10"
-                          >
-                            <History className="h-3.5 w-3.5" />
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent side="top" className="text-xs">View Timeline</TooltipContent>
-                      </Tooltip>
                     </div>
                   </TableCell>
                 </TableRow>

@@ -220,38 +220,9 @@ export interface IOrderStats {
     overdue: number;
 }
 
-export interface CreateOrderInput {
-    orderName: string;
-    clientId: string;
-    orderDate: string;
-    deadline: string;
-    imageQuantity: number;
-    perImagePrice: number;
-    totalPrice: number;
-    services: string[];
-    returnFileFormat: string;
-    instruction?: string;
-    priority?: OrderPriority;
-    contactPersonId?: string;
-    notes?: string;
-}
-
-export interface UpdateOrderInput extends Partial<CreateOrderInput> {
-    status?: OrderStatus;
-}
-
 export interface UpdateStatusInput {
     status: OrderStatus;
     note?: string;
-}
-
-export interface ExtendDeadlineInput {
-    newDeadline: string;
-    reason?: string;
-}
-
-export interface AddRevisionInput {
-    instruction: string;
 }
 
 export interface OrderFilters {
