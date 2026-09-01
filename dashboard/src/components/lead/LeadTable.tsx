@@ -15,6 +15,7 @@ import { Eye, Edit, UserPlus, Loader, Phone, Calendar, Users } from 'lucide-reac
 import { Skeleton } from '@/components/ui/skeleton';
 import { Lead } from '@/types/lead.type';
 import { format } from 'date-fns';
+import { usePermissions } from '@/hooks/use-permissions';
 
 interface LeadTableProps {
     leads: Lead[];
@@ -35,6 +36,9 @@ export function LeadTable({
     onEdit,
     onView,
 }: LeadTableProps) {
+    const { can } = usePermissions();
+    const canEdit = can('lead.update');
+    const canConvert = can('lead.convert');
     const [convertLead] = useConvertLeadToClientMutation();
     const [activeConvertingId, setActiveConvertingId] = useState<string | null>(
         null,
@@ -253,16 +257,18 @@ export function LeadTable({
                                         >
                                             <Eye className="h-3.5 w-3.5" />
                                         </Button>
-                                        <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            title="Edit"
-                                            onClick={() => onEdit(lead)}
-                                            className="h-7 w-7 text-muted-foreground hover:text-brand-accent hover:bg-brand-accent/10"
-                                        >
-                                            <Edit className="h-3.5 w-3.5" />
-                                        </Button>
-                                        {!lead.isConverted && (
+                                        {canEdit && (
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                title="Edit"
+                                                onClick={() => onEdit(lead)}
+                                                className="h-7 w-7 text-muted-foreground hover:text-brand-accent hover:bg-brand-accent/10"
+                                            >
+                                                <Edit className="h-3.5 w-3.5" />
+                                            </Button>
+                                        )}
+                                        {canConvert && !lead.isConverted && (
                                             <Button
                                                 variant="ghost"
                                                 size="icon"

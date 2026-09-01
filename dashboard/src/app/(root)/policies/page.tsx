@@ -36,17 +36,12 @@ import { PolicyForm } from "@/components/policy/PolicyForm";
 import { PolicyFilters } from "@/components/policy/PolicyFilters";
 import { PolicyTable } from "@/components/policy/PolicyTable";
 import { PolicyPagination } from "@/components/policy/PolicyPagination";
-import { useSession } from "@/lib/auth-client";
-import { Role } from "@/constants/role";
+import { usePermissions } from "@/hooks/use-permissions";
 import { CreatePolicyData, IPolicy } from "@/types/policy.type";
 
 export default function PoliciesPage() {
-  const { data: session } = useSession();
-  const isAdmin = useMemo(() => {
-    return [Role.SUPER_ADMIN, Role.ADMIN, Role.HR_MANAGER].includes(
-      session?.user?.role as Role,
-    );
-  }, [session]);
+  const { can } = usePermissions();
+  const isAdmin = can("policy.manage");
 
   const { data, isLoading } = useGetPoliciesQuery();
   const [createPolicy, { isLoading: isCreating }] = useCreatePolicyMutation();

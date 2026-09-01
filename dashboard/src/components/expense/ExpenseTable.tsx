@@ -12,6 +12,7 @@ import { Edit2, Trash2, RefreshCcw, Receipt } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import type { Expense } from "@/redux/features/expense/expenseApi";
+import { usePermissions } from "@/hooks/use-permissions";
 
 const STATUS_CONFIG: Record<string, { label: string; dot: string; text: string }> = {
   pending: { label: "Pending", dot: "bg-amber-500", text: "text-amber-700 dark:text-amber-400" },
@@ -36,6 +37,9 @@ export function ExpenseTable({
   onDelete,
   onMarkPending,
 }: ExpenseTableProps) {
+  const { can } = usePermissions();
+  const canUpdate = can("expense.update");
+  const canDelete = can("expense.delete");
   return (
     <Table>
       <TableHeader>
@@ -156,7 +160,7 @@ export function ExpenseTable({
                 {/* Actions */}
                 <TableCell className="pr-6">
                   <div className="flex items-center justify-end gap-1">
-                    {expense.status === "paid" && (
+                    {canUpdate && expense.status === "paid" && (
                       <Button
                         variant="ghost"
                         size="icon"
@@ -167,24 +171,28 @@ export function ExpenseTable({
                         <RefreshCcw className="h-3.5 w-3.5" />
                       </Button>
                     )}
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      title="Edit"
-                      onClick={() => onEdit(expense)}
-                      className="h-7 w-7 text-muted-foreground hover:text-brand-accent hover:bg-brand-accent/10"
-                    >
-                      <Edit2 className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      title="Delete"
-                      onClick={() => onDelete(expense)}
-                      className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
+                    {canUpdate && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        title="Edit"
+                        onClick={() => onEdit(expense)}
+                        className="h-7 w-7 text-muted-foreground hover:text-brand-accent hover:bg-brand-accent/10"
+                      >
+                        <Edit2 className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
+                    {canDelete && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        title="Delete"
+                        onClick={() => onDelete(expense)}
+                        className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
                   </div>
                 </TableCell>
               </TableRow>

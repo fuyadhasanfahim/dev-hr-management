@@ -17,6 +17,7 @@ import { formatMoney } from "@/lib/money";
 import { getCategoryConfig } from "@/constants/quotation-templates";
 import ReceiptPuppeteerPdfBtn, { receiptPdfFileStem } from "@/components/receipt/ReceiptPuppeteerPdfBtn";
 import type { IReceipt } from "@/types/receipt.type";
+import { usePermissions } from "@/hooks/use-permissions";
 
 function resolveQuotationTotal(r: IReceipt): number {
   if (!r.quotationId) return 0;
@@ -39,6 +40,9 @@ interface ReceiptTableProps {
 }
 
 export function ReceiptTable({ receipts, isLoading, onAddPayment, onVoid }: ReceiptTableProps) {
+  const { can } = usePermissions();
+  const canAddPayment = can("receipt.create");
+  const canVoid = can("receipt.update");
   return (
     <Table>
       <TableHeader>
@@ -193,7 +197,7 @@ export function ReceiptTable({ receipts, isLoading, onAddPayment, onVoid }: Rece
                 {/* Actions */}
                 <TableCell className="pr-6">
                   <div className="flex items-center justify-end gap-1">
-                    {!isVoid && (
+                    {!isVoid && canAddPayment && (
                       <Button
                         variant="ghost"
                         size="icon"
@@ -222,7 +226,7 @@ export function ReceiptTable({ receipts, isLoading, onAddPayment, onVoid }: Rece
                       className="h-7 w-7 p-0 text-muted-foreground hover:text-brand-primary hover:bg-brand-primary/10"
                       iconOnly
                     />
-                    {!isVoid && (
+                    {!isVoid && canVoid && (
                       <Button
                         variant="ghost"
                         size="icon"

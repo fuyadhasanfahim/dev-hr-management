@@ -69,6 +69,7 @@ import {
 import { IconPlus, IconX } from '@tabler/icons-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { usePermissions } from '@/hooks/use-permissions';
 
 const statusConfig: Record<string, { label: string; dot: string; text: string }> = {
     scheduled: { label: 'Scheduled', dot: 'bg-blue-500', text: 'text-blue-700 dark:text-blue-400' },
@@ -171,6 +172,9 @@ export function MeetingTable({ meetings, isLoading }: MeetingTableProps) {
 }
 
 function MeetingRow({ meeting }: { meeting: Meeting }) {
+    const { can } = usePermissions();
+    const canUpdate = can('meeting.update');
+    const canDelete = can('meeting.delete');
     const [cancelMeeting, { isLoading: isCancelling }] = useCancelMeetingMutation();
     const [updateMeeting, { isLoading: isUpdating }] = useUpdateMeetingMutation();
     const [deleteMeeting, { isLoading: isDeleting }] = useDeleteMeetingMutation();
@@ -498,7 +502,11 @@ function MeetingRow({ meeting }: { meeting: Meeting }) {
                         </DialogContent>
                     </Dialog>
 
-                    <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+                    <Dialog
+                        open={isEditDialogOpen && canUpdate}
+                        onOpenChange={setIsEditDialogOpen}
+                    >
+                        {canUpdate && (
                         <DialogTrigger asChild>
                             <Button
                                 variant="ghost"
@@ -509,6 +517,7 @@ function MeetingRow({ meeting }: { meeting: Meeting }) {
                                 <Edit className="h-3.5 w-3.5" />
                             </Button>
                         </DialogTrigger>
+                        )}
                         <DialogContent className="w-lg overflow-hidden p-0 flex flex-col h-[95vh] gap-0">
                             <form onSubmit={handleEditSubmit} className="flex flex-col h-full gap-0">
                                 <DialogHeader className="px-6 pt-5 pb-4 shrink-0 border-b border-border">
@@ -661,7 +670,11 @@ function MeetingRow({ meeting }: { meeting: Meeting }) {
                         </DialogContent>
                     </Dialog>
 
-                    <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+                    <AlertDialog
+                        open={isDeleteDialogOpen && canDelete}
+                        onOpenChange={setIsDeleteDialogOpen}
+                    >
+                        {canDelete && (
                         <AlertDialogTrigger asChild>
                             <Button
                                 variant="ghost"
@@ -672,6 +685,7 @@ function MeetingRow({ meeting }: { meeting: Meeting }) {
                                 <Trash2 className="h-3.5 w-3.5" />
                             </Button>
                         </AlertDialogTrigger>
+                        )}
                         <AlertDialogContent>
                             <AlertDialogHeader>
                                 <AlertDialogTitle>Delete Meeting</AlertDialogTitle>
@@ -703,7 +717,7 @@ function MeetingRow({ meeting }: { meeting: Meeting }) {
                         </Button>
                     )}
 
-                    {meeting.status === 'scheduled' && upcoming && (
+                    {canUpdate && meeting.status === 'scheduled' && upcoming && (
                         <Button
                             variant="ghost"
                             size="icon"
@@ -722,6 +736,8 @@ function MeetingRow({ meeting }: { meeting: Meeting }) {
 }
 
 export function ScheduleMeetingDialog({ clients }: { clients: ClientOption[] }) {
+    const { can } = usePermissions();
+    const canCreate = can('meeting.create');
     const [open, setOpen] = useState(false);
     const getDefaultDateTime = () => {
         const d = new Date(Date.now() + 60 * 60 * 1000);
@@ -831,6 +847,8 @@ export function ScheduleMeetingDialog({ clients }: { clients: ClientOption[] }) 
     const removeExtraPhone = (phone: string) => {
         setForm((f) => ({ ...f, attendeePhones: (f.attendeePhones || []).filter((p) => p !== phone) }));
     };
+
+    if (!canCreate) return null;
 
     return (
         <Dialog

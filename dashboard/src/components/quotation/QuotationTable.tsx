@@ -14,6 +14,7 @@ import { Eye, Edit2, Trash2, Send, Loader2, Receipt, FileText } from "lucide-rea
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import type { QuotationData, QuotationStatus } from "@/types/quotation.type";
+import { usePermissions } from "@/hooks/use-permissions";
 
 const STATUS_CONFIG: Record<QuotationStatus, { label: string; className: string }> = {
   draft: { label: "Draft", className: "bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-900/40 dark:text-slate-300 dark:border-slate-800" },
@@ -51,6 +52,12 @@ export function QuotationTable({
   onConvert,
   onReceipt,
 }: QuotationTableProps) {
+  const { can } = usePermissions();
+  const canConvert = can("order.create");
+  const canReceipt = can("receipt.create");
+  const canSend = can("quotation.create");
+  const canEdit = can("quotation.update");
+  const canDelete = can("quotation.delete");
   return (
     <Table>
       <TableHeader>
@@ -187,7 +194,7 @@ export function QuotationTable({
                 {/* Actions */}
                 <TableCell className="pr-6" onClick={(e) => e.stopPropagation()}>
                   <div className="flex items-center justify-end gap-1">
-                    {q.isLatestVersion !== false && !q.orderId && hasServices && !["superseded", "expired"].includes(q.status || "") && (
+                    {canConvert && q.isLatestVersion !== false && !q.orderId && hasServices && !["superseded", "expired"].includes(q.status || "") && (
                       <Button
                         variant="default"
                         size="sm"
@@ -198,7 +205,7 @@ export function QuotationTable({
                       </Button>
                     )}
 
-                    {q.isLatestVersion !== false && !["superseded", "expired"].includes(q.status || "") && (
+                    {canReceipt && q.isLatestVersion !== false && !["superseded", "expired"].includes(q.status || "") && (
                       <Button
                         variant="ghost"
                         size="icon"
@@ -222,7 +229,7 @@ export function QuotationTable({
                       </Link>
                     </Button>
 
-                    {q.isLatestVersion !== false && !["superseded", "rejected", "expired"].includes(q.status || "") && (
+                    {canSend && q.isLatestVersion !== false && !["superseded", "rejected", "expired"].includes(q.status || "") && (
                       <Button
                         variant="ghost"
                         size="icon"
@@ -239,25 +246,29 @@ export function QuotationTable({
                       </Button>
                     )}
 
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      title="Edit"
-                      className="h-7 w-7 text-muted-foreground hover:text-brand-accent hover:bg-brand-accent/10"
-                      onClick={() => onEdit(q)}
-                    >
-                      <Edit2 className="h-3.5 w-3.5" />
-                    </Button>
+                    {canEdit && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        title="Edit"
+                        className="h-7 w-7 text-muted-foreground hover:text-brand-accent hover:bg-brand-accent/10"
+                        onClick={() => onEdit(q)}
+                      >
+                        <Edit2 className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
 
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      title="Delete"
-                      className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                      onClick={() => q._id && onDelete(q._id)}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
+                    {canDelete && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        title="Delete"
+                        className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                        onClick={() => q._id && onDelete(q._id)}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
                   </div>
                 </TableCell>
               </TableRow>

@@ -28,6 +28,7 @@ import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { getFilteredStatusOptions } from "@/constants/orderStatusWorkflow";
 import { ORDER_STATUS_LABELS, ORDER_STATUS_COLORS } from "@/lib/constants";
+import { usePermissions } from "@/hooks/use-permissions";
 import type { IOrder, OrderStatus } from "@/types/order.type";
 
 const STATUS_DOT_COLORS: Record<OrderStatus, string> = {
@@ -84,6 +85,11 @@ export function OrderTable({
   onTimeline,
   onStatusChange,
 }: OrderTableProps) {
+  const { can } = usePermissions();
+  const canChangeStatus = can("order.changeStatus");
+  const canUpdate = can("order.update");
+  const canDelete = can("order.delete");
+  const canReceipt = can("receipt.create");
   const colCount = (isSelectionMode ? 1 : 0) + 10;
 
   return (
@@ -334,11 +340,12 @@ export function OrderTable({
                       <Select
                         value={order.status}
                         onValueChange={(value) => onStatusChange(order._id, value as OrderStatus)}
+                        disabled={!canChangeStatus}
                       >
                         <SelectTrigger
                           size="sm"
                           className={cn(
-                            "w-[135px] h-7 border-transparent text-[11px] font-semibold uppercase tracking-wide justify-center gap-1.5 shadow-none",
+                            "w-[135px] h-7 border-transparent text-[11px] font-semibold uppercase tracking-wide justify-center gap-1.5 shadow-none disabled:opacity-100",
                             ORDER_STATUS_COLORS[order.status],
                           )}
                         >
@@ -388,7 +395,7 @@ export function OrderTable({
                         <TooltipContent side="top" className="text-xs">View Details</TooltipContent>
                       </Tooltip>
 
-                      {order.quotationGroupId && (
+                      {order.quotationGroupId && canReceipt && (
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <Button
@@ -404,35 +411,35 @@ export function OrderTable({
                         </Tooltip>
                       )}
 
-                      {canManage(order) && (
-                        <>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => onEdit(order)}
-                                className="h-7 w-7 text-muted-foreground hover:text-brand-accent hover:bg-brand-accent/10"
-                              >
-                                <Edit2 className="h-3.5 w-3.5" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent side="top" className="text-xs">Edit Order</TooltipContent>
-                          </Tooltip>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => onDelete(order)}
-                                className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent side="top" className="text-xs">Delete Order</TooltipContent>
-                          </Tooltip>
-                        </>
+                      {canManage(order) && canUpdate && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => onEdit(order)}
+                              className="h-7 w-7 text-muted-foreground hover:text-brand-accent hover:bg-brand-accent/10"
+                            >
+                              <Edit2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent side="top" className="text-xs">Edit Order</TooltipContent>
+                        </Tooltip>
+                      )}
+                      {canManage(order) && canDelete && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => onDelete(order)}
+                              className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent side="top" className="text-xs">Delete Order</TooltipContent>
+                        </Tooltip>
                       )}
 
                       <Tooltip>

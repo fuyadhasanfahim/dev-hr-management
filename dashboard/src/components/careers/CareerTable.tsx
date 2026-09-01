@@ -20,6 +20,7 @@ import {
 import { Eye, Download, Trash2, Loader, FileText } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
+import { usePermissions } from "@/hooks/use-permissions";
 import type { IJobApplication, ApplicationStatus } from "@/types/career.type";
 import {
   APPLICATION_STATUS_LABELS,
@@ -130,6 +131,8 @@ function ApplicationRow({
   onDelete: (id: string) => void;
   onStatusChange: (id: string, status: ApplicationStatus) => Promise<void>;
 }) {
+  const { can } = usePermissions();
+  const canManage = can("career.manage");
   return (
     <TableRow className="cursor-pointer" onClick={() => onView(app)}>
       {/* Applicant */}
@@ -158,7 +161,11 @@ function ApplicationRow({
 
       {/* Status */}
       <TableCell onClick={(e) => e.stopPropagation()}>
-        <StatusSelect app={app} onStatusChange={onStatusChange} />
+        <StatusSelect
+          app={app}
+          onStatusChange={onStatusChange}
+          disabled={!canManage}
+        />
       </TableCell>
 
       {/* Applied */}
@@ -191,15 +198,17 @@ function ApplicationRow({
               <Download className="h-3.5 w-3.5" />
             </a>
           </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            title="Delete"
-            onClick={() => onDelete(app._id)}
-            className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </Button>
+          {canManage && (
+            <Button
+              variant="ghost"
+              size="icon"
+              title="Delete"
+              onClick={() => onDelete(app._id)}
+              className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
+          )}
         </div>
       </TableCell>
     </TableRow>
@@ -209,9 +218,11 @@ function ApplicationRow({
 function StatusSelect({
   app,
   onStatusChange,
+  disabled = false,
 }: {
   app: IJobApplication;
   onStatusChange: (id: string, status: ApplicationStatus) => Promise<void>;
+  disabled?: boolean;
 }) {
   const [isUpdating, setIsUpdating] = useState(false);
 
@@ -226,7 +237,11 @@ function StatusSelect({
   };
 
   return (
-    <Select value={app.status} onValueChange={handleChange} disabled={isUpdating}>
+    <Select
+      value={app.status}
+      onValueChange={handleChange}
+      disabled={isUpdating || disabled}
+    >
       <SelectTrigger
         size="sm"
         className={cn(

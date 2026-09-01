@@ -63,6 +63,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { usePermissions } from '@/hooks/use-permissions';
 
 const statusConfig: Record<string, { label: string; dot: string; text: string }> = {
     pending: { label: 'Pending', dot: 'bg-amber-500', text: 'text-amber-700 dark:text-amber-400' },
@@ -166,6 +167,10 @@ export function ConsultationTable({ consultations, isLoading }: ConsultationTabl
 }
 
 function ConsultationRow({ consultation }: { consultation: Consultation }) {
+    const { can } = usePermissions();
+    const canUpdate = can('consultation.update');
+    const canDelete = can('consultation.delete');
+    const canScheduleMeeting = can('meeting.create');
     const [updateConsultation, { isLoading: isUpdating }] = useUpdateConsultationMutation();
     const [deleteConsultation, { isLoading: isDeleting }] = useDeleteConsultationMutation();
 
@@ -313,24 +318,25 @@ function ConsultationRow({ consultation }: { consultation: Consultation }) {
                         <Eye className="h-3.5 w-3.5" />
                     </Button>
 
-                    {consultation.status === 'pending' && (
+                    {canScheduleMeeting && consultation.status === 'pending' && (
                         <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-blue-600 hover:bg-blue-500/10" onClick={() => setIsScheduleOpen(true)} title="Schedule Meeting">
                             <CalendarPlus className="h-3.5 w-3.5" />
                         </Button>
                     )}
 
-                    {consultation.status === 'scheduled' && (
+                    {canUpdate && consultation.status === 'scheduled' && (
                         <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-emerald-600 hover:bg-emerald-500/10" onClick={() => handleStatusChange('completed')} disabled={isUpdating} title="Mark Completed">
                             <CheckCircle2 className="h-3.5 w-3.5" />
                         </Button>
                     )}
 
-                    {(consultation.status === 'pending' || consultation.status === 'scheduled') && (
+                    {canUpdate && (consultation.status === 'pending' || consultation.status === 'scheduled') && (
                         <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10" onClick={() => handleStatusChange('cancelled')} disabled={isUpdating} title="Cancel">
                             <Ban className="h-3.5 w-3.5" />
                         </Button>
                     )}
 
+                    {canDelete && (
                     <AlertDialog>
                         <AlertDialogTrigger asChild>
                             <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10" title="Delete">
@@ -352,6 +358,7 @@ function ConsultationRow({ consultation }: { consultation: Consultation }) {
                             </AlertDialogFooter>
                         </AlertDialogContent>
                     </AlertDialog>
+                    )}
                 </div>
             </TableCell>
 

@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Eye, Edit, Users, UsersRound } from "lucide-react";
 import { Client } from "@/types/client.type";
+import { usePermissions } from "@/hooks/use-permissions";
 import {
   Tooltip,
   TooltipContent,
@@ -31,6 +32,8 @@ export function ClientTable({
   onEdit,
   onView,
 }: ClientTableProps) {
+  const { can } = usePermissions();
+  const canEdit = can("client.update");
   return (
     <TooltipProvider delayDuration={300}>
       <Table>
@@ -201,15 +204,17 @@ export function ClientTable({
                       >
                         <Eye className="h-3.5 w-3.5" />
                       </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        title="Edit"
-                        onClick={() => onEdit(client)}
-                        className="h-7 w-7 text-muted-foreground hover:text-brand-accent hover:bg-brand-accent/10"
-                      >
-                        <Edit className="h-3.5 w-3.5" />
-                      </Button>
+                      {canEdit && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          title="Edit"
+                          onClick={() => onEdit(client)}
+                          className="h-7 w-7 text-muted-foreground hover:text-brand-accent hover:bg-brand-accent/10"
+                        >
+                          <Edit className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
                     </div>
                   </TableCell>
                 </TableRow>
