@@ -329,16 +329,16 @@ const TableRow = ({
     >
         <Text style={[styles.tableCell, styles.colNo]}>{index + 1}</Text>
         <Text style={[styles.tableCell, styles.colDate]}>
-            {format(new Date(order.orderDate), 'PPP')}
+            {format(new Date(order.orderDate ?? order.createdAt), 'PPP')}
         </Text>
         <Text style={[styles.tableCell, styles.colName]}>
-            {order.orderName}
+            {order.orderName ?? order.orderNumber}
         </Text>
         <Text style={[styles.tableCell, styles.colQty]}>
-            {order.imageQuantity}
+            {order.imageQuantity ?? 0}
         </Text>
         <Text style={[styles.tableCell, styles.colRate]}>
-            {formatCurrency(order.perImagePrice)}
+            {formatCurrency(order.perImagePrice ?? 0)}
         </Text>
         <Text style={[styles.tableCell, styles.colTotal]}>
             {formatCurrency(order.totalPrice)}
@@ -516,9 +516,11 @@ export default function InvoicePDF(props: InvoicePDFProps) {
                 year: Number(props.year),
                 clientEmail: email,
                 items: props.orders.map((order) => ({
-                    name: order.orderName,
-                    price: order.perImagePrice * order.imageQuantity,
-                    quantity: order.imageQuantity,
+                    name: order.orderName ?? order.orderNumber,
+                    price:
+                        (order.perImagePrice ?? 0) * (order.imageQuantity ?? 0) ||
+                        order.totalPrice,
+                    quantity: order.imageQuantity ?? 1,
                 })),
             }).unwrap();
 

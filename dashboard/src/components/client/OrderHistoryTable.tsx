@@ -100,7 +100,7 @@ export function OrderHistoryTable({ orders, isLoading, currency = "USD" }: Order
                             <TableRow key={order._id} className="group hover:bg-muted/10 transition-colors">
                                 <TableCell className="border-r border-slate-200 dark:border-slate-800 font-medium py-4">
                                     <div className="flex flex-col gap-1">
-                                        <span className="text-slate-900 dark:text-slate-100">{order.orderName}</span>
+                                        <span className="text-slate-900 dark:text-slate-100">{order.quotationSnapshot?.templateName || order.orderName || order.orderNumber}</span>
                                         <div className="flex items-center gap-2">
                                             {order.isPaid ? (
                                                 <Badge variant="outline" className="text-[9px] h-4 bg-green-50 dark:bg-green-950/40 text-green-700 dark:text-green-300 border-green-200 dark:border-green-900/50">
@@ -118,10 +118,10 @@ export function OrderHistoryTable({ orders, isLoading, currency = "USD" }: Order
                                     </div>
                                 </TableCell>
                                 <TableCell className="border-r border-slate-200 dark:border-slate-800 text-center py-4 text-xs text-slate-600 dark:text-slate-300">
-                                    {format(new Date(order.orderDate), "MMM dd, yyyy")}
+                                    {format(new Date(order.orderDate ?? order.createdAt), "MMM dd, yyyy")}
                                 </TableCell>
                                 <TableCell className="border-r border-slate-200 dark:border-slate-800 text-center py-4 text-sm font-bold text-slate-800 dark:text-slate-200">
-                                    {order.imageQuantity}
+                                    {order.imageQuantity ?? "—"}
                                 </TableCell>
                                 <TableCell className="border-r border-slate-200 dark:border-slate-800 text-center py-4 text-sm font-semibold text-slate-800 dark:text-slate-200">
                                     {formatCurrency(order.totalPrice)}

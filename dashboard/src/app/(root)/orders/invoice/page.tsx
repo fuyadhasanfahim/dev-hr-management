@@ -168,7 +168,7 @@ export default function InvoicePage() {
         let totalImages = 0;
         let totalAmount = 0;
         selectedOrdersList.forEach((order: IOrder) => {
-            totalImages += order.imageQuantity;
+            totalImages += order.imageQuantity ?? 0;
             totalAmount += order.totalPrice;
         });
         return { totalImages, totalAmount };
@@ -201,7 +201,7 @@ export default function InvoicePage() {
                 const generatedNumber = result.formattedInvoiceNumber;
 
                 const orderDates = selectedOrdersList.map((o) =>
-                    new Date(o.orderDate).getTime(),
+                    new Date(o.orderDate ?? o.createdAt).getTime(),
                 );
                 const minDate = new Date(Math.min(...orderDates)).toISOString();
                 const maxDate = new Date(Math.max(...orderDates)).toISOString();
@@ -223,9 +223,11 @@ export default function InvoicePage() {
                     totalOrders: selectedOrdersList.length,
                     clientEmail: selectedClient.emails[0],
                     items: selectedOrdersList.map((order) => ({
-                        name: order.orderName,
-                        price: order.perImagePrice * order.imageQuantity,
-                        quantity: order.imageQuantity,
+                        name: order.orderName ?? order.orderNumber,
+                        price:
+                            (order.perImagePrice ?? 0) *
+                                (order.imageQuantity ?? 0) || order.totalPrice,
+                        quantity: order.imageQuantity ?? 1,
                     })),
                     orderIds: Array.from(selectedOrders),
                 }).unwrap();
@@ -259,7 +261,7 @@ export default function InvoicePage() {
                 if (result.success) {
                     currentInvoiceNumber = result.formattedInvoiceNumber;
 
-                    const orderDates = selectedOrdersList.map((o) => new Date(o.orderDate).getTime());
+                    const orderDates = selectedOrdersList.map((o) => new Date(o.orderDate ?? o.createdAt).getTime());
                     const minDate = new Date(Math.min(...orderDates)).toISOString();
                     const maxDate = new Date(Math.max(...orderDates)).toISOString();
 
@@ -280,9 +282,11 @@ export default function InvoicePage() {
                         totalOrders: selectedOrdersList.length,
                         clientEmail: emails[0],
                         items: selectedOrdersList.map((order) => ({
-                            name: order.orderName,
-                            price: order.perImagePrice * order.imageQuantity,
-                            quantity: order.imageQuantity,
+                            name: order.orderName ?? order.orderNumber,
+                            price:
+                                (order.perImagePrice ?? 0) *
+                                    (order.imageQuantity ?? 0) || order.totalPrice,
+                            quantity: order.imageQuantity ?? 1,
                         })),
                     }).unwrap();
 
@@ -439,15 +443,15 @@ export default function InvoicePage() {
                                             <TableCell><Checkbox checked={selectedOrders.has(order._id)} onCheckedChange={(val) => handleSelectOrder(order._id, !!val)} /></TableCell>
                                             <TableCell>
                                                 <div className="flex flex-col">
-                                                    <span className="font-medium">{order.orderName}</span>
+                                                    <span className="font-medium">{order.quotationSnapshot?.templateName || order.orderName || order.orderNumber}</span>
                                                     <div className="flex gap-1 mt-1">
                                                         {order.isPaid && <Badge className="text-[9px] bg-green-100 text-green-700">PAID</Badge>}
                                                         {order.invoiceNumber && <Badge className="text-[9px] bg-blue-100 text-blue-700">INV #{order.invoiceNumber}</Badge>}
                                                     </div>
                                                 </div>
                                             </TableCell>
-                                            <TableCell className="text-xs">{format(new Date(order.orderDate), "MMM dd, yyyy")}</TableCell>
-                                            <TableCell className="text-center font-bold">{order.imageQuantity}</TableCell>
+                                            <TableCell className="text-xs">{format(new Date(order.orderDate ?? order.createdAt), "MMM dd, yyyy")}</TableCell>
+                                            <TableCell className="text-center font-bold">{order.imageQuantity ?? "—"}</TableCell>
                                             <TableCell className="text-right font-semibold">{formatCurrency(order.totalPrice)}</TableCell>
                                             <TableCell className="text-center">
                                                 <Badge variant="outline" className="capitalize text-[10px]">{order.status.replace('_', ' ')}</Badge>

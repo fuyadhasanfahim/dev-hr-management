@@ -147,55 +147,78 @@ export interface IQuotationSnapshot {
     };
 }
 
+export type OrderType = "project" | "service" | "subscription";
+
+export interface IOrderStatusHistoryEntry {
+    status: OrderStatus;
+    note?: string;
+    changedBy?: string | { _id: string; name: string };
+    updatedAt?: string;
+    createdAt?: string;
+}
+
+export type OrderStaffRef = string | { _id: string; name: string; image?: string };
+
+/**
+ * An order is the immutable operational record created when a quotation is
+ * accepted. `quotationSnapshot` is a frozen copy of the quotation (scope,
+ * services, line items, milestones, totals) — the source of truth for every
+ * financial / scope decision. Everything else is operational and mutable.
+ */
 export interface IOrder {
     _id: string;
     orderNumber: string;
 
-    
-    // ── Pipeline Fields (New) ───────────────────────────────────────────
+    // ── Frozen quotation snapshot (source of truth) ────────────────────
     quotationGroupId?: string;
     quotationSnapshot?: IQuotationSnapshot;
-    assets?: IOrderAsset[];
-    // ──────────────────────────────────────────────────────────────────
 
-    title?: string; 
-    description?: string;
-    orderType?: string;
-    currency?: string;
-    totalAmount?: number;
-    items?: IOrderItem[];
-
-    orderName: string;
+    // ── Operational ───────────────────────────────────────────────────
     clientId: Client | string;
-    orderDate: string;
-    deadline: string;
-    originalDeadline?: string;
-    imageQuantity: number;
-    perImagePrice: number;
-    totalPrice: number;
-    services: {
-        _id: string;
-        name: string;
-    }[];
-    returnFileFormat: {
-        _id: string;
-        name: string;
-        extension: string;
-    };
-    instruction?: string;
+    orderType?: OrderType;
     status: OrderStatus;
     priority: OrderPriority;
-    contactPersonId?: string;
-    notes?: string;
-    revisionCount: number;
-    isLegacy?: boolean; 
-    earning?: {
-        status: "paid" | "unpaid";
-    };
-    revisionInstructions: IRevisionInstruction[];
-    timeline: ITimelineEntry[];
+    statusHistory?: IOrderStatusHistoryEntry[];
+    assignedTeam?: OrderStaffRef[];
+    teamLeader?: OrderStaffRef | null;
+    assets?: IOrderAsset[];
+    milestones?: unknown[];
+    internalNotes?: string;
+    estimatedDeliveryDate?: string;
     completedAt?: string;
     deliveredAt?: string;
+
+    // ── Quick-access financial summary (mirrors the snapshot) ─────────
+    totalPrice: number;
+    currency?: string;
+    imageQuantity?: number;
+
+    createdBy: string;
+    createdAt: string;
+    updatedAt: string;
+
+    // ── Legacy image-editing fields — no longer written by the backend.
+    // Kept optional so the invoice / dashboard / order-history views still
+    // compile until they are migrated to `quotationSnapshot`. @deprecated
+    orderName?: string;
+    orderDate?: string;
+    deadline?: string;
+    originalDeadline?: string;
+    perImagePrice?: number;
+    title?: string;
+    description?: string;
+    totalAmount?: number;
+    items?: IOrderItem[];
+    services?: { _id: string; name: string }[];
+    returnFileFormat?: { _id: string; name: string; extension: string };
+    instruction?: string;
+    notes?: string;
+    contactPersonId?: string;
+    revisionCount?: number;
+    isLegacy?: boolean;
+    earning?: { status: "paid" | "unpaid" };
+    revisionInstructions?: IRevisionInstruction[];
+    timeline?: ITimelineEntry[];
     invoiceNumber?: string;
     isPaid?: boolean;
     paymentPhases?: {
@@ -204,9 +227,6 @@ export interface IOrder {
         delivery: { status: string; amountDue?: number; amountPaid?: number; percentage?: number };
         final: { status: string; amountDue?: number; amountPaid?: number; percentage?: number };
     } | null;
-    createdBy: string;
-    createdAt: string;
-    updatedAt: string;
 }
 
 export interface IOrderStats {

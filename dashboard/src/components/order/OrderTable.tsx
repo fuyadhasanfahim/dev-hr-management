@@ -95,9 +95,6 @@ export function OrderTable({
               Total
             </TableHead>
             <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground text-center">
-              Payment
-            </TableHead>
-            <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground text-center">
               Status
             </TableHead>
             <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -120,7 +117,6 @@ export function OrderTable({
                 <TableCell><Skeleton className="h-5 w-[70px] rounded-md" /></TableCell>
                 <TableCell><Skeleton className="h-5 w-6 mx-auto rounded-full" /></TableCell>
                 <TableCell><Skeleton className="h-3.5 w-[70px] ml-auto" /></TableCell>
-                <TableCell><Skeleton className="h-6 w-[90px] mx-auto" /></TableCell>
                 <TableCell><Skeleton className="h-6 w-[100px] mx-auto rounded-md" /></TableCell>
                 <TableCell><Skeleton className="h-3.5 w-[80px]" /></TableCell>
                 <TableCell className="pr-6">
@@ -147,45 +143,7 @@ export function OrderTable({
           ) : (
             orders.map((order) => {
               const client = typeof order.clientId === "object" ? order.clientId : null;
-              const phases = order.paymentPhases;
-
-              let stage = "Upfront";
-              let stageStyle =
-                "bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-950/30 dark:text-amber-400";
-              let pct = 0;
-
-              if (phases) {
-                const due =
-                  (phases.upfront?.amountDue || 0) +
-                  (phases.delivery?.amountDue || 0) +
-                  (phases.final?.amountDue || 0);
-                const paid =
-                  (phases.upfront?.amountPaid || 0) +
-                  (phases.delivery?.amountPaid || 0) +
-                  (phases.final?.amountPaid || 0);
-                pct =
-                  typeof phases.totalPercentage === "number"
-                    ? phases.totalPercentage
-                    : due > 0
-                      ? Math.min(100, Math.floor((paid / due) * 100))
-                      : 0;
-
-                if (phases.upfront?.status === "paid") {
-                  stage = "Delivery";
-                  stageStyle =
-                    "bg-sky-100 text-sky-800 border-sky-200 dark:bg-sky-950/30 dark:text-sky-400";
-                }
-                if (phases.delivery?.status === "paid") {
-                  stage = "Final";
-                  stageStyle =
-                    "bg-indigo-100 text-indigo-800 border-indigo-200 dark:bg-indigo-950/30 dark:text-indigo-400";
-                }
-                if (phases.final?.status === "paid") {
-                  stage = "Paid";
-                  stageStyle =
-                    "bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400";
-                }
-              }
+              const snap = order.quotationSnapshot;
 
               return (
                 <TableRow
@@ -210,9 +168,9 @@ export function OrderTable({
                   {/* Project / Service */}
                   <TableCell>
                     <span className="text-sm text-foreground/80 line-clamp-1 max-w-[200px] block">
-                      {order.quotationSnapshot?.templateName ||
-                        order.orderName ||
-                        "Untitled Project"}
+                      {snap?.templateName ||
+                        snap?.details?.title ||
+                        order.orderNumber}
                     </span>
                   </TableCell>
 
@@ -230,7 +188,9 @@ export function OrderTable({
                   <TableCell>
                     <div className="flex justify-center">
                       <div className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-muted text-[11px] font-bold">
-                        {order.quotationSnapshot?.scopeOfWork?.length || 0}
+                        {snap?.services?.length ||
+                          snap?.scopeOfWork?.length ||
+                          0}
                       </div>
                     </div>
                   </TableCell>
@@ -243,50 +203,15 @@ export function OrderTable({
                         !canSeeFinancials && "blur-[4px] select-none pointer-events-none",
                       )}
                     >
-                      {order.quotationSnapshot?.currency === "USD"
-                        ? "$"
-                        : order.quotationSnapshot?.currency || "$"}
-                      {(
-                        order.quotationSnapshot?.grandTotal ||
-                        order.totalAmount ||
-                        order.totalPrice ||
-                        0
-                      ).toLocaleString(undefined, {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      })}
+                      {snap?.currency === "USD" ? "$" : snap?.currency || "৳"}
+                      {(snap?.grandTotal ?? order.totalPrice ?? 0).toLocaleString(
+                        undefined,
+                        {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        },
+                      )}
                     </span>
-                  </TableCell>
-
-                  {/* Payment */}
-                  <TableCell>
-                    {!phases ? (
-                      <div className="text-center text-[10px] text-muted-foreground font-medium italic">
-                        No Data
-                      </div>
-                    ) : (
-                      <div className="space-y-1 w-full max-w-[110px] mx-auto">
-                        <div className="flex items-center justify-between gap-1 text-[9px] font-bold">
-                          <span className={cn("px-1 rounded-[4px] border tracking-tight truncate uppercase", stageStyle)}>
-                            {stage}
-                          </span>
-                          <span className={cn("font-mono tracking-tight", pct === 100 ? "text-emerald-600" : "text-foreground/80")}>
-                            {pct}%
-                          </span>
-                        </div>
-                        <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
-                          <div
-                            className={cn(
-                              "h-full transition-all duration-700 ease-out rounded-full",
-                              pct === 100
-                                ? "bg-gradient-to-r from-emerald-500 to-emerald-400"
-                                : "bg-gradient-to-r from-primary/90 to-primary",
-                            )}
-                            style={{ width: `${pct}%` }}
-                          />
-                        </div>
-                      </div>
-                    )}
                   </TableCell>
 
                   {/* Status */}
@@ -329,7 +254,7 @@ export function OrderTable({
                   {/* Created Date */}
                   <TableCell>
                     <span className="text-muted-foreground text-[12px] whitespace-nowrap">
-                      {safeFormat(order.createdAt || order.orderDate)}
+                      {safeFormat(order.createdAt)}
                     </span>
                   </TableCell>
 
