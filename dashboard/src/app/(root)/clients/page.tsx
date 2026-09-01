@@ -22,6 +22,7 @@ import { Button } from '@/components/ui/button';
 import { Plus, Loader, FileDown } from 'lucide-react';
 import { toast } from 'sonner';
 import { ClientForm, type ClientFormData } from '@/components/client/ClientForm';
+import { usePermissions } from '@/hooks/use-permissions';
 import { ClientStats } from '@/components/client/ClientStats';
 import { ClientFilters } from '@/components/client/ClientFilters';
 import { ClientTable } from '@/components/client/ClientTable';
@@ -84,6 +85,9 @@ function ClientsPageContent() {
         const newUrl = params.toString() ? `${pathname}?${params.toString()}` : pathname;
         window.history.replaceState({ ...window.history.state, as: newUrl, url: newUrl }, '', newUrl);
     };
+
+    const { can } = usePermissions();
+    const canCreateClient = can('client.create');
 
     // Dialog states
     const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
@@ -232,17 +236,19 @@ function ClientsPageContent() {
                         <FileDown className="h-3.5 w-3.5" />
                         <span className="hidden sm:inline">Export</span>
                     </Button>
-                    <Button
-                        size="sm"
-                        onClick={() => {
-                            setAddServerErrors(undefined);
-                            setIsAddDialogOpen(true);
-                        }}
-                        className="h-8"
-                    >
-                        <Plus className="h-3.5 w-3.5" />
-                        Add Client
-                    </Button>
+                    {canCreateClient && (
+                        <Button
+                            size="sm"
+                            onClick={() => {
+                                setAddServerErrors(undefined);
+                                setIsAddDialogOpen(true);
+                            }}
+                            className="h-8"
+                        >
+                            <Plus className="h-3.5 w-3.5" />
+                            Add Client
+                        </Button>
+                    )}
                 </div>
             </div>
 
@@ -305,7 +311,10 @@ function ClientsPageContent() {
             </Card>
 
             {/* ── Add Client Dialog ────────────────────────────────────── */}
-            <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+            <Dialog
+                open={isAddDialogOpen && canCreateClient}
+                onOpenChange={setIsAddDialogOpen}
+            >
                 <DialogContent className="max-w-4xl h-[90vh] max-h-[90vh] flex flex-col p-0 overflow-hidden gap-0">
                     <div className="px-6 py-4 border-b border-border shrink-0">
                         <DialogHeader>

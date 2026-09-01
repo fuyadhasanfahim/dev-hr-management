@@ -179,8 +179,9 @@ export function UserAccessForm({
                     deniedPermissions: [...denied],
                 },
             }).unwrap();
-            toast.success('Permission overrides updated.');
-            if (!embedded && callbackUrl) router.push(callbackUrl);
+            toast.success('Permission overrides saved.');
+            // stay on the page — the refetched access resets the form to the
+            // saved state (Save disables until the next edit).
         } catch (err) {
             toast.error(
                 (err as { data?: { message?: string } })?.data?.message ||
