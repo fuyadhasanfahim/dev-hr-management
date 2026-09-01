@@ -3,6 +3,7 @@ import type {
     IOrder,
     IOrderStats,
     UpdateStatusInput,
+    UpdateOrderInput,
     OrderFilters,
 } from '@/types/order.type';
 
@@ -29,8 +30,8 @@ interface OrderStatsResponse {
 /**
  * Orders are created only by converting an accepted quotation
  * (`convertQuotationToOrder`). The `quotationSnapshot` on an order is
- * immutable — there is no update / delete / revision / deadline mutation.
- * "Revision" is a status transition; deadlines live on the quotation.
+ * immutable — `updateOrder` only touches operational fields (priority,
+ * internal notes, estimated delivery date). "Revision" is a status transition.
  */
 export const orderApi = apiSlice.injectEndpoints({
     endpoints: (builder) => ({
@@ -80,6 +81,21 @@ export const orderApi = apiSlice.injectEndpoints({
                 providesTags: [{ type: 'Order', id: 'YEARS' }],
             },
         ),
+
+        updateOrder: builder.mutation<
+            OrderResponse,
+            { id: string; data: UpdateOrderInput }
+        >({
+            query: ({ id, data }) => ({
+                url: `/orders/${id}`,
+                method: 'PATCH',
+                body: data,
+            }),
+            invalidatesTags: (_result, _error, { id }) => [
+                { type: 'Order', id },
+                { type: 'Order', id: 'LIST' },
+            ],
+        }),
 
         updateOrderStatus: builder.mutation<
             OrderResponse,
@@ -137,6 +153,7 @@ export const {
     useGetOrderStatsQuery,
     useGetOrdersByClientQuery,
     useGetOrderYearsQuery,
+    useUpdateOrderMutation,
     useUpdateOrderStatusMutation,
     useUpdateOrderTeamMutation,
     useConvertQuotationToOrderMutation,

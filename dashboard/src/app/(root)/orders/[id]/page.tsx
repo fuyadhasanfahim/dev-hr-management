@@ -6,15 +6,27 @@ import { useSession } from "@/lib/auth-client";
 import { Role } from "@/constants/role";
 import { 
     useGetOrderByIdQuery, 
-    useUpdateOrderStatusMutation
+    useUpdateOrderStatusMutation,
+    useUpdateOrderMutation,
 } from "@/redux/features/order/orderApi";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { usePermissions } from "@/hooks/use-permissions";
 import {
     Dialog,
     DialogContent,
@@ -40,14 +52,19 @@ import {
     Loader2,
     ChevronDown,
     Users,
-    LayoutList
+    LayoutList,
+    Pencil,
+    Flag,
+    CalendarClock,
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { OrderTasksTab } from "@/components/tasks/OrderTasksTab";
 
-import { OrderStatus } from "@/types/order.type";
+import { OrderStatus, type OrderPriority } from "@/types/order.type";
 import { ORDER_STATUS_LABELS } from "@/lib/constants";
 import { getFilteredStatusOptions } from "@/constants/orderStatusWorkflow";
+
+const ORDER_PRIORITIES: OrderPriority[] = ["low", "medium", "high", "urgent"];
 
 export default function OrderDetailsPage() {
     const params = useParams();
@@ -60,10 +77,51 @@ export default function OrderDetailsPage() {
         return r === Role.SUPER_ADMIN || r === Role.ADMIN || r === Role.HR_MANAGER;
     }, [session]);
 
+    const { can } = usePermissions();
+    const canEdit = can("order.update");
+
     const { data, isLoading, error } = useGetOrderByIdQuery(id);
     const order = data?.data;
     // -- Status Management Flow logic --
     const [updateOrderStatus] = useUpdateOrderStatusMutation();
+    const [updateOrder, { isLoading: isSavingOps }] = useUpdateOrderMutation();
+
+    // -- Operational-details edit dialog --
+    const [isOpEditOpen, setIsOpEditOpen] = useState(false);
+    const [opForm, setOpForm] = useState({
+        priority: "medium" as OrderPriority,
+        estimatedDeliveryDate: "",
+        internalNotes: "",
+    });
+
+    const openOpEdit = () => {
+        if (!order) return;
+        setOpForm({
+            priority: (order.priority as OrderPriority) || "medium",
+            estimatedDeliveryDate: order.estimatedDeliveryDate
+                ? new Date(order.estimatedDeliveryDate).toISOString().slice(0, 10)
+                : "",
+            internalNotes: order.internalNotes || "",
+        });
+        setIsOpEditOpen(true);
+    };
+
+    const handleSaveOps = async () => {
+        try {
+            await updateOrder({
+                id,
+                data: {
+                    priority: opForm.priority,
+                    internalNotes: opForm.internalNotes,
+                    estimatedDeliveryDate: opForm.estimatedDeliveryDate || null,
+                },
+            }).unwrap();
+            toast.success("Order details updated");
+            setIsOpEditOpen(false);
+        } catch (err: any) {
+            toast.error(err?.data?.message || "Failed to update order details");
+        }
+    };
 
     const handleStatusClick = async (target: OrderStatus) => {
         try {
@@ -420,6 +478,69 @@ export default function OrderDetailsPage() {
                             </div>
                         </CardContent>
                     </Card>
+                    <Card className="shadow-md border-muted/60">
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 border-b bg-muted/10">
+                            <CardTitle className="text-lg flex items-center gap-2">
+                                <Flag className="h-4 w-4 text-primary" />
+                                Operational Details
+                            </CardTitle>
+                            {canEdit && (
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-7 gap-1.5 text-xs"
+                                    onClick={openOpEdit}
+                                >
+                                    <Pencil className="h-3.5 w-3.5" />
+                                    Edit
+                                </Button>
+                            )}
+                        </CardHeader>
+                        <CardContent className="pt-5 space-y-3 text-sm">
+                            <div className="flex justify-between items-center py-1 border-b border-dashed">
+                                <span className="text-muted-foreground">Priority</span>
+                                <Badge
+                                    variant="outline"
+                                    className={cn(
+                                        "capitalize font-bold text-[10px]",
+                                        order.priority === "urgent" &&
+                                            "border-red-300 text-red-600",
+                                        order.priority === "high" &&
+                                            "border-orange-300 text-orange-600",
+                                    )}
+                                >
+                                    {order.priority || "medium"}
+                                </Badge>
+                            </div>
+                            <div className="flex justify-between items-center py-1 border-b border-dashed">
+                                <span className="text-muted-foreground flex items-center gap-1.5">
+                                    <CalendarClock className="h-3.5 w-3.5" />
+                                    Est. Delivery
+                                </span>
+                                <span className="font-medium">
+                                    {order.estimatedDeliveryDate
+                                        ? format(
+                                              new Date(order.estimatedDeliveryDate),
+                                              "MMM d, yyyy",
+                                          )
+                                        : "Not set"}
+                                </span>
+                            </div>
+                            <div className="py-1">
+                                <span className="text-muted-foreground text-xs uppercase tracking-wider font-bold">
+                                    Internal Notes
+                                </span>
+                                <p className="mt-1.5 text-foreground/80 whitespace-pre-wrap text-[13px] leading-relaxed">
+                                    {order.internalNotes || (
+                                        <span className="italic text-muted-foreground">
+                                            None
+                                        </span>
+                                    )}
+                                </p>
+                            </div>
+                        </CardContent>
+                    </Card>
+
                     <Card className="shadow-md border-muted/60 bg-muted/20">
                         <CardHeader>
                             <CardTitle className="text-lg flex items-center gap-2">
@@ -440,6 +561,90 @@ export default function OrderDetailsPage() {
                     </Card>
                 </div>
             </div>
+
+            {/* Operational-details edit dialog */}
+            <Dialog open={isOpEditOpen} onOpenChange={setIsOpEditOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Edit Operational Details</DialogTitle>
+                        <DialogDescription>
+                            Priority, delivery estimate and internal notes. The
+                            quotation scope and pricing are frozen and cannot be
+                            changed here.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                        <div className="space-y-2">
+                            <Label>Priority</Label>
+                            <Select
+                                value={opForm.priority}
+                                onValueChange={(v) =>
+                                    setOpForm((f) => ({
+                                        ...f,
+                                        priority: v as OrderPriority,
+                                    }))
+                                }
+                            >
+                                <SelectTrigger>
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {ORDER_PRIORITIES.map((p) => (
+                                        <SelectItem
+                                            key={p}
+                                            value={p}
+                                            className="capitalize"
+                                        >
+                                            {p}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="space-y-2">
+                            <Label>Estimated Delivery Date</Label>
+                            <Input
+                                type="date"
+                                value={opForm.estimatedDeliveryDate}
+                                onChange={(e) =>
+                                    setOpForm((f) => ({
+                                        ...f,
+                                        estimatedDeliveryDate: e.target.value,
+                                    }))
+                                }
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label>Internal Notes</Label>
+                            <Textarea
+                                rows={4}
+                                value={opForm.internalNotes}
+                                onChange={(e) =>
+                                    setOpForm((f) => ({
+                                        ...f,
+                                        internalNotes: e.target.value,
+                                    }))
+                                }
+                                placeholder="Notes visible to the team only…"
+                            />
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button
+                            variant="outline"
+                            onClick={() => setIsOpEditOpen(false)}
+                        >
+                            Cancel
+                        </Button>
+                        <Button onClick={handleSaveOps} disabled={isSavingOps}>
+                            {isSavingOps && (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                            )}
+                            Save
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

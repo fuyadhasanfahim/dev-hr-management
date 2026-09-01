@@ -12,6 +12,7 @@ export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
 export const ORDER_PRIORITY_LABELS: Record<OrderPriority, string> = {
   low: "Low",
   normal: "Normal",
+  medium: "Medium",
   high: "High",
   urgent: "Urgent",
 };
@@ -28,6 +29,7 @@ export const ORDER_STATUS_COLORS: Record<OrderStatus, string> = {
 export const ORDER_PRIORITY_COLORS: Record<OrderPriority, string> = {
   low: "bg-muted text-muted-foreground",
   normal: "bg-blue-500/20 text-blue-700 dark:text-blue-400",
+  medium: "bg-blue-500/20 text-blue-700 dark:text-blue-400",
   high: "bg-orange-500/20 text-orange-700 dark:text-orange-400",
   urgent: "bg-red-500/20 text-red-700 dark:text-red-400",
 };

@@ -661,6 +661,70 @@ async function updateOrderTeam(
     return updated;
 }
 
+const ORDER_PRIORITIES = ['low', 'medium', 'high', 'urgent'] as const;
+type OrderPriority = (typeof ORDER_PRIORITIES)[number];
+
+/**
+ * Update the *operational* fields of an order. The `quotationSnapshot` (scope
+ * + pricing, frozen at acceptance) is intentionally not touchable here — only
+ * priority, internal notes and the estimated delivery date.
+ */
+async function updateOrderOperational(
+    orderId: string,
+    payload: {
+        priority?: string;
+        internalNotes?: string;
+        estimatedDeliveryDate?: string | null;
+    },
+): Promise<IOrder> {
+    const order = await OrderModel.findById(orderId);
+    if (!order) throw new AppError('Order not found', 404);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const update: Record<string, any> = {};
+
+    if (payload.priority !== undefined) {
+        if (!ORDER_PRIORITIES.includes(payload.priority as OrderPriority)) {
+            throw new AppError(
+                `Invalid priority. Expected one of: ${ORDER_PRIORITIES.join(', ')}`,
+                400,
+            );
+        }
+        update.priority = payload.priority;
+    }
+
+    if (payload.internalNotes !== undefined) {
+        update.internalNotes = payload.internalNotes;
+    }
+
+    if (payload.estimatedDeliveryDate !== undefined) {
+        if (
+            payload.estimatedDeliveryDate === null ||
+            payload.estimatedDeliveryDate === ''
+        ) {
+            update.estimatedDeliveryDate = undefined;
+        } else {
+            const d = new Date(payload.estimatedDeliveryDate);
+            if (Number.isNaN(d.getTime())) {
+                throw new AppError('Invalid estimatedDeliveryDate', 400);
+            }
+            update.estimatedDeliveryDate = d;
+        }
+    }
+
+    if (Object.keys(update).length === 0) {
+        throw new AppError('No editable fields provided', 400);
+    }
+
+    const updated = await OrderModel.findByIdAndUpdate(
+        orderId,
+        { $set: update },
+        { new: true },
+    );
+    if (!updated) throw new AppError('Order not found', 404);
+    return updated;
+}
+
 export default {
     createOrderFromQuotation,
     transitionStatus,
@@ -669,4 +733,5 @@ export default {
     getOrderByIdFromDB,
     getAssetByAccessToken,
     updateOrderTeam,
+    updateOrderOperational,
 };

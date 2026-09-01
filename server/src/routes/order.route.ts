@@ -25,6 +25,10 @@ router.patch('/:id/status',         requirePermission('order.changeStatus'), Ord
 router.patch('/:id/team',           requirePermission('order.assign'), OrderController.updateOrderTeam);
 router.post('/convert-quotation',    requirePermission('order.create'), OrderController.convertQuotationToOrder);
 
+// Operational fields only (priority / internalNotes / estimatedDeliveryDate).
+// The quotationSnapshot stays immutable.
+router.patch('/:id',                requirePermission('order.update'), OrderController.updateOrder);
+
 // Public asset delivery endpoint — accessToken is the credential (no JWT).
 router.get('/client/:id/assets/:assetId', OrderController.getAssetPublic);
 

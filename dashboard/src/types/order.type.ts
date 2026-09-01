@@ -6,7 +6,8 @@ export type OrderStatus =
     | "delivered"
     | "cancelled";
 
-export type OrderPriority = "low" | "normal" | "high" | "urgent";
+// Server writes low | medium | high | urgent. "normal" is legacy read-only.
+export type OrderPriority = "low" | "normal" | "medium" | "high" | "urgent";
 
 export interface IService {
     _id: string;
@@ -243,6 +244,13 @@ export interface IOrderStats {
 export interface UpdateStatusInput {
     status: OrderStatus;
     note?: string;
+}
+
+/** Operational fields an order editor may change. The quotation snapshot is immutable. */
+export interface UpdateOrderInput {
+    priority?: OrderPriority;
+    internalNotes?: string;
+    estimatedDeliveryDate?: string | null;
 }
 
 export interface OrderFilters {

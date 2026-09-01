@@ -200,6 +200,26 @@ async function updateOrderTeam(req: Request, res: Response, next: NextFunction):
     }
 }
 
+async function updateOrder(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+        const { id } = req.params;
+        if (!id) {
+            next(new AppError('Order id is required', 400));
+            return;
+        }
+        const { priority, internalNotes, estimatedDeliveryDate } = req.body ?? {};
+        const result = await OrderService.updateOrderOperational(id, {
+            priority,
+            internalNotes,
+            estimatedDeliveryDate,
+        });
+        const sanitized = maskOrder(result, req.user);
+        res.status(200).json({ success: true, data: sanitized });
+    } catch (err) {
+        next(err);
+    }
+}
+
 export default {
     getAllOrders,
     getOrderById,
@@ -208,4 +228,5 @@ export default {
     getAssetPublic,
     convertQuotationToOrder,
     updateOrderTeam,
+    updateOrder,
 };
