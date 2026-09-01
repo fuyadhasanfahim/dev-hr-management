@@ -75,7 +75,7 @@ export interface IQuotation extends Document {
     version: number;
     isLatestVersion: boolean;
 
-    serviceType: 'web-development';
+    serviceType: QuotationCategory;
     clientId: Types.ObjectId;
 
     company: {

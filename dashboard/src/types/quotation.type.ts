@@ -1,10 +1,11 @@
-export type ServiceType = "web-development";
-
 export type QuotationCategory =
   | "web-development"
   | "photo-editing"
   | "marketing"
   | "video-editing";
+
+/** A quotation's primary category (drives the resulting order's type). */
+export type ServiceType = QuotationCategory;
 
 export type QuotationStatus =
   | "draft"

@@ -13,7 +13,11 @@ const quotationSchema = new Schema<IQuotation>(
 
         // ── Identity ──────────────────────────────────────────────────────────────
         quotationNumber: { type: String, required: true, unique: true, index: true },
-        serviceType: { type: String, enum: ['web-development'], required: true },
+        serviceType: {
+            type: String,
+            enum: ['web-development', 'photo-editing', 'marketing', 'video-editing'],
+            required: true,
+        },
         clientId: { type: Schema.Types.ObjectId, ref: 'Client', required: true },
 
         // ── Snapshots ─────────────────────────────────────────────────────────────

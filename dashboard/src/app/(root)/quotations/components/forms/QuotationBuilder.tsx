@@ -73,7 +73,7 @@ import {
     useUpdateQuotationMutation,
 } from "@/redux/features/quotation/quotationApi";
 import { Client } from "@/types/client.type";
-import { QuotationData } from "@/types/quotation.type";
+import { QuotationData, type QuotationCategory } from "@/types/quotation.type";
 import { publicApiUrl } from "@/lib/public-api";
 
 // --- Types & Data Interfaces ---
@@ -1502,8 +1502,16 @@ Please review the details below. Should you have any questions or require custom
             s.taxRate = taxPercentage || 0;
         });
 
+        // The quotation's `serviceType` is its primary category — web-development
+        // when present (maps to an "project" order), otherwise the first service.
+        const primaryServiceType: QuotationCategory =
+            services.some((s) => s.category === "web-development")
+                ? "web-development"
+                : (services[0]?.category as QuotationCategory) ??
+                  "web-development";
+
         const payload = {
-            serviceType: "web-development" as const,
+            serviceType: primaryServiceType,
             clientId: selectedClient,
             currency: selectedCurrency === "US Dollar (USD)" ? "$" : "৳",
             company: initialData?.company || {
