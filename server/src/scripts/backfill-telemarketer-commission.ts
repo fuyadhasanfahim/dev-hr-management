@@ -20,6 +20,10 @@ import WalletTransactionModel, {
 } from '../models/wallet-transaction.model.js';
 import { getTelemarketerStaff } from '../utils/telemarketer.util.js';
 import commissionService from '../services/commission.service.js';
+// Register models referenced only via populate()/refs so this stand-alone
+// script has them available the way the running server does.
+import '../models/client.model.js';
+import '../models/staff.model.js';
 
 const APPLY = process.argv.includes('--apply');
 const RATE = commissionService.COMMISSION_RATE;
