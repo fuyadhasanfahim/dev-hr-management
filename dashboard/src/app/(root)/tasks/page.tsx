@@ -10,6 +10,7 @@ import {
     useSubmitTaskMutation,
 } from '@/redux/features/task/taskApi';
 import { useGetStaffsQuery, useGetMeQuery } from '@/redux/features/staff/staffApi';
+import { usePermissions } from '@/hooks/use-permissions';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import {
@@ -64,9 +65,11 @@ export default function TeamWorkloadPage() {
         }
     }, [role, meData, router]);
 
+    const { can } = usePermissions();
     const canManage = useMemo(() => {
         return role === Role.SUPER_ADMIN || role === Role.ADMIN || role === Role.HR_MANAGER || role === Role.TEAM_LEADER;
     }, [role]);
+    const canCreateTask = can('task.create');
 
     const { data: tasksRes, isLoading } = useGetMyTasksQuery(undefined);
     const { data: staffsData } = useGetStaffsQuery({ limit: 100 });
@@ -225,7 +228,7 @@ export default function TeamWorkloadPage() {
                 </div>
 
                 <div className="flex items-center gap-2 flex-wrap">
-                    {canManage && (
+                    {canManage && canCreateTask && (
                         <Button size="sm" onClick={() => setIsAssignModalOpen(true)} className="gap-1.5">
                             <Plus className="h-4 w-4" />
                             Assign Task

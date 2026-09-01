@@ -32,6 +32,7 @@ import {
 } from "@/redux/features/payroll/payrollBankSettingsApi";
 
 import { IPayrollItem } from "@/types/payroll.type";
+import { usePermissions } from "@/hooks/use-permissions";
 
 interface ExportPdfDialogProps {
     open: boolean;
@@ -118,6 +119,8 @@ export default function ExportPdfDialog({
     payrollData,
     month,
 }: ExportPdfDialogProps) {
+    const { can } = usePermissions();
+    const canManageBanks = can("payroll.bankSettings");
     const [selectedBankId, setSelectedBankId] = useState<string>("");
     const [showAddForm, setShowAddForm] = useState(false);
 
@@ -444,15 +447,17 @@ export default function ExportPdfDialog({
                                         </div>
                                     )}
 
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => setShowAddForm(true)}
-                                        className="w-full"
-                                    >
-                                        <Plus className="h-4 w-4" />
-                                        Add New Bank Account
-                                    </Button>
+                                    {canManageBanks && (
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => setShowAddForm(true)}
+                                            className="w-full"
+                                        >
+                                            <Plus className="h-4 w-4" />
+                                            Add New Bank Account
+                                        </Button>
+                                    )}
                                 </>
                             ) : (
                                 <>

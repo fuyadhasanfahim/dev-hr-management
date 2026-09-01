@@ -7,6 +7,7 @@ import {
 } from "@/redux/features/attendance/attendanceApi";
 import { AttendanceStatus } from "@/types/attendance.type";
 import { useGetStaffsQuery } from "@/redux/features/staff/staffApi";
+import { usePermissions } from "@/hooks/use-permissions";
 import { motion } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
@@ -314,6 +315,8 @@ export default function AttendancePage() {
     });
 
     const [updateStatus] = useUpdateAttendanceStatusMutation();
+    const { can } = usePermissions();
+    const canManageAttendance = can("attendance.manage");
 
     const handleStatusChange = async (id: string, newStatus: AttendanceStatus) => {
         try {
@@ -923,7 +926,8 @@ export default function AttendancePage() {
                                                                 )
                                                             }
                                                             disabled={
-                                                                isFetching
+                                                                isFetching ||
+                                                                !canManageAttendance
                                                             }
                                                         >
                                                             <SelectTrigger className="h-8 text-xs w-[120px] ml-auto">

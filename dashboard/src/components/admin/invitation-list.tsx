@@ -44,8 +44,12 @@ import {
 import { toast } from 'sonner';
 import { format, formatDistanceToNow } from 'date-fns';
 import InviteEmployeeDialog from './invite-employee-dialog';
+import { usePermissions } from '@/hooks/use-permissions';
 
 export default function InvitationList() {
+    const { can } = usePermissions();
+    const canCreate = can('invitation.create');
+    const canDelete = can('invitation.delete');
     const [filter, setFilter] = useState<
         'all' | 'pending' | 'used' | 'expired'
     >('all');
@@ -276,6 +280,7 @@ export default function InvitationList() {
                                                         </TooltipContent>
                                                     </Tooltip>
                                                 </TooltipProvider>
+                                                {canCreate && (
                                                 <TooltipProvider>
                                                     <Tooltip>
                                                         <TooltipTrigger asChild>
@@ -302,6 +307,8 @@ export default function InvitationList() {
                                                         </TooltipContent>
                                                     </Tooltip>
                                                 </TooltipProvider>
+                                                )}
+                                                {canDelete && (
                                                 <TooltipProvider>
                                                     <Tooltip>
                                                         <TooltipTrigger asChild>
@@ -326,6 +333,7 @@ export default function InvitationList() {
                                                         </TooltipContent>
                                                     </Tooltip>
                                                 </TooltipProvider>
+                                                )}
                                             </>
                                         )}
                                     </div>

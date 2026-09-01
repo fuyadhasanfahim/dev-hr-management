@@ -52,7 +52,7 @@ import * as XLSX from "xlsx";
 import { IPayrollItem } from "@/types/payroll.type";
 import { IBranch } from "@/types/branch.type";
 import { toast } from "sonner";
-import { useSession } from "@/lib/auth-client";
+import { usePermissions } from "@/hooks/use-permissions";
 import { cn } from "@/lib/utils";
 
 const MONTHS = [
@@ -114,11 +114,9 @@ export default function PayrollPage() {
     const [isSelectMode, setIsSelectMode] = useState(false);
     const [showPdfDialog, setShowPdfDialog] = useState(false);
 
-    const { data: session } = useSession();
-    const userRole = session?.user?.role;
-    const canWrite = ["super_admin", "admin", "hr_manager"].includes(
-        userRole || "",
-    );
+    const { can } = usePermissions();
+    const canWrite = can("payroll.lock");
+    const canProcess = can("payroll.process");
 
     // Update URL Helper
     const updateUrl = (key: string, value: string) => {
@@ -390,7 +388,7 @@ export default function PayrollPage() {
                             </TabsList>
 
                             <div className="flex items-center gap-3">
-                                {activeTab === "salary" && (
+                                {activeTab === "salary" && canProcess && (
                                     <Button
                                         variant={isSelectMode ? "default" : "outline"}
                                         size="sm"

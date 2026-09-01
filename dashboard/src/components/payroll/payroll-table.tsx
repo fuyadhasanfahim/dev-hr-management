@@ -35,6 +35,7 @@ import {
   useUndoPaymentMutation,
 } from "@/redux/features/payroll/payrollApi";
 import { useSession } from "@/lib/auth-client";
+import { usePermissions } from "@/hooks/use-permissions";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { summarizeBulkPayrollResult } from "@/lib/payroll-mismatch";
@@ -63,6 +64,8 @@ export default function PayrollTable({
   branchId,
 }: PayrollTableProps) {
   const { data: session } = useSession();
+  const { can } = usePermissions();
+  const canProcess = can("payroll.process");
   const [selectedStaffIds, setSelectedStaffIds] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [processingId, setProcessingId] = useState<string | null>(null);
@@ -260,7 +263,7 @@ export default function PayrollTable({
       </div>
 
       {/* Bulk Action Bar Simplified */}
-      {selectedStaffIds.length > 0 && isSelectMode && !isLocked && (
+      {selectedStaffIds.length > 0 && isSelectMode && !isLocked && canProcess && (
         <div className="bg-muted border rounded-lg p-3 flex items-center justify-between animate-in fade-in duration-300">
           <div className="text-sm font-semibold">
             {selectedStaffIds.length} staff selected
@@ -425,7 +428,7 @@ export default function PayrollTable({
                             <TooltipContent>View Calendar</TooltipContent>
                           </Tooltip>
 
-                          {!isPaid && !isLocked && (
+                          {canProcess && !isPaid && !isLocked && (
                             <Tooltip>
                               <TooltipTrigger asChild>
                                 <Button
@@ -450,6 +453,7 @@ export default function PayrollTable({
                             </Tooltip>
                           )}
 
+                          {canProcess && (
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <Button
@@ -471,8 +475,9 @@ export default function PayrollTable({
                             </TooltipTrigger>
                             <TooltipContent>Provide Grace</TooltipContent>
                           </Tooltip>
+                          )}
 
-                          {isPaid ? (
+                          {canProcess && (isPaid ? (
                             <div className="flex items-center ml-1">
                               <Badge
                                 variant="outline"
@@ -526,7 +531,7 @@ export default function PayrollTable({
                               </TooltipTrigger>
                               <TooltipContent>Proceed to Pay</TooltipContent>
                             </Tooltip>
-                          )}
+                          ))}
                         </div>
                       </TooltipProvider>
                     </TableCell>

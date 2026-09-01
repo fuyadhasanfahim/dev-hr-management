@@ -97,6 +97,7 @@ export default function StaffDetailsPage() {
 
     const { can } = usePermissions();
     const canManageAccess = can('role.assign');
+    const canEditStaff = can('staff.update');
 
     const userRole = session?.user?.role;
     const isOwner = session?.user?.id === staff?.userId;
@@ -313,7 +314,7 @@ export default function StaffDetailsPage() {
                         </div>
 
                         {/* Actions (Right Aligned) */}
-                        {canEdit && (
+                        {canEditStaff && (
                             <div className="flex items-center gap-2 self-start lg:self-center shrink-0">
                                 <EditStaffDialog
                                     staff={staff}

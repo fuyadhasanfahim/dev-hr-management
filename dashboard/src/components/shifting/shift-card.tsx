@@ -27,6 +27,7 @@ import UpdateShift from "./update-shift";
 import { IShift } from "@/types/shift.type";
 import { useSession } from "@/lib/auth-client";
 import { Role } from "@/constants/role";
+import { usePermissions } from "@/hooks/use-permissions";
 import ShiftDeleteAlert from "./shift-delete-alert";
 import ShiftOffDialog from "./shift-off-dialog";
 import AssignedStaffDialog from "./assigned-staff-dialog";
@@ -47,6 +48,9 @@ const DAY_MAP: Record<number, string> = {
 
 export default function ShiftCard({ shift }: ShiftCardProps) {
     const { data: session, isPending } = useSession();
+    const { can } = usePermissions();
+    const canUpdate = can("shift.update");
+    const canDelete = can("shift.delete");
     const [openEdit, setOpenEdit] = useState(false);
     const [updateShift, { isLoading: isUpdating }] = useUpdateShiftMutation();
 
@@ -106,7 +110,7 @@ export default function ShiftCard({ shift }: ShiftCardProps) {
                             </Badge>
                             <Switch
                                 checked={shift.isActive}
-                                disabled={isUpdating}
+                                disabled={isUpdating || !canUpdate}
                                 onCheckedChange={handleToggleStatus}
                                 className="scale-75 origin-left"
                             />
@@ -136,6 +140,7 @@ export default function ShiftCard({ shift }: ShiftCardProps) {
                             />
                         )}
 
+                        {(canUpdate || canDelete) && (
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                                 <Button
@@ -154,15 +159,20 @@ export default function ShiftCard({ shift }: ShiftCardProps) {
                                 align="end"
                                 className="w-[160px]"
                             >
-                                <DropdownMenuItem
-                                    onClick={() => setOpenEdit(true)}
-                                >
-                                    <Pencil className="h-4 w-4 text-muted-foreground" />
-                                    Edit Details
-                                </DropdownMenuItem>
-                                <ShiftDeleteAlert shiftId={shift._id} />
+                                {canUpdate && (
+                                    <DropdownMenuItem
+                                        onClick={() => setOpenEdit(true)}
+                                    >
+                                        <Pencil className="h-4 w-4 text-muted-foreground" />
+                                        Edit Details
+                                    </DropdownMenuItem>
+                                )}
+                                {canDelete && (
+                                    <ShiftDeleteAlert shiftId={shift._id} />
+                                )}
                             </DropdownMenuContent>
                         </DropdownMenu>
+                        )}
                     </div>
                 </div>
 
