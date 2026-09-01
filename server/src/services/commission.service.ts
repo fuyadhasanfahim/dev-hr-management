@@ -4,125 +4,149 @@ import WalletTransactionModel, {
     TransactionType,
 } from "../models/wallet-transaction.model.js";
 import EarningModel from "../models/earning.model.js";
+import { getTelemarketerStaff } from "../utils/telemarketer.util.js";
 
 const COMMISSION_RATE = 0.05; // 5%
 
+const round2 = (n: number): number => Math.round(n * 100) / 100;
+
+type ReconcileResult = {
+    earningId: string;
+    staffId: mongoose.Types.ObjectId;
+    delta: number;
+    desired: number;
+    previous: number;
+} | null;
+
 /**
- * Process commission for an earning converted to BDT.
- * Only applies if the client associated with the earning was created by a telemarketer.
+ * Bring the telemarketer commission for one earning in line with what it
+ * *should* be — `5% of the earning's recorded gross` — whatever it is now.
  *
- * @param earningId - The ID of the earning that was paid/withdrawn
- * @param changedBy - The userId who triggered the conversion (for audit)
+ * This is the single entry point and it is fully idempotent:
+ *  - first payment on a telemarketer's client  -> credits 5%
+ *  - more payments land                        -> tops the commission up
+ *  - a payment is voided (earning shrinks)     -> claws the difference back
+ *  - every payment voided (earning deleted)    -> claws the whole thing back
+ *  - run twice with nothing changed            -> no-op
+ *
+ * The adjustment is always a single signed `commission` wallet transaction
+ * (positive = credit, negative = claw-back) plus a matching `$inc` on the
+ * staff balance, so `sum(completed commission txns for an earning)` always
+ * equals the commission actually paid for it.
+ *
+ * @param earningId     Earning to reconcile. May already be deleted — then the
+ *                      target is 0 and any prior commission is clawed back.
+ * @param actorUserId   User who triggered the change (audit only; optional).
  */
-async function processEarningCommission(earningId: string, _changedBy: string, parentSession?: ClientSession) {
+async function reconcileEarningCommission(
+    earningId: string,
+    actorUserId?: string,
+    parentSession?: ClientSession,
+): Promise<ReconcileResult> {
     const session = parentSession || (await mongoose.startSession());
     if (!parentSession) session.startTransaction();
 
     try {
-        // 1. Fetch the earning and its associated client
+        const earningObjectId = new mongoose.Types.ObjectId(earningId);
+
+        // 1. What the commission SHOULD be right now.
         const earning = await EarningModel.findById(earningId)
             .populate("clientId")
             .session(session);
 
-        if (!earning) {
-            throw new Error("Earning not found");
-        }
+        const client = (earning?.clientId as any) || null;
+        const totalGrossBDT = earning
+            ? earning.payments.reduce((sum, p) => sum + (p.amount || 0), 0)
+            : 0;
+        const desired = round2(totalGrossBDT * COMMISSION_RATE);
 
-        const client = earning.clientId as any;
-        if (!client || !client.createdBy) {
-            await session.abortTransaction();
-            return null;
-        }
-
-        // 2. Calculate total commission already paid for this earning
-        const existingTransactions = await WalletTransactionModel.find({
-            "metadata.earningId": new mongoose.Types.ObjectId(earningId),
+        // 2. What has already been credited for this earning.
+        const existing = await WalletTransactionModel.find({
+            "metadata.earningId": earningObjectId,
             type: TransactionType.COMMISSION,
             status: "completed",
         }).session(session);
+        const previous = round2(existing.reduce((sum, t) => sum + t.amount, 0));
 
-        const alreadyPaidCommission = existingTransactions.reduce(
-            (sum, t) => sum + t.amount,
-            0,
-        );
-
-        // 3. Find the staff member assigned to or who created the client
-        const telemarketerUserId = client.assignedTelemarketer || client.createdBy;
-        const staff = await StaffModel.findOne({
-            userId: telemarketerUserId,
-            designation: { $regex: /^telemarketer$/i },
-            status: "active",
-        }).session(session);
-
-        if (!staff) {
-            // Not a telemarketer — no commission to process
-            await session.abortTransaction();
+        const delta = round2(desired - previous);
+        if (Math.abs(delta) < 0.01) {
+            if (!parentSession) await session.abortTransaction();
             return null;
         }
 
-        // 4. Calculate total GROSS BDT. Earnings are recorded directly in Taka
-        // now (no currency conversion), so gross BDT is just the summed payment amounts.
-        const totalGrossBDT = earning.payments.reduce(
-            (sum, p) => sum + (p.amount || 0),
-            0,
-        );
+        // 3. Which telemarketer does this belong to? Reuse the staff already on
+        //    a prior commission txn (works even after the earning is deleted);
+        //    otherwise resolve from the client's owner / assignee.
+        let staffId: mongoose.Types.ObjectId | null =
+            (existing[0]?.staffId as mongoose.Types.ObjectId) ?? null;
 
-        // 5. Calculate incremental commission (based on Gross BDT)
-        const totalExpectedCommission = Math.round(totalGrossBDT * COMMISSION_RATE * 100) / 100;
-        const commissionAmount = Math.round((totalExpectedCommission - alreadyPaidCommission) * 100) / 100;
-
-        if (commissionAmount < 0.01) {
-            await session.abortTransaction();
-            return null;
+        if (!staffId) {
+            if (!client || !client.createdBy) {
+                if (!parentSession) await session.abortTransaction();
+                return null;
+            }
+            const ownerUserId = String(
+                client.assignedTelemarketer || client.createdBy,
+            );
+            const staff = await getTelemarketerStaff(ownerUserId, session);
+            if (!staff) {
+                // Client isn't owned by a telemarketer — nothing to pay.
+                if (!parentSession) await session.abortTransaction();
+                return null;
+            }
+            staffId = staff._id as mongoose.Types.ObjectId;
         }
 
-        // 6. Calculate the "Effective Gross" for THIS specific transaction to show in description
-        const incrementalGross = Math.round((commissionAmount / COMMISSION_RATE) * 100) / 100;
+        const clientName =
+            client?.name || existing[0]?.metadata?.clientName || "client";
+        const period = earning ? ` (${earning.month}/${earning.year})` : "";
+        const description =
+            delta > 0
+                ? `5% commission on ৳${totalGrossBDT.toLocaleString()} gross — ${clientName}${period}`
+                : `Commission adjustment (payment voided) — ${clientName}${period}`;
 
-        // 6. Create wallet transaction record
+        // 4. One signed transaction + matching balance move, atomically.
         await WalletTransactionModel.create(
             [
                 {
-                    staffId: staff._id,
-                    amount: commissionAmount,
+                    staffId,
+                    amount: delta,
                     type: TransactionType.COMMISSION,
-                    description: `5% commission on ৳${incrementalGross.toLocaleString()} Gross (Total ৳${totalGrossBDT.toLocaleString()}) - ${client.name} (${earning.month}/${earning.year})`,
                     status: "completed",
+                    ...(actorUserId
+                        ? { createdBy: new mongoose.Types.ObjectId(actorUserId) }
+                        : {}),
+                    description,
                     metadata: {
-                        earningId: earning._id,
-                        clientName: client.name,
-                        incrementalGross: incrementalGross,
-                        totalGrossBDT: totalGrossBDT,
+                        earningId: earningObjectId,
+                        clientName,
+                        totalGrossBDT,
                         commissionRate: COMMISSION_RATE,
-                        isIncremental: alreadyPaidCommission > 0,
+                        reconciledTo: desired,
+                        previousCommission: previous,
+                        isAdjustment: previous > 0,
                     },
                 },
             ],
             { session },
         );
 
-        // 6. Increment staff balance atomically
         await StaffModel.updateOne(
-            { _id: staff._id },
-            { $inc: { balance: commissionAmount } },
+            { _id: staffId },
+            { $inc: { balance: delta } },
             { session },
         );
 
-        if (!parentSession) {
-            await session.commitTransaction();
-        }
+        if (!parentSession) await session.commitTransaction();
 
         console.log(
-            `[Commission] ৳${commissionAmount} credited to ${staff.staffId} for Earning ${earning._id}`,
+            `[Commission] ${delta >= 0 ? "+" : ""}৳${delta} for earning ${earningId} (target ৳${desired}, was ৳${previous})`,
         );
 
-        return {
-            staffId: staff.staffId,
-            commissionAmount,
-            earningId: earning._id,
-        };
+        return { earningId, staffId, delta, desired, previous };
     } catch (err) {
         if (!parentSession) await session.abortTransaction();
+        console.error("[Commission] reconcile failed:", err);
         throw err;
     } finally {
         if (!parentSession) session.endSession();
@@ -130,56 +154,19 @@ async function processEarningCommission(earningId: string, _changedBy: string, p
 }
 
 /**
- * Reverse all commissions associated with an earning.
- * Used when a payment is marked as unpaid or deleted.
- *
- * @param earningId - The ID of the earning to reverse commissions for
+ * Back-compat aliases — reconciliation is self-correcting, so "process" and
+ * "reverse" are just the same call. `reverse` exists for readability at the
+ * call site where an earning has just been deleted.
  */
-async function reverseEarningCommission(earningId: string, parentSession?: ClientSession) {
-    const session = parentSession || (await mongoose.startSession());
-    if (!parentSession) session.startTransaction();
-
-    try {
-        // 1. Find all completed commission transactions for this earning
-        const transactions = await WalletTransactionModel.find({
-            "metadata.earningId": new mongoose.Types.ObjectId(earningId),
-            type: TransactionType.COMMISSION,
-            status: "completed",
-        }).session(session);
-
-        if (transactions.length === 0) {
-            await session.abortTransaction();
-            return;
-        }
-
-        for (const transaction of transactions) {
-            // 2. Mark transaction as "cancelled" (or we could create a "refund" type)
-            transaction.status = "cancelled";
-            await transaction.save({ session });
-
-            // 3. Deduct amount from staff balance
-            await StaffModel.updateOne(
-                { _id: transaction.staffId },
-                { $inc: { balance: -transaction.amount } },
-                { session },
-            );
-
-            console.log(
-                `[Commission Reversal] ৳${transaction.amount} reversed from staff ${transaction.staffId} for Earning ${earningId}`,
-            );
-        }
-
-        if (!parentSession) await session.commitTransaction();
-    } catch (err) {
-        if (!parentSession) await session.abortTransaction();
-        console.error("[Commission Reversal] Failed:", err);
-        throw err;
-    } finally {
-        if (!parentSession) session.endSession();
-    }
-}
+const processEarningCommission = reconcileEarningCommission;
+const reverseEarningCommission = (
+    earningId: string,
+    actorUserId?: string,
+    parentSession?: ClientSession,
+) => reconcileEarningCommission(earningId, actorUserId, parentSession);
 
 export default {
+    reconcileEarningCommission,
     processEarningCommission,
     reverseEarningCommission,
     COMMISSION_RATE,

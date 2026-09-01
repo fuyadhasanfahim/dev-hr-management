@@ -5,6 +5,7 @@ import ReceiptModel from '../models/receipt.model.js';
 import ReceiptPaymentModel from '../models/receipt-payment.model.js';
 import QuotationModel from '../models/quotation.model.js';
 import { logger } from '../lib/logger.js';
+import commissionService from './commission.service.js';
 import type {
     IEarning,
     IEarningPopulated,
@@ -33,7 +34,23 @@ async function syncEarningFromReceipt(
     }).sort({ paymentDate: 1, createdAt: 1 });
 
     if (payments.length === 0) {
+        // All payments voided — the Earning disappears, so claw back any
+        // telemarketer commission that was credited against it.
+        const stale = await EarningModel.findOne({ receiptId: receipt._id }).select('_id');
         await EarningModel.deleteOne({ receiptId: receipt._id });
+        if (stale) {
+            try {
+                await commissionService.reverseEarningCommission(
+                    stale._id.toString(),
+                    userId || receipt.createdBy.toString(),
+                );
+            } catch (err) {
+                logger.error(
+                    { err, receiptId: receipt._id.toString(), earningId: stale._id.toString() },
+                    'commission.reverse_failed',
+                );
+            }
+        }
         return null;
     }
 
@@ -82,6 +99,22 @@ async function syncEarningFromReceipt(
         { receiptId: receipt._id.toString(), earningId: earning._id.toString(), paidAmount, status },
         'earning.synced_from_receipt',
     );
+
+    // Reconcile the 5% telemarketer commission for this earning — credits on
+    // the first payment, tops up as more land, claws back on a partial void,
+    // no-ops when the client's owner isn't a telemarketer. Best-effort: a
+    // commission failure must never block the payment/earning itself.
+    try {
+        await commissionService.reconcileEarningCommission(
+            earning._id.toString(),
+            userId || receipt.createdBy.toString(),
+        );
+    } catch (err) {
+        logger.error(
+            { err, receiptId: receipt._id.toString(), earningId: earning._id.toString() },
+            'commission.process_failed',
+        );
+    }
 
     return earning;
 }

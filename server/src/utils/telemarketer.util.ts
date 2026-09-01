@@ -1,3 +1,4 @@
+import type { ClientSession } from "mongoose";
 import StaffModel from "../models/staff.model.js";
 
 /**
@@ -16,8 +17,10 @@ const TELEMARKETER_MATCH = {
 /**
  * Returns the staff record if the user is a telemarketer, else null.
  */
-export async function getTelemarketerStaff(userId: string) {
-    return StaffModel.findOne({ userId, ...TELEMARKETER_MATCH }).lean();
+export async function getTelemarketerStaff(userId: string, session?: ClientSession) {
+    return StaffModel.findOne({ userId, ...TELEMARKETER_MATCH })
+        .session(session ?? null)
+        .lean();
 }
 
 /**
