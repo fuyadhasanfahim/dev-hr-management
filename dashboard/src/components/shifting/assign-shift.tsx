@@ -36,6 +36,7 @@ import IStaff from "@/types/staff.type";
 import { IShift } from "@/types/shift.type";
 import { toast } from "sonner";
 import { useAssignShiftMutation } from "@/redux/features/shiftAssignment/shiftAssignmentApi";
+import { usePermissions } from "@/hooks/use-permissions";
 import { useDebounce } from "@/hooks/use-debounce";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
 import { cn } from "@/lib/utils";
@@ -58,6 +59,7 @@ type FormData = z.infer<typeof shiftAssignSchema>;
 export default function AssignShift() {
   const { data: session, isPending } = useSession();
 
+  const { can } = usePermissions();
   const [open, setOpen] = useState(false);
   const [staffSelectOpen, setStaffSelectOpen] = useState(false);
   const [staffSearchTerm, setStaffSearchTerm] = useState("");
@@ -157,6 +159,8 @@ export default function AssignShift() {
       .toUpperCase()
       .slice(0, 2);
   };
+
+  if (!can("shift.assign")) return null;
 
   return (
     <Dialog

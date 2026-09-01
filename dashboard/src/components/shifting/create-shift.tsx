@@ -27,6 +27,7 @@ import {
 } from '@/components/ui/select';
 
 import { useCreateShiftMutation } from '@/redux/features/shift/shiftApi';
+import { usePermissions } from '@/hooks/use-permissions';
 import { useGetAllBranchesQuery } from '@/redux/features/branch/branchApi';
 import { Spinner } from '../ui/spinner';
 
@@ -71,6 +72,7 @@ export default function CreateShift() {
     const { data: branchData, isLoading: isBranchLoading } =
         useGetAllBranchesQuery(undefined);
 
+    const { can } = usePermissions();
     const [createShift, { isLoading: isCreating }] = useCreateShiftMutation();
     const [open, setOpen] = useState(false);
 
@@ -123,6 +125,8 @@ export default function CreateShift() {
             toast.error(err?.data?.message || 'Failed to create shift');
         }
     };
+
+    if (!can('shift.create')) return null;
 
     return (
         <Dialog open={open} onOpenChange={setOpen}>

@@ -14,7 +14,6 @@ import {
 import { Switch } from '@/components/ui/switch';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Role } from '@/constants/role';
 import { useSession } from '@/lib/auth-client';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { IconPlus } from '@tabler/icons-react';
@@ -23,6 +22,7 @@ import { z } from 'zod';
 import { toast } from 'sonner';
 
 import { useCreateBranchMutation } from '@/redux/features/branch/branchApi';
+import { usePermissions } from '@/hooks/use-permissions';
 import { Spinner } from '../ui/spinner';
 import { useState } from 'react';
 
@@ -36,7 +36,8 @@ const branchSchema = z.object({
 type BranchFormValues = z.infer<typeof branchSchema>;
 
 export default function CreateBranch() {
-    const { data: session, isPending } = useSession();
+    const { isPending } = useSession();
+    const { can } = usePermissions();
     const [createBranch, { isLoading: isCreating }] = useCreateBranchMutation();
 
     const [open, setOpen] = useState<boolean>(false);
@@ -78,11 +79,9 @@ export default function CreateBranch() {
         }
     };
 
-    const canCreate =
-        session &&
-        (session.user.role === Role.SUPER_ADMIN ||
-            session.user.role === Role.ADMIN ||
-            session.user.role === Role.HR_MANAGER);
+    const canCreate = can('branch.manage');
+
+    if (!canCreate) return null;
 
     return (
         <Dialog open={!!open} onOpenChange={setOpen}>

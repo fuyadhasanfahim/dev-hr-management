@@ -5,6 +5,7 @@ import {
     useGetPersonsQuery,
     useCreateDebitMutation,
 } from '@/redux/features/debit/debitApi';
+import { usePermissions } from '@/hooks/use-permissions';
 import {
     Dialog,
     DialogContent,
@@ -36,6 +37,7 @@ import { cn } from '@/lib/utils';
 import { Textarea } from '@/components/ui/textarea';
 
 export function AddTransactionDialog() {
+    const { can } = usePermissions();
     const [open, setOpen] = useState(false);
     const [personId, setPersonId] = useState('');
     const [amount, setAmount] = useState('');
@@ -88,6 +90,8 @@ export function AddTransactionDialog() {
             toast.error(`Failed to add debit: ${(err as Error).message}`);
         }
     };
+
+    if (!can('debit.create')) return null;
 
     return (
         <Dialog open={open} onOpenChange={setOpen}>

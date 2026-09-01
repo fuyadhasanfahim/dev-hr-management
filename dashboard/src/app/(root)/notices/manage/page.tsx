@@ -75,8 +75,12 @@ import {
     NOTICE_PRIORITY_COLORS,
     NOTICE_CATEGORY_COLORS,
 } from '@/types/notice.type';
+import { usePermissions } from '@/hooks/use-permissions';
 
 export default function NoticeManagePage() {
+    const { can } = usePermissions();
+    const canUpdate = can('notice.update');
+    const canDelete = can('notice.delete');
     const [isCreateOpen, setIsCreateOpen] = useState(false);
     const [editingNotice, setEditingNotice] = useState<INotice | null>(null);
     const [deleteNoticeId, setDeleteNoticeId] = useState<string | null>(null);
@@ -269,6 +273,7 @@ export default function NoticeManagePage() {
                                     </TableCell>
                                     <TableCell className="text-right">
                                         <div className="flex justify-end gap-1">
+                                            {canUpdate && (
                                             <Button
                                                 variant="ghost"
                                                 size="icon"
@@ -287,6 +292,7 @@ export default function NoticeManagePage() {
                                                     <Eye className="h-4 w-4" />
                                                 )}
                                             </Button>
+                                            )}
                                             <Button
                                                 variant="ghost"
                                                 size="icon"
@@ -297,6 +303,7 @@ export default function NoticeManagePage() {
                                             >
                                                 <BarChart3 className="h-4 w-4" />
                                             </Button>
+                                            {canUpdate && (
                                             <Button
                                                 variant="ghost"
                                                 size="icon"
@@ -306,6 +313,8 @@ export default function NoticeManagePage() {
                                             >
                                                 <Pencil className="h-4 w-4" />
                                             </Button>
+                                            )}
+                                            {canDelete && (
                                             <Button
                                                 variant="ghost"
                                                 size="icon"
@@ -318,6 +327,7 @@ export default function NoticeManagePage() {
                                             >
                                                 <Trash2 className="h-4 w-4" />
                                             </Button>
+                                            )}
                                         </div>
                                     </TableCell>
                                 </TableRow>

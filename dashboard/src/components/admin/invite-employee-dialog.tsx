@@ -20,6 +20,7 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { useCreateInvitationMutation } from "@/redux/features/invitation/invitationApi";
+import { usePermissions } from "@/hooks/use-permissions";
 import { useGetAllBranchesQuery } from "@/redux/features/branch/branchApi";
 import { useGetAllShiftsQuery } from "@/redux/features/shift/shiftApi";
 import { useGetAllDepartmentsQuery } from "@/redux/features/department/departmentApi";
@@ -45,6 +46,7 @@ const ROLE_LABELS: Record<RoleType, string> = {
 };
 
 export default function InviteEmployeeDialog() {
+    const { can } = usePermissions();
     const [open, setOpen] = useState(false);
     const { data: session } = useSession();
     const [createInvitation, { isLoading }] = useCreateInvitationMutation();
@@ -143,6 +145,8 @@ export default function InviteEmployeeDialog() {
             toast.error(err?.data?.message || "Failed to send invitation");
         }
     };
+
+    if (!can("invitation.create")) return null;
 
     return (
         <Dialog open={open} onOpenChange={setOpen}>

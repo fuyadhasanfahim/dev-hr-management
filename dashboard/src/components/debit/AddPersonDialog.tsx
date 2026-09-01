@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useCreatePersonMutation } from "@/redux/features/debit/debitApi";
+import { usePermissions } from "@/hooks/use-permissions";
 import {
   Dialog,
   DialogContent,
@@ -17,6 +18,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 
 export function AddPersonDialog() {
+  const { can } = usePermissions();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
@@ -47,6 +49,8 @@ export function AddPersonDialog() {
       toast.error(`Failed to add person: ${(err as Error).message}`);
     }
   };
+
+  if (!can("debit.create")) return null;
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
