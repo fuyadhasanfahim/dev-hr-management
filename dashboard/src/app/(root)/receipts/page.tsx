@@ -36,6 +36,7 @@ import {
 } from "@/redux/features/receipt/receiptApi";
 import type { IReceipt } from "@/types/receipt.type";
 import { AddPaymentDialog } from "@/components/receipt/AddPaymentDialog";
+import { usePermissions } from "@/hooks/use-permissions";
 import { ReceiptFilters } from "@/components/receipt/ReceiptFilters";
 import { ReceiptTable } from "@/components/receipt/ReceiptTable";
 import { ReceiptPagination } from "@/components/receipt/ReceiptPagination";
@@ -49,6 +50,7 @@ export default function ReceiptsPage() {
   const { data: qData, isLoading, refetch } = useGetReceiptsQuery({
     limit: 1000,
   });
+  const { can } = usePermissions();
   const [voidReceipt, { isLoading: isVoiding }] = useVoidReceiptMutation();
   const [voidTarget, setVoidTarget] = useState<IReceipt | null>(null);
   const [voidReason, setVoidReason] = useState("");
@@ -194,12 +196,14 @@ export default function ReceiptsPage() {
             )}
           </p>
         </div>
-        <Button size="sm" className="h-8" asChild>
-          <Link href="/receipts/new">
-            <Plus className="h-3.5 w-3.5" />
-            New Receipt
-          </Link>
-        </Button>
+        {can("receipt.create") && (
+          <Button size="sm" className="h-8" asChild>
+            <Link href="/receipts/new">
+              <Plus className="h-3.5 w-3.5" />
+              New Receipt
+            </Link>
+          </Button>
+        )}
       </div>
 
       {/* ── Stats Strip ──────────────────────────────────────────── */}

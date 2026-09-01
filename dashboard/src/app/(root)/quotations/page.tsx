@@ -20,6 +20,7 @@ import { QuotationData } from "@/types/quotation.type";
 import { useRouter } from "next/navigation";
 import { Loader, Plus, TrendingUp, TrendingDown } from "lucide-react";
 import { useSession } from "@/lib/auth-client";
+import { usePermissions } from "@/hooks/use-permissions";
 import { Role } from "@/constants/role";
 import {
   Card as StatCard,
@@ -57,6 +58,7 @@ const STATUS_OPTIONS = [
 export default function QuotationsPage() {
   const router = useRouter();
   const { data: session } = useSession();
+  const { can } = usePermissions();
   const canSeeFinancials = useMemo(() => {
     const r = session?.user?.role;
     return r === Role.SUPER_ADMIN || r === Role.ADMIN || r === Role.HR_MANAGER;
@@ -304,15 +306,17 @@ export default function QuotationsPage() {
             )}
           </p>
         </div>
-        <Button size="sm" className="h-8" asChild>
-          <Link
-            href="/quotations/new"
-            onClick={() => useQuotationStore.getState().reset()}
-          >
-            <Plus className="h-3.5 w-3.5" />
-            New Quotation
-          </Link>
-        </Button>
+        {can("quotation.create") && (
+          <Button size="sm" className="h-8" asChild>
+            <Link
+              href="/quotations/new"
+              onClick={() => useQuotationStore.getState().reset()}
+            >
+              <Plus className="h-3.5 w-3.5" />
+              New Quotation
+            </Link>
+          </Button>
+        )}
       </div>
 
       {/* ── Stats Strip ──────────────────────────────────────────── */}

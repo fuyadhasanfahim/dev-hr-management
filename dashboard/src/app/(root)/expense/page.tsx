@@ -62,6 +62,7 @@ import {
     type ExpenseFormData,
 } from "@/components/expense/ExpenseForm";
 import { ExportExpenseDialog } from "@/components/expense/ExportExpenseDialog";
+import { usePermissions } from "@/hooks/use-permissions";
 import { ExpenseFilters, type FilterType } from "@/components/expense/ExpenseFilters";
 import { ExpenseTable } from "@/components/expense/ExpenseTable";
 import { ExpensePagination } from "@/components/expense/ExpensePagination";
@@ -82,6 +83,9 @@ interface Branch {
 }
 
 export default function ExpensePage() {
+    const { can } = usePermissions();
+    const canCreateExpense = can("expense.create");
+
     // Filter State
     const [page, setPage] = useState(1);
     const [limit, setLimit] = useState(20);
@@ -426,13 +430,18 @@ export default function ExpensePage() {
                         availableYears={years}
                         branches={branches}
                     />
-                    <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-                        <DialogTrigger asChild>
-                            <Button size="sm" className="h-8">
-                                <Plus className="h-3.5 w-3.5" />
-                                Add Expense
-                            </Button>
-                        </DialogTrigger>
+                    <Dialog
+                        open={isAddDialogOpen && canCreateExpense}
+                        onOpenChange={setIsAddDialogOpen}
+                    >
+                        {canCreateExpense && (
+                            <DialogTrigger asChild>
+                                <Button size="sm" className="h-8">
+                                    <Plus className="h-3.5 w-3.5" />
+                                    Add Expense
+                                </Button>
+                            </DialogTrigger>
+                        )}
                         <DialogContent className="max-w-md">
                             <DialogHeader>
                                 <DialogTitle>Add New Expense</DialogTitle>
@@ -630,7 +639,7 @@ export default function ExpensePage() {
 
             {/* Add Category Dialog */}
             <Dialog
-                open={isAddCategoryDialogOpen}
+                open={isAddCategoryDialogOpen && canCreateExpense}
                 onOpenChange={setIsAddCategoryDialogOpen}
             >
                 <DialogContent className="max-w-sm">

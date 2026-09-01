@@ -22,6 +22,7 @@ import { Button } from '@/components/ui/button';
 import { Plus, Loader, FileDown, Settings } from 'lucide-react';
 import { toast } from 'sonner';
 import { LeadForm, type LeadFormValues } from '@/components/lead/LeadForm';
+import { usePermissions } from '@/hooks/use-permissions';
 import { LeadSettingsDialog } from '@/components/lead/LeadSettingsDialog';
 import { LeadStats } from '@/components/lead/LeadStats';
 import { LeadFilters } from '@/components/lead/LeadFilters';
@@ -47,6 +48,8 @@ function LeadsPageContent() {
     const router = useRouter();
     const pathname = usePathname();
     const searchParams = useSearchParams();
+    const { can } = usePermissions();
+    const canCreateLead = can('lead.create');
 
     // Local filter states initialized from searchParams
     const [page, setPage] = useState(() => Number(searchParams.get('page')) || 1);
@@ -265,17 +268,19 @@ function LeadsPageContent() {
                         <FileDown className="h-3.5 w-3.5" />
                         <span className="hidden sm:inline">Export</span>
                     </Button>
-                    <Button
-                        size="sm"
-                        onClick={() => {
-                            setServerErrors(undefined);
-                            setIsAddDialogOpen(true);
-                        }}
-                        className="h-8"
-                    >
-                        <Plus className="h-3.5 w-3.5" />
-                        Add Lead
-                    </Button>
+                    {canCreateLead && (
+                        <Button
+                            size="sm"
+                            onClick={() => {
+                                setServerErrors(undefined);
+                                setIsAddDialogOpen(true);
+                            }}
+                            className="h-8"
+                        >
+                            <Plus className="h-3.5 w-3.5" />
+                            Add Lead
+                        </Button>
+                    )}
                 </div>
             </div>
 
@@ -346,7 +351,10 @@ function LeadsPageContent() {
             </Card>
 
             {/* ── Add Lead Dialog ──────────────────────────────────────── */}
-            <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+            <Dialog
+                open={isAddDialogOpen && canCreateLead}
+                onOpenChange={setIsAddDialogOpen}
+            >
                 <DialogContent className="max-w-3xl h-[90vh] max-h-[90vh] flex flex-col p-0 overflow-hidden gap-0">
                     <div className="px-6 py-4 border-b border-border shrink-0">
                         <DialogHeader>
