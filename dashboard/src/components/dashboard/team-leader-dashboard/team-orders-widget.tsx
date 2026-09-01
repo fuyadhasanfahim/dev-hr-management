@@ -59,7 +59,9 @@ export function TeamOrdersWidget() {
             {orders.slice(0, 5).map((order) => {
               const clientObj = typeof order.clientId === "object" ? order.clientId : null;
               const clientName = clientObj?.name || "Client";
-              const deadlineDate = order.deadline ? new Date(order.deadline) : null;
+              const deadlineDate = order.estimatedDeliveryDate
+                ? new Date(order.estimatedDeliveryDate)
+                : null;
               const isUrgent =
                 deadlineDate &&
                 order.status !== "completed" &&
@@ -77,7 +79,10 @@ export function TeamOrdersWidget() {
                         href={"/orders/" + order._id}
                         className="text-xs font-bold text-foreground hover:text-primary truncate"
                       >
-                        {order.orderName || order.title || order.orderNumber || "Order"}
+                        {order.quotationSnapshot?.templateName ||
+                          order.quotationSnapshot?.details?.title ||
+                          order.orderNumber ||
+                          "Order"}
                       </Link>
                     </div>
                     <div className="flex items-center gap-2 text-[11px] text-muted-foreground">

@@ -57,29 +57,6 @@ export interface CreateReturnFileFormatInput {
 
 export type UpdateReturnFileFormatInput = Partial<CreateReturnFileFormatInput>;
 
-export interface IRevisionInstruction {
-    instruction: string;
-    createdAt: string;
-    createdBy: string;
-}
-
-export interface ITimelineEntry {
-    status: OrderStatus;
-    timestamp: string;
-    changedBy: string;
-    note?: string;
-}
-
-export interface IOrderItem {
-    serviceId?: string;
-    name: string;
-    pricingModel: string;
-    quantity?: number;
-    hours?: number;
-    unitPrice: number;
-    totalPrice: number;
-}
-
 import { Client } from "./client.type";
 
 export interface IOrderAsset {
@@ -197,35 +174,6 @@ export interface IOrder {
     createdBy: string;
     createdAt: string;
     updatedAt: string;
-
-    // ── Legacy image-editing fields — no longer written by the backend.
-    // Kept optional so the invoice / dashboard / order-history views still
-    // compile until they are migrated to `quotationSnapshot`. @deprecated
-    orderName?: string;
-    orderDate?: string;
-    deadline?: string;
-    originalDeadline?: string;
-    perImagePrice?: number;
-    title?: string;
-    description?: string;
-    totalAmount?: number;
-    items?: IOrderItem[];
-    services?: { _id: string; name: string }[];
-    returnFileFormat?: { _id: string; name: string; extension: string };
-    instruction?: string;
-    notes?: string;
-    contactPersonId?: string;
-    revisionCount?: number;
-    isLegacy?: boolean;
-    earning?: { status: "paid" | "unpaid" };
-    revisionInstructions?: IRevisionInstruction[];
-    timeline?: ITimelineEntry[];
-    paymentPhases?: {
-        totalPercentage?: number;
-        upfront: { status: string; amountDue?: number; amountPaid?: number; percentage?: number };
-        delivery: { status: string; amountDue?: number; amountPaid?: number; percentage?: number };
-        final: { status: string; amountDue?: number; amountPaid?: number; percentage?: number };
-    } | null;
 }
 
 export interface IOrderStats {

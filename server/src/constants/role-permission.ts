@@ -20,7 +20,6 @@ export const SYSTEM_ROLE_PERMISSIONS: Record<Role, readonly string[]> = {
         'order.*',
         'quotation.*',
         'receipt.*',
-        'invoice.*',
         'client.*',
         'lead.*',
         'leadSetting.*',
@@ -73,7 +72,6 @@ export const SYSTEM_ROLE_PERMISSIONS: Record<Role, readonly string[]> = {
         'invitation.*',
         'career.*', // recruiting is an HR function — job positions + applications
         'service.*',
-        'invoice.*', // invoice / billing writes: admin, super_admin, hr_manager
         'wallet.*',
         'returnFileFormat.*',
         'branch.*', // Phase 6d — branch write routes allowed HR

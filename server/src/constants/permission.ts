@@ -56,10 +56,6 @@ export const PERMISSION_GROUPS = {
         label: 'Receipts',
         actions: ['read', 'create', 'update', 'delete'],
     },
-    invoice: {
-        label: 'Invoices',
-        actions: ['read', 'create', 'update', 'delete', 'void'],
-    },
     client: {
         label: 'Clients',
         actions: ['read', 'create', 'update', 'delete'],

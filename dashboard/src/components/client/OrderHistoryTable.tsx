@@ -37,7 +37,7 @@ export function OrderHistoryTable({ orders, isLoading, currency = "USD" }: Order
                         <TableRow>
                             <TableHead className="border-r border-slate-200 dark:border-slate-800">Order Name</TableHead>
                             <TableHead className="border-r border-slate-200 dark:border-slate-800 text-center">Date</TableHead>
-                            <TableHead className="border-r border-slate-200 dark:border-slate-800 text-center">Images</TableHead>
+                            <TableHead className="border-r border-slate-200 dark:border-slate-800 text-center">Services</TableHead>
                             <TableHead className="border-r border-slate-200 dark:border-slate-800 text-center">Price</TableHead>
                             <TableHead className="border-r border-slate-200 dark:border-slate-800 text-center">Status</TableHead>
                             <TableHead className="text-right">Action</TableHead>
@@ -79,7 +79,7 @@ export function OrderHistoryTable({ orders, isLoading, currency = "USD" }: Order
                     <TableRow>
                         <TableHead className="border-r border-slate-200 dark:border-slate-800 font-semibold">Order Name</TableHead>
                         <TableHead className="border-r border-slate-200 dark:border-slate-800 text-center font-semibold">Date</TableHead>
-                        <TableHead className="border-r border-slate-200 dark:border-slate-800 text-center font-semibold">Images</TableHead>
+                        <TableHead className="border-r border-slate-200 dark:border-slate-800 text-center font-semibold">Services</TableHead>
                         <TableHead className="border-r border-slate-200 dark:border-slate-800 text-center font-semibold">Price</TableHead>
                         <TableHead className="border-r border-slate-200 dark:border-slate-800 text-center font-semibold">Status</TableHead>
                         <TableHead className="text-right font-semibold">Action</TableHead>
@@ -100,7 +100,7 @@ export function OrderHistoryTable({ orders, isLoading, currency = "USD" }: Order
                             <TableRow key={order._id} className="group hover:bg-muted/10 transition-colors">
                                 <TableCell className="border-r border-slate-200 dark:border-slate-800 font-medium py-4">
                                     <div className="flex flex-col gap-1">
-                                        <span className="text-slate-900 dark:text-slate-100">{order.quotationSnapshot?.templateName || order.orderName || order.orderNumber}</span>
+                                        <span className="text-slate-900 dark:text-slate-100">{order.quotationSnapshot?.templateName || order.quotationSnapshot?.details?.title || order.orderNumber}</span>
                                         <div className="flex items-center gap-2">
                                             <Badge variant="outline" className={`text-[9px] h-4 uppercase ${ORDER_PRIORITY_COLORS[order.priority]}`}>
                                                 {ORDER_PRIORITY_LABELS[order.priority]}
@@ -109,13 +109,15 @@ export function OrderHistoryTable({ orders, isLoading, currency = "USD" }: Order
                                     </div>
                                 </TableCell>
                                 <TableCell className="border-r border-slate-200 dark:border-slate-800 text-center py-4 text-xs text-slate-600 dark:text-slate-300">
-                                    {format(new Date(order.orderDate ?? order.createdAt), "MMM dd, yyyy")}
+                                    {format(new Date(order.createdAt), "MMM dd, yyyy")}
                                 </TableCell>
                                 <TableCell className="border-r border-slate-200 dark:border-slate-800 text-center py-4 text-sm font-bold text-slate-800 dark:text-slate-200">
-                                    {order.imageQuantity ?? "—"}
+                                    {order.quotationSnapshot?.services?.length ??
+                                     order.quotationSnapshot?.scopeOfWork?.length ??
+                                     "—"}
                                 </TableCell>
                                 <TableCell className="border-r border-slate-200 dark:border-slate-800 text-center py-4 text-sm font-semibold text-slate-800 dark:text-slate-200">
-                                    {formatCurrency(order.totalPrice)}
+                                    {formatCurrency(order.quotationSnapshot?.grandTotal ?? order.totalPrice)}
                                 </TableCell>
                                 <TableCell className="border-r border-slate-200 dark:border-slate-800 text-center py-4">
                                     <span
