@@ -220,8 +220,6 @@ export interface IOrder {
     earning?: { status: "paid" | "unpaid" };
     revisionInstructions?: IRevisionInstruction[];
     timeline?: ITimelineEntry[];
-    invoiceNumber?: string;
-    isPaid?: boolean;
     paymentPhases?: {
         totalPercentage?: number;
         upfront: { status: string; amountDue?: number; amountPaid?: number; percentage?: number };

@@ -9,7 +9,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import { Eye, Clock, CheckCircle2, AlertCircle, FileText } from "lucide-react";
+import { Eye } from "lucide-react";
 import Link from 'next/link';
 import { format } from "date-fns";
 import { IOrder, OrderStatus, OrderPriority } from "@/types/order.type";
@@ -102,15 +102,6 @@ export function OrderHistoryTable({ orders, isLoading, currency = "USD" }: Order
                                     <div className="flex flex-col gap-1">
                                         <span className="text-slate-900 dark:text-slate-100">{order.quotationSnapshot?.templateName || order.orderName || order.orderNumber}</span>
                                         <div className="flex items-center gap-2">
-                                            {order.isPaid ? (
-                                                <Badge variant="outline" className="text-[9px] h-4 bg-green-50 dark:bg-green-950/40 text-green-700 dark:text-green-300 border-green-200 dark:border-green-900/50">
-                                                    <CheckCircle2 className="h-2.5 w-2.5 mr-0.5" /> PAID
-                                                </Badge>
-                                            ) : order.invoiceNumber ? (
-                                                <Badge variant="outline" className="text-[9px] h-4 bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-900/50">
-                                                    <FileText className="h-2.5 w-2.5 mr-0.5" /> INV #{order.invoiceNumber}
-                                                </Badge>
-                                            ) : null}
                                             <Badge variant="outline" className={`text-[9px] h-4 uppercase ${ORDER_PRIORITY_COLORS[order.priority]}`}>
                                                 {ORDER_PRIORITY_LABELS[order.priority]}
                                             </Badge>

@@ -34,7 +34,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
-import { Loader, Plus, FileText, TrendingUp, TrendingDown } from "lucide-react";
+import { Loader, Plus, TrendingUp, TrendingDown } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { OrderFilters as OrderFiltersBar } from "@/components/order/OrderFilters";
@@ -288,12 +288,6 @@ export default function OrdersPage() {
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap justify-end">
-          <Button variant="outline" size="sm" className="h-8" asChild>
-            <Link href="/orders/invoice">
-              <FileText className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Generate Invoice</span>
-            </Link>
-          </Button>
           <Button variant="outline" size="sm" className="h-8" asChild>
             <Link href="/quotations">
               <IconReceipt className="h-3.5 w-3.5" />

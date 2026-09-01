@@ -549,10 +549,6 @@ export default function OrderDetailsPage() {
                             </CardTitle>
                         </CardHeader>
                         <CardContent className="space-y-3">
-                            <Button variant="outline" className="w-full justify-start font-semibold" onClick={() => router.push(`/orders/invoice/${order._id}`)}>
-                                <FileText className="h-4 w-4" />
-                                Generate Invoice
-                            </Button>
                             <Button variant="outline" className="w-full justify-start font-semibold">
                                 <Package className="h-4 w-4" />
                                 View Project Files

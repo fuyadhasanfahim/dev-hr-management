@@ -19,7 +19,6 @@ import { ServiceRoutes } from "./service.route.js";
 import { ProjectRoutes } from "./project.route.js";
 import { profitShareRoute } from "./profit-share.route.js";
 import { debitRoute } from "./debit.route.js";
-import { BillingRoutes } from "./billing.route.js";
 import { leaveRoute } from "./leave.route.js";
 import { noticeRoute } from "./notice.route.js";
 import externalBusinessRoute from "./external-business.routes.js";
@@ -131,10 +130,6 @@ const moduleRoutes = [
     {
         path: "/debits",
         route: debitRoute,
-    },
-    {
-        path: "/invoices",
-        route: BillingRoutes,
     },
     {
         path: "/leave",

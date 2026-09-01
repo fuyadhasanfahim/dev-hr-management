@@ -113,10 +113,6 @@ app.use(
             (req.method === "POST" &&
                 req.path === "/careers/applications/public");
 
-        // Allow public access to read invoice data (for payment portal)
-        const isPublicInvoiceRoute =
-            req.method === "GET" && /^\/invoices\/public\//.test(req.path);
-
         // Allow public access to quotation token routes (payment portal)
         const isPublicQuotationTokenRoute =
             (req.method === "GET" && /^\/quotations\/client\/[^/]+$/.test(req.path)) ||
@@ -138,7 +134,6 @@ app.use(
         if (
             isPublicInvitationRoute ||
             isPublicCareerRoute ||
-            isPublicInvoiceRoute ||
             isPublicQuotationTokenRoute ||
             isPublicQuotationPdfPuppeteerRoute ||
             isSupportRoute ||
