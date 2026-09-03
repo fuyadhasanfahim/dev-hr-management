@@ -20,6 +20,7 @@ router.post('/', (_req, res) => {
 
 router.get('/',         requirePermission('order.read'), OrderController.getAllOrders);
 router.get('/:id',      requirePermission('order.read'), OrderController.getOrderById);
+router.get('/:id/invoice/pdf', requirePermission('order.read'), OrderController.downloadInvoicePdf);
 
 router.patch('/:id/status',         requirePermission('order.changeStatus'), OrderController.updateOrderStatus);
 router.patch('/:id/team',           requirePermission('order.assign'), OrderController.updateOrderTeam);

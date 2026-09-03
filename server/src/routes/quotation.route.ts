@@ -29,6 +29,11 @@ router.get(
     requirePermission('quotation.read'),
     QuotationController.getQuotationById,
 );
+router.get(
+    '/:id/invoice/pdf',
+    requirePermission('quotation.read'),
+    QuotationController.downloadInvoicePdf,
+);
 
 router.post(
     '/',

@@ -1,6 +1,7 @@
 import type { Request, Response, NextFunction } from 'express';
 import { QuotationService } from '../services/quotation.service.js';
 import { QuotationPuppeteerPdfService } from '../services/quotation-puppeteer-pdf.service.js';
+import { InvoicePuppeteerPdfService } from '../services/invoice-puppeteer-pdf.service.js';
 import { logger } from '../lib/logger.js';
 import { maskQuotation, maskQuotations } from '../utils/masking.js';
 
@@ -169,6 +170,19 @@ const downloadQuotationPdfPuppeteer = async (req: Request, res: Response, next: 
     }
 };
 
+const downloadInvoicePdf = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const { id } = req.params;
+        if (!id) return next(new Error('ID is required'));
+        const { buffer, filename } = await InvoicePuppeteerPdfService.generateFromQuotation(id);
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        res.send(buffer);
+    } catch (err) {
+        next(err);
+    }
+};
+
 const getGroupVersions = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const { groupId } = req.params;
@@ -285,6 +299,7 @@ export default {
     getAllQuotations,
     getQuotationById,
     downloadQuotationPdfPuppeteer,
+    downloadInvoicePdf,
     getGroupVersions,
     deleteQuotation,
     // Public

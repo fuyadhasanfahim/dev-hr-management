@@ -46,6 +46,7 @@ import {
     Info,
 } from 'lucide-react';
 import Link from 'next/link';
+import InvoicePdfButton from '@/components/shared/InvoicePdfButton';
 import QuotationPuppeteerPdfBtn, {
     quotationPdfFileStem,
 } from '@/components/quotation/pdf/QuotationPuppeteerPdfBtn';
@@ -548,6 +549,15 @@ export default function ViewQuotationPage() {
                         fileNameBase={quotationPdfFileStem(
                             data.quotationNumber,
                             data.details?.title,
+                        )}
+                    />
+
+                    <InvoicePdfButton
+                        source="quotation"
+                        id={id as string}
+                        fileNameBase={(data.quotationNumber || 'quotation').replace(
+                            /^QTN/i,
+                            'INV',
                         )}
                     />
 

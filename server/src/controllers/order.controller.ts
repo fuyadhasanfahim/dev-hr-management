@@ -1,5 +1,6 @@
 import type { Request, Response, NextFunction } from 'express';
 import OrderService from '../services/order.service.js';
+import { InvoicePuppeteerPdfService } from '../services/invoice-puppeteer-pdf.service.js';
 import { AppError } from '../utils/AppError.js';
 import { maskOrder, maskOrders } from '../utils/masking.js';
 
@@ -220,6 +221,22 @@ async function updateOrder(req: Request, res: Response, next: NextFunction): Pro
     }
 }
 
+async function downloadInvoicePdf(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+        const { id } = req.params;
+        if (!id) {
+            next(new AppError('Order id is required', 400));
+            return;
+        }
+        const { buffer, filename } = await InvoicePuppeteerPdfService.generateFromOrder(id);
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        res.send(buffer);
+    } catch (err) {
+        next(err);
+    }
+}
+
 export default {
     getAllOrders,
     getOrderById,
@@ -229,4 +246,5 @@ export default {
     convertQuotationToOrder,
     updateOrderTeam,
     updateOrder,
+    downloadInvoicePdf,
 };

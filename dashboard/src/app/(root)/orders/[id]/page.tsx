@@ -27,6 +27,7 @@ import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { usePermissions } from "@/hooks/use-permissions";
+import InvoicePdfButton from "@/components/shared/InvoicePdfButton";
 import {
     Dialog,
     DialogContent,
@@ -229,10 +230,16 @@ export default function OrderDetailsPage() {
                     </div>
                 </div>
                 <div className="flex gap-2">
-                    <Button variant="outline" size="sm">
-                        <FileText className="h-4 w-4" />
-                        Export PDF
-                    </Button>
+                    <InvoicePdfButton
+                        source="order"
+                        id={id as string}
+                        fileNameBase={(
+                            order.quotationSnapshot?.quotationNumber ||
+                            order.orderNumber ||
+                            "invoice"
+                        ).replace(/^QTN/i, "INV")}
+                        className="h-9 px-3"
+                    />
                     {/* Update Status Dropdown Trigger */}
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
