@@ -1,4 +1,3 @@
-import './lib/dns-init.js';
 import { client } from "./lib/db.js";
 import envConfig from "./config/env.config.js";
 import { createServer } from "http";
