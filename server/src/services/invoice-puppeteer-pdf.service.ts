@@ -272,8 +272,8 @@ export function buildInvoiceHtml(inv: InvoiceData, ctx: InvoicePdfContext): stri
         ? `<div class="page-watermark"><img src="${esc(ctx.markSrc)}" alt="" /></div>`
         : '';
 
-    const payLine = payUrl
-        ? `<div class="pay-row"><span class="pay-k">Pay online</span><span class="pay-v"><a href="${esc(payUrl)}">${esc(payUrl.replace(/^https?:\/\//, ''))}</a></span></div>`
+    const payBtn = payUrl
+        ? `<a class="pay-btn" href="${esc(payUrl)}">Pay Now</a>`
         : '';
 
     return `<!DOCTYPE html>
@@ -316,8 +316,8 @@ export function buildInvoiceHtml(inv: InvoiceData, ctx: InvoicePdfContext): stri
     body {
       font-family: var(--font-sans);
       color: var(--ink-2);
-      font-size: 9.5pt;
-      line-height: 1.5;
+      font-size: 9pt;
+      line-height: 1.44;
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
       -webkit-font-smoothing: antialiased;
@@ -345,13 +345,13 @@ export function buildInvoiceHtml(inv: InvoiceData, ctx: InvoicePdfContext): stri
       height: 3px;
       background: linear-gradient(90deg, var(--brand-mid), var(--brand) 55%, #2a0785);
       border-radius: 2px;
-      margin-bottom: 6mm;
+      margin-bottom: 4mm;
     }
     .masthead { display: flex; justify-content: space-between; align-items: flex-start; gap: 12mm; }
     .brand-logo { height: 11mm; width: auto; object-fit: contain; object-position: left center; display: block; }
     .doc-id { text-align: right; }
     .doc-word {
-      font-size: 20pt; font-weight: 800; letter-spacing: -0.02em;
+      font-size: 17pt; font-weight: 800; letter-spacing: -0.02em;
       color: var(--ink); line-height: 1;
     }
     .doc-no {
@@ -359,40 +359,15 @@ export function buildInvoiceHtml(inv: InvoiceData, ctx: InvoicePdfContext): stri
       letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted);
       margin-top: 5px;
     }
-
-    /* ── Hero: bill-to + amount due ───────────────────────────────────────── */
-    .hero { display: flex; gap: 10mm; margin-top: 7mm; }
-    .hero-left { flex: 1.1; }
-    .hero-right { flex: 1; }
-
-    .eyebrow {
-      font-family: var(--font-mono); font-size: 7.5pt; font-weight: 600;
-      letter-spacing: 0.18em; text-transform: uppercase; color: var(--brand-mid);
-      margin-bottom: 6px;
+    .doc-meta {
+      font-family: var(--font-mono); font-size: 8pt; color: var(--faint);
+      line-height: 1.7; margin-top: 7px;
     }
-    .party-name { font-size: 12.5pt; font-weight: 700; color: var(--ink); line-height: 1.3; }
-    .party-line { font-size: 9pt; color: var(--muted); line-height: 1.6; margin-top: 2px; }
-
-    .due-card {
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: 12px;
-      padding: 5mm 5mm 4mm;
-    }
-    .due-label {
-      font-family: var(--font-mono); font-size: 7.5pt; font-weight: 600;
-      letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted);
-    }
-    .due-figure {
-      font-family: var(--font-mono); font-weight: 600;
-      font-size: 17pt; letter-spacing: -0.01em; line-height: 1.1;
-      color: var(--ink); margin-top: 3px;
-    }
-    .due-card.is-open .due-figure { color: var(--due); }
-    .due-card.is-clear .due-figure { color: var(--ok); font-size: 14pt; }
+    .doc-meta span { display: block; }
+    .doc-meta b { color: var(--ink-2); font-weight: 500; }
 
     .status-tag {
-      display: inline-block; margin-top: 8px;
+      display: inline-block; margin-top: 9px;
       font-family: var(--font-mono); font-size: 7pt; font-weight: 600;
       letter-spacing: 0.14em; text-transform: uppercase;
       padding: 4px 9px; border-radius: 999px;
@@ -401,21 +376,31 @@ export function buildInvoiceHtml(inv: InvoiceData, ctx: InvoicePdfContext): stri
     .status-tag.is-partial { color: var(--warn); background: var(--warn-bg); }
     .status-tag.is-unpaid  { color: var(--due);  background: var(--due-bg); }
 
-    .due-meta { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 8px; }
-    .due-meta .m-row { display: flex; justify-content: space-between; font-size: 8.5pt; line-height: 1.7; }
-    .due-meta .m-k { color: var(--faint); }
-    .due-meta .m-v { color: var(--ink-2); font-weight: 500; font-family: var(--font-mono); }
+    /* ── Hero: bill from / bill to ───────────────────────────────────────── */
+    .hero { display: flex; gap: 8mm; margin-top: 5mm; align-items: stretch; }
+    .hero-col { flex: 1; }
+    .hero-col.to {
+      background: var(--panel); border: 1px solid var(--line);
+      border-radius: 10px; padding: 4mm 4.5mm;
+    }
+    .eyebrow {
+      font-family: var(--font-mono); font-size: 7.5pt; font-weight: 600;
+      letter-spacing: 0.18em; text-transform: uppercase; color: var(--brand-mid);
+      margin-bottom: 6px;
+    }
+    .party-name { font-size: 11.5pt; font-weight: 700; color: var(--ink); line-height: 1.3; }
+    .party-line { font-size: 8.5pt; color: var(--muted); line-height: 1.5; margin-top: 1px; }
 
     /* ── Line items ───────────────────────────────────────────────────────── */
     .section-title {
-      margin: 6mm 0 3mm;
+      margin: 5mm 0 2.5mm;
       font-size: 8pt; font-weight: 700; letter-spacing: 0.14em;
       text-transform: uppercase; color: var(--ink);
       font-family: var(--font-mono);
     }
     .project-title {
-      font-size: 13pt; font-weight: 700; color: var(--ink);
-      letter-spacing: -0.01em; margin-bottom: 5mm;
+      font-size: 12pt; font-weight: 700; color: var(--ink);
+      letter-spacing: -0.01em; margin-bottom: 3.5mm;
     }
 
     table.items { width: 100%; border-collapse: collapse; }
@@ -425,33 +410,33 @@ export function buildInvoiceHtml(inv: InvoiceData, ctx: InvoicePdfContext): stri
       text-align: left; padding: 0 0 7px; border-bottom: 1.5px solid var(--ink);
     }
     table.items thead th.h-amt { text-align: right; }
-    table.items .li-row td { padding: 7px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+    table.items .li-row td { padding: 5.5px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
     .li-idx {
       width: 12mm; font-family: var(--font-mono); font-size: 8pt;
-      color: var(--faint); padding-top: 8px !important;
+      color: var(--faint); padding-top: 7px !important;
     }
     .li-title { font-size: 10pt; font-weight: 600; color: var(--ink); }
     .li-sub { font-size: 8.5pt; color: var(--muted); margin-top: 2px; }
     .li-amt {
       text-align: right; white-space: nowrap; width: 34mm;
-      font-family: var(--font-mono); font-size: 10pt; font-weight: 500; color: var(--ink);
-      padding-top: 8px !important;
+      font-family: var(--font-mono); font-size: 9.5pt; font-weight: 500; color: var(--ink);
+      padding-top: 7px !important;
     }
 
     /* ── Totals ───────────────────────────────────────────────────────────── */
-    .totals-wrap { display: flex; justify-content: flex-end; margin-top: 5mm; }
+    .totals-wrap { display: flex; justify-content: flex-end; margin-top: 3.5mm; }
     table.totals { width: 74mm; border-collapse: collapse; }
-    table.totals td { padding: 5px 0; font-size: 9pt; }
+    table.totals td { padding: 4px 0; font-size: 9pt; }
     table.totals .sum-amt { text-align: right; white-space: nowrap; font-family: var(--font-mono); }
     table.totals .sum-row td { color: var(--muted); }
     table.totals .sum-row.is-paid-row td { color: var(--ok); font-weight: 600; }
     table.totals .grand td {
       color: var(--ink); font-weight: 700; font-size: 10.5pt;
-      border-top: 1px solid var(--line); padding-top: 9px;
+      border-top: 1px solid var(--line); padding-top: 7px;
     }
 
     .balance-bar {
-      margin-top: 5mm; border-radius: 10px; padding: 4mm 6mm;
+      margin-top: 4mm; border-radius: 10px; padding: 3.5mm 6mm;
       display: flex; justify-content: space-between; align-items: baseline;
       page-break-inside: avoid;
     }
@@ -468,22 +453,23 @@ export function buildInvoiceHtml(inv: InvoiceData, ctx: InvoicePdfContext): stri
     .balance-bar.is-clear .balance-v { color: var(--ok); }
 
     /* ── Closing ──────────────────────────────────────────────────────────── */
-    .closing { margin-top: 7mm; page-break-inside: avoid; }
+    .closing { margin-top: 5mm; page-break-inside: avoid; }
     .pay-note {
-      margin-top: 6mm;
+      margin-top: 4mm;
       border-left: 2px solid var(--brand-line);
       padding: 0.5mm 0 0.5mm 5mm;
       font-size: 8pt; color: var(--muted); line-height: 1.55;
       max-width: 122mm;
     }
-    .pay-row { margin-top: 3px; display: flex; gap: 8px; }
-    .pay-k {
-      font-family: var(--font-mono); font-size: 7pt; letter-spacing: 0.12em;
-      text-transform: uppercase; color: var(--faint); min-width: 18mm;
+    .pay-btn {
+      display: inline-block; margin-top: 9px;
+      font-family: var(--font-sans); font-size: 8.5pt; font-weight: 700;
+      letter-spacing: 0.02em; color: #fff; text-decoration: none;
+      padding: 8px 20px; border-radius: 8px;
+      background: linear-gradient(134deg, #9C46F4 0%, #6A25E0 42%, #390CA4 100%);
     }
-    .pay-v a { font-weight: 600; }
 
-    .sign-row { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 8mm; }
+    .sign-row { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 5mm; }
     .sig-block { max-width: 70mm; }
     .sig-img { display: block; width: 176px; height: 42px; object-fit: contain; object-position: left bottom; margin-bottom: 4px; }
     .sig-img-spacer { height: 16px; margin-bottom: 4px; }
@@ -507,35 +493,30 @@ export function buildInvoiceHtml(inv: InvoiceData, ctx: InvoicePdfContext): stri
       <div class="doc-id">
         <div class="doc-word">Invoice</div>
         <div class="doc-no">${esc(inv.invoiceNumber)}</div>
+        <div class="doc-meta">
+          <span>Issued <b>${esc(formatDatePdf(inv.issueDate))}</b></span>
+          <span>Quotation <b>${esc(inv.quotationNumber || '—')}</b></span>
+        </div>
+        <span class="status-tag ${stateMeta.className}">${esc(stateMeta.label)}</span>
       </div>
     </div>
 
     <div class="hero">
-      <div class="hero-left">
-        <div class="eyebrow">Billed To</div>
+      <div class="hero-col">
+        <div class="eyebrow">Bill From</div>
+        <div class="party-name">${esc(DEFAULT_COMPANY.name)}</div>
+        <div class="party-line">${esc(DEFAULT_COMPANY.address)}</div>
+        <div class="party-line">${esc(DEFAULT_COMPANY.email)}</div>
+        <div class="party-line">${esc(DEFAULT_COMPANY.phone)}</div>
+      </div>
+
+      <div class="hero-col to">
+        <div class="eyebrow">Bill To</div>
         <div class="party-name">${esc(inv.client.contactName)}</div>
         ${inv.client.companyName ? `<div class="party-line">${esc(inv.client.companyName)}</div>` : ''}
         ${inv.client.address ? `<div class="party-line">${esc(inv.client.address)}</div>` : ''}
         ${inv.client.email ? `<div class="party-line">${esc(inv.client.email)}</div>` : ''}
         ${inv.client.phone ? `<div class="party-line">${esc(inv.client.phone)}</div>` : ''}
-
-        <div class="eyebrow" style="margin-top:7mm;">From</div>
-        <div class="party-name" style="font-size:10.5pt;">${esc(DEFAULT_COMPANY.name)}</div>
-        <div class="party-line">${esc(DEFAULT_COMPANY.address)}</div>
-        <div class="party-line">${esc(DEFAULT_COMPANY.email)} &nbsp;·&nbsp; ${esc(DEFAULT_COMPANY.phone)}</div>
-      </div>
-
-      <div class="hero-right">
-        <div class="due-card ${paidInFull ? 'is-clear' : 'is-open'}">
-          <div class="due-label">${paidInFull ? 'Balance' : 'Amount Due'}</div>
-          <div class="due-figure">${paidInFull ? 'Paid in full' : esc(formatMoneyPdf(inv.balanceDue, c))}</div>
-          <span class="status-tag ${stateMeta.className}">${esc(stateMeta.label)}</span>
-          <div class="due-meta">
-            <div class="m-row"><span class="m-k">Issued</span><span class="m-v">${esc(formatDatePdf(inv.issueDate))}</span></div>
-            <div class="m-row"><span class="m-k">Quotation</span><span class="m-v">${esc(inv.quotationNumber || '—')}</span></div>
-            <div class="m-row"><span class="m-k">Total value</span><span class="m-v">${esc(formatMoneyPdf(inv.grandTotal, c))}</span></div>
-          </div>
-        </div>
       </div>
     </div>
 
@@ -570,7 +551,7 @@ export function buildInvoiceHtml(inv: InvoiceData, ctx: InvoicePdfContext): stri
       This invoice covers the services listed above under quotation
       <strong>${esc(inv.quotationNumber || '—')}</strong>. Any payments already
       recorded are reflected in the balance above.
-      ${payLine}
+      ${payBtn ? `<div>${payBtn}</div>` : ''}
     </div>
 
     <div class="closing">
@@ -680,7 +661,7 @@ async function renderPdf(
                       font-family:-apple-system,'Segoe UI',Roboto,sans-serif;
                       font-size:7pt;color:#9a94ac;
                       display:flex;justify-content:space-between;align-items:center;">
-            <span>&copy; ${new Date().getFullYear()} WebBriks LLC &nbsp;&middot;&nbsp; info@webbriks.com</span>
+            <span>&copy; ${new Date().getFullYear()} WebBriks &nbsp;&middot;&nbsp; This invoice was generated automatically by the WebBriks system.</span>
             <span>${esc(inv.invoiceNumber)} &nbsp;&middot;&nbsp; Page <span class="pageNumber"></span> / <span class="totalPages"></span></span>
           </div>`;
 
