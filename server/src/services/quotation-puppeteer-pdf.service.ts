@@ -256,7 +256,7 @@ async function fetchWoff2AsDataUrl(url: string): Promise<string | null> {
  * Returns '' on any failure so the CSS font stacks fall back to system fonts —
  * the document still renders, it just loses the custom faces.
  */
-async function buildEmbeddedFontCss(): Promise<string> {
+export async function buildEmbeddedFontCss(): Promise<string> {
     if (embeddedFontCss !== null) return embeddedFontCss;
 
     const cssParts: string[] = [];
@@ -310,7 +310,7 @@ let cachedMarkDataUrl: string | null = null;
  * to the full logo (and finally to `null`, which just hides the mark) if
  * anything about the crop fails — a missing decoration must never fail a PDF.
  */
-async function extractBrandMark(
+export async function extractBrandMark(
     browser: Awaited<ReturnType<typeof puppeteer.launch>>,
     logoDataUrl: string,
 ): Promise<string | null> {

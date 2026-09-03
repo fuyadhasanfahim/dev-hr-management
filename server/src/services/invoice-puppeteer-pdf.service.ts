@@ -10,6 +10,10 @@ import ClientModel from '../models/client.model.js';
 import ReceiptModel from '../models/receipt.model.js';
 import { AppError } from '../utils/AppError.js';
 import { logger } from '../lib/logger.js';
+import {
+    buildEmbeddedFontCss,
+    extractBrandMark,
+} from './quotation-puppeteer-pdf.service.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -166,6 +170,10 @@ interface InvoiceData {
 interface InvoicePdfContext {
     logoSrc: string;
     signatureSrc: string;
+    /** Cropped brand icon for the page watermark (shared with the quotation PDF). */
+    markSrc: string;
+    /** Inlined @font-face block (Inter / Geist Mono), shared with the quotation PDF. */
+    fontCss: string;
 }
 
 /** `QTN-2026-0007` → `INV-2026-0007`; otherwise `INV-<given>`; else a dated stub. */
@@ -214,50 +222,58 @@ async function attachReceiptLedger(
 
 // ─── HTML ───────────────────────────────────────────────────────────────────
 
-const PAYMENT_STATE_META: Record<PaymentState, { label: string; className: string }> = {
-    paid: { label: 'Paid in Full', className: 'pill-paid' },
-    partial: { label: 'Partially Paid', className: 'pill-partial' },
-    unpaid: { label: 'Payment Due', className: 'pill-unpaid' },
+const PAYMENT_STATE_META: Record<
+    PaymentState,
+    { label: string; className: string }
+> = {
+    paid: { label: 'Paid in Full', className: 'is-paid' },
+    partial: { label: 'Partially Paid', className: 'is-partial' },
+    unpaid: { label: 'Payment Due', className: 'is-unpaid' },
 };
 
 export function buildInvoiceHtml(inv: InvoiceData, ctx: InvoicePdfContext): string {
     const c = inv.currency || 'BDT';
     const payUrl = (process.env.PAYMENT_CLIENT_URL || '').trim();
     const stateMeta = PAYMENT_STATE_META[inv.paymentState];
+    const paidInFull = inv.balanceDue <= 0.009;
 
     const lineRows = inv.lines
         .map(
-            (l) => `
+            (l, i) => `
         <tr class="li-row">
-          <td>
+          <td class="li-idx">${String(i + 1).padStart(2, '0')}</td>
+          <td class="li-main">
             <div class="li-title">${esc(l.label)}</div>
             ${l.sublabel ? `<div class="li-sub">${esc(l.sublabel)}</div>` : ''}
           </td>
-          <td class="li-amt">${formatMoneyPdf(l.amount, c)}</td>
+          <td class="li-amt">${esc(formatMoneyPdf(l.amount, c))}</td>
         </tr>`,
         )
         .join('');
 
     const discountRow =
         inv.discountAmount > 0.009
-            ? `<tr class="sum-row"><td>Discount</td><td class="sum-amt">− ${formatMoneyPdf(inv.discountAmount, c)}</td></tr>`
+            ? `<tr class="sum-row"><td>Discount</td><td class="sum-amt">&minus;&nbsp;${esc(formatMoneyPdf(inv.discountAmount, c))}</td></tr>`
             : '';
     const taxRow =
         inv.taxAmount > 0.009
-            ? `<tr class="sum-row"><td>Tax</td><td class="sum-amt">+ ${formatMoneyPdf(inv.taxAmount, c)}</td></tr>`
+            ? `<tr class="sum-row"><td>Tax</td><td class="sum-amt">+&nbsp;${esc(formatMoneyPdf(inv.taxAmount, c))}</td></tr>`
             : '';
-
     const paidRow =
         inv.totalPaid > 0.009
-            ? `<tr class="sum-row sum-paid"><td>Amount Paid</td><td class="sum-amt">− ${formatMoneyPdf(inv.totalPaid, c)}</td></tr>`
+            ? `<tr class="sum-row is-paid-row"><td>Amount Paid</td><td class="sum-amt">&minus;&nbsp;${esc(formatMoneyPdf(inv.totalPaid, c))}</td></tr>`
             : '';
 
     const signatureBlock = ctx.signatureSrc
-        ? `<img class="sig-img" src="${esc(ctx.signatureSrc)}" alt="" width="200" height="48" />`
+        ? `<img class="sig-img" src="${esc(ctx.signatureSrc)}" alt="" width="188" height="46" />`
         : `<div class="sig-img-spacer" aria-hidden="true"></div>`;
 
+    const watermark = ctx.markSrc
+        ? `<div class="page-watermark"><img src="${esc(ctx.markSrc)}" alt="" /></div>`
+        : '';
+
     const payLine = payUrl
-        ? `<div class="pay-line">Pay securely online at <a href="${esc(payUrl)}">${esc(payUrl.replace(/^https?:\/\//, ''))}</a></div>`
+        ? `<div class="pay-row"><span class="pay-k">Pay online</span><span class="pay-v"><a href="${esc(payUrl)}">${esc(payUrl.replace(/^https?:\/\//, ''))}</a></span></div>`
         : '';
 
     return `<!DOCTYPE html>
@@ -266,227 +282,309 @@ export function buildInvoiceHtml(inv: InvoiceData, ctx: InvoicePdfContext): stri
   <meta charset="utf-8" />
   <title>${esc(inv.invoiceNumber)}</title>
   <style>
+    ${ctx.fontCss}
+
     :root {
-      --violet-light: #A855F7;
-      --violet-deep: #4F46E5;
-      --accent-mid: #7c3aed;
-      --slate900: #0f172a;
-      --slate700: #334155;
-      --slate500: #64748b;
-      --slate300: #cbd5e1;
-      --slate100: #f1f5f9;
-      --slate50: #f8fafc;
-      --ok: #059669;
-      --due: #b91c1c;
-      --warn: #b45309;
-    }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    html, body { height: 100%; }
-    body {
-      font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      font-size: 13.5px;
-      line-height: 1.62;
-      color: var(--slate700);
-      background: #fff;
-      -webkit-print-color-adjust: exact;
-      print-color-adjust: exact;
-      font-variant-numeric: tabular-nums;
+      --brand:      #4E12D4;
+      --brand-mid:  #7c3aed;
+      --brand-soft: #f4f0ff;
+      --brand-line: rgba(78, 18, 212, 0.16);
+
+      --ink:      #14101f;
+      --ink-2:    #3b3550;
+      --muted:    #6b6580;
+      --faint:    #9a94ac;
+      --line:     #ece9f2;
+      --surface:  #ffffff;
+      --panel:    #faf9fd;
+
+      --ok:   #0f8a5f;
+      --ok-bg:#e8f6ef;
+      --due:  #b42318;
+      --due-bg:#fdeceb;
+      --warn: #a15c07;
+      --warn-bg:#fdf3e3;
+
+      --font-sans: 'Inter', system-ui, -apple-system, 'Hind Siliguri', sans-serif;
+      --font-mono: 'Geist Mono', ui-monospace, 'JetBrains Mono', monospace;
     }
 
-    /* Faint centred brand mark — reads as stationery, repeats on every page. */
+    @page { size: A4; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body { background: var(--surface); }
+    body {
+      font-family: var(--font-sans);
+      color: var(--ink-2);
+      font-size: 9.5pt;
+      line-height: 1.5;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+      -webkit-font-smoothing: antialiased;
+      font-variant-numeric: tabular-nums;
+    }
+    strong { font-weight: 600; color: var(--ink); }
+    a { color: var(--brand); text-decoration: none; }
+
+    /* Brand mark behind every page — same treatment as the quotation PDF. */
     .page-watermark {
       position: fixed;
       top: 50%; left: 50%;
       transform: translate(-50%, -50%);
-      width: 120mm;
-      opacity: 0.045;
+      width: 95mm;
+      opacity: 0.035;
       z-index: 0;
       pointer-events: none;
     }
     .page-watermark img { width: 100%; height: auto; display: block; }
 
-    .page-pad { position: relative; z-index: 1; padding: 0 3mm; }
+    .sheet { position: relative; z-index: 1; }
 
-    .header-row { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
-    .logo-box { width: 152px; height: 52px; display: flex; align-items: center; justify-content: flex-start; flex-shrink: 0; }
-    .logo-box img { display: block; width: 148px; height: 48px; object-fit: contain; object-position: left center; }
-    .header-right { text-align: right; }
-    .h-title {
-      font-size: 30px; font-weight: 800; letter-spacing: 0.08em;
-      background: linear-gradient(180deg, var(--violet-light), var(--violet-deep));
-      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-      background-clip: text; color: var(--violet-deep);
+    /* ── Masthead ──────────────────────────────────────────────────────────── */
+    .top-rule {
+      height: 3px;
+      background: linear-gradient(90deg, var(--brand-mid), var(--brand) 55%, #2a0785);
+      border-radius: 2px;
+      margin-bottom: 6mm;
     }
-    .title-accent { height: 3px; width: 54px; margin: 8px 0 10px auto; border-radius: 2px; background: linear-gradient(90deg, var(--violet-light), var(--violet-deep)); }
-    .meta { font-size: 11.5px; color: var(--slate500); margin-bottom: 4px; line-height: 1.5; }
-    .meta strong { color: var(--slate900); font-weight: 700; }
-
-    .status-pill {
-      display: inline-block; margin-top: 6px;
-      font-size: 10px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase;
-      padding: 5px 12px; border-radius: 999px;
+    .masthead { display: flex; justify-content: space-between; align-items: flex-start; gap: 12mm; }
+    .brand-logo { height: 11mm; width: auto; object-fit: contain; object-position: left center; display: block; }
+    .doc-id { text-align: right; }
+    .doc-word {
+      font-size: 20pt; font-weight: 800; letter-spacing: -0.02em;
+      color: var(--ink); line-height: 1;
     }
-    .pill-paid { color: #065f46; background: #d1fae5; border: 1px solid #6ee7b7; }
-    .pill-partial { color: #92400e; background: #fef3c7; border: 1px solid #fcd34d; }
-    .pill-unpaid { color: #991b1b; background: #fee2e2; border: 1px solid #fca5a5; }
-
-    .divider { height: 1px; background: var(--slate100); margin: 18px 0 20px; }
-
-    .billing { display: flex; justify-content: space-between; margin-bottom: 22px; }
-    .bill-col { width: 48%; }
-    .bill-col.r { text-align: right; }
-    .lbl { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.12em; color: var(--accent-mid); margin-bottom: 9px; }
-    .bill-name { font-size: 13.5px; font-weight: 700; color: var(--slate900); margin-bottom: 5px; line-height: 1.35; }
-    .bill-txt { font-size: 12px; color: var(--slate500); line-height: 1.58; margin-bottom: 4px; }
-
-    .sec {
-      font-size: 14.5px; font-weight: 800; color: var(--slate900);
-      letter-spacing: 0.1em; text-transform: uppercase; margin: 24px 0 11px;
-      page-break-after: avoid; break-after: avoid-page;
+    .doc-no {
+      font-family: var(--font-mono); font-size: 8.5pt; font-weight: 500;
+      letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted);
+      margin-top: 5px;
     }
-    .card { border: 1px solid var(--slate100); border-radius: 10px; overflow: hidden; background: #fff; }
 
-    table.li-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
-    table.li-table thead th {
-      text-align: left; padding: 13px 17px;
-      background: linear-gradient(90deg, var(--violet-light), var(--violet-deep));
-      color: #fff; font-size: 12px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; border: none;
+    /* ── Hero: bill-to + amount due ───────────────────────────────────────── */
+    .hero { display: flex; gap: 10mm; margin-top: 7mm; }
+    .hero-left { flex: 1.1; }
+    .hero-right { flex: 1; }
+
+    .eyebrow {
+      font-family: var(--font-mono); font-size: 7.5pt; font-weight: 600;
+      letter-spacing: 0.18em; text-transform: uppercase; color: var(--brand-mid);
+      margin-bottom: 6px;
     }
-    table.li-table thead th.th-amt { text-align: right; }
-    table.li-table .li-row td { padding: 13px 17px; border-top: 1px solid var(--slate100); vertical-align: top; }
-    .li-title { font-weight: 700; color: var(--slate900); }
-    .li-sub { font-size: 11px; color: var(--slate500); margin-top: 2px; }
-    .li-amt { text-align: right; white-space: nowrap; font-weight: 600; color: var(--slate900); }
+    .party-name { font-size: 12.5pt; font-weight: 700; color: var(--ink); line-height: 1.3; }
+    .party-line { font-size: 9pt; color: var(--muted); line-height: 1.6; margin-top: 2px; }
 
-    .totals { margin-top: 14px; display: flex; justify-content: flex-end; page-break-inside: avoid; }
-    table.sum-table { width: 62%; border-collapse: collapse; font-size: 12.5px; }
-    table.sum-table td { padding: 8px 4px; }
-    table.sum-table .sum-amt { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
-    table.sum-table .sum-row td { color: var(--slate500); border-top: 1px solid var(--slate100); }
-    table.sum-table .sum-row.sum-paid td { color: var(--ok); font-weight: 700; }
-    table.sum-table .row-grand td {
-      font-weight: 800; font-size: 15px; color: var(--slate900);
-      border-top: 1.5px solid var(--slate300); padding-top: 12px;
+    .due-card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 5mm 5mm 4mm;
     }
-    table.sum-table .row-due td {
-      font-weight: 800; font-size: 17px;
-      padding-top: 12px; border-top: 1.5px solid var(--slate300);
+    .due-label {
+      font-family: var(--font-mono); font-size: 7.5pt; font-weight: 600;
+      letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted);
     }
-    .row-due.due-open td { color: var(--due); }
-    .row-due.due-clear td { color: var(--ok); }
-
-    .pay-note {
-      margin-top: 20px; padding: 13px 16px; border-radius: 9px;
-      background: var(--slate50); border: 1px solid var(--slate100);
-      font-size: 11.5px; color: var(--slate500); line-height: 1.6;
+    .due-figure {
+      font-family: var(--font-mono); font-weight: 600;
+      font-size: 17pt; letter-spacing: -0.01em; line-height: 1.1;
+      color: var(--ink); margin-top: 3px;
     }
-    .pay-note .pay-line { margin-top: 4px; }
-    .pay-note a { color: var(--violet-deep); text-decoration: none; font-weight: 700; }
+    .due-card.is-open .due-figure { color: var(--due); }
+    .due-card.is-clear .due-figure { color: var(--ok); font-size: 14pt; }
 
-    .pdf-tail { margin-top: 30px; }
-    .sig-wrap { margin-top: 10px; page-break-inside: avoid; max-width: 320px; }
-    .sig-img { display: block; width: 200px; height: 48px; object-fit: contain; object-position: left bottom; margin-bottom: 6px; }
-    .sig-img-spacer { height: 40px; margin-bottom: 6px; }
-    .sig-line { border-bottom: 1px solid var(--slate900); margin-bottom: 8px; width: 100%; max-width: 260px; }
-    .sig-name { font-size: 13px; font-weight: 800; color: var(--slate900); line-height: 1.35; }
-    .sig-role { font-size: 11.5px; color: var(--slate500); margin-top: 5px; }
+    .status-tag {
+      display: inline-block; margin-top: 8px;
+      font-family: var(--font-mono); font-size: 7pt; font-weight: 600;
+      letter-spacing: 0.14em; text-transform: uppercase;
+      padding: 4px 9px; border-radius: 999px;
+    }
+    .status-tag.is-paid    { color: var(--ok);   background: var(--ok-bg); }
+    .status-tag.is-partial { color: var(--warn); background: var(--warn-bg); }
+    .status-tag.is-unpaid  { color: var(--due);  background: var(--due-bg); }
 
-    .doc-footer {
-      margin-top: 30px; padding-top: 14px;
-      border-top: 1px solid var(--slate300); text-align: center;
+    .due-meta { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 8px; }
+    .due-meta .m-row { display: flex; justify-content: space-between; font-size: 8.5pt; line-height: 1.7; }
+    .due-meta .m-k { color: var(--faint); }
+    .due-meta .m-v { color: var(--ink-2); font-weight: 500; font-family: var(--font-mono); }
+
+    /* ── Line items ───────────────────────────────────────────────────────── */
+    .section-title {
+      margin: 6mm 0 3mm;
+      font-size: 8pt; font-weight: 700; letter-spacing: 0.14em;
+      text-transform: uppercase; color: var(--ink);
+      font-family: var(--font-mono);
+    }
+    .project-title {
+      font-size: 13pt; font-weight: 700; color: var(--ink);
+      letter-spacing: -0.01em; margin-bottom: 5mm;
+    }
+
+    table.items { width: 100%; border-collapse: collapse; }
+    table.items thead th {
+      font-family: var(--font-mono); font-size: 7pt; font-weight: 600;
+      letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted);
+      text-align: left; padding: 0 0 7px; border-bottom: 1.5px solid var(--ink);
+    }
+    table.items thead th.h-amt { text-align: right; }
+    table.items .li-row td { padding: 7px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+    .li-idx {
+      width: 12mm; font-family: var(--font-mono); font-size: 8pt;
+      color: var(--faint); padding-top: 8px !important;
+    }
+    .li-title { font-size: 10pt; font-weight: 600; color: var(--ink); }
+    .li-sub { font-size: 8.5pt; color: var(--muted); margin-top: 2px; }
+    .li-amt {
+      text-align: right; white-space: nowrap; width: 34mm;
+      font-family: var(--font-mono); font-size: 10pt; font-weight: 500; color: var(--ink);
+      padding-top: 8px !important;
+    }
+
+    /* ── Totals ───────────────────────────────────────────────────────────── */
+    .totals-wrap { display: flex; justify-content: flex-end; margin-top: 5mm; }
+    table.totals { width: 74mm; border-collapse: collapse; }
+    table.totals td { padding: 5px 0; font-size: 9pt; }
+    table.totals .sum-amt { text-align: right; white-space: nowrap; font-family: var(--font-mono); }
+    table.totals .sum-row td { color: var(--muted); }
+    table.totals .sum-row.is-paid-row td { color: var(--ok); font-weight: 600; }
+    table.totals .grand td {
+      color: var(--ink); font-weight: 700; font-size: 10.5pt;
+      border-top: 1px solid var(--line); padding-top: 9px;
+    }
+
+    .balance-bar {
+      margin-top: 5mm; border-radius: 10px; padding: 4mm 6mm;
+      display: flex; justify-content: space-between; align-items: baseline;
       page-break-inside: avoid;
     }
-    .doc-footer-main { font-size: 10.5px; font-weight: 600; color: #334155; line-height: 1.5; }
-    .doc-footer a { color: #4F46E5; text-decoration: none; }
+    .balance-bar.is-open  { background: var(--due-bg); border: 1px solid rgba(180,35,24,0.22); }
+    .balance-bar.is-clear { background: var(--ok-bg); border: 1px solid rgba(15,138,95,0.22); }
+    .balance-k {
+      font-family: var(--font-mono); font-size: 8pt; font-weight: 600;
+      letter-spacing: 0.14em; text-transform: uppercase;
+    }
+    .balance-bar.is-open .balance-k  { color: var(--due); }
+    .balance-bar.is-clear .balance-k { color: var(--ok); }
+    .balance-v { font-family: var(--font-mono); font-weight: 700; font-size: 14pt; }
+    .balance-bar.is-open .balance-v  { color: var(--due); }
+    .balance-bar.is-clear .balance-v { color: var(--ok); }
+
+    /* ── Closing ──────────────────────────────────────────────────────────── */
+    .closing { margin-top: 7mm; page-break-inside: avoid; }
+    .pay-note {
+      margin-top: 6mm;
+      border-left: 2px solid var(--brand-line);
+      padding: 0.5mm 0 0.5mm 5mm;
+      font-size: 8pt; color: var(--muted); line-height: 1.55;
+      max-width: 122mm;
+    }
+    .pay-row { margin-top: 3px; display: flex; gap: 8px; }
+    .pay-k {
+      font-family: var(--font-mono); font-size: 7pt; letter-spacing: 0.12em;
+      text-transform: uppercase; color: var(--faint); min-width: 18mm;
+    }
+    .pay-v a { font-weight: 600; }
+
+    .sign-row { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 8mm; }
+    .sig-block { max-width: 70mm; }
+    .sig-img { display: block; width: 176px; height: 42px; object-fit: contain; object-position: left bottom; margin-bottom: 4px; }
+    .sig-img-spacer { height: 16px; margin-bottom: 4px; }
+    .sig-line { border-bottom: 1px solid var(--ink); width: 58mm; margin-bottom: 5px; }
+    .sig-name { font-size: 9pt; font-weight: 700; color: var(--ink); }
+    .sig-role { font-size: 7.5pt; color: var(--muted); margin-top: 1px; }
+    .stamp {
+      font-family: var(--font-mono);
+      font-size: 7pt; letter-spacing: 0.1em; text-transform: uppercase; color: var(--faint);
+    }
   </style>
 </head>
 <body>
-  <div class="page-watermark"><img src="${esc(ctx.logoSrc)}" alt="" /></div>
+  ${watermark}
+  <div class="sheet">
 
-  <div class="page-pad">
-    <div class="header-row">
-      <div class="logo-box">
-        <img src="${esc(ctx.logoSrc)}" alt="WebBriks" width="148" height="48" />
-      </div>
-      <div class="header-right">
-        <div class="h-title">INVOICE</div>
-        <div class="title-accent"></div>
-        <div class="meta">Invoice&nbsp;#: <strong>${esc(inv.invoiceNumber)}</strong></div>
-        <div class="meta">Issued: <strong>${esc(formatDatePdf(inv.issueDate))}</strong></div>
-        <div class="meta">Quotation: <strong>${esc(inv.quotationNumber || '—')}</strong></div>
-        <div class="status-pill ${stateMeta.className}">${esc(stateMeta.label)}</div>
+    <div class="top-rule"></div>
+
+    <div class="masthead">
+      <img class="brand-logo" src="${esc(ctx.logoSrc)}" alt="WebBriks" />
+      <div class="doc-id">
+        <div class="doc-word">Invoice</div>
+        <div class="doc-no">${esc(inv.invoiceNumber)}</div>
       </div>
     </div>
 
-    <div class="divider"></div>
+    <div class="hero">
+      <div class="hero-left">
+        <div class="eyebrow">Billed To</div>
+        <div class="party-name">${esc(inv.client.contactName)}</div>
+        ${inv.client.companyName ? `<div class="party-line">${esc(inv.client.companyName)}</div>` : ''}
+        ${inv.client.address ? `<div class="party-line">${esc(inv.client.address)}</div>` : ''}
+        ${inv.client.email ? `<div class="party-line">${esc(inv.client.email)}</div>` : ''}
+        ${inv.client.phone ? `<div class="party-line">${esc(inv.client.phone)}</div>` : ''}
 
-    <div class="billing">
-      <div class="bill-col">
-        <div class="lbl">From</div>
-        <div class="bill-name">${esc(DEFAULT_COMPANY.name)}</div>
-        <div class="bill-txt">${esc(DEFAULT_COMPANY.address)}</div>
-        <div class="bill-txt">${esc(DEFAULT_COMPANY.email)}</div>
-        <div class="bill-txt">${esc(DEFAULT_COMPANY.phone)}</div>
+        <div class="eyebrow" style="margin-top:7mm;">From</div>
+        <div class="party-name" style="font-size:10.5pt;">${esc(DEFAULT_COMPANY.name)}</div>
+        <div class="party-line">${esc(DEFAULT_COMPANY.address)}</div>
+        <div class="party-line">${esc(DEFAULT_COMPANY.email)} &nbsp;·&nbsp; ${esc(DEFAULT_COMPANY.phone)}</div>
       </div>
-      <div class="bill-col r">
-        <div class="lbl">Bill To</div>
-        <div class="bill-name">${esc(inv.client.contactName)}</div>
-        ${inv.client.companyName ? `<div class="bill-txt">${esc(inv.client.companyName)}</div>` : ''}
-        ${inv.client.address ? `<div class="bill-txt">${esc(inv.client.address)}</div>` : ''}
-        ${inv.client.email ? `<div class="bill-txt">${esc(inv.client.email)}</div>` : ''}
-        ${inv.client.phone ? `<div class="bill-txt">${esc(inv.client.phone)}</div>` : ''}
+
+      <div class="hero-right">
+        <div class="due-card ${paidInFull ? 'is-clear' : 'is-open'}">
+          <div class="due-label">${paidInFull ? 'Balance' : 'Amount Due'}</div>
+          <div class="due-figure">${paidInFull ? 'Paid in full' : esc(formatMoneyPdf(inv.balanceDue, c))}</div>
+          <span class="status-tag ${stateMeta.className}">${esc(stateMeta.label)}</span>
+          <div class="due-meta">
+            <div class="m-row"><span class="m-k">Issued</span><span class="m-v">${esc(formatDatePdf(inv.issueDate))}</span></div>
+            <div class="m-row"><span class="m-k">Quotation</span><span class="m-v">${esc(inv.quotationNumber || '—')}</span></div>
+            <div class="m-row"><span class="m-k">Total value</span><span class="m-v">${esc(formatMoneyPdf(inv.grandTotal, c))}</span></div>
+          </div>
+        </div>
       </div>
     </div>
 
-    <div class="sec">${esc(inv.projectTitle || 'Project')}</div>
+    <div class="section-title">Services</div>
+    <div class="project-title">${esc(inv.projectTitle || 'Project')}</div>
 
-    <div class="card">
-      <table class="li-table">
-        <thead>
-          <tr><th>Service</th><th class="th-amt">Amount</th></tr>
-        </thead>
-        <tbody>
-          ${lineRows || `<tr class="li-row"><td>Project fee</td><td class="li-amt">${formatMoneyPdf(inv.subtotal, c)}</td></tr>`}
-        </tbody>
-      </table>
-    </div>
+    <table class="items">
+      <thead>
+        <tr><th class="h-idx"></th><th>Description</th><th class="h-amt">Amount</th></tr>
+      </thead>
+      <tbody>
+        ${lineRows || `<tr class="li-row"><td class="li-idx">01</td><td class="li-main"><div class="li-title">Project fee</div></td><td class="li-amt">${esc(formatMoneyPdf(inv.subtotal, c))}</td></tr>`}
+      </tbody>
+    </table>
 
-    <div class="totals">
-      <table class="sum-table">
-        <tr class="sum-row"><td>Subtotal</td><td class="sum-amt">${formatMoneyPdf(inv.subtotal, c)}</td></tr>
+    <div class="totals-wrap">
+      <table class="totals">
+        <tr class="sum-row"><td>Subtotal</td><td class="sum-amt">${esc(formatMoneyPdf(inv.subtotal, c))}</td></tr>
         ${discountRow}
         ${taxRow}
-        <tr class="row-grand"><td>Grand Total</td><td class="sum-amt">${formatMoneyPdf(inv.grandTotal, c)}</td></tr>
+        <tr class="grand"><td>Grand Total</td><td class="sum-amt">${esc(formatMoneyPdf(inv.grandTotal, c))}</td></tr>
         ${paidRow}
-        <tr class="row-due ${inv.balanceDue <= 0.009 ? 'due-clear' : 'due-open'}">
-          <td>${inv.balanceDue <= 0.009 ? 'Balance' : 'Balance Due'}</td>
-          <td class="sum-amt">${inv.balanceDue <= 0.009 ? 'PAID IN FULL' : formatMoneyPdf(inv.balanceDue, c)}</td>
-        </tr>
       </table>
+    </div>
+
+    <div class="balance-bar ${paidInFull ? 'is-clear' : 'is-open'}">
+      <span class="balance-k">${paidInFull ? 'Settled' : 'Balance Due'}</span>
+      <span class="balance-v">${paidInFull ? esc(formatMoneyPdf(inv.grandTotal, c)) : esc(formatMoneyPdf(inv.balanceDue, c))}</span>
     </div>
 
     <div class="pay-note">
       This invoice covers the services listed above under quotation
-      <strong>${esc(inv.quotationNumber || '—')}</strong>. Payments already recorded are
-      reflected in the balance.${payLine}
+      <strong>${esc(inv.quotationNumber || '—')}</strong>. Any payments already
+      recorded are reflected in the balance above.
+      ${payLine}
     </div>
 
-    <div class="pdf-tail">
-      <div class="sig-wrap">
-        ${signatureBlock}
-        <div class="sig-line"></div>
-        <div class="sig-name">${esc(SIGNATORY_NAME)}</div>
-        <div class="sig-role">${esc(SIGNATORY_ROLE)}, ${esc(DEFAULT_COMPANY.name)}</div>
-      </div>
-
-      <footer class="doc-footer">
-        <div class="doc-footer-main">
-          &copy; ${new Date().getFullYear()} <a href="https://webbriks.com">WebBriks</a>. All rights reserved. &bull;
-          <a href="mailto:info@webbriks.com">info@webbriks.com</a> &bull;
-          <a href="https://webbriks.com">https://webbriks.com</a>
+    <div class="closing">
+      <div class="sign-row">
+        <div class="sig-block">
+          ${signatureBlock}
+          <div class="sig-line"></div>
+          <div class="sig-name">${esc(SIGNATORY_NAME)}</div>
+          <div class="sig-role">${esc(SIGNATORY_ROLE)}, ${esc(DEFAULT_COMPANY.name)}</div>
         </div>
-      </footer>
+        <div class="stamp">${esc(inv.invoiceNumber)}</div>
+      </div>
     </div>
+
   </div>
 </body>
 </html>`;
@@ -499,8 +597,7 @@ async function renderPdf(
         LOCAL_LOGO_BASE64 || (await fetchImageAsDataUrl(DEFAULT_LOGO)) || FALLBACK_PIXEL_PNG;
     const signatureUrl = process.env.COMPANY_SIGNATURE_URL || DEFAULT_SIGNATURE;
     const signatureSrc = (await fetchImageAsDataUrl(signatureUrl)) || '';
-
-    const html = buildInvoiceHtml(inv, { logoSrc, signatureSrc });
+    const fontCss = await buildEmbeddedFontCss().catch(() => '');
 
     let browser: Awaited<ReturnType<typeof puppeteer.launch>> | undefined;
     try {
@@ -508,7 +605,23 @@ async function renderPdf(
             headless: true,
             args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
         });
+
+        // Same cropped brand icon the quotation PDF uses for its watermark.
+        const markSrc = (await extractBrandMark(browser, logoSrc).catch(() => null)) || '';
+
+        const html = buildInvoiceHtml(inv, { logoSrc, signatureSrc, markSrc, fontCss });
         const page = await browser.newPage();
+
+        // PDF page geometry, in CSS px (1mm = 96/25.4 px). The viewport is set
+        // to the printable content box so DOM measurements match the paginated
+        // output — see the signature-anchoring step below.
+        const MM = 96 / 25.4;
+        const MARGIN_TOP_MM = 14;
+        const MARGIN_BOTTOM_MM = 20;
+        const CONTENT_W = Math.round((210 - 32) * MM);
+        const CONTENT_H = (297 - MARGIN_TOP_MM - MARGIN_BOTTOM_MM) * MM;
+        await page.setViewport({ width: CONTENT_W, height: Math.round(CONTENT_H) });
+
         await page.setContent(html, { waitUntil: 'load' });
         await page.evaluate(async () => {
             const g = globalThis as unknown as {
@@ -530,10 +643,54 @@ async function renderPdf(
             );
         });
 
+        await page.emulateMediaType('print');
+
+        // Anchor the signature block to the bottom of its page. Without this a
+        // spilled `.closing` floats alone at the top of the last page; here we
+        // measure where it lands and insert a spacer so it drops just above the
+        // running footer. A comfortably-fitting single-page invoice is left as-is.
+        await page.evaluate((contentHRaw: number) => {
+            const g = globalThis as any;
+            const el = g.document.querySelector('.closing');
+            if (!el) return;
+            // Under-shoot slightly so rounding never pushes the block a page too far.
+            const contentH = contentHRaw * 0.985;
+            const rect = el.getBoundingClientRect();
+            const top = rect.top;
+            const h = rect.height;
+            if (top + h <= contentH) return; // fits on the first page — leave it
+            const posInPage = ((top % contentH) + contentH) % contentH;
+            const spaceLeft = contentH - posInPage;
+            const CLEAR = 18;
+            const spacerH =
+                spaceLeft >= h + CLEAR
+                    ? spaceLeft - h - CLEAR
+                    : spaceLeft + (contentH - h - CLEAR);
+            if (spacerH <= 0) return;
+            const spacer = g.document.createElement('div');
+            spacer.style.height = spacerH + 'px';
+            spacer.setAttribute('aria-hidden', 'true');
+            el.parentNode.insertBefore(spacer, el);
+        }, CONTENT_H);
+
+        // Native running footer — sits at the bottom of every page (incl. a
+        // short final page), so a spilled signature never floats alone.
+        const footerTemplate = `
+          <div style="width:100%;box-sizing:border-box;padding:0 16mm;
+                      font-family:-apple-system,'Segoe UI',Roboto,sans-serif;
+                      font-size:7pt;color:#9a94ac;
+                      display:flex;justify-content:space-between;align-items:center;">
+            <span>&copy; ${new Date().getFullYear()} WebBriks LLC &nbsp;&middot;&nbsp; info@webbriks.com</span>
+            <span>${esc(inv.invoiceNumber)} &nbsp;&middot;&nbsp; Page <span class="pageNumber"></span> / <span class="totalPages"></span></span>
+          </div>`;
+
         const pdf = await page.pdf({
             format: 'A4',
             printBackground: true,
-            margin: { top: '12mm', bottom: '14mm', left: '10mm', right: '10mm' },
+            displayHeaderFooter: true,
+            headerTemplate: '<div></div>',
+            footerTemplate,
+            margin: { top: '14mm', bottom: '20mm', left: '16mm', right: '16mm' },
         });
 
         const stem = inv.invoiceNumber || 'invoice';
