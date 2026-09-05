@@ -430,12 +430,13 @@ export function buildInvoiceHtml(inv: InvoiceData, ctx: InvoicePdfContext): stri
     }
 
     .balance-bar {
-      border-radius: 10px; padding: 3.5mm 6mm;
-      display: flex; flex-direction: column; gap: 3px;
+      border-radius: 10px; padding: 3.5mm 5mm;
+      display: flex; align-items: center; justify-content: space-between; gap: 6mm;
       page-break-inside: avoid;
     }
     .balance-bar.is-open  { background: var(--due-bg); border: 1px solid rgba(180,35,24,0.22); }
     .balance-bar.is-clear { background: var(--ok-bg); border: 1px solid rgba(15,138,95,0.22); }
+    .balance-info { display: flex; flex-direction: column; gap: 3px; }
     .balance-k {
       font-family: var(--font-mono); font-size: 8pt; font-weight: 600;
       letter-spacing: 0.14em; text-transform: uppercase;
@@ -445,30 +446,25 @@ export function buildInvoiceHtml(inv: InvoiceData, ctx: InvoicePdfContext): stri
     .balance-v { font-family: var(--font-mono); font-weight: 700; font-size: 14pt; }
     .balance-bar.is-open .balance-v  { color: var(--due); }
     .balance-bar.is-clear .balance-v { color: var(--ok); }
-
-    /* ── Closing ──────────────────────────────────────────────────────────── */
-    .closing { margin-top: 5mm; page-break-inside: avoid; }
-    .pay-note {
-      margin-top: 4mm;
-      border-left: 2px solid var(--brand-line);
-      padding: 0.5mm 0 0.5mm 5mm;
-      display: flex; align-items: center; justify-content: space-between; gap: 6mm;
-    }
-    .pay-note-text {
-      font-size: 8pt; color: var(--muted); line-height: 1.55;
-      max-width: 108mm;
-    }
     .pay-btn {
       flex-shrink: 0;
       display: inline-block;
       font-family: var(--font-sans); font-size: 8.5pt; font-weight: 700;
       letter-spacing: 0.02em; color: #fff; text-decoration: none;
-      padding: 8px 20px; border-radius: 8px;
+      padding: 7px 16px; border-radius: 8px;
       background: linear-gradient(134deg, #9C46F4 0%, #6A25E0 42%, #390CA4 100%);
     }
 
-    .sign-row { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 5mm; }
-    .sig-block { max-width: 70mm; }
+    /* ── Closing ──────────────────────────────────────────────────────────── */
+    .closing { margin-top: 5mm; page-break-inside: avoid; }
+    .sign-row { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 5mm; gap: 8mm; }
+    .closing-note {
+      border-left: 2px solid var(--brand-line);
+      padding: 0.5mm 0 0.5mm 5mm;
+      font-size: 8pt; color: var(--muted); line-height: 1.55;
+      max-width: 78mm;
+    }
+    .sig-block { max-width: 70mm; flex-shrink: 0; }
     .sig-img { display: block; width: 176px; height: 42px; object-fit: contain; object-position: left bottom; margin-bottom: 4px; }
     .sig-img-spacer { height: 16px; margin-bottom: 4px; }
     .sig-line { border-bottom: 1px solid var(--ink); width: 58mm; margin-bottom: 5px; }
@@ -526,8 +522,11 @@ export function buildInvoiceHtml(inv: InvoiceData, ctx: InvoicePdfContext): stri
 
     <div class="totals-wrap">
       <div class="balance-bar ${paidInFull ? 'is-clear' : 'is-open'}">
-        <span class="balance-k">${paidInFull ? 'Settled' : 'Balance Due'}</span>
-        <span class="balance-v">${paidInFull ? esc(formatMoneyPdf(inv.grandTotal, c)) : esc(formatMoneyPdf(inv.balanceDue, c))}</span>
+        <div class="balance-info">
+          <span class="balance-k">${paidInFull ? 'Settled' : 'Balance Due'}</span>
+          <span class="balance-v">${paidInFull ? esc(formatMoneyPdf(inv.grandTotal, c)) : esc(formatMoneyPdf(inv.balanceDue, c))}</span>
+        </div>
+        ${payBtn}
       </div>
       <table class="totals">
         <tr class="sum-row"><td>Subtotal</td><td class="sum-amt">${esc(formatMoneyPdf(inv.subtotal, c))}</td></tr>
@@ -538,17 +537,13 @@ export function buildInvoiceHtml(inv: InvoiceData, ctx: InvoicePdfContext): stri
       </table>
     </div>
 
-    <div class="pay-note">
-      <div class="pay-note-text">
-        This invoice covers the services listed above under quotation
-        <strong>${esc(inv.quotationNumber || '—')}</strong>. Any payments already
-        recorded are reflected in the balance above.
-      </div>
-      ${payBtn}
-    </div>
-
     <div class="closing">
       <div class="sign-row">
+        <div class="closing-note">
+          This invoice covers the services listed above under quotation
+          <strong>${esc(inv.quotationNumber || '—')}</strong>. Any payments already
+          recorded are reflected in the balance above.
+        </div>
         <div class="sig-block">
           ${signatureBlock}
           <div class="sig-line"></div>
