@@ -273,7 +273,11 @@ export function buildInvoiceHtml(inv: InvoiceData, ctx: InvoicePdfContext): stri
         : '';
 
     const payBtn = payUrl
-        ? `<a class="pay-btn" href="${esc(payUrl)}">Pay Now</a>`
+        ? `<div class="balance-divider"></div>
+           <a class="pay-btn" href="${esc(payUrl)}">
+             <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="5" width="20" height="14" rx="2.5" fill="#fff" fill-opacity="0.22"/><path d="M2 9.5H22" stroke="#fff" stroke-width="1.6"/><rect x="5" y="13.2" width="5" height="1.8" rx="0.9" fill="#fff"/></svg>
+             Pay Now
+           </a>`
         : '';
 
     return `<!DOCTYPE html>
@@ -430,30 +434,28 @@ export function buildInvoiceHtml(inv: InvoiceData, ctx: InvoicePdfContext): stri
     }
 
     .balance-bar {
-      border-radius: 10px; padding: 3.5mm 5mm;
-      display: flex; align-items: center; justify-content: space-between; gap: 6mm;
+      border-radius: 14px; padding: 4mm 6mm;
+      background: linear-gradient(135deg, #F7F3FF 0%, #ECE3FC 100%);
+      display: flex; align-items: center; gap: 5mm;
       page-break-inside: avoid;
     }
-    .balance-bar.is-open  { background: var(--due-bg); border: 1px solid rgba(180,35,24,0.22); }
-    .balance-bar.is-clear { background: var(--ok-bg); border: 1px solid rgba(15,138,95,0.22); }
     .balance-info { display: flex; flex-direction: column; gap: 3px; }
     .balance-k {
-      font-family: var(--font-mono); font-size: 8pt; font-weight: 600;
-      letter-spacing: 0.14em; text-transform: uppercase;
+      font-family: var(--font-mono); font-size: 7.5pt; font-weight: 700;
+      letter-spacing: 0.16em; text-transform: uppercase; color: var(--brand-mid);
     }
-    .balance-bar.is-open .balance-k  { color: var(--due); }
-    .balance-bar.is-clear .balance-k { color: var(--ok); }
-    .balance-v { font-family: var(--font-mono); font-weight: 700; font-size: 14pt; }
-    .balance-bar.is-open .balance-v  { color: var(--due); }
-    .balance-bar.is-clear .balance-v { color: var(--ok); }
+    .balance-v { font-family: var(--font-mono); font-weight: 800; font-size: 16pt; color: #2E1065; }
+    .balance-divider { align-self: stretch; width: 1px; background: rgba(78,18,212,0.18); }
     .pay-btn {
       flex-shrink: 0;
-      display: inline-block;
+      display: inline-flex; align-items: center; gap: 6px;
       font-family: var(--font-sans); font-size: 8.5pt; font-weight: 700;
       letter-spacing: 0.02em; color: #fff; text-decoration: none;
-      padding: 7px 16px; border-radius: 8px;
+      padding: 8px 18px; border-radius: 999px;
       background: linear-gradient(134deg, #9C46F4 0%, #6A25E0 42%, #390CA4 100%);
+      box-shadow: 0 3px 8px rgba(78,18,212,0.28);
     }
+    .pay-btn svg { width: 14px; height: 14px; display: block; }
 
     /* ── Closing ──────────────────────────────────────────────────────────── */
     .closing { margin-top: 5mm; page-break-inside: avoid; }
@@ -521,7 +523,7 @@ export function buildInvoiceHtml(inv: InvoiceData, ctx: InvoicePdfContext): stri
     </table>
 
     <div class="totals-wrap">
-      <div class="balance-bar ${paidInFull ? 'is-clear' : 'is-open'}">
+      <div class="balance-bar">
         <div class="balance-info">
           <span class="balance-k">${paidInFull ? 'Settled' : 'Balance Due'}</span>
           <span class="balance-v">${paidInFull ? esc(formatMoneyPdf(inv.grandTotal, c)) : esc(formatMoneyPdf(inv.balanceDue, c))}</span>
