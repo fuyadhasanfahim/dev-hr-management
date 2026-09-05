@@ -2,9 +2,10 @@ import type { Request, Response, NextFunction } from 'express';
 import type Stripe from 'stripe';
 import {
     PaymentService,
-    normalizeCurrencyForGateway,
     toStripeMinorUnits,
     fromStripeMinorUnits,
+    resolveGatewayCharge,
+    convertGatewayAmountToNative,
 } from '../services/payment.service.js';
 import { getStripeClient, getStripeWebhookSecret } from '../services/stripe.service.js';
 import { createPaypalOrder, capturePaypalOrder } from '../services/paypal.service.js';
@@ -27,25 +28,31 @@ async function getInvoiceByToken(req: Request, res: Response, next: NextFunction
 
 /**
  * POST /api/payments/stripe/create-intent — public, `resolvePaymentToken`
- * already ran. Charges exactly `req.paymentCtx.amountDue` — the request body
- * carries only the token, nothing that could influence the charged amount.
+ * already ran. Charges exactly `req.paymentCtx.amountDue`, converted to a
+ * currency Stripe will accept if needed (Stripe doesn't take BDT, most of
+ * our invoices are BDT) — see resolveGatewayCharge. The request body carries
+ * only the token, nothing that could influence the charged amount.
  */
 async function createStripeIntent(req: Request, res: Response, next: NextFunction) {
     try {
         const ctx = req.paymentCtx!;
         const stripe = getStripeClient();
-        const gatewayCurrency = normalizeCurrencyForGateway(ctx.currency);
+        const charge = await resolveGatewayCharge(ctx);
 
         // Idempotent on the token's jti: a page refresh or retry before the
         // customer pays reuses the same PaymentIntent instead of orphaning a
         // new one every time.
         const intent = await stripe.paymentIntents.create(
             {
-                amount: toStripeMinorUnits(ctx.amountDue, gatewayCurrency),
-                currency: gatewayCurrency,
+                amount: toStripeMinorUnits(charge.chargeAmount, charge.chargeCurrency),
+                currency: charge.chargeCurrency,
                 metadata: {
                     paymentTokenJti: ctx.tokenDoc.jti,
                     orderId: String(ctx.order._id),
+                    // Locked in here, read back verbatim in the webhook — see
+                    // resolveGatewayCharge's doc comment for why this must
+                    // never be re-derived at confirmation time.
+                    fxRate: String(charge.fxRate),
                 },
                 automatic_payment_methods: { enabled: true },
             },
@@ -56,8 +63,11 @@ async function createStripeIntent(req: Request, res: Response, next: NextFunctio
             success: true,
             data: {
                 clientSecret: intent.client_secret,
-                amount: ctx.amountDue,
-                currency: gatewayCurrency,
+                amount: charge.chargeAmount,
+                currency: charge.chargeCurrency,
+                // So the checkout UI can show "≈ $X" against the native BDT total if it wants to.
+                nativeAmount: ctx.amountDue,
+                nativeCurrency: ctx.currency,
             },
         });
     } catch (err) {
@@ -102,11 +112,15 @@ async function stripeWebhook(req: Request, res: Response) {
         if (!jti) throw new AppError('Stripe event missing paymentTokenJti metadata', 400);
 
         const resolved = await PaymentService.resolveActiveByJti(jti);
-        const gatewayCurrency = normalizeCurrencyForGateway(resolved.currency);
-        const capturedAmount = fromStripeMinorUnits(intent.amount_received, gatewayCurrency);
+        const fxRate = Number(intent.metadata?.fxRate) || 1;
+        const capturedInChargeCurrency = fromStripeMinorUnits(intent.amount_received, intent.currency);
+        // Converts back with the *same* rate locked in at create-intent time
+        // (fxRate is 1, a no-op, when the invoice's own currency was charged
+        // directly) — never a freshly-fetched one.
+        const nativeAmount = convertGatewayAmountToNative(capturedInChargeCurrency, fxRate);
 
         await PaymentService.consumeAndRecordPayment(resolved, {
-            amount: capturedAmount,
+            amount: nativeAmount,
             via: 'stripe',
             gatewayRef: intent.id,
             method: 'card',
@@ -135,26 +149,34 @@ async function stripeWebhook(req: Request, res: Response) {
 
 /**
  * POST /api/payments/paypal/create-order — public, `resolvePaymentToken`
- * already ran. Same amount rule as Stripe: always `req.paymentCtx.amountDue`.
- * The created order id is stamped onto the token (pendingGatewayRef) so
- * capture-order below can only ever complete *this* order for *this* token.
+ * already ran. Same amount rule as Stripe: always `req.paymentCtx.amountDue`,
+ * converted to a currency PayPal will accept if needed (see
+ * resolveGatewayCharge — PayPal doesn't take BDT either). The created order
+ * id (and the fxRate used) are stamped onto the token so capture-order below
+ * can only ever complete *this* order, converted back at the *same* rate.
  */
 async function createPaypalOrderHandler(req: Request, res: Response, next: NextFunction) {
     try {
         const ctx = req.paymentCtx!;
-        const currencyCode = normalizeCurrencyForGateway(ctx.currency).toUpperCase();
+        const charge = await resolveGatewayCharge(ctx);
 
         const order = await createPaypalOrder({
-            amount: ctx.amountDue,
-            currencyCode,
+            amount: charge.chargeAmount,
+            currencyCode: charge.chargeCurrency.toUpperCase(),
             referenceId: ctx.tokenDoc.jti,
         });
 
-        await PaymentService.recordPendingGatewayRef(ctx.tokenDoc._id, order.id);
+        await PaymentService.recordPendingGatewayRef(ctx.tokenDoc._id, order.id, charge.fxRate);
 
         res.status(200).json({
             success: true,
-            data: { orderId: order.id, amount: ctx.amountDue, currency: currencyCode },
+            data: {
+                orderId: order.id,
+                amount: charge.chargeAmount,
+                currency: charge.chargeCurrency.toUpperCase(),
+                nativeAmount: ctx.amountDue,
+                nativeCurrency: ctx.currency,
+            },
         });
     } catch (err) {
         next(err);
@@ -184,16 +206,14 @@ async function capturePaypalOrderHandler(req: Request, res: Response, next: Next
             throw new AppError(`PayPal payment was not completed (status: ${capture.status}).`, 402);
         }
 
-        const gatewayCurrency = normalizeCurrencyForGateway(ctx.currency);
-        if (capture.capturedCurrency !== gatewayCurrency) {
-            // Should be unreachable (we set the currency at create-order time),
-            // but a currency mismatch is exactly the class of bug that must
-            // never fall through to recording a payment.
-            throw new AppError('Captured currency does not match the invoice currency.', 422);
-        }
+        // Converts back with the *same* rate locked in at create-order time
+        // (pendingFxRate is 1, a no-op, when the invoice's own currency was
+        // charged directly) — never a freshly-fetched one.
+        const fxRate = ctx.tokenDoc.pendingFxRate ?? 1;
+        const nativeAmount = convertGatewayAmountToNative(capture.capturedAmount, fxRate);
 
         await PaymentService.consumeAndRecordPayment(ctx, {
-            amount: capture.capturedAmount,
+            amount: nativeAmount,
             via: 'paypal',
             gatewayRef: capture.captureId,
             method: 'paypal',

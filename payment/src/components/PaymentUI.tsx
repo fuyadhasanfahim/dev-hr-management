@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import PaymentWrapper from "./PaymentWrapper";
 import PayPalWrapper from "./PayPalWrapper";
 import type { InvoiceSnapshot } from "@/app/payment/[token]/page";
+import { formatMoney } from "@/lib/money";
 
 interface PaymentUIProps {
     invoice: InvoiceSnapshot;
@@ -25,10 +26,7 @@ const trustPoints = [
 export default function PaymentUI({ invoice, token }: PaymentUIProps) {
     const { activeMethod, setMethod, isProcessing } = usePaymentStore();
 
-    const formattedTotal = new Intl.NumberFormat("en-US", {
-        style: "currency",
-        currency: (invoice.currency || "USD").toUpperCase(),
-    }).format(invoice.amountDue);
+    const formattedTotal = formatMoney(invoice.amountDue, invoice.currency);
 
     return (
         <motion.div
@@ -99,10 +97,7 @@ export default function PaymentUI({ invoice, token }: PaymentUIProps) {
                                     >
                                         <dt className="text-[#9CA3AF]">{line.label}</dt>
                                         <dd className="text-right text-[#D1D5DB]">
-                                            {new Intl.NumberFormat("en-US", {
-                                                style: "currency",
-                                                currency: (invoice.currency || "USD").toUpperCase(),
-                                            }).format(line.amount)}
+                                            {formatMoney(line.amount, invoice.currency)}
                                         </dd>
                                     </div>
                                 ))}

@@ -4,6 +4,7 @@ import React from "react";
 import { PayPalScriptProvider, PayPalButtons } from "@paypal/react-paypal-js";
 import { useRouter } from "next/navigation";
 import { usePaymentStore } from "../store/paymentStore";
+import { resolveDisplayGatewayCurrency } from "@/lib/money";
 
 interface PayPalWrapperProps {
     /** The single-use payment link token — every call below is scoped to this. */
@@ -34,7 +35,11 @@ export default function PayPalWrapper({
 
     const initialOptions = {
         clientId: process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID || "",
-        currency: (currency || "USD").toUpperCase(),
+        // PayPal doesn't take BDT either — this must match what
+        // create-order actually charges (see resolveGatewayCharge
+        // server-side); the SDK needs a currency upfront, before we can ask
+        // the server, so the same BDT->USD decision is mirrored here.
+        currency: resolveDisplayGatewayCurrency(currency),
         intent: "capture",
         components: "buttons",
         "disable-funding": "paylater",

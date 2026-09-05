@@ -45,6 +45,8 @@ export interface IPaymentToken extends Document {
      * never one created against a different token/invoice.
      */
     pendingGatewayRef?: string;
+    /** fxRate locked in when pendingGatewayRef was created (see payment.service.ts's resolveGatewayCharge) — 1 if no conversion applied. */
+    pendingFxRate?: number;
     /** The ReceiptPayment created from this successful payment. */
     receiptPaymentId?: Types.ObjectId;
 
@@ -77,6 +79,7 @@ const paymentTokenSchema = new Schema<IPaymentToken>(
         consumedVia: { type: String, enum: ['stripe', 'paypal'] },
         gatewayRef: { type: String },
         pendingGatewayRef: { type: String },
+        pendingFxRate: { type: Number },
         receiptPaymentId: { type: Schema.Types.ObjectId, ref: 'ReceiptPayment' },
     },
     { timestamps: true },

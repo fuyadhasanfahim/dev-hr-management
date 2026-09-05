@@ -8,6 +8,7 @@ import PaymentTokenModel, { type IPaymentToken } from '../models/payment-token.m
 import UserModel from '../models/user.model.js';
 import { ReceiptService, type AddPaymentInput } from './receipt.service.js';
 import earningService from './earning.service.js';
+import { getUsdToBdtRate } from './fx-rate.service.js';
 import {
     attachReceiptLedger,
     toInvoiceNumber,
@@ -141,6 +142,55 @@ export function toStripeMinorUnits(amount: number, gatewayCurrency: string): num
 export function fromStripeMinorUnits(minorAmount: number, gatewayCurrency: string): number {
     const factor = ZERO_DECIMAL_CURRENCIES.has(gatewayCurrency) ? 1 : 100;
     return minorAmount / factor;
+}
+
+/**
+ * Currencies neither Stripe nor PayPal will charge in directly. The invoice,
+ * the payment page, and the Receipt ledger stay in the invoice's native
+ * currency throughout — only the gateway call itself uses the converted
+ * amount (see resolveGatewayCharge/convertGatewayAmountToNative below).
+ */
+const GATEWAY_UNSUPPORTED_CURRENCIES = new Set(['bdt']);
+
+export interface GatewayCharge {
+    /** What to actually pass as the gateway's amount/currency. */
+    chargeCurrency: string;
+    chargeAmount: number;
+    /** 1 unit of chargeCurrency = this many units of the invoice's native currency (1 if no conversion happened). Locked in at create-intent/create-order time and must be reused as-is when verifying the capture — never re-fetched, so a mid-flight rate update can't cause a false mismatch. */
+    fxRate: number;
+}
+
+/**
+ * Resolves what a gateway should actually be charged for this token: the
+ * native currency/amount unchanged when the gateway supports it, or a
+ * same-value USD conversion (at today's rate) when it doesn't.
+ */
+export async function resolveGatewayCharge(resolved: ResolvedPaymentToken): Promise<GatewayCharge> {
+    const nativeCurrency = normalizeCurrencyForGateway(resolved.currency);
+
+    if (!GATEWAY_UNSUPPORTED_CURRENCIES.has(nativeCurrency)) {
+        return { chargeCurrency: nativeCurrency, chargeAmount: resolved.amountDue, fxRate: 1 };
+    }
+
+    if (nativeCurrency === 'bdt') {
+        const usdToBdt = await getUsdToBdtRate();
+        const chargeAmount = Math.round((resolved.amountDue / usdToBdt) * 100) / 100;
+        // fxRate expresses "native units per 1 charge-currency unit" so the
+        // inverse conversion below is a plain multiplication.
+        return { chargeCurrency: 'usd', chargeAmount, fxRate: usdToBdt };
+    }
+
+    throw new AppError(`Currency "${resolved.currency}" is not supported for online payment.`, 422);
+}
+
+/**
+ * Converts a gateway-reported captured amount back into the invoice's
+ * native currency, using the *same* fxRate locked in at charge time (never a
+ * freshly-fetched one) — so this is an exact inverse of resolveGatewayCharge,
+ * not a fresh, potentially-drifted conversion.
+ */
+export function convertGatewayAmountToNative(capturedAmount: number, fxRate: number): number {
+    return Math.round(capturedAmount * fxRate * 100) / 100;
 }
 
 // A synthetic "actor" for payments the client makes directly through the
@@ -288,14 +338,19 @@ export class PaymentService {
     }
 
     /**
-     * Records the PayPal order id created against this token, so a later
-     * capture-order call can be checked against it (see PaymentTokenModel's
-     * `pendingGatewayRef` doc comment) — prevents completing a capture for a
-     * PayPal order that was created against a *different* token/invoice.
+     * Records the PayPal order id created against this token (and the fxRate
+     * locked in for it, if the charge currency differs from the invoice's
+     * native currency), so a later capture-order call can be checked against
+     * both — prevents completing a capture for a PayPal order created
+     * against a *different* token/invoice, and guarantees the capture is
+     * converted back with the exact rate that was quoted, not a fresh one.
      * No-op (silently) if the token is no longer active by the time this runs.
      */
-    static async recordPendingGatewayRef(tokenId: Types.ObjectId, ref: string): Promise<void> {
-        await PaymentTokenModel.updateOne({ _id: tokenId, status: 'active' }, { $set: { pendingGatewayRef: ref } });
+    static async recordPendingGatewayRef(tokenId: Types.ObjectId, ref: string, fxRate: number): Promise<void> {
+        await PaymentTokenModel.updateOne(
+            { _id: tokenId, status: 'active' },
+            { $set: { pendingGatewayRef: ref, pendingFxRate: fxRate } },
+        );
     }
 
     /** Public, read-only invoice summary shown on the payment page. Never consumes the token. */
@@ -349,8 +404,13 @@ export class PaymentService {
 
         // Defense in depth: even though the caller is expected to charge
         // exactly `amountDue`, refuse to record a mismatched amount rather
-        // than silently accepting whatever the gateway reports.
-        if (Math.abs(opts.amount - amountDue) > 0.01) {
+        // than silently accepting whatever the gateway reports. The
+        // tolerance is relative (not a flat cent) because a currency-
+        // converted charge (see resolveGatewayCharge) round-trips through
+        // two roundings to 2 decimal places — a fixed cent tolerance would
+        // be too tight for a large BDT amount and too loose for a small one.
+        const tolerance = Math.max(0.01, amountDue * 0.0005);
+        if (Math.abs(opts.amount - amountDue) > tolerance) {
             logger.error(
                 { tokenId: String(tokenDoc._id), expected: amountDue, got: opts.amount, via: opts.via },
                 'payment.amount_mismatch',

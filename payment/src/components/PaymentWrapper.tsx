@@ -6,6 +6,7 @@ import type { StripeElementsOptions } from "@stripe/stripe-js";
 import { Elements } from "@stripe/react-stripe-js";
 import CheckoutForm from "./CheckoutForm";
 import { Loader2 } from "lucide-react";
+import { formatMoney } from "@/lib/money";
 
 // Initialize Stripe outside of a component's render to avoid recreating the Stripe object on every render.
 const stripePromise = loadStripe(
@@ -72,10 +73,7 @@ export default function PaymentWrapper({
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
 
-    const formattedTotal = new Intl.NumberFormat("en-US", {
-        style: "currency",
-        currency: (currency || "USD").toUpperCase(),
-    }).format(amount);
+    const formattedTotal = formatMoney(amount, currency);
 
     useEffect(() => {
         let cancelled = false;
