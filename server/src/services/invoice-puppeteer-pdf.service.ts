@@ -422,7 +422,7 @@ export function buildInvoiceHtml(inv: InvoiceData, ctx: InvoicePdfContext): stri
     }
 
     /* ── Totals ───────────────────────────────────────────────────────────── */
-    .totals-wrap { display: flex; justify-content: space-between; align-items: flex-start; gap: 6mm; margin-top: 3.5mm; }
+    .totals-wrap { display: flex; justify-content: flex-end; margin-top: 3.5mm; }
     table.totals { width: 74mm; border-collapse: collapse; }
     table.totals td { padding: 4px 0; font-size: 9pt; }
     table.totals .sum-amt { text-align: right; white-space: nowrap; font-family: var(--font-mono); }
@@ -434,6 +434,7 @@ export function buildInvoiceHtml(inv: InvoiceData, ctx: InvoicePdfContext): stri
     }
 
     .balance-bar {
+      margin-top: 4mm;
       border-radius: 14px; padding: 4mm 6mm;
       background: linear-gradient(135deg, #F7F3FF 0%, #ECE3FC 100%);
       display: flex; align-items: center; gap: 5mm;
@@ -523,13 +524,6 @@ export function buildInvoiceHtml(inv: InvoiceData, ctx: InvoicePdfContext): stri
     </table>
 
     <div class="totals-wrap">
-      <div class="balance-bar">
-        <div class="balance-info">
-          <span class="balance-k">${paidInFull ? 'Settled' : 'Balance Due'}</span>
-          <span class="balance-v">${paidInFull ? esc(formatMoneyPdf(inv.grandTotal, c)) : esc(formatMoneyPdf(inv.balanceDue, c))}</span>
-        </div>
-        ${payBtn}
-      </div>
       <table class="totals">
         <tr class="sum-row"><td>Subtotal</td><td class="sum-amt">${esc(formatMoneyPdf(inv.subtotal, c))}</td></tr>
         ${discountRow}
@@ -537,6 +531,14 @@ export function buildInvoiceHtml(inv: InvoiceData, ctx: InvoicePdfContext): stri
         <tr class="grand"><td>Grand Total</td><td class="sum-amt">${esc(formatMoneyPdf(inv.grandTotal, c))}</td></tr>
         ${paidRow}
       </table>
+    </div>
+
+    <div class="balance-bar">
+      <div class="balance-info">
+        <span class="balance-k">${paidInFull ? 'Settled' : 'Balance Due'}</span>
+        <span class="balance-v">${paidInFull ? esc(formatMoneyPdf(inv.grandTotal, c)) : esc(formatMoneyPdf(inv.balanceDue, c))}</span>
+      </div>
+      ${payBtn}
     </div>
 
     <div class="closing">
