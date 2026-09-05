@@ -287,6 +287,17 @@ export class PaymentService {
         return resolveFromTokenDoc(tokenDoc);
     }
 
+    /**
+     * Records the PayPal order id created against this token, so a later
+     * capture-order call can be checked against it (see PaymentTokenModel's
+     * `pendingGatewayRef` doc comment) — prevents completing a capture for a
+     * PayPal order that was created against a *different* token/invoice.
+     * No-op (silently) if the token is no longer active by the time this runs.
+     */
+    static async recordPendingGatewayRef(tokenId: Types.ObjectId, ref: string): Promise<void> {
+        await PaymentTokenModel.updateOne({ _id: tokenId, status: 'active' }, { $set: { pendingGatewayRef: ref } });
+    }
+
     /** Public, read-only invoice summary shown on the payment page. Never consumes the token. */
     static async getInvoiceSummary(resolved: ResolvedPaymentToken) {
         const { order, amountDue, currency } = resolved;

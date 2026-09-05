@@ -38,6 +38,13 @@ export interface IPaymentToken extends Document {
     consumedVia?: 'stripe' | 'paypal';
     /** Stripe PaymentIntent id / PayPal order id that consumed this token. */
     gatewayRef?: string;
+    /**
+     * PayPal order id created (but not yet captured) against this token —
+     * set by create-order, checked by capture-order so a capture request can
+     * only ever complete the *same* PayPal order this exact token created,
+     * never one created against a different token/invoice.
+     */
+    pendingGatewayRef?: string;
     /** The ReceiptPayment created from this successful payment. */
     receiptPaymentId?: Types.ObjectId;
 
@@ -69,6 +76,7 @@ const paymentTokenSchema = new Schema<IPaymentToken>(
         consumedAt: { type: Date },
         consumedVia: { type: String, enum: ['stripe', 'paypal'] },
         gatewayRef: { type: String },
+        pendingGatewayRef: { type: String },
         receiptPaymentId: { type: Schema.Types.ObjectId, ref: 'ReceiptPayment' },
     },
     { timestamps: true },

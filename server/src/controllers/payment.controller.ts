@@ -7,6 +7,7 @@ import {
     fromStripeMinorUnits,
 } from '../services/payment.service.js';
 import { getStripeClient, getStripeWebhookSecret } from '../services/stripe.service.js';
+import { createPaypalOrder, capturePaypalOrder } from '../services/paypal.service.js';
 import { AppError } from '../utils/AppError.js';
 import { logger } from '../lib/logger.js';
 
@@ -132,8 +133,82 @@ async function stripeWebhook(req: Request, res: Response) {
     }
 }
 
+/**
+ * POST /api/payments/paypal/create-order — public, `resolvePaymentToken`
+ * already ran. Same amount rule as Stripe: always `req.paymentCtx.amountDue`.
+ * The created order id is stamped onto the token (pendingGatewayRef) so
+ * capture-order below can only ever complete *this* order for *this* token.
+ */
+async function createPaypalOrderHandler(req: Request, res: Response, next: NextFunction) {
+    try {
+        const ctx = req.paymentCtx!;
+        const currencyCode = normalizeCurrencyForGateway(ctx.currency).toUpperCase();
+
+        const order = await createPaypalOrder({
+            amount: ctx.amountDue,
+            currencyCode,
+            referenceId: ctx.tokenDoc.jti,
+        });
+
+        await PaymentService.recordPendingGatewayRef(ctx.tokenDoc._id, order.id);
+
+        res.status(200).json({
+            success: true,
+            data: { orderId: order.id, amount: ctx.amountDue, currency: currencyCode },
+        });
+    } catch (err) {
+        next(err);
+    }
+}
+
+/**
+ * POST /api/payments/paypal/capture-order — public, `resolvePaymentToken`
+ * already ran. The client tells us which PayPal order to capture, but that
+ * claim is only ever used to call PayPal's own capture API; the actual
+ * "did this succeed and for how much" comes from PayPal's response, not the
+ * client's request.
+ */
+async function capturePaypalOrderHandler(req: Request, res: Response, next: NextFunction) {
+    try {
+        const ctx = req.paymentCtx!;
+        const paypalOrderId = req.body?.paypalOrderId;
+        if (!paypalOrderId || typeof paypalOrderId !== 'string') {
+            throw new AppError('paypalOrderId is required.', 400);
+        }
+        if (ctx.tokenDoc.pendingGatewayRef !== paypalOrderId) {
+            throw new AppError('This PayPal order does not match the current payment link.', 400);
+        }
+
+        const capture = await capturePaypalOrder(paypalOrderId);
+        if (capture.status !== 'COMPLETED') {
+            throw new AppError(`PayPal payment was not completed (status: ${capture.status}).`, 402);
+        }
+
+        const gatewayCurrency = normalizeCurrencyForGateway(ctx.currency);
+        if (capture.capturedCurrency !== gatewayCurrency) {
+            // Should be unreachable (we set the currency at create-order time),
+            // but a currency mismatch is exactly the class of bug that must
+            // never fall through to recording a payment.
+            throw new AppError('Captured currency does not match the invoice currency.', 422);
+        }
+
+        await PaymentService.consumeAndRecordPayment(ctx, {
+            amount: capture.capturedAmount,
+            via: 'paypal',
+            gatewayRef: capture.captureId,
+            method: 'paypal',
+        });
+
+        res.status(200).json({ success: true, data: { status: 'completed' } });
+    } catch (err) {
+        next(err);
+    }
+}
+
 export default {
     getInvoiceByToken,
     createStripeIntent,
     stripeWebhook,
+    createPaypalOrderHandler,
+    capturePaypalOrderHandler,
 };
