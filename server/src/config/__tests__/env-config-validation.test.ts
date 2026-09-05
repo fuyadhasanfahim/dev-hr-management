@@ -51,12 +51,18 @@ const FULL_VALID_ENV: Record<string, string> = {
     CLOUDINARY_UPLOAD_PATH: 'test-uploads',
     QUOTATION_TOKEN_SECRET: 'test-token-secret',
     ENCRYPTION_KEY: 'test-encryption-key',
+    PAYMENT_TOKEN_SECRET: 'test-payment-token-secret',
     // Soft-warn vars — non-empty here so the "full valid config" case is
     // fully clean (no warning) as its own baseline.
     AWS_ACCESS_KEY_ID: 'test-aws-key',
     AWS_SECRET_ACCESS_KEY: 'test-aws-secret',
     AWS_BUCKET_NAME: 'test-bucket',
     GEMINI_API_KEY: 'test-gemini-key',
+    STRIPE_SECRET_KEY: 'test-stripe-secret',
+    STRIPE_PUBLISHABLE_KEY: 'test-stripe-publishable',
+    STRIPE_WEBHOOK_SECRET: 'test-stripe-webhook',
+    PAYPAL_CLIENT_ID: 'test-paypal-client-id',
+    PAYPAL_CLIENT_SECRET: 'test-paypal-client-secret',
 };
 
 /**

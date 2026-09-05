@@ -72,7 +72,7 @@ function formatDatePdf(raw: unknown): string {
     }
 }
 
-const CATEGORY_LABELS: Record<string, string> = {
+export const CATEGORY_LABELS: Record<string, string> = {
     'web-development': 'Web Development',
     'photo-editing': 'Photo Editing',
     'marketing': 'Marketing',
@@ -164,6 +164,8 @@ interface InvoiceData {
     grandTotal: number;
     totalPaid: number;
     balanceDue: number;
+    /** Single-use payment link token (see payment.service.ts); Pay Now is omitted when absent. */
+    paymentToken?: string | null;
     paymentState: PaymentState;
 }
 
@@ -177,7 +179,7 @@ interface InvoicePdfContext {
 }
 
 /** `QTN-2026-0007` → `INV-2026-0007`; otherwise `INV-<given>`; else a dated stub. */
-function toInvoiceNumber(quotationNumber?: string | null): string {
+export function toInvoiceNumber(quotationNumber?: string | null): string {
     const qn = String(quotationNumber ?? '')
         .trim()
         .replace(/^#/, '');
@@ -186,7 +188,7 @@ function toInvoiceNumber(quotationNumber?: string | null): string {
     return `INV-${new Date().getFullYear()}-DRAFT`;
 }
 
-function lineAmountFromService(svc: Record<string, any>): number {
+export function lineAmountFromService(svc: Record<string, any>): number {
     const base = Number(svc?.basePrice) || 0;
     const items = Array.isArray(svc?.lineItems) ? svc.lineItems : [];
     const itemsTotal = items.reduce(
@@ -203,7 +205,7 @@ function derivePaymentState(grandTotal: number, totalPaid: number): PaymentState
     return 'unpaid';
 }
 
-async function attachReceiptLedger(
+export async function attachReceiptLedger(
     quotationGroupId: string | undefined,
     grandTotal: number,
 ): Promise<{ totalPaid: number; balanceDue: number; paymentState: PaymentState }> {
@@ -233,7 +235,13 @@ const PAYMENT_STATE_META: Record<
 
 export function buildInvoiceHtml(inv: InvoiceData, ctx: InvoicePdfContext): string {
     const c = inv.currency || 'BDT';
-    const payUrl = (process.env.PAYMENT_CLIENT_URL || '').trim();
+    const paymentClientUrl = (process.env.PAYMENT_CLIENT_URL || '').trim();
+    // Only ever link to the token-scoped payment page — never a bare/token-less
+    // URL, so this button can't land on a generic page with no invoice context.
+    const payUrl =
+        paymentClientUrl && inv.paymentToken
+            ? `${paymentClientUrl.replace(/\/+$/, '')}/payment/${encodeURIComponent(inv.paymentToken)}`
+            : '';
     const stateMeta = PAYMENT_STATE_META[inv.paymentState];
     const paidInFull = inv.balanceDue <= 0.009;
 
@@ -681,9 +689,19 @@ async function renderPdf(
 }
 
 export class InvoicePuppeteerPdfService {
-    /** On-demand invoice PDF built from an accepted quotation's Order snapshot. */
+    /**
+     * On-demand invoice PDF built from an accepted quotation's Order snapshot.
+     *
+     * `paymentToken`: the caller (order.controller.ts) mints/reuses this via
+     * PaymentService.issueTokenForOrder *before* calling in here — kept out of
+     * this file to avoid a circular import (payment.service.ts already
+     * imports helpers from this module). Omit it (or pass null/undefined,
+     * e.g. the order is fully paid) to render the invoice without a Pay Now
+     * button.
+     */
     static async generateFromOrder(
         orderId: string,
+        opts: { paymentToken?: string | null } = {},
     ): Promise<{ buffer: Buffer; filename: string }> {
         const order = await OrderModel.findById(orderId).lean();
         if (!order) throw new AppError('Order not found', 404);
@@ -729,6 +747,7 @@ export class InvoicePuppeteerPdfService {
             taxAmount: Number(totals.taxAmount) || 0,
             grandTotal: Number(totals.grandTotal) || 0,
             ...ledger,
+            paymentToken: opts.paymentToken,
         };
 
         return renderPdf(inv);

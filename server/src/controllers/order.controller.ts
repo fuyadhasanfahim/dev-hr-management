@@ -1,8 +1,10 @@
 import type { Request, Response, NextFunction } from 'express';
 import OrderService from '../services/order.service.js';
 import { InvoicePuppeteerPdfService } from '../services/invoice-puppeteer-pdf.service.js';
+import { PaymentService } from '../services/payment.service.js';
 import { AppError } from '../utils/AppError.js';
 import { maskOrder, maskOrders } from '../utils/masking.js';
+import { logger } from '../lib/logger.js';
 
 /**
  * CRITICAL: POST / (createOrder) has been intentionally removed.
@@ -228,7 +230,20 @@ async function downloadInvoicePdf(req: Request, res: Response, next: NextFunctio
             next(new AppError('Order id is required', 400));
             return;
         }
-        const { buffer, filename } = await InvoicePuppeteerPdfService.generateFromOrder(id);
+
+        // Mint/reuse this order's single-use payment link for the PDF's Pay
+        // Now button. Best-effort: a failure here (e.g. no receipt ledger
+        // yet) must not block the invoice download itself — it just renders
+        // without a Pay Now button, same as a fully-paid order.
+        let paymentToken: string | null = null;
+        try {
+            const issued = await PaymentService.issueTokenForOrder(id);
+            paymentToken = issued?.token ?? null;
+        } catch (err) {
+            logger.warn({ err, orderId: id }, 'invoice.payment_token.issue_failed');
+        }
+
+        const { buffer, filename } = await InvoicePuppeteerPdfService.generateFromOrder(id, { paymentToken });
         res.setHeader('Content-Type', 'application/pdf');
         res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
         res.send(buffer);

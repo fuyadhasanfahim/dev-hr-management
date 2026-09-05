@@ -1,9 +1,12 @@
 import 'express';
+import type { ResolvedPaymentToken } from '../services/payment.service.js';
 
 declare module 'express-serve-static-core' {
     interface Request {
         correlationId?: string;
         requestId?: string;
+        /** Set by resolvePaymentToken — the server-trusted result of validating the request's payment token. */
+        paymentCtx?: ResolvedPaymentToken;
         user?: {
             id?: string;
             role?: string;

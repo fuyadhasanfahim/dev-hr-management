@@ -123,6 +123,13 @@ app.use(
         const isPublicQuotationPdfPuppeteerRoute =
             req.method === "GET" && /^\/quotations\/[^/]+\/pdf\/puppeteer$/.test(req.path);
 
+        // Public payment routes — the /:token itself (verified inside
+        // resolvePaymentToken) is the auth, same trust model as the
+        // quotation client-token routes above. Every route added here in
+        // later phases (Stripe/PayPal create-intent, create-order, capture)
+        // must go through resolvePaymentToken.
+        const isPublicPaymentRoute = req.path.startsWith("/payments/");
+
         // Support routes bypass the global auth middleware because they implement unified/guest auth internally
         const isSupportRoute = req.path.startsWith("/support");
 
@@ -136,6 +143,7 @@ app.use(
             isPublicCareerRoute ||
             isPublicQuotationTokenRoute ||
             isPublicQuotationPdfPuppeteerRoute ||
+            isPublicPaymentRoute ||
             isSupportRoute ||
             isPublicAIChatRoute
         ) {

@@ -29,6 +29,7 @@ const requiredVars = [
     'CLOUDINARY_UPLOAD_PATH',
     'QUOTATION_TOKEN_SECRET',
     'ENCRYPTION_KEY',
+    'PAYMENT_TOKEN_SECRET',
 ] as const;
 
 const missing = requiredVars.filter((key) => !process.env[key]);
@@ -52,6 +53,8 @@ if (missing.length > 0) {
 // instead, so a misconfiguration is still visible without blocking boot.
 const softWarnVars = [
     'AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'AWS_BUCKET_NAME', 'GEMINI_API_KEY',
+    'STRIPE_SECRET_KEY', 'STRIPE_PUBLISHABLE_KEY', 'STRIPE_WEBHOOK_SECRET',
+    'PAYPAL_CLIENT_ID', 'PAYPAL_CLIENT_SECRET',
 ] as const;
 const missingSoft = softWarnVars.filter((key) => !process.env[key]);
 if (missingSoft.length > 0) {
@@ -123,5 +126,19 @@ const envConfig = {
 
     // Gemini AI
     gemini_api_key: process.env.GEMINI_API_KEY || '',
+
+    // Payment pipeline — client invoice payment links (JWT signing) +
+    // gateway credentials. The token secret is hard-required (see
+    // requiredVars above); the gateway credentials only gate their own
+    // feature and degrade gracefully (route returns 503) when absent.
+    payment_token_secret: process.env.PAYMENT_TOKEN_SECRET!,
+    payment_client_url: process.env.PAYMENT_CLIENT_URL || '',
+    stripe_secret_key: process.env.STRIPE_SECRET_KEY || '',
+    stripe_publishable_key: process.env.STRIPE_PUBLISHABLE_KEY || '',
+    stripe_webhook_secret: process.env.STRIPE_WEBHOOK_SECRET || '',
+    paypal_mode: process.env.PAYPAL_MODE || 'sandbox',
+    paypal_client_id: process.env.PAYPAL_CLIENT_ID || '',
+    paypal_client_secret: process.env.PAYPAL_CLIENT_SECRET || '',
+    paypal_api_base_url: process.env.PAYPAL_API_BASE_URL || '',
 };
 export default envConfig;

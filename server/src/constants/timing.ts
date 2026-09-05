@@ -7,6 +7,9 @@
 /** How long a client-facing quotation secure link/token stays valid. */
 export const TOKEN_EXPIRY_DAYS = 30;
 
+/** How long a client-facing invoice payment link/token stays valid. */
+export const PAYMENT_TOKEN_EXPIRY_DAYS = 90;
+
 /**
  * Duplicate-submission idempotency window: a quotation with an identical
  * creation fingerprint created within this window is treated as a repeat

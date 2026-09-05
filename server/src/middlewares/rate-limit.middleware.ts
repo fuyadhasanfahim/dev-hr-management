@@ -64,8 +64,25 @@ export const generalPublicLimiter = rateLimit({
     ),
 });
 
+/**
+ * Public payment routes (invoice lookup, gateway intent/order creation,
+ * capture) — per-IP throttle against link-guessing / brute-force attempts.
+ * Deliberately looser than otpLimiter (no email to key on here) but tighter
+ * than generalPublicLimiter given the financial blast radius.
+ */
+export const paymentLimiter = rateLimit({
+    windowMs: 60 * 1000, // 1 minute
+    max: 20,
+    standardHeaders: true,
+    legacyHeaders: false,
+    handler: jsonHandler(
+        'Too many payment requests. Please slow down and try again shortly.',
+    ),
+});
+
 export default {
     otpLimiter,
     aiChatLimiter,
     generalPublicLimiter,
+    paymentLimiter,
 };

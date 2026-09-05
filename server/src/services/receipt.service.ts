@@ -144,21 +144,30 @@ export class ReceiptService {
     /**
      * Add a payment transaction to an existing Receipt ledger.
      * Validates against quotation grand total before saving.
+     *
+     * `session` is optional and additive: staff-facing callers omit it and
+     * behave exactly as before. Gateway-confirmed online payments (see
+     * payment.service.ts) pass one so the payment row, the receipt-totals
+     * recalculation, and the caller's own token-consumption write commit or
+     * roll back together.
      */
     static async addPayment(
         receiptId: string,
         data: AddPaymentInput,
         userId: string,
+        session?: ClientSession,
     ): Promise<{ receipt: IReceipt; payment: IReceiptPayment }> {
         if (!data.amount || data.amount <= 0) throw new AppError('amount must be greater than 0', 400);
         if (!data.paymentType) throw new AppError('paymentType is required', 400);
 
-        const receipt = await ReceiptModel.findById(receiptId);
+        const opts = session ? { session } : {};
+
+        const receipt = await ReceiptModel.findById(receiptId, null, opts);
         if (!receipt) throw new AppError('Receipt not found', 404);
         if (receipt.status === 'void') throw new AppError('Cannot add payment to a voided receipt', 400);
 
         // Fetch quotation grand total for balance validation
-        const quotation = await QuotationModel.findById(receipt.quotationId);
+        const quotation = await QuotationModel.findById(receipt.quotationId, null, opts);
         if (!quotation) throw new AppError('Linked quotation not found', 404);
 
         const grandTotal = quotation.totals?.grandTotal || 0;
@@ -173,34 +182,45 @@ export class ReceiptService {
         }
 
         // Create the payment entry
-        const payment = new ReceiptPaymentModel({
-            receiptId: receipt._id,
-            paymentType: data.paymentType,
-            ...(data.paymentType === 'milestone' && data.milestoneLabel
-                ? { milestoneLabel: data.milestoneLabel }
-                : {}),
-            amount: data.amount,
-            paymentDate: data.paymentDate ? new Date(data.paymentDate) : new Date(),
-            ...(data.method ? { method: data.method } : {}),
-            ...(data.note ? { note: data.note } : {}),
-            status: 'recorded',
-            createdBy: new Types.ObjectId(userId),
-        });
-
-        await payment.save();
+        const [payment] = await ReceiptPaymentModel.create(
+            [
+                {
+                    receiptId: receipt._id,
+                    paymentType: data.paymentType,
+                    ...(data.paymentType === 'milestone' && data.milestoneLabel
+                        ? { milestoneLabel: data.milestoneLabel }
+                        : {}),
+                    amount: data.amount,
+                    paymentDate: data.paymentDate ? new Date(data.paymentDate) : new Date(),
+                    ...(data.method ? { method: data.method } : {}),
+                    ...(data.note ? { note: data.note } : {}),
+                    status: 'recorded',
+                    createdBy: new Types.ObjectId(userId),
+                },
+            ],
+            opts,
+        );
+        if (!payment) throw new AppError('Failed to create payment entry', 500);
 
         // Recalculate totals
-        await recalculateReceiptTotals(receipt, grandTotal);
+        await recalculateReceiptTotals(receipt, grandTotal, session);
 
         logger.info(
             { receiptId: receipt._id.toString(), paymentId: payment._id.toString(), amount: data.amount },
             'receipt.payment.added',
         );
 
-        try {
-            await earningService.syncEarningFromReceipt(receipt._id.toString(), userId);
-        } catch (err) {
-            logger.error({ err, receiptId: receipt._id.toString() }, 'earning.sync_failed');
+        // Skip when running inside a caller-managed transaction (session passed):
+        // this read wouldn't see the payment we just wrote until the caller
+        // commits, and would run inside their transaction otherwise. Such
+        // callers (payment.service.ts) are responsible for syncing earnings
+        // themselves once their transaction has committed.
+        if (!session) {
+            try {
+                await earningService.syncEarningFromReceipt(receipt._id.toString(), userId);
+            } catch (err) {
+                logger.error({ err, receiptId: receipt._id.toString() }, 'earning.sync_failed');
+            }
         }
 
         return { receipt, payment };
