@@ -3,12 +3,16 @@ import jwt from 'jsonwebtoken';
 import mongoose, { Types } from 'mongoose';
 import OrderModel, { type IOrder } from '../models/order.model.js';
 import ReceiptModel from '../models/receipt.model.js';
+import ReceiptPaymentModel from '../models/receipt-payment.model.js';
 import ClientModel from '../models/client.model.js';
 import PaymentTokenModel, { type IPaymentToken } from '../models/payment-token.model.js';
 import UserModel from '../models/user.model.js';
 import { ReceiptService, type AddPaymentInput } from './receipt.service.js';
 import earningService from './earning.service.js';
 import { getUsdToBdtRate } from './fx-rate.service.js';
+import { formatMoneyPdf } from './online-payment-receipt-pdf.service.js';
+import notificationService from './notification.service.js';
+import emailService from './email.service.js';
 import {
     attachReceiptLedger,
     toInvoiceNumber,
@@ -379,6 +383,69 @@ export class PaymentService {
     }
 
     /**
+     * Resolves an already-*consumed* token — for the success page and its
+     * receipt download, which run *after* the payment that consumed the
+     * token. Deliberately separate from resolveActiveToken (which rejects
+     * consumed tokens): this is read-only and never touches payment state,
+     * so letting it read a spent token is safe — it can't be used to pay
+     * again, only to look back at the payment that already happened.
+     */
+    static async resolveConsumedToken(rawToken: string): Promise<ResolvedPaymentToken> {
+        if (!rawToken || typeof rawToken !== 'string') {
+            throw new AppError('Payment token is required.', 400);
+        }
+        const payload = verifyToken(rawToken);
+        const tokenDoc = await PaymentTokenModel.findOne({ jti: payload.jti });
+        if (!tokenDoc || tokenDoc.token !== rawToken) {
+            throw new AppError('Invalid payment link.', 410);
+        }
+        if (tokenDoc.status !== 'consumed') {
+            throw new AppError('No completed payment found for this link.', 404);
+        }
+
+        const order = await OrderModel.findById(tokenDoc.orderId);
+        if (!order) throw new AppError('Order not found', 404);
+
+        return {
+            tokenDoc,
+            order,
+            receiptId: tokenDoc.receiptId,
+            quotationGroupId: tokenDoc.quotationGroupId,
+            clientId: tokenDoc.clientId,
+            // Not "due" any more (it's paid) — kept for shape consistency;
+            // callers of this path should read the actual paid amount off
+            // the ReceiptPayment via getPaymentConfirmation instead.
+            amountDue: tokenDoc.amountDue,
+            currency: tokenDoc.currency,
+        };
+    }
+
+    /** Confirmation summary for the success page + receipt PDF — built from a resolveConsumedToken result. */
+    static async getPaymentConfirmation(resolved: ResolvedPaymentToken) {
+        const { order, tokenDoc } = resolved;
+        const snap = (order.quotationSnapshot || {}) as Record<string, any>;
+        const client = await ClientModel.findById(order.clientId).lean();
+        const payment = tokenDoc.receiptPaymentId
+            ? await ReceiptPaymentModel.findById(tokenDoc.receiptPaymentId).lean()
+            : null;
+
+        if (!tokenDoc.gatewayRef || !tokenDoc.consumedVia || !payment) {
+            throw new AppError('Payment confirmation is not available for this link.', 404);
+        }
+
+        return {
+            clientName: client?.name || snap.clientName || 'Client',
+            projectTitle: snap.details?.title || snap.templateName || order.orderNumber,
+            quotationNumber: snap.quotationNumber || undefined,
+            amount: payment.amount,
+            currency: resolved.currency,
+            paymentId: tokenDoc.gatewayRef,
+            via: tokenDoc.consumedVia,
+            paymentDate: payment.paymentDate,
+        };
+    }
+
+    /**
      * Atomically consumes a resolved token and records the payment — the
      * core of the single-use guarantee. `resolved` must come straight out of
      * `resolveActiveToken` in the same request (its `amountDue` is what gets
@@ -470,6 +537,45 @@ export class PaymentService {
                 await earningService.syncEarningFromReceipt(String(receiptId), String(systemUserId));
             } catch (err) {
                 logger.error({ err, receiptId: String(receiptId) }, 'earning.sync_failed');
+            }
+
+            // Admin-facing notification + email — best-effort, same reasoning
+            // as the earning sync above: the payment already succeeded and is
+            // recorded, so a notification/email hiccup must never turn into a
+            // 500 for a customer whose card was already charged.
+            try {
+                const snap = (resolved.order.quotationSnapshot || {}) as Record<string, any>;
+                const client = await ClientModel.findById(resolved.order.clientId).lean();
+                const clientName = client?.name || snap.clientName || 'Client';
+                const projectTitle = snap.details?.title || snap.templateName || resolved.order.orderNumber;
+                const amountFormatted = formatMoneyPdf(opts.amount, resolved.currency);
+
+                await notificationService.notifyAdminsOnlinePaymentReceived({
+                    clientName,
+                    projectTitle,
+                    amountFormatted,
+                    via: opts.via,
+                    actorUserId: systemUserId,
+                });
+
+                await emailService.sendAdminPaymentReceiptEmail({
+                    clientName,
+                    projectTitle,
+                    ...(snap.quotationNumber ? { quotationNumber: snap.quotationNumber } : {}),
+                    amountFormatted,
+                    paymentId: opts.gatewayRef,
+                    via: opts.via,
+                    paymentDateFormatted: new Date().toLocaleDateString('en-US', {
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric',
+                    }),
+                });
+            } catch (err) {
+                logger.error(
+                    { err, tokenId: String(tokenDoc._id), receiptId: String(receiptId) },
+                    'payment.admin_notification_failed',
+                );
             }
 
             return { receiptId: receiptId, paymentId: payment._id as unknown as Types.ObjectId };

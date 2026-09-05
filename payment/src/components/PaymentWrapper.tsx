@@ -137,6 +137,7 @@ export default function PaymentWrapper({
                     <CheckoutForm
                         amount={formattedTotal}
                         invoiceNumber={invoiceNumber}
+                        token={token}
                     />
                 </Elements>
             )}

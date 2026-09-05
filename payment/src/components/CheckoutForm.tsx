@@ -12,9 +12,12 @@ import { BRAND_GRADIENT } from "@/lib/brand";
 export default function CheckoutForm({
     amount,
     invoiceNumber,
+    token,
 }: {
     amount: string;
     invoiceNumber: string;
+    /** The single-use payment link token — carried through to the success page so it can fetch the paid receipt. */
+    token: string;
 }) {
     const stripe = useStripe();
     const elements = useElements();
@@ -34,7 +37,7 @@ export default function CheckoutForm({
         const { error } = await stripe.confirmPayment({
             elements,
             confirmParams: {
-                return_url: `${window.location.origin}/success?invoice=${invoiceNumber}`,
+                return_url: `${window.location.origin}/success?invoice=${invoiceNumber}&token=${encodeURIComponent(token)}`,
             },
         });
 

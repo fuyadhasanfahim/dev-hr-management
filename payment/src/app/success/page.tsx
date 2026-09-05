@@ -2,10 +2,22 @@
 
 import { useEffect, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
-import { CheckCircle2, XCircle, Loader2 } from "lucide-react";
+import { CheckCircle2, XCircle, Loader2, Download } from "lucide-react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { BRAND_GRADIENT } from "@/lib/brand";
+import { formatMoney } from "@/lib/money";
+
+interface PaymentConfirmation {
+    clientName: string;
+    projectTitle: string;
+    quotationNumber?: string;
+    amount: number;
+    currency: string;
+    paymentId: string;
+    via: "stripe" | "paypal";
+    paymentDate: string;
+}
 
 function SuccessContent() {
     const searchParams = useSearchParams();
@@ -17,6 +29,7 @@ function SuccessContent() {
     const redirectStatus = searchParams.get("redirect_status"); // Stripe Status
     const invoiceNumber = searchParams.get("invoice");
     const alreadyPaid = searchParams.get("already_paid") === "true";
+    const token = searchParams.get("token");
 
     // Purely a UX status page based on the redirect's own query params — no
     // backend call here. The actual "did this get paid" record was already
@@ -43,6 +56,34 @@ function SuccessContent() {
         const timer = setTimeout(() => setStatus("error"), 1500);
         return () => clearTimeout(timer);
     }, [isAmbiguous]);
+
+    // Best-effort receipt fetch for display — purely informational, never
+    // part of the payment-recording flow (see the comment above isSuccess).
+    const [confirmation, setConfirmation] = useState<PaymentConfirmation | null>(null);
+    useEffect(() => {
+        if (!isSuccess || !token) return;
+        let cancelled = false;
+        (async () => {
+            try {
+                const res = await fetch(
+                    `${process.env.NEXT_PUBLIC_API_URL}/api/payments/confirmation/${encodeURIComponent(token)}`,
+                );
+                const body = await res.json().catch(() => null);
+                if (!cancelled && res.ok && body?.success) {
+                    setConfirmation(body.data as PaymentConfirmation);
+                }
+            } catch {
+                // Silent — the receipt card just doesn't render; the success message above still stands.
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [isSuccess, token]);
+
+    const receiptDownloadUrl = token
+        ? `${process.env.NEXT_PUBLIC_API_URL}/api/payments/confirmation/${encodeURIComponent(token)}/pdf`
+        : null;
 
     if (status === "loading") {
         return (
@@ -103,17 +144,51 @@ function SuccessContent() {
             <p className="max-w-[320px] text-[14px] text-[#9CA3AF]">
                 {alreadyPaid
                     ? "This invoice has already been paid securely. No further action is needed."
-                    : "Thank you! Your payment has been securely processed and a receipt is on its way to your email."}
+                    : "Thank you! Your payment has been securely processed."}
             </p>
 
             <div className="mt-2 flex w-full max-w-[340px] items-center justify-between rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3 text-[13px]">
                 <span className="text-[#9CA3AF]">Reference</span>
                 <span className="font-mono font-semibold text-[#C9A9F9]">
-                    {paymentIntent ||
+                    {confirmation?.paymentId ||
+                        paymentIntent ||
                         orderId ||
                         (invoiceNumber ? `INV-${invoiceNumber}` : "WB-PAY")}
                 </span>
             </div>
+
+            {confirmation && (
+                <div className="mt-1 flex w-full max-w-[340px] flex-col gap-2.5 rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3.5 text-[13px]">
+                    <div className="flex items-center justify-between">
+                        <span className="text-[#9CA3AF]">Client</span>
+                        <span className="text-[#D1D5DB]">{confirmation.clientName}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                        <span className="text-[#9CA3AF]">
+                            {confirmation.quotationNumber ? "Quotation" : "Project"}
+                        </span>
+                        <span className="text-[#D1D5DB]">
+                            {confirmation.quotationNumber || confirmation.projectTitle}
+                        </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                        <span className="text-[#9CA3AF]">Amount paid</span>
+                        <span className="font-semibold text-white">
+                            {formatMoney(confirmation.amount, confirmation.currency)}
+                        </span>
+                    </div>
+                </div>
+            )}
+
+            {receiptDownloadUrl && (
+                <a
+                    href={receiptDownloadUrl}
+                    className="mt-1 flex w-full max-w-[340px] items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-6 py-3 text-[14px] font-semibold text-white transition-colors hover:bg-white/[0.06]"
+                >
+                    <Download className="h-4 w-4" />
+                    Download Receipt
+                </a>
+            )}
 
             <Link
                 href="https://webbriks.com"

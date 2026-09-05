@@ -7,6 +7,7 @@ import { InvitationEmail } from '../templates/InvitationEmail.js';
 import { ApplicationStatusEmail } from '../templates/ApplicationStatusEmail.js';
 import { QuotationEmail, type QuotationMilestoneEmailInfo } from '../templates/QuotationEmail.js';
 import { ReceiptEmail } from '../templates/ReceiptEmail.js';
+import { PaymentReceiptEmail } from '../templates/PaymentReceiptEmail.js';
 import { TaskNotificationEmail } from '../templates/TaskNotificationEmail.js';
 import * as React from 'react';
 import envConfig from '../config/env.config.js';
@@ -335,6 +336,55 @@ const sendReceiptEmail = async (data: SendReceiptEmailData) => {
     }
 };
 
+// TODO: replace with a real admin distribution list (or envConfig.smtp_user)
+// before this goes live for real client payments — hardcoded per explicit
+// instruction while the online-payment flow is still being tested.
+const ADMIN_PAYMENT_NOTIFICATION_EMAIL = 'fuyadhasanfahim179@gmail.com';
+
+interface SendAdminPaymentReceiptData {
+    clientName: string;
+    projectTitle: string;
+    quotationNumber?: string;
+    amountFormatted: string;
+    paymentId: string;
+    via: 'stripe' | 'paypal';
+    paymentDateFormatted: string;
+}
+
+const sendAdminPaymentReceiptEmail = async (data: SendAdminPaymentReceiptData) => {
+    try {
+        const emailHtml = await render(
+            React.createElement(PaymentReceiptEmail, {
+                clientName: data.clientName,
+                projectTitle: data.projectTitle,
+                ...(data.quotationNumber ? { quotationNumber: data.quotationNumber } : {}),
+                amountFormatted: data.amountFormatted,
+                paymentId: data.paymentId,
+                via: data.via,
+                paymentDateFormatted: data.paymentDateFormatted,
+            }),
+        );
+
+        const mailOptions = {
+            from: 'Payments | WebBriks',
+            to: ADMIN_PAYMENT_NOTIFICATION_EMAIL,
+            subject: `Online payment received — ${data.amountFormatted} (${data.projectTitle})`,
+            html: emailHtml,
+        };
+
+        const info = await transporter.sendMail(mailOptions);
+        console.log('[email] admin payment receipt sent', {
+            to: ADMIN_PAYMENT_NOTIFICATION_EMAIL,
+            messageId: (info as any)?.messageId,
+            accepted: (info as any)?.accepted,
+        });
+        return info;
+    } catch (error) {
+        console.error('Error sending admin payment receipt email:', error);
+        throw error;
+    }
+};
+
 interface SendApplicationStatusData {
     to: string;
     applicantName: string;
@@ -596,6 +646,7 @@ export default {
     sendInvitationEmail,
     sendQuotationEmail,
     sendReceiptEmail,
+    sendAdminPaymentReceiptEmail,
     sendApplicationStatusEmail,
     sendMeetingInviteEmail,
     sendMeetingReminderEmail,

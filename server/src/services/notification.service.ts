@@ -354,6 +354,47 @@ const notifyAdminsPaymentReceived = async (data: {
     }
 };
 
+// Notify admins/super_admins about a client-initiated online payment
+// (Stripe/PayPal, via payment.service.ts) — deliberately scoped narrower
+// than notifyAdminsPaymentReceived above (admin/super_admin only, no
+// hr_manager/owner) since this is specifically about the online checkout
+// flow, not the general "convert this earning to BDT" workflow.
+const notifyAdminsOnlinePaymentReceived = async (data: {
+    clientName: string;
+    projectTitle: string;
+    amountFormatted: string;
+    via: "stripe" | "paypal";
+    actorUserId: Types.ObjectId | string;
+}) => {
+    const { default: UserModel } = await import("../models/user.model.js");
+
+    const admins = await UserModel.find({
+        role: { $in: ["super_admin", "admin"] },
+    }).toArray();
+
+    const viaLabel = data.via === "stripe" ? "card" : "PayPal";
+    const notifications = admins.map((admin: any) => ({
+        userId: admin._id,
+        title: "💳 Online Payment Received",
+        message: `${data.clientName} just paid ${data.amountFormatted} via ${viaLabel} for ${data.projectTitle}.`,
+        type: "earning" as const,
+        priority: "high" as const,
+        resourceType: "earning" as const,
+        actionUrl: "/receipts",
+        actionLabel: "View Receipt",
+        createdBy: data.actorUserId,
+    }));
+
+    if (notifications.length > 0) {
+        const createdDocs = await NotificationModel.insertMany(notifications);
+        createdDocs.forEach((doc: any) => {
+            if (doc.userId) {
+                emitToUser(doc.userId.toString(), "notification:new", doc);
+            }
+        });
+    }
+};
+
 // ============================================
 // TASK NOTIFICATION HELPERS
 // ============================================
@@ -504,6 +545,7 @@ export default {
     notifyLeaveStatus,
     notifyAdminsLeaveRequest,
     notifyAdminsPaymentReceived,
+    notifyAdminsOnlinePaymentReceived,
 
     // Task helpers
     notifyTaskAssigned,

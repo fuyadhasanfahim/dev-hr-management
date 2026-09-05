@@ -23,4 +23,21 @@ export async function resolvePaymentToken(req: Request, _res: Response, next: Ne
     }
 }
 
+/**
+ * Same as resolvePaymentToken but for the post-payment confirmation routes
+ * (success page summary + receipt PDF download) — these run *after* the
+ * token that paid for them has already been consumed, so they resolve
+ * through resolveConsumedToken instead, which requires status === 'consumed'
+ * rather than 'active'.
+ */
+export async function resolveConsumedPaymentToken(req: Request, _res: Response, next: NextFunction) {
+    try {
+        const raw = (req.params?.token as string | undefined) ?? (req.body?.token as string | undefined);
+        req.paymentCtx = await PaymentService.resolveConsumedToken(raw ?? '');
+        next();
+    } catch (err) {
+        next(err);
+    }
+}
+
 export default resolvePaymentToken;

@@ -9,6 +9,7 @@ import {
 } from '../services/payment.service.js';
 import { getStripeClient, getStripeWebhookSecret } from '../services/stripe.service.js';
 import { createPaypalOrder, capturePaypalOrder } from '../services/paypal.service.js';
+import { OnlinePaymentReceiptPdfService } from '../services/online-payment-receipt-pdf.service.js';
 import { AppError } from '../utils/AppError.js';
 import { logger } from '../lib/logger.js';
 
@@ -225,10 +226,43 @@ async function capturePaypalOrderHandler(req: Request, res: Response, next: Next
     }
 }
 
+/**
+ * GET /api/payments/confirmation/:token — public, read-only. Runs *after*
+ * the token was consumed by a successful payment (`resolveConsumedPaymentToken`
+ * middleware) — for the success page to show what was actually paid.
+ */
+async function getPaymentConfirmation(req: Request, res: Response, next: NextFunction) {
+    try {
+        const confirmation = await PaymentService.getPaymentConfirmation(req.paymentCtx!);
+        res.status(200).json({ success: true, data: confirmation });
+    } catch (err) {
+        next(err);
+    }
+}
+
+/**
+ * GET /api/payments/confirmation/:token/pdf — public. Same consumed-token
+ * gate as above; streams the simple receipt PDF for the success page's
+ * Download button.
+ */
+async function downloadPaymentReceipt(req: Request, res: Response, next: NextFunction) {
+    try {
+        const confirmation = await PaymentService.getPaymentConfirmation(req.paymentCtx!);
+        const { buffer, filename } = await OnlinePaymentReceiptPdfService.generate(confirmation);
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        res.send(buffer);
+    } catch (err) {
+        next(err);
+    }
+}
+
 export default {
     getInvoiceByToken,
     createStripeIntent,
     stripeWebhook,
     createPaypalOrderHandler,
     capturePaypalOrderHandler,
+    getPaymentConfirmation,
+    downloadPaymentReceipt,
 };

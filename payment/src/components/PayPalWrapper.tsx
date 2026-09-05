@@ -103,7 +103,7 @@ export default function PayPalWrapper({
                             }
 
                             router.push(
-                                `/success?method=paypal&id=${data.orderID}&invoice=${invoiceNumber}`,
+                                `/success?method=paypal&id=${data.orderID}&invoice=${invoiceNumber}&token=${encodeURIComponent(token)}`,
                             );
                         } catch (err) {
                             setError(
