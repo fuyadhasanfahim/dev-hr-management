@@ -85,6 +85,36 @@ function SuccessContent() {
         ? `${process.env.NEXT_PUBLIC_API_URL}/api/payments/confirmation/${encodeURIComponent(token)}/pdf`
         : null;
 
+    // A plain <a href> gives no feedback while the PDF is being generated
+    // (a few seconds — it's rendered server-side with Puppeteer on request),
+    // so a click looks like nothing happened. Fetch + blob instead, with a
+    // loading state, so the button visibly shows it's working.
+    const [downloading, setDownloading] = useState(false);
+    const [downloadError, setDownloadError] = useState<string | null>(null);
+    const handleDownload = async () => {
+        if (!receiptDownloadUrl || downloading) return;
+        setDownloading(true);
+        setDownloadError(null);
+        try {
+            const res = await fetch(receiptDownloadUrl);
+            if (!res.ok) throw new Error(`Download failed (${res.status})`);
+            const blob = await res.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `Receipt-${confirmation?.paymentId || "webbriks"}.pdf`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 2500);
+        } catch (err) {
+            console.error("Receipt download failed:", err);
+            setDownloadError("Couldn't download the receipt. Please try again.");
+        } finally {
+            setDownloading(false);
+        }
+    };
+
     if (status === "loading") {
         return (
             <div className="mx-auto flex max-w-md flex-col items-center gap-3 py-16 text-center">
@@ -181,13 +211,27 @@ function SuccessContent() {
             )}
 
             {receiptDownloadUrl && (
-                <a
-                    href={receiptDownloadUrl}
-                    className="mt-1 flex w-full max-w-[340px] items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-6 py-3 text-[14px] font-semibold text-white transition-colors hover:bg-white/[0.06]"
+                <button
+                    type="button"
+                    onClick={handleDownload}
+                    disabled={downloading}
+                    className="mt-1 flex w-full max-w-[340px] items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-6 py-3 text-[14px] font-semibold text-white transition-colors hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-70"
                 >
-                    <Download className="h-4 w-4" />
-                    Download Receipt
-                </a>
+                    {downloading ? (
+                        <>
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            Preparing receipt…
+                        </>
+                    ) : (
+                        <>
+                            <Download className="h-4 w-4" />
+                            Download Receipt
+                        </>
+                    )}
+                </button>
+            )}
+            {downloadError && (
+                <p className="text-[12.5px] text-red-400">{downloadError}</p>
             )}
 
             <Link

@@ -539,26 +539,28 @@ export class PaymentService {
                 logger.error({ err, receiptId: String(receiptId) }, 'earning.sync_failed');
             }
 
-            // Admin-facing notification + email — best-effort, same reasoning
-            // as the earning sync above: the payment already succeeded and is
-            // recorded, so a notification/email hiccup must never turn into a
-            // 500 for a customer whose card was already charged.
-            try {
-                const snap = (resolved.order.quotationSnapshot || {}) as Record<string, any>;
-                const client = await ClientModel.findById(resolved.order.clientId).lean();
-                const clientName = client?.name || snap.clientName || 'Client';
-                const projectTitle = snap.details?.title || snap.templateName || resolved.order.orderNumber;
-                const amountFormatted = formatMoneyPdf(opts.amount, resolved.currency);
+            // Admin-facing notification + email, and the client-facing
+            // receipt email — all best-effort, same reasoning as the earning
+            // sync above: the payment already succeeded and is recorded, so
+            // a notification/email hiccup must never turn into a 500 for a
+            // customer whose card was already charged. Each runs
+            // independently (Promise.allSettled) so one failing (e.g. a bad
+            // client email on file) doesn't take the others down with it.
+            const snap = (resolved.order.quotationSnapshot || {}) as Record<string, any>;
+            const client = await ClientModel.findById(resolved.order.clientId).lean();
+            const clientName = client?.name || snap.clientName || 'Client';
+            const projectTitle = snap.details?.title || snap.templateName || resolved.order.orderNumber;
+            const amountFormatted = formatMoneyPdf(opts.amount, resolved.currency);
 
-                await notificationService.notifyAdminsOnlinePaymentReceived({
+            const results = await Promise.allSettled([
+                notificationService.notifyAdminsOnlinePaymentReceived({
                     clientName,
                     projectTitle,
                     amountFormatted,
                     via: opts.via,
                     actorUserId: systemUserId,
-                });
-
-                await emailService.sendAdminPaymentReceiptEmail({
+                }),
+                emailService.sendAdminPaymentReceiptEmail({
                     clientName,
                     projectTitle,
                     ...(snap.quotationNumber ? { quotationNumber: snap.quotationNumber } : {}),
@@ -570,13 +572,21 @@ export class PaymentService {
                         month: 'long',
                         day: 'numeric',
                     }),
-                });
-            } catch (err) {
-                logger.error(
-                    { err, tokenId: String(tokenDoc._id), receiptId: String(receiptId) },
-                    'payment.admin_notification_failed',
-                );
-            }
+                }),
+                // The existing client-facing receipt flow (fuller template,
+                // PDF attached) — reused as-is rather than duplicated; pulls
+                // the client's email straight off the Client record.
+                ReceiptService.sendReceipt(String(receiptId)),
+            ]);
+
+            results.forEach((r, i) => {
+                if (r.status === 'rejected') {
+                    logger.error(
+                        { err: r.reason, tokenId: String(tokenDoc._id), receiptId: String(receiptId), step: i },
+                        'payment.post_payment_notification_failed',
+                    );
+                }
+            });
 
             return { receiptId: receiptId, paymentId: payment._id as unknown as Types.ObjectId };
         } catch (err) {
