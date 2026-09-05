@@ -23,6 +23,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { Eye, Receipt, Package } from "lucide-react";
+import InvoicePdfButton from "@/components/shared/InvoicePdfButton";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { getFilteredStatusOptions } from "@/constants/orderStatusWorkflow";
@@ -261,20 +262,6 @@ export function OrderTable({
                   {/* Actions */}
                   <TableCell className="pr-6" onClick={(e) => e.stopPropagation()}>
                     <div className="flex justify-end gap-1">
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => onView(order)}
-                            className="h-7 w-7 text-muted-foreground hover:text-brand-primary hover:bg-brand-primary/10"
-                          >
-                            <Eye className="h-3.5 w-3.5" />
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent side="top" className="text-xs">View Details</TooltipContent>
-                      </Tooltip>
-
                       {order.quotationGroupId && canReceipt && (
                         <Tooltip>
                           <TooltipTrigger asChild>
@@ -290,6 +277,37 @@ export function OrderTable({
                           <TooltipContent side="top" className="text-xs">Record a payment</TooltipContent>
                         </Tooltip>
                       )}
+
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <InvoicePdfButton
+                            source="order"
+                            id={order._id}
+                            fileNameBase={(
+                              order.quotationSnapshot?.quotationNumber ||
+                              order.orderNumber ||
+                              "invoice"
+                            ).replace(/^QTN/i, "INV")}
+                            iconOnly
+                            className="h-7 w-7 text-muted-foreground hover:text-brand-primary hover:bg-brand-primary/10"
+                          />
+                        </TooltipTrigger>
+                        <TooltipContent side="top" className="text-xs">Download Invoice</TooltipContent>
+                      </Tooltip>
+
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => onView(order)}
+                            className="h-7 w-7 text-muted-foreground hover:text-brand-primary hover:bg-brand-primary/10"
+                          >
+                            <Eye className="h-3.5 w-3.5" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent side="top" className="text-xs">View Details</TooltipContent>
+                      </Tooltip>
 
                     </div>
                   </TableCell>

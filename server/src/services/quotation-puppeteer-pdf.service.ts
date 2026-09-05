@@ -170,11 +170,10 @@ const FALLBACK_PIXEL_PNG =
     'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
 
 const DEFAULT_COMPANY = {
-    name: 'WebBriks',
-    website: 'www.webbriks.com',
-    email: 'hello@webbriks.com',
-    phone: '+880 1977 201923',
-    address: '115 Senpara Parbata, Mirpur, Dhaka 1216, Bangladesh.',
+    name: 'WEB BRIKS LLC',
+    country: 'United States',
+    ein: 'Federal Tax ID (EIN): 30-1421814',
+    vat: 'VAT ID: Not Applicable — U.S. Entity',
 };
 
 const imageCache = new Map<string, string>();
@@ -694,10 +693,9 @@ export function buildPrintHtml(
         : '—';
 
     const companyName = normalizeText(q.company?.name || DEFAULT_COMPANY.name);
-    const companyWebsite = normalizeText(q.company?.website || DEFAULT_COMPANY.website);
-    const companyEmail = normalizeText(q.company?.email || DEFAULT_COMPANY.email);
-    const companyPhone = normalizeText(q.company?.phone || DEFAULT_COMPANY.phone);
-    const companyAddress = normalizeText(q.company?.address || DEFAULT_COMPANY.address);
+    const companyCountry = normalizeText(q.company?.country || DEFAULT_COMPANY.country);
+    const companyEin = normalizeText(q.company?.ein || DEFAULT_COMPANY.ein);
+    const companyVat = normalizeText(q.company?.vat || DEFAULT_COMPANY.vat);
 
     const clientContact = normalizeText(client.contactName || '');
     const clientCompany = normalizeText(client.companyName || '');
@@ -788,7 +786,7 @@ export function buildPrintHtml(
     }
 
     const clientLines = [clientSecondary, clientAddress, clientEmail, clientPhone].filter(Boolean);
-    const companyLines = [companyAddress, companyEmail, companyPhone, companyWebsite].filter(Boolean);
+    const companyLines = [companyCountry, companyEin, companyVat].filter(Boolean);
 
     const metaItems: Array<[string, string]> = [
         ['Quotation', `#${quotationNo}`],
@@ -1165,8 +1163,8 @@ export function buildPrintHtml(
             <div class="paginate-block blk-section-end">
                 <div class="closing">
                     <div class="closing-name">${esc(companyName)}</div>
-                    <div class="closing-contact">${esc(companyWebsite)} · ${esc(companyEmail)} · ${esc(companyPhone)}</div>
-                    <div class="closing-address">${esc(companyAddress)}</div>
+                    <div class="closing-contact">${esc(companyCountry)}</div>
+                    <div class="closing-address">${esc(companyEin)} · ${esc(companyVat)}</div>
                 </div>
             </div>
         </div>

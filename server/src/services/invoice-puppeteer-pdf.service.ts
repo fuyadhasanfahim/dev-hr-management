@@ -107,10 +107,10 @@ const FALLBACK_PIXEL_PNG =
     'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
 
 const DEFAULT_COMPANY = {
-    name: 'WebBriks',
-    address: '115 Senpara Parbata, Mirpur, Dhaka 1216, Bangladesh.',
-    email: 'info@webbriks.com',
-    phone: '+8801977201923',
+    name: 'WEB BRIKS LLC',
+    country: 'United States',
+    ein: 'Federal Tax ID (EIN): 30-1421814',
+    vat: 'VAT ID: Not Applicable — U.S. Entity',
 };
 
 const SIGNATORY_NAME = process.env.COMPANY_SIGNATORY_NAME || 'Md. Ashaduzzaman';
@@ -341,12 +341,6 @@ export function buildInvoiceHtml(inv: InvoiceData, ctx: InvoicePdfContext): stri
     .sheet { position: relative; z-index: 1; }
 
     /* ── Masthead ──────────────────────────────────────────────────────────── */
-    .top-rule {
-      height: 3px;
-      background: linear-gradient(90deg, var(--brand-mid), var(--brand) 55%, #2a0785);
-      border-radius: 2px;
-      margin-bottom: 4mm;
-    }
     .masthead { display: flex; justify-content: space-between; align-items: flex-start; gap: 12mm; }
     .brand-logo { height: 11mm; width: auto; object-fit: contain; object-position: left center; display: block; }
     .doc-id { text-align: right; }
@@ -378,8 +372,8 @@ export function buildInvoiceHtml(inv: InvoiceData, ctx: InvoicePdfContext): stri
 
     /* ── Hero: bill from / bill to ───────────────────────────────────────── */
     .hero { display: flex; gap: 8mm; margin-top: 5mm; align-items: stretch; }
-    .hero-col { flex: 1; }
-    .hero-col.to {
+    .hero-col {
+      flex: 1;
       background: var(--panel); border: 1px solid var(--line);
       border-radius: 10px; padding: 4mm 4.5mm;
     }
@@ -424,7 +418,7 @@ export function buildInvoiceHtml(inv: InvoiceData, ctx: InvoicePdfContext): stri
     }
 
     /* ── Totals ───────────────────────────────────────────────────────────── */
-    .totals-wrap { display: flex; justify-content: flex-end; margin-top: 3.5mm; }
+    .totals-wrap { display: flex; justify-content: space-between; align-items: flex-end; gap: 6mm; margin-top: 3.5mm; }
     table.totals { width: 74mm; border-collapse: collapse; }
     table.totals td { padding: 4px 0; font-size: 9pt; }
     table.totals .sum-amt { text-align: right; white-space: nowrap; font-family: var(--font-mono); }
@@ -436,8 +430,8 @@ export function buildInvoiceHtml(inv: InvoiceData, ctx: InvoicePdfContext): stri
     }
 
     .balance-bar {
-      margin-top: 4mm; border-radius: 10px; padding: 3.5mm 6mm;
-      display: flex; justify-content: space-between; align-items: baseline;
+      border-radius: 10px; padding: 3.5mm 6mm;
+      display: flex; flex-direction: column; gap: 3px; align-self: flex-end;
       page-break-inside: avoid;
     }
     .balance-bar.is-open  { background: var(--due-bg); border: 1px solid rgba(180,35,24,0.22); }
@@ -476,17 +470,11 @@ export function buildInvoiceHtml(inv: InvoiceData, ctx: InvoicePdfContext): stri
     .sig-line { border-bottom: 1px solid var(--ink); width: 58mm; margin-bottom: 5px; }
     .sig-name { font-size: 9pt; font-weight: 700; color: var(--ink); }
     .sig-role { font-size: 7.5pt; color: var(--muted); margin-top: 1px; }
-    .stamp {
-      font-family: var(--font-mono);
-      font-size: 7pt; letter-spacing: 0.1em; text-transform: uppercase; color: var(--faint);
-    }
   </style>
 </head>
 <body>
   ${watermark}
   <div class="sheet">
-
-    <div class="top-rule"></div>
 
     <div class="masthead">
       <img class="brand-logo" src="${esc(ctx.logoSrc)}" alt="WebBriks" />
@@ -505,9 +493,9 @@ export function buildInvoiceHtml(inv: InvoiceData, ctx: InvoicePdfContext): stri
       <div class="hero-col">
         <div class="eyebrow">Bill From</div>
         <div class="party-name">${esc(DEFAULT_COMPANY.name)}</div>
-        <div class="party-line">${esc(DEFAULT_COMPANY.address)}</div>
-        <div class="party-line">${esc(DEFAULT_COMPANY.email)}</div>
-        <div class="party-line">${esc(DEFAULT_COMPANY.phone)}</div>
+        <div class="party-line">${esc(DEFAULT_COMPANY.country)}</div>
+        <div class="party-line">${esc(DEFAULT_COMPANY.ein)}</div>
+        <div class="party-line">${esc(DEFAULT_COMPANY.vat)}</div>
       </div>
 
       <div class="hero-col to">
@@ -533,6 +521,10 @@ export function buildInvoiceHtml(inv: InvoiceData, ctx: InvoicePdfContext): stri
     </table>
 
     <div class="totals-wrap">
+      <div class="balance-bar ${paidInFull ? 'is-clear' : 'is-open'}">
+        <span class="balance-k">${paidInFull ? 'Settled' : 'Balance Due'}</span>
+        <span class="balance-v">${paidInFull ? esc(formatMoneyPdf(inv.grandTotal, c)) : esc(formatMoneyPdf(inv.balanceDue, c))}</span>
+      </div>
       <table class="totals">
         <tr class="sum-row"><td>Subtotal</td><td class="sum-amt">${esc(formatMoneyPdf(inv.subtotal, c))}</td></tr>
         ${discountRow}
@@ -540,11 +532,6 @@ export function buildInvoiceHtml(inv: InvoiceData, ctx: InvoicePdfContext): stri
         <tr class="grand"><td>Grand Total</td><td class="sum-amt">${esc(formatMoneyPdf(inv.grandTotal, c))}</td></tr>
         ${paidRow}
       </table>
-    </div>
-
-    <div class="balance-bar ${paidInFull ? 'is-clear' : 'is-open'}">
-      <span class="balance-k">${paidInFull ? 'Settled' : 'Balance Due'}</span>
-      <span class="balance-v">${paidInFull ? esc(formatMoneyPdf(inv.grandTotal, c)) : esc(formatMoneyPdf(inv.balanceDue, c))}</span>
     </div>
 
     <div class="pay-note">
@@ -562,7 +549,6 @@ export function buildInvoiceHtml(inv: InvoiceData, ctx: InvoicePdfContext): stri
           <div class="sig-name">${esc(SIGNATORY_NAME)}</div>
           <div class="sig-role">${esc(SIGNATORY_ROLE)}, ${esc(DEFAULT_COMPANY.name)}</div>
         </div>
-        <div class="stamp">${esc(inv.invoiceNumber)}</div>
       </div>
     </div>
 
@@ -657,7 +643,8 @@ async function renderPdf(
         // Native running footer — sits at the bottom of every page (incl. a
         // short final page), so a spilled signature never floats alone.
         const footerTemplate = `
-          <div style="width:100%;box-sizing:border-box;padding:0 16mm;
+          <div style="width:100%;box-sizing:border-box;padding:8px 16mm 0;
+                      border-top:1px solid #e2ddef;
                       font-family:-apple-system,'Segoe UI',Roboto,sans-serif;
                       font-size:7pt;color:#9a94ac;
                       display:flex;justify-content:space-between;align-items:center;">

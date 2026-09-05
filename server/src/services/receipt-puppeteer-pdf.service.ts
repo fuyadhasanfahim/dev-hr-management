@@ -94,10 +94,10 @@ const FALLBACK_PIXEL_PNG =
     'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
 
 const DEFAULT_COMPANY = {
-    name: 'WebBriks',
-    address: '115 Senpara Parbata, Mirpur, Dhaka 1216, Bangladesh.',
-    email: 'info@webbriks.com',
-    phone: '+8801977201923',
+    name: 'WEB BRIKS LLC',
+    country: 'United States',
+    ein: 'Federal Tax ID (EIN): 30-1421814',
+    vat: 'VAT ID: Not Applicable — U.S. Entity',
 };
 
 const PAYMENT_TYPE_LABELS: Record<string, string> = {
@@ -284,9 +284,9 @@ function buildPrintHtml(r: Record<string, any>, ctx: ReceiptPdfContext): string 
     <div class="bill-col">
       <div class="lbl">Received By</div>
       <div class="bill-name">${esc(DEFAULT_COMPANY.name)}</div>
-      <div class="bill-txt">${esc(DEFAULT_COMPANY.address)}</div>
-      <div class="bill-txt">${esc(DEFAULT_COMPANY.email)}</div>
-      <div class="bill-txt">${esc(DEFAULT_COMPANY.phone)}</div>
+      <div class="bill-txt">${esc(DEFAULT_COMPANY.country)}</div>
+      <div class="bill-txt">${esc(DEFAULT_COMPANY.ein)}</div>
+      <div class="bill-txt">${esc(DEFAULT_COMPANY.vat)}</div>
     </div>
     <div class="bill-col r">
       <div class="lbl">Received From</div>

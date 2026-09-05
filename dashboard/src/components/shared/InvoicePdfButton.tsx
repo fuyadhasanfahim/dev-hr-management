@@ -13,6 +13,8 @@ interface Props {
   /** File name shown to the user, without extension. */
   fileNameBase: string;
   className?: string;
+  /** Render as an icon-only button (no label), e.g. for table row actions. */
+  iconOnly?: boolean;
 }
 
 function parseContentDispositionFilename(header: string | null): string | null {
@@ -38,7 +40,7 @@ function sanitizeFileName(base: string): string {
   return stem.endsWith('.pdf') ? stem : `${stem}.pdf`;
 }
 
-export default function InvoicePdfButton({ source, id, fileNameBase, className }: Props) {
+export default function InvoicePdfButton({ source, id, fileNameBase, className, iconOnly }: Props) {
   const [loading, setLoading] = useState(false);
 
   const handleDownload = async () => {
@@ -104,6 +106,26 @@ export default function InvoicePdfButton({ source, id, fileNameBase, className }
       setLoading(false);
     }
   };
+
+  if (iconOnly) {
+    return (
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className={className}
+        disabled={loading}
+        onClick={handleDownload}
+        aria-label="Download invoice"
+      >
+        {loading ? (
+          <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+        ) : (
+          <FileText className="h-3.5 w-3.5" aria-hidden />
+        )}
+      </Button>
+    );
+  }
 
   return (
     <Button
