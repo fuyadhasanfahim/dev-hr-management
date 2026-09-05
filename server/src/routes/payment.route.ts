@@ -6,8 +6,11 @@ import { paymentLimiter } from '../middlewares/rate-limit.middleware.js';
 const router: Router = Router();
 
 // ─── Public client routes (no session — validated by the payment token itself) ───
-// Stripe/PayPal create-intent, create-order, and capture routes land here in
-// later phases, each behind `resolvePaymentToken` the same way.
+// PayPal create-order/capture-order routes land here in the next phase, the
+// same way. The Stripe *webhook* is intentionally NOT here — it's mounted
+// directly on the app in app.ts, ahead of the JSON body parser, since
+// signature verification needs the raw request bytes.
 router.get('/invoice/:token', paymentLimiter, resolvePaymentToken, PaymentController.getInvoiceByToken);
+router.post('/stripe/create-intent', paymentLimiter, resolvePaymentToken, PaymentController.createStripeIntent);
 
 export const paymentRoute = router;

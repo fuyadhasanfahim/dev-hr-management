@@ -17,6 +17,7 @@ import router from "./routes/index.js";
 import "./models/user.model.js";
 import { globalErrorHandler } from "./middlewares/globalErrorHandler.js";
 import { getHealthStatus } from "./lib/health.js";
+import PaymentController from "./controllers/payment.controller.js";
 
 const { trusted_origins, client_url } = envConfig;
 
@@ -93,6 +94,15 @@ const globalLimiter = rateLimit({
     },
 });
 app.use(globalLimiter);
+
+// Stripe webhook — MUST be registered with the raw body, before the global
+// JSON parser below, since signature verification needs the exact bytes
+// Stripe sent (a re-serialized parsed body will not match the signature).
+app.post(
+    "/api/payments/stripe/webhook",
+    express.raw({ type: "application/json" }),
+    PaymentController.stripeWebhook,
+);
 
 app.use(express.json());
 

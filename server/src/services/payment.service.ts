@@ -72,6 +72,77 @@ function verifyToken(token: string): PaymentTokenPayload {
     }
 }
 
+/** DB-side status/expiry checks + a live amount-due recompute, shared by both token-resolution entry points. */
+async function resolveFromTokenDoc(tokenDoc: IPaymentToken): Promise<ResolvedPaymentToken> {
+    if (tokenDoc.status === 'consumed') {
+        throw new AppError('This payment link has already been used.', 410);
+    }
+    if (tokenDoc.status === 'void') {
+        throw new AppError('This payment link is no longer active. A newer invoice may have been issued.', 410);
+    }
+    if (tokenDoc.expiresAt <= new Date()) {
+        throw new AppError('This payment link has expired.', 410);
+    }
+
+    const order = await OrderModel.findById(tokenDoc.orderId);
+    if (!order) throw new AppError('Order not found', 404);
+
+    const { grandTotal, currency } = resolveOrderTotals(order);
+    const { balanceDue } = await attachReceiptLedger(order.quotationGroupId, grandTotal);
+
+    if (balanceDue <= 0.009) {
+        throw new AppError('This invoice has already been paid in full.', 409);
+    }
+
+    return {
+        tokenDoc,
+        order,
+        receiptId: tokenDoc.receiptId,
+        quotationGroupId: tokenDoc.quotationGroupId,
+        clientId: tokenDoc.clientId,
+        amountDue: balanceDue,
+        currency,
+    };
+}
+
+// ─── Gateway currency helpers ───────────────────────────────────────────────
+// Quotations store currency as free-form display text ('৳', 'Tk', 'BDT',
+// 'USD', ...). Gateways need a lowercase ISO-4217 code and (for Stripe) the
+// amount in the currency's smallest unit. Centralized here so both gateways'
+// controllers convert identically.
+
+const CURRENCY_SYMBOL_MAP: Record<string, string> = {
+    '৳': 'bdt',
+    tk: 'bdt',
+    bdt: 'bdt',
+    '$': 'usd',
+    usd: 'usd',
+};
+
+/** Zero-decimal currencies per Stripe's docs — none of ours today, but kept explicit rather than assumed. */
+const ZERO_DECIMAL_CURRENCIES = new Set(['bif', 'clp', 'djf', 'gnf', 'jpy', 'kmf', 'krw', 'mga', 'pyg', 'rwf', 'ugx', 'vnd', 'vuv', 'xaf', 'xof', 'xpf']);
+
+export function normalizeCurrencyForGateway(currency: string): string {
+    const key = String(currency ?? '').trim().toLowerCase();
+    const mapped = CURRENCY_SYMBOL_MAP[key] ?? (/^[a-z]{3}$/.test(key) ? key : null);
+    if (!mapped) {
+        throw new AppError(`Currency "${currency}" is not supported for online payment.`, 422);
+    }
+    return mapped;
+}
+
+/** Converts a major-unit amount (e.g. 1500.50) into the integer smallest-unit amount Stripe expects. */
+export function toStripeMinorUnits(amount: number, gatewayCurrency: string): number {
+    const factor = ZERO_DECIMAL_CURRENCIES.has(gatewayCurrency) ? 1 : 100;
+    return Math.round(amount * factor);
+}
+
+/** Inverse of `toStripeMinorUnits` — for reading `amount_received` back off a webhook event. */
+export function fromStripeMinorUnits(minorAmount: number, gatewayCurrency: string): number {
+    const factor = ZERO_DECIMAL_CURRENCIES.has(gatewayCurrency) ? 1 : 100;
+    return minorAmount / factor;
+}
+
 // A synthetic "actor" for payments the client makes directly through the
 // gateway (no staff member involved), so ReceiptPayment.createdBy — required,
 // for a clean audit trail — always points at a real, dedicated user document
@@ -181,8 +252,8 @@ export class PaymentService {
 
     /**
      * Verifies a raw token from a payment request (signature + expiry), then
-     * checks the DB-side single-use/rotation guard, then recomputes the
-     * amount due live. Every public payment route must resolve its token
+     * hands off to the shared DB-side resolution. Every public payment route
+     * (create-intent, create-order, capture-order) must resolve its token
      * through this — never decode the JWT and trust its payload directly.
      */
     static async resolveActiveToken(rawToken: string): Promise<ResolvedPaymentToken> {
@@ -196,35 +267,24 @@ export class PaymentService {
         if (!tokenDoc || tokenDoc.token !== rawToken) {
             throw new AppError('Invalid payment link.', 410);
         }
-        if (tokenDoc.status === 'consumed') {
-            throw new AppError('This payment link has already been used.', 410);
-        }
-        if (tokenDoc.status === 'void') {
-            throw new AppError('This payment link is no longer active. A newer invoice may have been issued.', 410);
-        }
-        if (tokenDoc.expiresAt <= new Date()) {
-            throw new AppError('This payment link has expired.', 410);
-        }
 
-        const order = await OrderModel.findById(tokenDoc.orderId);
-        if (!order) throw new AppError('Order not found', 404);
+        return resolveFromTokenDoc(tokenDoc);
+    }
 
-        const { grandTotal, currency } = resolveOrderTotals(order);
-        const { balanceDue } = await attachReceiptLedger(order.quotationGroupId, grandTotal);
-
-        if (balanceDue <= 0.009) {
-            throw new AppError('This invoice has already been paid in full.', 409);
-        }
-
-        return {
-            tokenDoc,
-            order,
-            receiptId: tokenDoc.receiptId,
-            quotationGroupId: tokenDoc.quotationGroupId,
-            clientId: tokenDoc.clientId,
-            amountDue: balanceDue,
-            currency,
-        };
+    /**
+     * Same DB-side validation + live-amount recompute as `resolveActiveToken`,
+     * but keyed by `jti` instead of the raw JWT. For gateway webhooks: the
+     * webhook payload never carries the client's original signed link (we
+     * pass the `jti` as gateway metadata at create-intent/create-order time
+     * instead), and the webhook's own signature verification is what proves
+     * the request is genuinely from the gateway — a second JWT check adds
+     * nothing there.
+     */
+    static async resolveActiveByJti(jti: string): Promise<ResolvedPaymentToken> {
+        if (!jti) throw new AppError('Missing payment token reference.', 400);
+        const tokenDoc = await PaymentTokenModel.findOne({ jti });
+        if (!tokenDoc) throw new AppError('Invalid payment link.', 410);
+        return resolveFromTokenDoc(tokenDoc);
     }
 
     /** Public, read-only invoice summary shown on the payment page. Never consumes the token. */
@@ -284,7 +344,10 @@ export class PaymentService {
                 { tokenId: String(tokenDoc._id), expected: amountDue, got: opts.amount, via: opts.via },
                 'payment.amount_mismatch',
             );
-            throw new AppError('Payment amount does not match the amount due on this invoice.', 409);
+            // 422, deliberately distinct from the 409s used for "already
+            // consumed" elsewhere in this flow — callers (the Stripe/PayPal
+            // webhook handlers) must NOT treat this one as safe-to-ignore.
+            throw new AppError('Payment amount does not match the amount due on this invoice.', 422);
         }
 
         const systemUserId = await getOrCreateSystemUserId();
