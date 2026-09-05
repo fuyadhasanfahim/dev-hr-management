@@ -59,23 +59,53 @@ function SuccessContent() {
 
     // Best-effort receipt fetch for display — purely informational, never
     // part of the payment-recording flow (see the comment above isSuccess).
+    //
+    // This can 404 for a few seconds after redirect even for a genuinely
+    // successful payment: Stripe's webhook (the only thing that actually
+    // marks the token "consumed" — see payment.service.ts) is a separate,
+    // asynchronous round-trip from Stripe's servers that lands *after* the
+    // client-side redirect here, not before it. Retry briefly rather than
+    // giving up on the first miss.
     const [confirmation, setConfirmation] = useState<PaymentConfirmation | null>(null);
+    const [confirmationPending, setConfirmationPending] = useState(false);
     useEffect(() => {
         if (!isSuccess || !token) return;
         let cancelled = false;
-        (async () => {
+        const MAX_ATTEMPTS = 6;
+        const RETRY_DELAY_MS = 2000;
+
+        const attempt = async (n: number) => {
+            if (cancelled) return;
             try {
                 const res = await fetch(
                     `${process.env.NEXT_PUBLIC_API_URL}/api/payments/confirmation/${encodeURIComponent(token)}`,
                 );
                 const body = await res.json().catch(() => null);
-                if (!cancelled && res.ok && body?.success) {
+                if (cancelled) return;
+
+                if (res.ok && body?.success) {
                     setConfirmation(body.data as PaymentConfirmation);
+                    setConfirmationPending(false);
+                    return;
+                }
+
+                if (n < MAX_ATTEMPTS) {
+                    setConfirmationPending(true);
+                    setTimeout(() => attempt(n + 1), RETRY_DELAY_MS);
+                } else {
+                    setConfirmationPending(false);
                 }
             } catch {
-                // Silent — the receipt card just doesn't render; the success message above still stands.
+                if (n < MAX_ATTEMPTS) {
+                    setConfirmationPending(true);
+                    setTimeout(() => attempt(n + 1), RETRY_DELAY_MS);
+                } else {
+                    setConfirmationPending(false);
+                }
             }
-        })();
+        };
+
+        attempt(1);
         return () => {
             cancelled = true;
         };
@@ -97,7 +127,18 @@ function SuccessContent() {
         setDownloadError(null);
         try {
             const res = await fetch(receiptDownloadUrl);
-            if (!res.ok) throw new Error(`Download failed (${res.status})`);
+            if (!res.ok) {
+                const body = await res.json().catch(() => null);
+                // A 404 here almost always means the payment isn't
+                // confirmed on our side yet (see the retry loop above) —
+                // surface the server's own message rather than a generic one.
+                throw new Error(
+                    body?.message ||
+                        (res.status === 404
+                            ? "Your payment is still being confirmed — please wait a moment and try again."
+                            : `Download failed (${res.status})`),
+                );
+            }
             const blob = await res.blob();
             const url = URL.createObjectURL(blob);
             const a = document.createElement("a");
@@ -109,7 +150,9 @@ function SuccessContent() {
             setTimeout(() => URL.revokeObjectURL(url), 2500);
         } catch (err) {
             console.error("Receipt download failed:", err);
-            setDownloadError("Couldn't download the receipt. Please try again.");
+            setDownloadError(
+                err instanceof Error ? err.message : "Couldn't download the receipt. Please try again.",
+            );
         } finally {
             setDownloading(false);
         }
@@ -186,6 +229,13 @@ function SuccessContent() {
                         (invoiceNumber ? `INV-${invoiceNumber}` : "WB-PAY")}
                 </span>
             </div>
+
+            {!confirmation && confirmationPending && (
+                <div className="mt-1 flex w-full max-w-[340px] items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3 text-[12.5px] text-[#9CA3AF]">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    Confirming your payment — the receipt will appear here in a moment.
+                </div>
+            )}
 
             {confirmation && (
                 <div className="mt-1 flex w-full max-w-[340px] flex-col gap-2.5 rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3.5 text-[13px]">
