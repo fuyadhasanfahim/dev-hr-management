@@ -318,7 +318,7 @@ function buildPrintHtml(r: Record<string, any>, ctx: ReceiptPdfContext): string 
     }
 
     /* ── Totals ───────────────────────────────────────────────────────────── */
-    .totals-wrap { display: flex; justify-content: space-between; align-items: flex-start; gap: 6mm; margin-top: 3.5mm; }
+    .totals-wrap { display: flex; justify-content: flex-end; margin-top: 3.5mm; }
     table.totals { width: 74mm; border-collapse: collapse; }
     table.totals td { padding: 4px 0; font-size: 9pt; }
     table.totals .sum-amt { text-align: right; white-space: nowrap; font-family: var(--font-mono); }
@@ -327,21 +327,18 @@ function buildPrintHtml(r: Record<string, any>, ctx: ReceiptPdfContext): string 
     }
 
     .balance-bar {
-      border-radius: 10px; padding: 3.5mm 6mm;
-      display: flex; flex-direction: column; gap: 3px;
+      margin-top: 4mm;
+      border-radius: 14px; padding: 5mm 7mm;
+      background: linear-gradient(135deg, #F7F3FF 0%, #ECE3FC 100%);
+      display: flex; align-items: center; justify-content: space-between; gap: 6mm;
       page-break-inside: avoid;
     }
-    .balance-bar.is-open  { background: var(--due-bg); border: 1px solid rgba(180,35,24,0.22); }
-    .balance-bar.is-clear { background: var(--ok-bg); border: 1px solid rgba(15,138,95,0.22); }
+    .balance-info { display: flex; flex-direction: column; gap: 3px; }
     .balance-k {
-      font-family: var(--font-mono); font-size: 8pt; font-weight: 600;
-      letter-spacing: 0.14em; text-transform: uppercase;
+      font-family: var(--font-mono); font-size: 7.5pt; font-weight: 700;
+      letter-spacing: 0.16em; text-transform: uppercase; color: var(--brand-mid);
     }
-    .balance-bar.is-open .balance-k  { color: var(--due); }
-    .balance-bar.is-clear .balance-k { color: var(--ok); }
-    .balance-v { font-family: var(--font-mono); font-weight: 700; font-size: 14pt; }
-    .balance-bar.is-open .balance-v  { color: var(--due); }
-    .balance-bar.is-clear .balance-v { color: var(--ok); }
+    .balance-v { font-family: var(--font-mono); font-weight: 800; font-size: 16pt; color: #2E1065; }
 
     /* ── Closing ──────────────────────────────────────────────────────────── */
     .closing { margin-top: 5mm; page-break-inside: avoid; }
@@ -405,13 +402,16 @@ function buildPrintHtml(r: Record<string, any>, ctx: ReceiptPdfContext): string 
     </table>
 
     <div class="totals-wrap">
-      <div class="balance-bar ${paidInFull ? 'is-clear' : 'is-open'}">
-        <span class="balance-k">${paidInFull ? 'Paid in Full' : 'Remaining Balance'}</span>
-        <span class="balance-v">${paidInFull ? esc(formatMoneyPdf(grandTotal, currency)) : esc(formatMoneyPdf(ctx.remaining, currency))}</span>
-      </div>
       <table class="totals">
         <tr class="grand"><td>${isVoid ? 'This Payment (Voided)' : 'This Payment'}</td><td class="sum-amt">${esc(formatMoneyPdf(r.amount, currency))}</td></tr>
       </table>
+    </div>
+
+    <div class="balance-bar">
+      <div class="balance-info">
+        <span class="balance-k">${paidInFull ? 'Paid in Full' : 'Remaining Balance'}</span>
+        <span class="balance-v">${paidInFull ? esc(formatMoneyPdf(grandTotal, currency)) : esc(formatMoneyPdf(ctx.remaining, currency))}</span>
+      </div>
     </div>
 
     <div class="closing">
