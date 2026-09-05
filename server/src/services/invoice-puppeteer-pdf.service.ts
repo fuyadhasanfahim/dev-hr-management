@@ -418,7 +418,7 @@ export function buildInvoiceHtml(inv: InvoiceData, ctx: InvoicePdfContext): stri
     }
 
     /* ── Totals ───────────────────────────────────────────────────────────── */
-    .totals-wrap { display: flex; justify-content: space-between; align-items: flex-end; gap: 6mm; margin-top: 3.5mm; }
+    .totals-wrap { display: flex; justify-content: space-between; align-items: flex-start; gap: 6mm; margin-top: 3.5mm; }
     table.totals { width: 74mm; border-collapse: collapse; }
     table.totals td { padding: 4px 0; font-size: 9pt; }
     table.totals .sum-amt { text-align: right; white-space: nowrap; font-family: var(--font-mono); }
@@ -431,7 +431,7 @@ export function buildInvoiceHtml(inv: InvoiceData, ctx: InvoicePdfContext): stri
 
     .balance-bar {
       border-radius: 10px; padding: 3.5mm 6mm;
-      display: flex; flex-direction: column; gap: 3px; align-self: flex-end;
+      display: flex; flex-direction: column; gap: 3px;
       page-break-inside: avoid;
     }
     .balance-bar.is-open  { background: var(--due-bg); border: 1px solid rgba(180,35,24,0.22); }
@@ -452,11 +452,15 @@ export function buildInvoiceHtml(inv: InvoiceData, ctx: InvoicePdfContext): stri
       margin-top: 4mm;
       border-left: 2px solid var(--brand-line);
       padding: 0.5mm 0 0.5mm 5mm;
+      display: flex; align-items: center; justify-content: space-between; gap: 6mm;
+    }
+    .pay-note-text {
       font-size: 8pt; color: var(--muted); line-height: 1.55;
-      max-width: 122mm;
+      max-width: 108mm;
     }
     .pay-btn {
-      display: inline-block; margin-top: 9px;
+      flex-shrink: 0;
+      display: inline-block;
       font-family: var(--font-sans); font-size: 8.5pt; font-weight: 700;
       letter-spacing: 0.02em; color: #fff; text-decoration: none;
       padding: 8px 20px; border-radius: 8px;
@@ -535,10 +539,12 @@ export function buildInvoiceHtml(inv: InvoiceData, ctx: InvoicePdfContext): stri
     </div>
 
     <div class="pay-note">
-      This invoice covers the services listed above under quotation
-      <strong>${esc(inv.quotationNumber || '—')}</strong>. Any payments already
-      recorded are reflected in the balance above.
-      ${payBtn ? `<div>${payBtn}</div>` : ''}
+      <div class="pay-note-text">
+        This invoice covers the services listed above under quotation
+        <strong>${esc(inv.quotationNumber || '—')}</strong>. Any payments already
+        recorded are reflected in the balance above.
+      </div>
+      ${payBtn}
     </div>
 
     <div class="closing">
@@ -612,10 +618,10 @@ async function renderPdf(
 
         await page.emulateMediaType('print');
 
-        // Anchor the signature block to the bottom of its page. Without this a
-        // spilled `.closing` floats alone at the top of the last page; here we
-        // measure where it lands and insert a spacer so it drops just above the
-        // running footer. A comfortably-fitting single-page invoice is left as-is.
+        // Anchor the signature block to the bottom of its page, just above the
+        // running footer — matching a standard printed invoice/bill form. We
+        // measure where `.closing` naturally lands and insert a spacer so it
+        // always sits right above the footer, whichever page it ends up on.
         await page.evaluate((contentHRaw: number) => {
             const g = globalThis as any;
             const el = g.document.querySelector('.closing');
@@ -625,10 +631,9 @@ async function renderPdf(
             const rect = el.getBoundingClientRect();
             const top = rect.top;
             const h = rect.height;
-            if (top + h <= contentH) return; // fits on the first page — leave it
             const posInPage = ((top % contentH) + contentH) % contentH;
             const spaceLeft = contentH - posInPage;
-            const CLEAR = 18;
+            const CLEAR = 24;
             const spacerH =
                 spaceLeft >= h + CLEAR
                     ? spaceLeft - h - CLEAR

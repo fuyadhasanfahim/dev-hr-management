@@ -9,11 +9,15 @@ import ClientModel from '../models/client.model.js';
 import QuotationModel from '../models/quotation.model.js';
 import { AppError } from '../utils/AppError.js';
 import { logger } from '../lib/logger.js';
+import {
+    buildEmbeddedFontCss,
+    extractBrandMark,
+} from './quotation-puppeteer-pdf.service.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-/** Matches the Quotation puppeteer PDF's money formatting exactly. */
+/** Matches the Invoice / Quotation puppeteer PDF's money formatting exactly. */
 function formatMoneyPdf(amount: number | null | undefined, currency?: string | null): string {
     const n = Number(amount || 0);
     const fractionDigits = 2;
@@ -100,6 +104,9 @@ const DEFAULT_COMPANY = {
     vat: 'VAT ID: Not Applicable — U.S. Entity',
 };
 
+const SIGNATORY_NAME = process.env.COMPANY_SIGNATORY_NAME || 'Md. Ashaduzzaman';
+const SIGNATORY_ROLE = process.env.COMPANY_SIGNATORY_ROLE || 'Founder & CEO';
+
 const PAYMENT_TYPE_LABELS: Record<string, string> = {
     full: 'Full Payment',
     partial: 'Partial Payment',
@@ -127,6 +134,10 @@ async function fetchImageAsDataUrl(url: string): Promise<string | null> {
 interface ReceiptPdfContext {
     logoSrc: string;
     signatureSrc: string;
+    /** Cropped brand icon for the page watermark (shared with the invoice/quotation PDFs). */
+    markSrc: string;
+    /** Inlined @font-face block (Inter / Geist Mono), shared with the invoice/quotation PDFs. */
+    fontCss: string;
     client: {
         contactName: string;
         companyName?: string;
@@ -145,29 +156,30 @@ function buildPrintHtml(r: Record<string, any>, ctx: ReceiptPdfContext): string 
     const grandTotal = ctx.totalPaidBefore + (isVoid ? 0 : r.amount) + ctx.remaining;
     const paymentDate = formatDatePdf(r.paymentDate);
     const paymentTypeLabel = PAYMENT_TYPE_LABELS[r.paymentType] || 'Payment';
+    const paidInFull = ctx.remaining <= 0.009;
 
-    const typeRow = `<tr class="pr-tr"><td>Payment Type</td><td class="pr-num">${esc(paymentTypeLabel)}</td></tr>`;
+    const typeRow = `<tr><td>Payment Type</td><td class="amt">${esc(paymentTypeLabel)}</td></tr>`;
     const stageRow = r.milestoneLabel
-        ? `<tr class="pr-tr"><td>Payment Stage</td><td class="pr-num">${esc(r.milestoneLabel)}</td></tr>`
+        ? `<tr><td>Payment Stage</td><td class="amt">${esc(r.milestoneLabel)}</td></tr>`
         : '';
     const methodRow = r.method
-        ? `<tr class="pr-tr"><td>Payment Method</td><td class="pr-num">${esc(r.method)}</td></tr>`
+        ? `<tr><td>Payment Method</td><td class="amt">${esc(r.method)}</td></tr>`
         : '';
     const noteRow = r.note
-        ? `<tr class="pr-tr"><td>Note</td><td class="pr-num">${esc(r.note)}</td></tr>`
+        ? `<tr><td>Note</td><td class="amt">${esc(r.note)}</td></tr>`
         : '';
-
-    const remainingRowLabel = ctx.remaining <= 0.009 ? 'Status' : 'Remaining Balance';
-    const remainingRowValue =
-        ctx.remaining <= 0.009 ? 'PAID IN FULL' : formatMoneyPdf(ctx.remaining, currency);
 
     const voidBanner = isVoid
         ? `<div class="void-banner">This receipt has been voided${r.voidReason ? ` — ${esc(r.voidReason)}` : ''}. It is kept for record purposes only and does not count toward the paid balance.</div>`
         : '';
 
     const signatureBlock = ctx.signatureSrc
-        ? `<img class="sig-img" src="${esc(ctx.signatureSrc)}" alt="" width="200" height="48" />`
+        ? `<img class="sig-img" src="${esc(ctx.signatureSrc)}" alt="" width="188" height="46" />`
         : `<div class="sig-img-spacer" aria-hidden="true"></div>`;
+
+    const watermark = ctx.markSrc
+        ? `<div class="page-watermark"><img src="${esc(ctx.markSrc)}" alt="" /></div>`
+        : '';
 
     return `<!DOCTYPE html>
 <html lang="en">
@@ -175,164 +187,245 @@ function buildPrintHtml(r: Record<string, any>, ctx: ReceiptPdfContext): string 
   <meta charset="utf-8" />
   <title>${esc(r.receiptNumber)}</title>
   <style>
+    ${ctx.fontCss}
+
     :root {
-      --violet-light: #A855F7;
-      --violet-deep: #4F46E5;
-      --accent-mid: #7c3aed;
-      --slate900: #0f172a;
-      --slate700: #334155;
-      --slate500: #64748b;
-      --slate300: #cbd5e1;
-      --slate100: #f1f5f9;
-      --slate50: #f8fafc;
+      --brand:      #4E12D4;
+      --brand-mid:  #7c3aed;
+      --brand-soft: #f4f0ff;
+      --brand-line: rgba(78, 18, 212, 0.16);
+
+      --ink:      #14101f;
+      --ink-2:    #3b3550;
+      --muted:    #6b6580;
+      --faint:    #9a94ac;
+      --line:     #ece9f2;
+      --surface:  #ffffff;
+      --panel:    #faf9fd;
+
+      --ok:   #0f8a5f;
+      --ok-bg:#e8f6ef;
+      --due:  #b42318;
+      --due-bg:#fdeceb;
+      --warn: #a15c07;
+      --warn-bg:#fdf3e3;
+
+      --font-sans: 'Inter', system-ui, -apple-system, 'Hind Siliguri', sans-serif;
+      --font-mono: 'Geist Mono', ui-monospace, 'JetBrains Mono', monospace;
     }
-    * { box-sizing: border-box; margin: 0; }
-    html, body { height: 100%; }
+
+    @page { size: A4; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body { background: var(--surface); }
     body {
-      font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      font-size: 13.5px;
-      line-height: 1.62;
-      color: var(--slate700);
-      background: #fff;
+      font-family: var(--font-sans);
+      color: var(--ink-2);
+      font-size: 9pt;
+      line-height: 1.44;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+      -webkit-font-smoothing: antialiased;
+      font-variant-numeric: tabular-nums;
     }
-    .page-pad {
-      padding: 0 3mm;
+    strong { font-weight: 600; color: var(--ink); }
+    a { color: var(--brand); text-decoration: none; }
+
+    /* Brand mark behind every page — same treatment as the invoice/quotation PDFs. */
+    .page-watermark {
+      position: fixed;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      width: 95mm;
+      opacity: 0.035;
+      z-index: 0;
+      pointer-events: none;
     }
-    .header-row { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
-    .logo-box { width: 152px; height: 52px; display: flex; align-items: center; justify-content: flex-start; flex-shrink: 0; }
-    .logo-box img { display: block; width: 148px; height: 48px; object-fit: contain; object-position: left center; }
-    .header-right { text-align: right; }
-    .h-title {
-      font-size: 28px; font-weight: 800; letter-spacing: 0.08em;
-      background: linear-gradient(180deg, var(--violet-light), var(--violet-deep));
-      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-      background-clip: text; color: var(--violet-deep);
+    .page-watermark img { width: 100%; height: auto; display: block; }
+
+    .sheet { position: relative; z-index: 1; }
+
+    /* ── Masthead ──────────────────────────────────────────────────────────── */
+    .masthead { display: flex; justify-content: space-between; align-items: flex-start; gap: 12mm; }
+    .brand-logo { height: 11mm; width: auto; object-fit: contain; object-position: left center; display: block; }
+    .doc-id { text-align: right; }
+    .doc-word {
+      font-size: 17pt; font-weight: 800; letter-spacing: -0.02em;
+      color: var(--ink); line-height: 1;
     }
-    .title-accent { height: 3px; width: 50px; margin: 8px 0 10px auto; border-radius: 2px; background: linear-gradient(90deg, var(--violet-light), var(--violet-deep)); }
-    .meta { font-size: 11.5px; color: var(--slate500); margin-bottom: 4px; line-height: 1.5; }
-    .meta strong { color: var(--slate900); font-weight: 700; }
-    .divider { height: 1px; background: var(--slate100); margin: 18px 0 20px; }
-    .billing { display: flex; justify-content: space-between; margin-bottom: 20px; }
-    .bill-col { width: 48%; }
-    .bill-col.r { text-align: right; }
-    .lbl { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.12em; color: var(--accent-mid); margin-bottom: 9px; }
-    .bill-name { font-size: 13.5px; font-weight: 700; color: var(--slate900); margin-bottom: 5px; line-height: 1.35; }
-    .bill-txt { font-size: 12px; color: var(--slate500); line-height: 1.58; margin-bottom: 4px; }
-    .sec {
-      font-size: 14.5px; font-weight: 800; color: var(--slate900);
-      letter-spacing: 0.1em; text-transform: uppercase; margin-top: 24px; margin-bottom: 11px;
-      page-break-after: avoid; break-after: avoid-page;
+    .doc-no {
+      font-family: var(--font-mono); font-size: 8.5pt; font-weight: 500;
+      letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted);
+      margin-top: 5px;
     }
-    .card { border: 1px solid var(--slate100); border-radius: 8px; padding: 14px 16px; background: #fff; margin-bottom: 8px; }
-    table.price-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-    table.price-table thead th.pricing-h {
-      text-align: left; padding: 13px 17px;
-      background: linear-gradient(90deg, var(--violet-light), var(--violet-deep));
-      color: #fff; font-size: 13px; font-weight: 800; letter-spacing: 0.07em; line-height: 1.35; border: none;
+    .doc-meta {
+      font-family: var(--font-mono); font-size: 8pt; color: var(--faint);
+      line-height: 1.7; margin-top: 7px;
     }
-    table.price-table .pr-tr td { padding: 11px 16px; border-top: 1px solid var(--slate100); vertical-align: baseline; line-height: 1.45; }
-    table.price-table .pr-num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
-    table.price-table .pr-tr.pr-this-payment td {
-      font-weight: 800; color: #059669; background: rgba(5, 150, 105, 0.06);
+    .doc-meta span { display: block; }
+    .doc-meta b { color: var(--ink-2); font-weight: 500; }
+
+    .status-tag {
+      display: inline-block; margin-top: 9px;
+      font-family: var(--font-mono); font-size: 7pt; font-weight: 600;
+      letter-spacing: 0.14em; text-transform: uppercase;
+      padding: 4px 9px; border-radius: 999px;
     }
-    table.price-table .pr-tr.pr-total td {
-      font-weight: 800; font-size: 16px; color: var(--slate900);
-      background: rgba(248, 250, 252, 0.95); padding-top: 14px; padding-bottom: 14px;
+    .status-tag.is-paid    { color: var(--ok);   background: var(--ok-bg); }
+    .status-tag.is-unpaid  { color: var(--due);  background: var(--due-bg); }
+
+    /* ── Hero: received by / received from ───────────────────────────────── */
+    .hero { display: flex; gap: 8mm; margin-top: 5mm; align-items: stretch; }
+    .hero-col {
+      flex: 1;
+      background: var(--panel); border: 1px solid var(--line);
+      border-radius: 10px; padding: 4mm 4.5mm;
     }
+    .eyebrow {
+      font-family: var(--font-mono); font-size: 7.5pt; font-weight: 600;
+      letter-spacing: 0.18em; text-transform: uppercase; color: var(--brand-mid);
+      margin-bottom: 6px;
+    }
+    .party-name { font-size: 11.5pt; font-weight: 700; color: var(--ink); line-height: 1.3; }
+    .party-line { font-size: 8.5pt; color: var(--muted); line-height: 1.5; margin-top: 1px; }
+
     .void-banner {
-      margin: 8px 0 18px; padding: 12px 16px; border-radius: 8px; font-size: 12px; font-weight: 700;
-      color: #b91c1c; background: #fef2f2; border: 1px solid #fecaca;
-    }
-    .pdf-tail { margin-top: 28px; padding-top: 28px; }
-    .sig-wrap { margin-top: 28px; page-break-inside: avoid; max-width: 320px; }
-    .sig-img { display: block; width: 200px; height: 48px; object-fit: contain; object-position: left bottom; margin-bottom: 6px; }
-    .sig-img-spacer { height: 40px; margin-bottom: 6px; }
-    .sig-line { border-bottom: 1px solid var(--slate900); margin-bottom: 8px; width: 100%; max-width: 260px; }
-    .sig-name { font-size: 13px; font-weight: 800; color: var(--slate900); line-height: 1.35; }
-    .sig-role { font-size: 11.5px; color: var(--slate500); margin-top: 5px; line-height: 1.5; }
-    .doc-footer {
-      margin-top: 32px; padding-top: 14px;
-      border-top: 1px solid var(--slate300); text-align: center;
+      margin-top: 4mm; border-radius: 10px; padding: 3mm 4.5mm;
+      background: var(--due-bg); border: 1px solid rgba(180,35,24,0.22);
+      font-size: 8pt; font-weight: 600; color: var(--due); line-height: 1.5;
       page-break-inside: avoid;
-      font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     }
-    .doc-footer-main { font-size: 10.5px; font-weight: 600; color: #334155; line-height: 1.5; }
-    .doc-footer a { color: #4F46E5; text-decoration: none; }
+
+    /* ── Payment summary ──────────────────────────────────────────────────── */
+    .section-title {
+      margin: 5mm 0 2.5mm;
+      font-size: 8pt; font-weight: 700; letter-spacing: 0.14em;
+      text-transform: uppercase; color: var(--ink);
+      font-family: var(--font-mono);
+    }
+    .project-title {
+      font-size: 12pt; font-weight: 700; color: var(--ink);
+      letter-spacing: -0.01em; margin-bottom: 3.5mm;
+    }
+
+    table.pay-details { width: 100%; border-collapse: collapse; }
+    table.pay-details td { padding: 6.5px 0; font-size: 9pt; border-bottom: 1px solid var(--line); vertical-align: baseline; }
+    table.pay-details td:first-child { color: var(--muted); }
+    table.pay-details tr:last-child td { border-bottom: none; }
+    table.pay-details td.amt {
+      text-align: right; white-space: nowrap;
+      font-family: var(--font-mono); font-weight: 500; color: var(--ink);
+    }
+
+    /* ── Totals ───────────────────────────────────────────────────────────── */
+    .totals-wrap { display: flex; justify-content: space-between; align-items: flex-start; gap: 6mm; margin-top: 3.5mm; }
+    table.totals { width: 74mm; border-collapse: collapse; }
+    table.totals td { padding: 4px 0; font-size: 9pt; }
+    table.totals .sum-amt { text-align: right; white-space: nowrap; font-family: var(--font-mono); }
+    table.totals .grand td {
+      color: var(--ink); font-weight: 700; font-size: 10.5pt;
+    }
+
+    .balance-bar {
+      border-radius: 10px; padding: 3.5mm 6mm;
+      display: flex; flex-direction: column; gap: 3px;
+      page-break-inside: avoid;
+    }
+    .balance-bar.is-open  { background: var(--due-bg); border: 1px solid rgba(180,35,24,0.22); }
+    .balance-bar.is-clear { background: var(--ok-bg); border: 1px solid rgba(15,138,95,0.22); }
+    .balance-k {
+      font-family: var(--font-mono); font-size: 8pt; font-weight: 600;
+      letter-spacing: 0.14em; text-transform: uppercase;
+    }
+    .balance-bar.is-open .balance-k  { color: var(--due); }
+    .balance-bar.is-clear .balance-k { color: var(--ok); }
+    .balance-v { font-family: var(--font-mono); font-weight: 700; font-size: 14pt; }
+    .balance-bar.is-open .balance-v  { color: var(--due); }
+    .balance-bar.is-clear .balance-v { color: var(--ok); }
+
+    /* ── Closing ──────────────────────────────────────────────────────────── */
+    .closing { margin-top: 5mm; page-break-inside: avoid; }
+    .sign-row { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 5mm; }
+    .sig-block { max-width: 70mm; }
+    .sig-img { display: block; width: 176px; height: 42px; object-fit: contain; object-position: left bottom; margin-bottom: 4px; }
+    .sig-img-spacer { height: 16px; margin-bottom: 4px; }
+    .sig-line { border-bottom: 1px solid var(--ink); width: 58mm; margin-bottom: 5px; }
+    .sig-name { font-size: 9pt; font-weight: 700; color: var(--ink); }
+    .sig-role { font-size: 7.5pt; color: var(--muted); margin-top: 1px; }
   </style>
 </head>
 <body>
-<div class="page-pad">
+  ${watermark}
+  <div class="sheet">
 
-  <div class="header-row">
-    <div class="logo-box">
-      <img src="${esc(ctx.logoSrc)}" alt="WebBriks" width="148" height="48" />
+    <div class="masthead">
+      <img class="brand-logo" src="${esc(ctx.logoSrc)}" alt="WebBriks" />
+      <div class="doc-id">
+        <div class="doc-word">Receipt</div>
+        <div class="doc-no">${esc(r.receiptNumber)}</div>
+        <div class="doc-meta">
+          <span>Date <b>${esc(paymentDate)}</b></span>
+          <span>Quotation <b>${esc(r.quotationNumber || '—')}</b></span>
+        </div>
+        <span class="status-tag ${isVoid ? 'is-unpaid' : 'is-paid'}">${isVoid ? 'Voided' : 'Payment Recorded'}</span>
+      </div>
     </div>
-    <div class="header-right">
-      <div class="h-title">RECEIPT</div>
-      <div class="title-accent"></div>
-      <div class="meta">Ref: <strong>${esc(r.receiptNumber)}</strong></div>
-      <div class="meta">Date: <strong>${esc(paymentDate)}</strong></div>
-      <div class="meta">Quotation: <strong>${esc(r.quotationNumber || '—')}</strong></div>
+
+    <div class="hero">
+      <div class="hero-col">
+        <div class="eyebrow">Received By</div>
+        <div class="party-name">${esc(DEFAULT_COMPANY.name)}</div>
+        <div class="party-line">${esc(DEFAULT_COMPANY.country)}</div>
+        <div class="party-line">${esc(DEFAULT_COMPANY.ein)}</div>
+        <div class="party-line">${esc(DEFAULT_COMPANY.vat)}</div>
+      </div>
+
+      <div class="hero-col">
+        <div class="eyebrow">Received From</div>
+        <div class="party-name">${esc(ctx.client.contactName)}</div>
+        ${ctx.client.companyName ? `<div class="party-line">${esc(ctx.client.companyName)}</div>` : ''}
+        ${ctx.client.address ? `<div class="party-line">${esc(ctx.client.address)}</div>` : ''}
+        ${ctx.client.email ? `<div class="party-line">${esc(ctx.client.email)}</div>` : ''}
+        ${ctx.client.phone ? `<div class="party-line">${esc(ctx.client.phone)}</div>` : ''}
+      </div>
     </div>
-  </div>
 
-  <div class="divider"></div>
+    ${voidBanner}
 
-  ${voidBanner}
+    <div class="section-title">Payment Summary</div>
+    <div class="project-title">Quotation ${esc(r.quotationNumber || '—')}</div>
 
-  <div class="billing">
-    <div class="bill-col">
-      <div class="lbl">Received By</div>
-      <div class="bill-name">${esc(DEFAULT_COMPANY.name)}</div>
-      <div class="bill-txt">${esc(DEFAULT_COMPANY.country)}</div>
-      <div class="bill-txt">${esc(DEFAULT_COMPANY.ein)}</div>
-      <div class="bill-txt">${esc(DEFAULT_COMPANY.vat)}</div>
-    </div>
-    <div class="bill-col r">
-      <div class="lbl">Received From</div>
-      <div class="bill-name">${esc(ctx.client.contactName)}</div>
-      ${ctx.client.companyName ? `<div class="bill-txt">${esc(ctx.client.companyName)}</div>` : ''}
-      ${ctx.client.address ? `<div class="bill-txt">${esc(ctx.client.address)}</div>` : ''}
-      ${ctx.client.email ? `<div class="bill-txt">${esc(ctx.client.email)}</div>` : ''}
-      ${ctx.client.phone ? `<div class="bill-txt">${esc(ctx.client.phone)}</div>` : ''}
-    </div>
-  </div>
-
-  <div class="sec">Payment Summary</div>
-  <div class="card" style="padding:0;">
-    <table class="price-table">
-      <thead>
-        <tr><th colspan="2" class="pricing-h pricing-th">Payment Details</th></tr>
-      </thead>
-      <tbody>
-        <tr class="pr-tr"><td>Total Contract Value</td><td class="pr-num">${formatMoneyPdf(grandTotal, currency)}</td></tr>
-        <tr class="pr-tr"><td>Previously Paid</td><td class="pr-num">${formatMoneyPdf(ctx.totalPaidBefore, currency)}</td></tr>
-        ${typeRow}
-        ${stageRow}
-        ${methodRow}
-        ${noteRow}
-        <tr class="pr-tr pr-this-payment"><td>${isVoid ? 'This Payment (Voided)' : 'This Payment'}</td><td class="pr-num">${formatMoneyPdf(r.amount, currency)}</td></tr>
-        <tr class="pr-tr pr-total"><td>${remainingRowLabel}</td><td class="pr-num">${remainingRowValue}</td></tr>
-      </tbody>
+    <table class="pay-details">
+      <tr><td>Total Contract Value</td><td class="amt">${esc(formatMoneyPdf(grandTotal, currency))}</td></tr>
+      <tr><td>Previously Paid</td><td class="amt">${esc(formatMoneyPdf(ctx.totalPaidBefore, currency))}</td></tr>
+      ${typeRow}
+      ${stageRow}
+      ${methodRow}
+      ${noteRow}
     </table>
-  </div>
 
-  <div class="pdf-tail">
-  <div class="sig-wrap">
-    ${signatureBlock}
-    <div class="sig-line"></div>
-    <div class="sig-name">Md. Ashaduzzaman</div>
-    <div class="sig-role">Founder &amp; CEO, ${esc(DEFAULT_COMPANY.name)}</div>
-  </div>
-
-  <footer class="doc-footer">
-    <div class="doc-footer-main">
-      &copy; ${new Date().getFullYear()} <a href="https://webbriks.com">WebBriks</a>. All rights reserved. &bull; <a href="mailto:info@webbriks.com">info@webbriks.com</a> &bull; <a href="https://webbriks.com">https://webbriks.com</a>
+    <div class="totals-wrap">
+      <div class="balance-bar ${paidInFull ? 'is-clear' : 'is-open'}">
+        <span class="balance-k">${paidInFull ? 'Paid in Full' : 'Remaining Balance'}</span>
+        <span class="balance-v">${paidInFull ? esc(formatMoneyPdf(grandTotal, currency)) : esc(formatMoneyPdf(ctx.remaining, currency))}</span>
+      </div>
+      <table class="totals">
+        <tr class="grand"><td>${isVoid ? 'This Payment (Voided)' : 'This Payment'}</td><td class="sum-amt">${esc(formatMoneyPdf(r.amount, currency))}</td></tr>
+      </table>
     </div>
-  </footer>
-  </div>
 
-</div>
+    <div class="closing">
+      <div class="sign-row">
+        <div class="sig-block">
+          ${signatureBlock}
+          <div class="sig-line"></div>
+          <div class="sig-name">${esc(SIGNATORY_NAME)}</div>
+          <div class="sig-role">${esc(SIGNATORY_ROLE)}, ${esc(DEFAULT_COMPANY.name)}</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
 </body>
 </html>`;
 }
@@ -395,22 +488,10 @@ export class ReceiptPuppeteerPdfService {
         };
 
         const signatureUrl = process.env.COMPANY_SIGNATURE_URL || DEFAULT_SIGNATURE;
-        let logoSrc =
+        const logoSrc =
             LOCAL_LOGO_BASE64 || (await fetchImageAsDataUrl(DEFAULT_LOGO)) || FALLBACK_PIXEL_PNG;
         const signatureSrc = (await fetchImageAsDataUrl(signatureUrl)) || '';
-
-        const html = buildPrintHtml(receiptForHtml, {
-            logoSrc,
-            signatureSrc,
-            client: {
-                contactName: client?.name || receipt.clientName,
-                address: client?.address || client?.officeAddress,
-                email: client?.emails?.[0],
-                phone: client?.phone,
-            },
-            totalPaidBefore,
-            remaining,
-        });
+        const fontCss = await buildEmbeddedFontCss().catch(() => '');
 
         let browser: Awaited<ReturnType<typeof puppeteer.launch>> | undefined;
         try {
@@ -418,7 +499,36 @@ export class ReceiptPuppeteerPdfService {
                 headless: true,
                 args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
             });
+
+            // Same cropped brand icon the invoice/quotation PDFs use for their watermark.
+            const markSrc = (await extractBrandMark(browser, logoSrc).catch(() => null)) || '';
+
+            const html = buildPrintHtml(receiptForHtml, {
+                logoSrc,
+                signatureSrc,
+                markSrc,
+                fontCss,
+                client: {
+                    contactName: client?.name || receipt.clientName,
+                    address: client?.address || client?.officeAddress,
+                    email: client?.emails?.[0],
+                    phone: client?.phone,
+                },
+                totalPaidBefore,
+                remaining,
+            });
+
             const page = await browser.newPage();
+
+            // PDF page geometry, in CSS px (1mm = 96/25.4 px) — same as the invoice PDF,
+            // so the two documents read as one consistent system.
+            const MM = 96 / 25.4;
+            const MARGIN_TOP_MM = 14;
+            const MARGIN_BOTTOM_MM = 20;
+            const CONTENT_W = Math.round((210 - 32) * MM);
+            const CONTENT_H = (297 - MARGIN_TOP_MM - MARGIN_BOTTOM_MM) * MM;
+            await page.setViewport({ width: CONTENT_W, height: Math.round(CONTENT_H) });
+
             await page.setContent(html, { waitUntil: 'load' });
             await page.evaluate(async () => {
                 const g = globalThis as unknown as {
@@ -440,10 +550,49 @@ export class ReceiptPuppeteerPdfService {
                 );
             });
 
+            await page.emulateMediaType('print');
+
+            // Anchor the signature block to the bottom of its page, just above the
+            // running footer — same treatment as the invoice PDF.
+            await page.evaluate((contentHRaw: number) => {
+                const g = globalThis as any;
+                const el = g.document.querySelector('.closing');
+                if (!el) return;
+                const contentH = contentHRaw * 0.985;
+                const rect = el.getBoundingClientRect();
+                const top = rect.top;
+                const h = rect.height;
+                const posInPage = ((top % contentH) + contentH) % contentH;
+                const spaceLeft = contentH - posInPage;
+                const CLEAR = 24;
+                const spacerH =
+                    spaceLeft >= h + CLEAR
+                        ? spaceLeft - h - CLEAR
+                        : spaceLeft + (contentH - h - CLEAR);
+                if (spacerH <= 0) return;
+                const spacer = g.document.createElement('div');
+                spacer.style.height = spacerH + 'px';
+                spacer.setAttribute('aria-hidden', 'true');
+                el.parentNode.insertBefore(spacer, el);
+            }, CONTENT_H);
+
+            const footerTemplate = `
+              <div style="width:100%;box-sizing:border-box;padding:8px 16mm 0;
+                          border-top:1px solid #e2ddef;
+                          font-family:-apple-system,'Segoe UI',Roboto,sans-serif;
+                          font-size:7pt;color:#9a94ac;
+                          display:flex;justify-content:space-between;align-items:center;">
+                <span>&copy; ${new Date().getFullYear()} WebBriks &nbsp;&middot;&nbsp; This receipt was generated automatically by the WebBriks system.</span>
+                <span>${esc(receipt.receiptNumber)} &nbsp;&middot;&nbsp; Page <span class="pageNumber"></span> / <span class="totalPages"></span></span>
+              </div>`;
+
             const pdf = await page.pdf({
                 format: 'A4',
                 printBackground: true,
-                margin: { top: '12mm', bottom: '14mm', left: '10mm', right: '10mm' },
+                displayHeaderFooter: true,
+                headerTemplate: '<div></div>',
+                footerTemplate,
+                margin: { top: '14mm', bottom: '20mm', left: '16mm', right: '16mm' },
             });
 
             const rn = String(receipt.receiptNumber || '').trim();
