@@ -9,9 +9,6 @@ import { BRAND_GRADIENT } from "@/lib/brand";
 
 function SuccessContent() {
     const searchParams = useSearchParams();
-    const [status, setStatus] = useState<"loading" | "success" | "error">(
-        "loading",
-    );
 
     // URL params
     const method = searchParams.get("method");
@@ -21,85 +18,31 @@ function SuccessContent() {
     const invoiceNumber = searchParams.get("invoice");
     const alreadyPaid = searchParams.get("already_paid") === "true";
 
+    // Purely a UX status page based on the redirect's own query params — no
+    // backend call here. The actual "did this get paid" record was already
+    // made server-side before we ever got redirected to this page: PayPal's
+    // capture-order call happens in PayPalWrapper's onApprove prior to the
+    // redirect, and Stripe's payment_intent confirmation lands via the
+    // signature-verified webhook independent of this page entirely. This
+    // page never itself records a payment.
+    const isSuccess =
+        alreadyPaid ||
+        redirectStatus === "succeeded" ||
+        (method === "paypal" && !!orderId);
+    const isFailure = !isSuccess && redirectStatus === "failed";
+    // Ambiguous only when someone opens /success directly with no params at
+    // all — resolved to "error" after a short grace period below.
+    const isAmbiguous = !isSuccess && !isFailure && redirectStatus === null && method === null;
+
+    const [status, setStatus] = useState<"loading" | "success" | "error">(() =>
+        isSuccess ? "success" : isFailure ? "error" : "loading",
+    );
+
     useEffect(() => {
-        const verifyAndConfirm = async () => {
-            if (alreadyPaid) {
-                setStatus("success");
-                return;
-            }
-
-            // 1. Client-side verification based on URL params
-            const isSuccess =
-                redirectStatus === "succeeded" ||
-                (method === "paypal" && orderId);
-
-            if (isSuccess) {
-                setStatus("success");
-
-                // 2. Synchronize with the backend to mark invoice as PAID
-                if (invoiceNumber) {
-                    try {
-                        console.log("Confirming payment with backend...");
-                        const confirmRes = await fetch(
-                            `${process.env.NEXT_PUBLIC_API_URL}/api/payments/confirm`,
-                            {
-                                method: "POST",
-                                headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({
-                                    invoiceNumber,
-                                    paymentIntentId: paymentIntent,
-                                    paypalOrderId:
-                                        method === "paypal"
-                                            ? orderId
-                                            : undefined,
-                                }),
-                            },
-                        );
-
-                        const confirmData = await confirmRes.json();
-
-                        if (confirmData.alreadyPaid) {
-                            console.log(
-                                "Invoice was already paid. No duplicate processing.",
-                            );
-                        } else if (!confirmRes.ok) {
-                            console.error(
-                                "Backend confirmation failed:",
-                                confirmData,
-                            );
-                        } else {
-                            console.log(
-                                "Backend record updated to PAID successfully.",
-                            );
-                        }
-                    } catch (err) {
-                        console.error(
-                            "Error connecting to backend for confirmation:",
-                            err,
-                        );
-                    }
-                }
-            } else if (redirectStatus === "failed") {
-                setStatus("error");
-            } else if (
-                redirectStatus === null &&
-                method === null &&
-                !alreadyPaid
-            ) {
-                // If someone just visits /success directly without params
-                setTimeout(() => setStatus("error"), 1500);
-            }
-        };
-
-        verifyAndConfirm();
-    }, [
-        redirectStatus,
-        method,
-        orderId,
-        invoiceNumber,
-        paymentIntent,
-        alreadyPaid,
-    ]);
+        if (!isAmbiguous) return;
+        const timer = setTimeout(() => setStatus("error"), 1500);
+        return () => clearTimeout(timer);
+    }, [isAmbiguous]);
 
     if (status === "loading") {
         return (

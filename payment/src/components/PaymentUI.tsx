@@ -1,7 +1,6 @@
 "use client";
 
 import { usePaymentStore } from "../store/paymentStore";
-import { format } from "date-fns";
 import { motion, AnimatePresence } from "framer-motion";
 import { CreditCard, Wallet, Lock, CheckCircle2, Loader2 } from "lucide-react";
 
@@ -9,22 +8,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 import PaymentWrapper from "./PaymentWrapper";
 import PayPalWrapper from "./PayPalWrapper";
+import type { InvoiceSnapshot } from "@/app/payment/[token]/page";
 
 interface PaymentUIProps {
-    invoice: {
-        invoiceNumber: string;
-        clientName: string;
-        clientAddress?: string;
-        companyName?: string;
-        totalAmount: number;
-        currency: string;
-        dueDate: string | Date;
-        totalOrders?: number;
-        totalImages?: number;
-        dateFrom?: string | Date;
-        dateTo?: string | Date;
-        [key: string]: unknown;
-    };
+    invoice: InvoiceSnapshot;
+    /** The single-use payment link token — every backend call is scoped to this, never a raw amount. */
+    token: string;
 }
 
 const trustPoints = [
@@ -33,26 +22,13 @@ const trustPoints = [
     "A receipt is emailed to you the moment payment clears.",
 ];
 
-export default function PaymentUI({ invoice }: PaymentUIProps) {
+export default function PaymentUI({ invoice, token }: PaymentUIProps) {
     const { activeMethod, setMethod, isProcessing } = usePaymentStore();
 
     const formattedTotal = new Intl.NumberFormat("en-US", {
         style: "currency",
-        currency: invoice.currency || "USD",
-    }).format(invoice.totalAmount);
-
-    const address =
-        invoice.clientAddress && invoice.clientAddress !== "N/A"
-            ? invoice.clientAddress
-            : "—";
-
-    const servicePeriod =
-        invoice.dateFrom && invoice.dateTo
-            ? `${format(new Date(invoice.dateFrom), "MMM d")} – ${format(
-                  new Date(invoice.dateTo),
-                  "MMM d, yyyy",
-              )}`
-            : "—";
+        currency: (invoice.currency || "USD").toUpperCase(),
+    }).format(invoice.amountDue);
 
     return (
         <motion.div
@@ -74,7 +50,7 @@ export default function PaymentUI({ invoice }: PaymentUIProps) {
                     Invoice{" "}
                     <span className="text-white">#{invoice.invoiceNumber}</span>{" "}
                     for{" "}
-                    <span className="text-white">{invoice.clientName}</span>
+                    <span className="text-white">{invoice.client.name}</span>
                 </p>
 
                 <div className="mt-8 rounded-2xl border border-white/10 bg-white/[0.02] p-6">
@@ -93,31 +69,46 @@ export default function PaymentUI({ invoice }: PaymentUIProps) {
                         <div className="flex items-start justify-between gap-4">
                             <dt className="text-[#9CA3AF]">Billed to</dt>
                             <dd className="max-w-[60%] text-right text-[#D1D5DB]">
-                                {invoice.clientName}
+                                {invoice.client.name}
                             </dd>
                         </div>
                         <div className="flex items-start justify-between gap-4">
-                            <dt className="text-[#9CA3AF]">Address</dt>
+                            <dt className="text-[#9CA3AF]">Project</dt>
                             <dd className="max-w-[60%] text-right text-[#D1D5DB]">
-                                {address}
+                                {invoice.projectTitle}
                             </dd>
                         </div>
-                        <div className="flex items-start justify-between gap-4">
-                            <dt className="text-[#9CA3AF]">Service period</dt>
-                            <dd className="text-right text-[#D1D5DB]">
-                                {servicePeriod}
-                            </dd>
-                        </div>
-                        <div className="flex items-start justify-between gap-4">
-                            <dt className="text-[#9CA3AF]">Due date</dt>
-                            <dd className="text-right text-[#D1D5DB]">
-                                {format(
-                                    new Date(invoice.dueDate),
-                                    "MMM d, yyyy",
-                                )}
-                            </dd>
-                        </div>
+                        {invoice.quotationNumber && (
+                            <div className="flex items-start justify-between gap-4">
+                                <dt className="text-[#9CA3AF]">Quotation</dt>
+                                <dd className="text-right text-[#D1D5DB]">
+                                    {invoice.quotationNumber}
+                                </dd>
+                            </div>
+                        )}
                     </dl>
+
+                    {invoice.lines.length > 0 && (
+                        <>
+                            <div className="my-5 h-px w-full bg-white/10" />
+                            <dl className="flex flex-col gap-2.5 text-[12.5px]">
+                                {invoice.lines.map((line, i) => (
+                                    <div
+                                        key={`${line.label}-${i}`}
+                                        className="flex items-start justify-between gap-4"
+                                    >
+                                        <dt className="text-[#9CA3AF]">{line.label}</dt>
+                                        <dd className="text-right text-[#D1D5DB]">
+                                            {new Intl.NumberFormat("en-US", {
+                                                style: "currency",
+                                                currency: (invoice.currency || "USD").toUpperCase(),
+                                            }).format(line.amount)}
+                                        </dd>
+                                    </div>
+                                ))}
+                            </dl>
+                        </>
+                    )}
 
                     <div className="my-5 h-px w-full bg-white/10" />
 
@@ -236,7 +227,7 @@ export default function PaymentUI({ invoice }: PaymentUIProps) {
                                         PayPal
                                     </span>
                                     <span className="text-[11px] text-[#9CA3AF]">
-                                        Redirect to PayPal to pay
+                                        Pay with your PayPal account
                                     </span>
                                 </span>
                                 <Wallet className="h-[18px] w-[18px] text-[#9CA3AF]" />
@@ -251,9 +242,9 @@ export default function PaymentUI({ invoice }: PaymentUIProps) {
                         >
                             <div className="animate-in fade-in slide-in-from-top-1 duration-500">
                                 <PaymentWrapper
+                                    token={token}
                                     invoiceNumber={invoice.invoiceNumber}
-                                    clientName={invoice.clientName}
-                                    amount={invoice.totalAmount}
+                                    amount={invoice.amountDue}
                                     currency={invoice.currency}
                                 />
                             </div>
@@ -266,13 +257,13 @@ export default function PaymentUI({ invoice }: PaymentUIProps) {
                             <div className="animate-in fade-in slide-in-from-top-1 duration-500">
                                 <div className="rounded-xl border border-white/10 bg-white/[0.02] p-6">
                                     <p className="mb-5 text-center text-[13px] leading-relaxed text-[#9CA3AF]">
-                                        You&apos;ll be redirected to PayPal to
-                                        securely complete your payment, then
-                                        returned here.
+                                        Complete your payment securely with
+                                        PayPal below.
                                     </p>
                                     <div className="mx-auto w-full max-w-xs">
                                         <PayPalWrapper
-                                            amount={invoice.totalAmount}
+                                            token={token}
+                                            amount={invoice.amountDue}
                                             currency={invoice.currency}
                                             invoiceNumber={invoice.invoiceNumber}
                                         />

@@ -6,13 +6,26 @@ import { useRouter } from "next/navigation";
 import { usePaymentStore } from "../store/paymentStore";
 
 interface PayPalWrapperProps {
+    /** The single-use payment link token — every call below is scoped to this. */
+    token: string;
     amount: number;
     currency: string;
     invoiceNumber: string;
 }
 
+/**
+ * Both `createOrder` and `onApprove` below call OUR backend
+ * (`/api/payments/paypal/create-order` and `/api/payments/paypal/capture-order`)
+ * instead of the PayPal SDK's own `actions.order.create`/`actions.order.capture`.
+ * That's deliberate: the SDK's client-side create/capture would let the
+ * browser dictate the charged amount and would never touch our Receipt
+ * ledger at all. Routing both through our server means the amount always
+ * comes from `payment.service.ts`'s live-recomputed amount due, and the
+ * capture is the same server-to-server PayPal API call our webhook-equivalent
+ * relies on for Stripe.
+ */
 export default function PayPalWrapper({
-    amount,
+    token,
     currency,
     invoiceNumber,
 }: PayPalWrapperProps) {
@@ -20,9 +33,8 @@ export default function PayPalWrapper({
     const router = useRouter();
 
     const initialOptions = {
-        // Fallback to test ID if env variable is missing
-        clientId: process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID || "test",
-        currency: currency.toUpperCase() || "USD",
+        clientId: process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID || "",
+        currency: (currency || "USD").toUpperCase(),
         intent: "capture",
         components: "buttons",
         "disable-funding": "paylater",
@@ -40,38 +52,60 @@ export default function PayPalWrapper({
                 <PayPalButtons
                     fundingSource="paypal"
                     style={{ layout: "vertical", shape: "rect", color: "gold" }}
-                    createOrder={(data, actions) => {
+                    createOrder={async () => {
                         setProcessing(true);
-                        return actions.order.create({
-                            intent: "CAPTURE",
-                            purchase_units: [
-                                {
-                                    reference_id: invoiceNumber,
-                                    amount: {
-                                        currency_code:
-                                            currency.toUpperCase() || "USD",
-                                        value: amount.toFixed(2),
-                                    },
-                                    description: `Invoice #${invoiceNumber}`,
-                                },
-                            ],
-                        });
+                        setError(null);
+                        const res = await fetch(
+                            `${process.env.NEXT_PUBLIC_API_URL}/api/payments/paypal/create-order`,
+                            {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ token }),
+                            },
+                        );
+                        const data = await res.json();
+                        if (!res.ok || !data?.success) {
+                            setProcessing(false);
+                            setError(
+                                data?.message ||
+                                    "Could not start the PayPal payment.",
+                            );
+                            throw new Error(data?.message || "create-order failed");
+                        }
+                        return data.data.orderId as string;
                     }}
-                    onApprove={async (data, actions) => {
+                    onApprove={async (data) => {
                         try {
-                            if (!actions.order) return;
-                            const details = await actions.order.capture();
+                            const res = await fetch(
+                                `${process.env.NEXT_PUBLIC_API_URL}/api/payments/paypal/capture-order`,
+                                {
+                                    method: "POST",
+                                    headers: { "Content-Type": "application/json" },
+                                    body: JSON.stringify({
+                                        token,
+                                        paypalOrderId: data.orderID,
+                                    }),
+                                },
+                            );
+                            const body = await res.json();
+                            if (!res.ok || !body?.success) {
+                                setError(
+                                    body?.message ||
+                                        "There was an issue completing your PayPal payment.",
+                                );
+                                setProcessing(false);
+                                return;
+                            }
 
-                            // Redirect to success page which will handle the
-                            // single /confirm call to the backend for verification
                             router.push(
-                                `/success?method=paypal&id=${details.id}&invoice=${invoiceNumber}`,
+                                `/success?method=paypal&id=${data.orderID}&invoice=${invoiceNumber}`,
                             );
                         } catch (err) {
                             setError(
                                 "There was an issue capturing your PayPal payment.",
                             );
-                            console.error("PayPal Capture Error:", err);
+                            console.error("PayPal capture error:", err);
+                            setProcessing(false);
                         }
                     }}
                     onError={(err) => {
@@ -79,6 +113,7 @@ export default function PayPalWrapper({
                             "PayPal encountered an error. Please try again or use a card.",
                         );
                         console.error("PayPal Script Error:", err);
+                        setProcessing(false);
                     }}
                     onCancel={() => {
                         setProcessing(false);

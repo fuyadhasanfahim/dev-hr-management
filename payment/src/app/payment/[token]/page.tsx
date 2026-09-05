@@ -2,43 +2,55 @@ import { redirect } from "next/navigation";
 import PaymentUI from "@/components/PaymentUI";
 
 /**
- * Pay page.
+ * Pay page — fetches the invoice snapshot from the dev-hr-management server:
  *
- * DESIGN COPIED from hr-management/payment. The old version read the invoice
- * straight out of MongoDB (inline Mongoose model + token decrypt). Per the new
- * architecture this app never touches the DB — it fetches the invoice snapshot
- * from the dev-hr-management server:
+ *   GET {NEXT_PUBLIC_API_URL}/api/payments/invoice/:token
  *
- *   GET {NEXT_PUBLIC_API_URL}/payments/invoice/:token
- *
- * That endpoint does not exist yet — build it on the server side. Until then
- * this page just renders the "invalid link" fallback (redirect to "/").
+ * The token itself IS the auth for this page; there is no session. The
+ * server validates it (signature, expiry, single-use, live amount-due
+ * recompute) and returns 410/409 for a dead link — this page just reacts to
+ * that rather than doing any of its own trust decisions.
  */
 
-type InvoiceSnapshot = {
+export interface InvoiceSnapshot {
     invoiceNumber: string;
-    clientName: string;
-    clientAddress?: string;
-    companyName?: string;
-    totalAmount: number;
+    quotationNumber: string;
+    projectTitle: string;
     currency: string;
-    dueDate: string;
-    paymentStatus?: string;
-    [key: string]: unknown;
-};
+    amountDue: number;
+    client: { name: string; email?: string };
+    lines: Array<{ label: string; sublabel?: string; amount: number }>;
+}
 
-async function fetchInvoice(token: string): Promise<InvoiceSnapshot | null> {
+type FetchResult =
+    | { kind: "ok"; invoice: InvoiceSnapshot }
+    | { kind: "already_paid" }
+    | { kind: "invalid" };
+
+async function fetchInvoice(token: string): Promise<FetchResult> {
     const base = process.env.NEXT_PUBLIC_API_URL;
-    if (!base) return null;
+    if (!base) return { kind: "invalid" };
+
     try {
         const res = await fetch(
-            `${base}/payments/invoice/${encodeURIComponent(token)}`,
+            `${base}/api/payments/invoice/${encodeURIComponent(token)}`,
             { cache: "no-store" },
         );
-        if (!res.ok) return null;
-        return (await res.json()) as InvoiceSnapshot;
+        const body = await res.json().catch(() => null);
+
+        if (res.ok && body?.success) {
+            return { kind: "ok", invoice: body.data as InvoiceSnapshot };
+        }
+
+        // The server reports "already paid in full" as 409 — treat that as
+        // a success-page redirect rather than a dead link.
+        if (res.status === 409) {
+            return { kind: "already_paid" };
+        }
+
+        return { kind: "invalid" };
     } catch {
-        return null;
+        return { kind: "invalid" };
     }
 }
 
@@ -62,13 +74,14 @@ export default async function PaymentPage({
 
     if (!token) redirect("/");
 
-    const invoice = await fetchInvoice(token);
+    const result = await fetchInvoice(token);
 
-    if (!invoice) redirect("/");
-
-    if (invoice.paymentStatus?.toLowerCase() === "paid") {
-        redirect(`/success?already_paid=true&invoice=${invoice.invoiceNumber}`);
+    if (result.kind === "already_paid") {
+        redirect(`/success?already_paid=true`);
+    }
+    if (result.kind === "invalid") {
+        redirect("/");
     }
 
-    return <PaymentUI invoice={JSON.parse(JSON.stringify(invoice))} />;
+    return <PaymentUI invoice={result.invoice} token={token} />;
 }

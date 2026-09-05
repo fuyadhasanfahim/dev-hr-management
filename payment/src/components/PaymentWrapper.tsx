@@ -57,13 +57,14 @@ const appearance: StripeElementsOptions["appearance"] = {
 };
 
 export default function PaymentWrapper({
+    token,
     invoiceNumber,
-    clientName,
     amount,
     currency,
 }: {
+    /** The single-use payment link token — the ONLY thing this call sends besides itself; the server derives the charge amount on its own. */
+    token: string;
     invoiceNumber: string;
-    clientName: string;
     amount: number;
     currency: string;
 }) {
@@ -73,46 +74,48 @@ export default function PaymentWrapper({
 
     const formattedTotal = new Intl.NumberFormat("en-US", {
         style: "currency",
-        currency: currency || "USD",
+        currency: (currency || "USD").toUpperCase(),
     }).format(amount);
 
     useEffect(() => {
-        // Fetch the PaymentIntent client secret from the HR server
+        let cancelled = false;
+
         const fetchClientSecret = async () => {
             try {
                 const res = await fetch(
-                    `${process.env.NEXT_PUBLIC_API_URL!}/api/payments/create-intent`,
+                    `${process.env.NEXT_PUBLIC_API_URL}/api/payments/stripe/create-intent`,
                     {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({
-                            invoiceNumber,
-                            clientName,
-                            amount,
-                            currency,
-                        }),
+                        body: JSON.stringify({ token }),
                     },
                 );
 
                 const data = await res.json();
+                if (cancelled) return;
 
-                if (res.ok && data.clientSecret) {
-                    setClientSecret(data.clientSecret);
+                if (res.ok && data?.success) {
+                    setClientSecret(data.data.clientSecret);
                 } else {
                     setError(
-                        data.error || "Failed to initialize payment session",
+                        data?.message || "Failed to initialize payment session",
                     );
                 }
             } catch (err: unknown) {
                 console.error("PaymentIntent initialization error:", err);
-                setError("Network error connecting to payment gateway.");
+                if (!cancelled) {
+                    setError("Network error connecting to payment gateway.");
+                }
             } finally {
-                setLoading(false);
+                if (!cancelled) setLoading(false);
             }
         };
 
         fetchClientSecret();
-    }, [invoiceNumber, clientName, amount, currency]);
+        return () => {
+            cancelled = true;
+        };
+    }, [token]);
 
     if (loading) {
         return (
