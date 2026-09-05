@@ -133,6 +133,8 @@ const envConfig = {
     // feature and degrade gracefully (route returns 503) when absent.
     payment_token_secret: process.env.PAYMENT_TOKEN_SECRET!,
     payment_client_url: process.env.PAYMENT_CLIENT_URL || '',
+    /** Comma-separated recipients for the online-payment admin notification email. Falls back to SMTP_USER if unset. */
+    payment_admin_emails: process.env.PAYMENT_ADMIN_EMAILS || '',
     stripe_secret_key: process.env.STRIPE_SECRET_KEY || '',
     stripe_publishable_key: process.env.STRIPE_PUBLISHABLE_KEY || '',
     stripe_webhook_secret: process.env.STRIPE_WEBHOOK_SECRET || '',

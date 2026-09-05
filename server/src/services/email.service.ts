@@ -336,10 +336,14 @@ const sendReceiptEmail = async (data: SendReceiptEmailData) => {
     }
 };
 
-// TODO: replace with a real admin distribution list (or envConfig.smtp_user)
-// before this goes live for real client payments — hardcoded per explicit
-// instruction while the online-payment flow is still being tested.
-const ADMIN_PAYMENT_NOTIFICATION_EMAIL = 'fuyadhasanfahim179@gmail.com';
+/** Comma-separated in PAYMENT_ADMIN_EMAILS — falls back to SMTP_USER's mailbox if unset. */
+function getAdminPaymentRecipients(): string[] {
+    const raw = envConfig.payment_admin_emails || envConfig.smtp_user || '';
+    return raw
+        .split(',')
+        .map((e) => e.trim())
+        .filter(Boolean);
+}
 
 interface SendAdminPaymentReceiptData {
     clientName: string;
@@ -352,6 +356,12 @@ interface SendAdminPaymentReceiptData {
 }
 
 const sendAdminPaymentReceiptEmail = async (data: SendAdminPaymentReceiptData) => {
+    const recipients = getAdminPaymentRecipients();
+    if (recipients.length === 0) {
+        console.warn('[email] admin payment receipt skipped — no PAYMENT_ADMIN_EMAILS/SMTP_USER configured');
+        return null;
+    }
+
     try {
         const emailHtml = await render(
             React.createElement(PaymentReceiptEmail, {
@@ -367,14 +377,14 @@ const sendAdminPaymentReceiptEmail = async (data: SendAdminPaymentReceiptData) =
 
         const mailOptions = {
             from: 'Payments | WebBriks',
-            to: ADMIN_PAYMENT_NOTIFICATION_EMAIL,
+            to: recipients,
             subject: `Online payment received — ${data.amountFormatted} (${data.projectTitle})`,
             html: emailHtml,
         };
 
         const info = await transporter.sendMail(mailOptions);
         console.log('[email] admin payment receipt sent', {
-            to: ADMIN_PAYMENT_NOTIFICATION_EMAIL,
+            to: recipients,
             messageId: (info as any)?.messageId,
             accepted: (info as any)?.accepted,
         });
