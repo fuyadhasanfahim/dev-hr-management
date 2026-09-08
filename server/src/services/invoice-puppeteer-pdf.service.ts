@@ -701,8 +701,6 @@ export function buildInvoiceHtml(inv: InvoiceData, ctx: InvoicePdfContext): stri
         <div class="party-name">${esc(inv.client.contactName)}</div>
         ${inv.client.companyName ? `<div class="party-line">${esc(inv.client.companyName)}</div>` : ''}
         ${inv.client.address ? `<div class="party-line">${esc(inv.client.address)}</div>` : ''}
-        ${inv.client.email ? `<div class="party-line">${esc(inv.client.email)}</div>` : ''}
-        ${inv.client.phone ? `<div class="party-line">${esc(inv.client.phone)}</div>` : ''}
       </div>
     </div>
 
