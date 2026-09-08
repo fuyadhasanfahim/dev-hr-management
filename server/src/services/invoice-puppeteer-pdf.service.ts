@@ -207,6 +207,17 @@ export function isUpfrontBillingCycle(cycle: unknown): boolean {
     return c === '' || UPFRONT_BILLING_CYCLES.has(c);
 }
 
+/** Maps a stored currency (ISO code or a legacy display symbol) to an ISO 4217
+ *  code. `formatMoneyPdf` already tolerates symbols, but the Receipt ledger,
+ *  payment page and gateway helpers are all cleaner with a canonical code. */
+export function normalizeCurrencyCode(currency: unknown): string {
+    const raw = String(currency ?? '').trim();
+    const key = raw.toLowerCase();
+    if (key === '$' || key === 'usd') return 'USD';
+    if (key === '৳' || key === 'tk' || key === 'bdt' || key === 'tk.') return 'BDT';
+    return /^[a-z]{3}$/.test(key) ? key.toUpperCase() : raw || 'BDT';
+}
+
 /** Upfront amount for one service: basePrice + upfront line items only. */
 export function upfrontAmountFromService(svc: Record<string, any>): number {
     const base = Number(svc?.basePrice) || 0;
@@ -905,7 +916,7 @@ export class InvoicePuppeteerPdfService {
         // stale `snap.totals` — see deriveInvoiceTotals().
         const totals = deriveInvoiceTotals(snap, Number(order.totalPrice) || 0);
 
-        const currency = snap.currency || order.currency || 'BDT';
+        const currency = normalizeCurrencyCode(snap.currency || order.currency);
         const client = await ClientModel.findById(order.clientId).lean();
         const ledger = await attachReceiptLedger(order.quotationGroupId, Number(totals.grandTotal) || 0);
 
@@ -969,7 +980,7 @@ export class InvoicePuppeteerPdfService {
             { services, totals: qAny.totals, grandTotal: qAny.totals?.grandTotal },
         );
 
-        const currency = (q as Record<string, any>).currency || 'BDT';
+        const currency = normalizeCurrencyCode((q as Record<string, any>).currency);
         const client = (q as Record<string, any>).clientId as Record<string, any> | null;
         const ledger = await attachReceiptLedger(
             (q as Record<string, any>).quotationGroupId,

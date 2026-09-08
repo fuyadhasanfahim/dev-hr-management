@@ -125,9 +125,10 @@ const serviceMetaData: Record<string, { icon: any; description: string }> = {
     },
 };
 
-// Helper to get currency symbol
+// Helper to get currency symbol — accepts the readable label ("US Dollar (USD)"),
+// an ISO code ("USD" / "BDT"), or a legacy stored symbol ("$" / "৳").
 function getCurrencySymbol(currencyName: string) {
-    if (currencyName.includes("USD")) return "$";
+    if (currencyName.includes("USD") || currencyName === "$") return "$";
     return "৳";
 }
 
@@ -1036,7 +1037,9 @@ Please review the details below. Should you have any questions or require custom
         if (initialData && !hasLoadedRef.current) {
             hasLoadedRef.current = true;
 
-            if (initialData.currency === "$") {
+            // Accept both the current ISO codes ("USD" / "BDT") and the legacy
+            // stored symbols ("$" / "৳").
+            if (initialData.currency === "$" || initialData.currency === "USD") {
                 setSelectedCurrency("US Dollar (USD)");
             } else {
                 setSelectedCurrency("Bangladeshi Taka (BDT)");
@@ -1521,7 +1524,9 @@ Please review the details below. Should you have any questions or require custom
         const payload = {
             serviceType: primaryServiceType,
             clientId: selectedClient,
-            currency: selectedCurrency === "US Dollar (USD)" ? "$" : "৳",
+            // Store ISO 4217 codes, not display symbols — the invoice PDF,
+            // payment page and gateway helpers all key off these.
+            currency: selectedCurrency === "US Dollar (USD)" ? "USD" : "BDT",
             company: initialData?.company || {
                 name: "WebBriks",
                 address: "115 Senpara Parbata, Mirpur, Dhaka 1216, Bangladesh.",
