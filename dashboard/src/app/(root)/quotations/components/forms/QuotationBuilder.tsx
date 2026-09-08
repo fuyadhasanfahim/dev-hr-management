@@ -1469,6 +1469,13 @@ Please review the details below. Should you have any questions or require custom
         }
 
         if (selectedServices.includes("Marketing")) {
+            // Prices typed on Campaign Scope & Deliverables nodes are an upfront
+            // setup fee — roll them into basePrice exactly like the web-dev
+            // feature tree does above. Without this they only ever survive as
+            // text inside scopeItems ("… - 200") and never reach the totals,
+            // so the invoice grand total / balance due / Pay Now all read zero.
+            const marketingFeaturesTotal = calculateFeatureTreeTotal(marketingFeatures);
+
             const lineItems: any[] = marketingPricing.map(i => ({
                 title: i.name,
                 description: i.description,
@@ -1491,6 +1498,7 @@ Please review the details below. Should you have any questions or require custom
                 scopeDescription: "Digital marketing and advertising campaign services.",
                 scopeItems: flattenedMarketing,
                 lineItems: lineItems,
+                basePrice: marketingFeaturesTotal,
                 discount: discountPercentage,
                 taxRate: taxPercentage,
             });

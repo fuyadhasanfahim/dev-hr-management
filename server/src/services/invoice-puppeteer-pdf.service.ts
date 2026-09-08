@@ -158,6 +158,8 @@ interface InvoiceData {
         phone?: string;
     };
     lines: InvoiceLine[];
+    /** Ongoing charges (monthly/yearly) — billed separately, not in the total. */
+    recurring: RecurringLine[];
     subtotal: number;
     discountAmount: number;
     taxAmount: number;
@@ -188,6 +190,43 @@ export function toInvoiceNumber(quotationNumber?: string | null): string {
     return `INV-${new Date().getFullYear()}-DRAFT`;
 }
 
+/** Billing cycles that are paid upfront (once, or per delivered unit). Kept in
+ *  sync with the quotation builder's `isUpfrontBillingCycle`
+ *  (server/src/types/quotation.type.ts) — monthly / yearly are recurring and
+ *  never feed the one-off invoice total. */
+const UPFRONT_BILLING_CYCLES = new Set([
+    'one-time',
+    'per-image',
+    'per-video',
+    'per-second',
+    'per-10s',
+]);
+
+export function isUpfrontBillingCycle(cycle: unknown): boolean {
+    const c = String(cycle ?? 'one-time').trim().toLowerCase();
+    return c === '' || UPFRONT_BILLING_CYCLES.has(c);
+}
+
+/** Upfront amount for one service: basePrice + upfront line items only. */
+export function upfrontAmountFromService(svc: Record<string, any>): number {
+    const base = Number(svc?.basePrice) || 0;
+    const items = Array.isArray(svc?.lineItems) ? svc.lineItems : [];
+    const itemsTotal = items.reduce(
+        (t: number, li: Record<string, any>) =>
+            isUpfrontBillingCycle(li?.billingCycle)
+                ? t + (Number(li?.price) || 0) * (Number(li?.quantity) || 1)
+                : t,
+        0,
+    );
+    return base + itemsTotal;
+}
+
+/**
+ * @deprecated Sums every line item regardless of billing cycle, so it
+ * disagrees with the quotation builder's totals (which exclude recurring
+ * charges). Use {@link upfrontAmountFromService}. Kept only for callers that
+ * still import it by name.
+ */
 export function lineAmountFromService(svc: Record<string, any>): number {
     const base = Number(svc?.basePrice) || 0;
     const items = Array.isArray(svc?.lineItems) ? svc.lineItems : [];
@@ -197,6 +236,83 @@ export function lineAmountFromService(svc: Record<string, any>): number {
         0,
     );
     return base + itemsTotal;
+}
+
+export interface RecurringLine {
+    label: string;
+    /** normalised, e.g. 'monthly' | 'yearly' */
+    cycle: string;
+    amount: number;
+}
+
+/** Recurring (non-upfront) line items pulled out of a snapshot's services. */
+export function recurringLinesFromServices(services: Record<string, any>[]): RecurringLine[] {
+    const out: RecurringLine[] = [];
+    for (const s of Array.isArray(services) ? services : []) {
+        const items = Array.isArray(s?.lineItems) ? s.lineItems : [];
+        for (const li of items) {
+            if (isUpfrontBillingCycle(li?.billingCycle)) continue;
+            out.push({
+                label: String(li?.title || li?.description || 'Recurring charge'),
+                cycle: String(li?.billingCycle || 'monthly').trim().toLowerCase(),
+                amount: (Number(li?.price) || 0) * (Number(li?.quantity) || 1),
+            });
+        }
+    }
+    return out;
+}
+
+export interface DerivedInvoiceTotals {
+    subtotal: number;
+    discountAmount: number;
+    taxAmount: number;
+    grandTotal: number;
+}
+
+/**
+ * Re-derives the one-off invoice money totals from a snapshot's own service
+ * list, using the same rules as the quotation builder (per-service discount%,
+ * then tax% on the discounted base; recurring line items excluded).
+ *
+ * Why not just trust `snap.totals`? An order's `quotationSnapshot` is frozen at
+ * conversion time — if the source quotation's totals were still zero then (e.g.
+ * a price sitting only in `scopeItems` text, or a line item mis-tagged
+ * `monthly`), the invoice keeps reading that stale zero forever. Recomputing
+ * from the snapshot's services heals that. The stored figure is still honoured
+ * when it is *higher* than the recomputed one, so a later hand-correction or a
+ * legitimately frozen number is never understated.
+ */
+export function deriveInvoiceTotals(
+    snap: Record<string, any>,
+    fallbackTotalPrice?: number,
+): DerivedInvoiceTotals {
+    const services: Record<string, any>[] = Array.isArray(snap?.services) ? snap.services : [];
+
+    let subtotal = 0;
+    let discountAmount = 0;
+    let taxAmount = 0;
+    for (const s of services) {
+        const serviceBase = upfrontAmountFromService(s);
+        const serviceDiscount = (serviceBase * (Number(s?.discount) || 0)) / 100;
+        const serviceSubtotal = serviceBase - serviceDiscount;
+        const serviceTax = (serviceSubtotal * (Number(s?.taxRate) || 0)) / 100;
+        subtotal += serviceSubtotal;
+        discountAmount += serviceDiscount;
+        taxAmount += serviceTax;
+    }
+    let grandTotal = subtotal + taxAmount;
+
+    const stored = Math.max(
+        Number(snap?.totals?.grandTotal) || 0,
+        Number(snap?.grandTotal) || 0,
+        Number(fallbackTotalPrice) || 0,
+    );
+    if (stored > grandTotal + 0.009) {
+        grandTotal = stored;
+        subtotal = stored - taxAmount;
+    }
+
+    return { subtotal, discountAmount, taxAmount, grandTotal };
 }
 
 function derivePaymentState(grandTotal: number, totalPaid: number): PaymentState {
@@ -242,8 +358,34 @@ export function buildInvoiceHtml(inv: InvoiceData, ctx: InvoicePdfContext): stri
         paymentClientUrl && inv.paymentToken
             ? `${paymentClientUrl.replace(/\/+$/, '')}/payment/${encodeURIComponent(inv.paymentToken)}`
             : '';
-    const stateMeta = PAYMENT_STATE_META[inv.paymentState];
-    const paidInFull = inv.balanceDue <= 0.009;
+    // A $0 grand total is not "settled" — there is simply nothing one-off to
+    // pay (e.g. a retainer-only engagement whose charges are all recurring).
+    // Guard the "Settled" wording behind an actual billable total so it can't
+    // contradict a "Partially Paid" tag driven by recorded payments.
+    const hasBillableTotal = inv.grandTotal > 0.009;
+    const paidInFull = hasBillableTotal && inv.balanceDue <= 0.009;
+    const recurringOnly = !hasBillableTotal && inv.recurring.length > 0;
+    const hasPayments = inv.totalPaid > 0.009;
+    const stateMeta = recurringOnly && !hasPayments
+        ? { label: 'Recurring Billing', className: 'is-partial' }
+        : PAYMENT_STATE_META[inv.paymentState];
+
+    // Balance-bar headline. Never says "Settled" without a real total behind it.
+    let balanceKey: string;
+    let balanceVal: string;
+    if (paidInFull) {
+        balanceKey = 'Settled';
+        balanceVal = formatMoneyPdf(inv.grandTotal, c);
+    } else if (!hasBillableTotal && hasPayments) {
+        balanceKey = 'Amount Paid';
+        balanceVal = formatMoneyPdf(inv.totalPaid, c);
+    } else if (recurringOnly) {
+        balanceKey = 'Due Now';
+        balanceVal = formatMoneyPdf(0, c);
+    } else {
+        balanceKey = 'Balance Due';
+        balanceVal = formatMoneyPdf(inv.balanceDue, c);
+    }
 
     const lineRows = inv.lines
         .map(
@@ -271,6 +413,30 @@ export function buildInvoiceHtml(inv: InvoiceData, ctx: InvoicePdfContext): stri
         inv.totalPaid > 0.009
             ? `<tr class="sum-row is-paid-row"><td>Amount Paid</td><td class="sum-amt">&minus;&nbsp;${esc(formatMoneyPdf(inv.totalPaid, c))}</td></tr>`
             : '';
+
+    const CYCLE_LABELS: Record<string, string> = {
+        monthly: '/ month',
+        yearly: '/ year',
+    };
+    const recurringBlock = inv.recurring.length
+        ? `
+    <div class="section-title">Recurring Charges</div>
+    <table class="items recurring">
+      <tbody>
+        ${inv.recurring
+            .map(
+                (r, i) => `
+        <tr class="li-row">
+          <td class="li-idx">${String(i + 1).padStart(2, '0')}</td>
+          <td class="li-main"><div class="li-title">${esc(r.label)}</div></td>
+          <td class="li-amt">${esc(formatMoneyPdf(r.amount, c))} <span class="li-cycle">${esc(CYCLE_LABELS[r.cycle] || `/ ${r.cycle}`)}</span></td>
+        </tr>`,
+            )
+            .join('')}
+      </tbody>
+    </table>
+    <div class="recurring-note">Recurring charges are billed separately on their own cycle and are not included in the balance due above.</div>`
+        : '';
 
     const signatureBlock = ctx.signatureSrc
         ? `<img class="sig-img" src="${esc(ctx.signatureSrc)}" alt="" width="188" height="46" />`
@@ -466,6 +632,16 @@ export function buildInvoiceHtml(inv: InvoiceData, ctx: InvoicePdfContext): stri
     }
     .pay-btn svg { width: 16px; height: 16px; display: block; }
 
+    /* ── Recurring charges ────────────────────────────────────────────────── */
+    table.items.recurring { margin-top: 1mm; }
+    table.items.recurring .li-amt .li-cycle {
+      font-family: var(--font-sans); font-size: 7.5pt; color: var(--muted); font-weight: 400;
+    }
+    .recurring-note {
+      margin-top: 2.5mm; font-size: 7.5pt; color: var(--muted);
+      border-left: 2px solid var(--brand-line); padding-left: 4mm; max-width: 110mm;
+    }
+
     /* ── Closing ──────────────────────────────────────────────────────────── */
     .closing { margin-top: 5mm; page-break-inside: avoid; }
     .sign-row { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 5mm; gap: 8mm; }
@@ -519,7 +695,7 @@ export function buildInvoiceHtml(inv: InvoiceData, ctx: InvoicePdfContext): stri
       </div>
     </div>
 
-    <div class="section-title">Services</div>
+    <div class="section-title">${recurringOnly ? 'One-Time Charges' : 'Services'}</div>
     <div class="project-title">${esc(inv.projectTitle || 'Project')}</div>
 
     <table class="items">
@@ -527,7 +703,12 @@ export function buildInvoiceHtml(inv: InvoiceData, ctx: InvoicePdfContext): stri
         <tr><th class="h-idx"></th><th>Description</th><th class="h-amt">Amount</th></tr>
       </thead>
       <tbody>
-        ${lineRows || `<tr class="li-row"><td class="li-idx">01</td><td class="li-main"><div class="li-title">Project fee</div></td><td class="li-amt">${esc(formatMoneyPdf(inv.subtotal, c))}</td></tr>`}
+        ${
+            lineRows ||
+            (recurringOnly
+                ? `<tr class="li-row"><td class="li-idx">01</td><td class="li-main"><div class="li-title">No one-time charges</div><div class="li-sub">See recurring charges below.</div></td><td class="li-amt">${esc(formatMoneyPdf(0, c))}</td></tr>`
+                : `<tr class="li-row"><td class="li-idx">01</td><td class="li-main"><div class="li-title">Project fee</div></td><td class="li-amt">${esc(formatMoneyPdf(inv.subtotal, c))}</td></tr>`)
+        }
       </tbody>
     </table>
 
@@ -544,13 +725,15 @@ export function buildInvoiceHtml(inv: InvoiceData, ctx: InvoicePdfContext): stri
     <div class="balance-bar">
       <div class="balance-left">
         <div class="balance-info">
-          <span class="balance-k">${paidInFull ? 'Settled' : 'Balance Due'}</span>
-          <span class="balance-v">${paidInFull ? esc(formatMoneyPdf(inv.grandTotal, c)) : esc(formatMoneyPdf(inv.balanceDue, c))}</span>
+          <span class="balance-k">${esc(balanceKey)}</span>
+          <span class="balance-v">${esc(balanceVal)}</span>
         </div>
         ${payBtn ? '<div class="balance-divider"></div>' : ''}
       </div>
       ${payBtn}
     </div>
+
+    ${recurringBlock}
 
     <div class="closing">
       <div class="sign-row">
@@ -709,21 +892,18 @@ export class InvoicePuppeteerPdfService {
         const snap = (order.quotationSnapshot || {}) as Record<string, any>;
         const services: Record<string, any>[] = Array.isArray(snap.services) ? snap.services : [];
 
-        const lines: InvoiceLine[] = services.map((s) => ({
-            label: CATEGORY_LABELS[s?.category] || String(s?.category || 'Service'),
-            sublabel: s?.scopeDescription || undefined,
-            amount: lineAmountFromService(s),
-        }));
+        const lines: InvoiceLine[] = services
+            .map((s) => ({
+                label: CATEGORY_LABELS[s?.category] || String(s?.category || 'Service'),
+                sublabel: s?.scopeDescription || undefined,
+                amount: upfrontAmountFromService(s),
+            }))
+            .filter((l) => l.amount > 0.009);
+        const recurring = recurringLinesFromServices(services);
 
-        const totals = snap.totals || {
-            subtotal: lines.reduce((t, l) => t + l.amount, 0),
-            discountAmount: Number(snap.discountAmount) || 0,
-            taxAmount: Number(snap.taxAmount) || 0,
-            grandTotal:
-                Number(snap.grandTotal) ||
-                Number(order.totalPrice) ||
-                lines.reduce((t, l) => t + l.amount, 0),
-        };
+        // Recompute from the frozen snapshot's own services rather than trust a
+        // stale `snap.totals` — see deriveInvoiceTotals().
+        const totals = deriveInvoiceTotals(snap, Number(order.totalPrice) || 0);
 
         const currency = snap.currency || order.currency || 'BDT';
         const client = await ClientModel.findById(order.clientId).lean();
@@ -742,6 +922,7 @@ export class InvoicePuppeteerPdfService {
                 phone: client?.phone,
             },
             lines,
+            recurring,
             subtotal: Number(totals.subtotal) || 0,
             discountAmount: Number(totals.discountAmount) || 0,
             taxAmount: Number(totals.taxAmount) || 0,
@@ -766,18 +947,27 @@ export class InvoicePuppeteerPdfService {
             .populate('lineItems')
             .lean();
 
-        const lines: InvoiceLine[] = svcDocs.map((s: Record<string, any>) => ({
-            label: CATEGORY_LABELS[s?.category] || String(s?.category || 'Service'),
-            sublabel: s?.scopeDescription || undefined,
-            amount: lineAmountFromService(s),
-        }));
+        // Newer quotations keep services in their own collection; older ones
+        // store them inline on the quotation document.
+        const qAny = q as Record<string, any>;
+        const services: Record<string, any>[] = svcDocs.length
+            ? (svcDocs as Record<string, any>[])
+            : Array.isArray(qAny.services)
+              ? qAny.services
+              : [];
 
-        const totals = (q as Record<string, any>).totals || {
-            subtotal: lines.reduce((t, l) => t + l.amount, 0),
-            discountAmount: 0,
-            taxAmount: 0,
-            grandTotal: lines.reduce((t, l) => t + l.amount, 0),
-        };
+        const lines: InvoiceLine[] = services
+            .map((s) => ({
+                label: CATEGORY_LABELS[s?.category] || String(s?.category || 'Service'),
+                sublabel: s?.scopeDescription || undefined,
+                amount: upfrontAmountFromService(s),
+            }))
+            .filter((l) => l.amount > 0.009);
+        const recurring = recurringLinesFromServices(services);
+
+        const totals = deriveInvoiceTotals(
+            { services, totals: qAny.totals, grandTotal: qAny.totals?.grandTotal },
+        );
 
         const currency = (q as Record<string, any>).currency || 'BDT';
         const client = (q as Record<string, any>).clientId as Record<string, any> | null;
@@ -802,6 +992,7 @@ export class InvoicePuppeteerPdfService {
                 phone: client?.phone || snapClient.phone,
             },
             lines,
+            recurring,
             subtotal: Number(totals.subtotal) || 0,
             discountAmount: Number(totals.discountAmount) || 0,
             taxAmount: Number(totals.taxAmount) || 0,

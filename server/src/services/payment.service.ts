@@ -16,7 +16,8 @@ import emailService from './email.service.js';
 import {
     attachReceiptLedger,
     toInvoiceNumber,
-    lineAmountFromService,
+    upfrontAmountFromService,
+    deriveInvoiceTotals,
     CATEGORY_LABELS,
 } from './invoice-puppeteer-pdf.service.js';
 import { AppError } from '../utils/AppError.js';
@@ -50,11 +51,11 @@ export interface ResolvedPaymentToken {
 
 function resolveOrderTotals(order: Record<string, any>): { grandTotal: number; currency: string } {
     const snap = order.quotationSnapshot || {};
-    const grandTotal =
-        Number(snap.totals?.grandTotal) ||
-        Number(snap.grandTotal) ||
-        Number(order.totalPrice) ||
-        0;
+    // Recompute from the snapshot's own services so a stale/zero `snap.totals`
+    // (price left in scopeItems text, a later quotation fix, etc.) doesn't
+    // suppress the payable amount — and therefore the Pay Now link. Mirrors
+    // the invoice PDF's own total. See deriveInvoiceTotals().
+    const { grandTotal } = deriveInvoiceTotals(snap, Number(order.totalPrice) || 0);
     const currency = snap.currency || order.currency || 'BDT';
     return { grandTotal, currency };
 }
@@ -374,11 +375,13 @@ export class PaymentService {
                 name: client?.name || snap.clientName || 'Client',
                 email: client?.emails?.[0] || snap.clientEmail,
             },
-            lines: services.map((s) => ({
-                label: CATEGORY_LABELS[s?.category] || String(s?.category || 'Service'),
-                sublabel: s?.scopeDescription || undefined,
-                amount: lineAmountFromService(s),
-            })),
+            lines: services
+                .map((s) => ({
+                    label: CATEGORY_LABELS[s?.category] || String(s?.category || 'Service'),
+                    sublabel: s?.scopeDescription || undefined,
+                    amount: upfrontAmountFromService(s),
+                }))
+                .filter((l) => l.amount > 0.009),
         };
     }
 
