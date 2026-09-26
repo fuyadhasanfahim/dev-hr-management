@@ -55,6 +55,8 @@ const softWarnVars = [
     'AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'AWS_BUCKET_NAME', 'GEMINI_API_KEY',
     'STRIPE_SECRET_KEY', 'STRIPE_PUBLISHABLE_KEY', 'STRIPE_WEBHOOK_SECRET',
     'PAYPAL_CLIENT_ID', 'PAYPAL_CLIENT_SECRET',
+    'META_APP_ID', 'META_APP_SECRET', 'META_WEBHOOK_VERIFY_TOKEN', 'META_ACCESS_TOKEN',
+    'OPENAI_API_KEY',
 ] as const;
 const missingSoft = softWarnVars.filter((key) => !process.env[key]);
 if (missingSoft.length > 0) {
@@ -142,5 +144,17 @@ const envConfig = {
     paypal_client_id: process.env.PAYPAL_CLIENT_ID || '',
     paypal_client_secret: process.env.PAYPAL_CLIENT_SECRET || '',
     paypal_api_base_url: process.env.PAYPAL_API_BASE_URL || '',
+
+    // Meta (WhatsApp Cloud API) — webhook verification + Graph API calls
+    meta_app_id: process.env.META_APP_ID || '',
+    meta_app_secret: process.env.META_APP_SECRET || '',
+    meta_api_version: process.env.META_API_VERSION || 'v21.0',
+    meta_webhook_verify_token: process.env.META_WEBHOOK_VERIFY_TOKEN || '',
+    meta_access_token: process.env.META_ACCESS_TOKEN || '',
+
+    // OpenAI — WhatsApp AI auto-reply (phase 2)
+    openai_api_key: process.env.OPENAI_API_KEY || '',
+    openai_chat_model: process.env.OPENAI_CHAT_MODEL || 'gpt-4.1-mini',
+    openai_embedding_model: process.env.OPENAI_EMBEDDING_MODEL || 'text-embedding-3-small',
 };
 export default envConfig;

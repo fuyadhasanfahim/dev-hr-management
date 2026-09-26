@@ -63,6 +63,11 @@ const FULL_VALID_ENV: Record<string, string> = {
     STRIPE_WEBHOOK_SECRET: 'test-stripe-webhook',
     PAYPAL_CLIENT_ID: 'test-paypal-client-id',
     PAYPAL_CLIENT_SECRET: 'test-paypal-client-secret',
+    META_APP_ID: 'test-meta-app-id',
+    META_APP_SECRET: 'test-meta-app-secret',
+    META_WEBHOOK_VERIFY_TOKEN: 'test-meta-verify-token',
+    META_ACCESS_TOKEN: 'test-meta-access-token',
+    OPENAI_API_KEY: 'test-openai-key',
 };
 
 /**
