@@ -27,6 +27,7 @@ export enum TicketSource {
     DIRECT    = 'direct',
     AI_CHAT   = 'ai_chat',
     LIVE_CHAT = 'live_chat',
+    WHATSAPP  = 'whatsapp',
 }
 
 export interface ITicket extends Document {
@@ -38,6 +39,7 @@ export interface ITicket extends Document {
     // or later removed.
     visitorName?: string;
     visitorEmail?: string;
+    whatsappPhone?: string; // Set when source is 'whatsapp' — where agent replies get sent
     subject: string;
     status: TicketStatus;
     priority: TicketPriority;
@@ -76,6 +78,10 @@ const ticketSchema = new Schema<ITicket>(
             type: String,
             trim: true,
             lowercase: true,
+        },
+        whatsappPhone: {
+            type: String,
+            trim: true,
         },
         subject: {
             type: String,

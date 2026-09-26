@@ -14,6 +14,7 @@ interface CreateTicketData {
     guestId?: string;
     visitorName?: string;  // Snapshot of submitter identity
     visitorEmail?: string;
+    whatsappPhone?: string; // Set when source is 'whatsapp'
     assignedTo?: string;   // Pre-assign (e.g. carry over from live-chat)
 }
 
@@ -50,6 +51,9 @@ export async function createTicket(data: CreateTicketData): Promise<any> {
     if (data.visitorEmail) {
         ticketFields.visitorEmail = data.visitorEmail;
     }
+    if (data.whatsappPhone) {
+        ticketFields.whatsappPhone = data.whatsappPhone;
+    }
     if (data.assignedTo) {
         ticketFields.assignedTo = new Types.ObjectId(data.assignedTo);
     }
@@ -66,6 +70,9 @@ export async function createTicket(data: CreateTicketData): Promise<any> {
         attachments: data.attachments || [],
     };
 
+    if (!senderId && data.visitorName) {
+        msgFields.senderName = data.visitorName;
+    }
     if (senderId) {
         msgFields.senderId = new Types.ObjectId(senderId);
     }

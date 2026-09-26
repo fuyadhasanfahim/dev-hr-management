@@ -67,6 +67,7 @@ const FULL_VALID_ENV: Record<string, string> = {
     META_APP_SECRET: 'test-meta-app-secret',
     META_WEBHOOK_VERIFY_TOKEN: 'test-meta-verify-token',
     META_ACCESS_TOKEN: 'test-meta-access-token',
+    WHATSAPP_PHONE_NUMBER_ID: 'test-phone-number-id',
     OPENAI_API_KEY: 'test-openai-key',
 };
 

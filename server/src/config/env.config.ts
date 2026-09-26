@@ -56,7 +56,7 @@ const softWarnVars = [
     'STRIPE_SECRET_KEY', 'STRIPE_PUBLISHABLE_KEY', 'STRIPE_WEBHOOK_SECRET',
     'PAYPAL_CLIENT_ID', 'PAYPAL_CLIENT_SECRET',
     'META_APP_ID', 'META_APP_SECRET', 'META_WEBHOOK_VERIFY_TOKEN', 'META_ACCESS_TOKEN',
-    'OPENAI_API_KEY',
+    'WHATSAPP_PHONE_NUMBER_ID', 'OPENAI_API_KEY',
 ] as const;
 const missingSoft = softWarnVars.filter((key) => !process.env[key]);
 if (missingSoft.length > 0) {
@@ -151,6 +151,7 @@ const envConfig = {
     meta_api_version: process.env.META_API_VERSION || 'v21.0',
     meta_webhook_verify_token: process.env.META_WEBHOOK_VERIFY_TOKEN || '',
     meta_access_token: process.env.META_ACCESS_TOKEN || '',
+    whatsapp_phone_number_id: process.env.WHATSAPP_PHONE_NUMBER_ID || '',
 
     // OpenAI — WhatsApp AI auto-reply (phase 2)
     openai_api_key: process.env.OPENAI_API_KEY || '',
