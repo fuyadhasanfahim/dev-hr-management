@@ -41,6 +41,19 @@ async function retryMessage(req: Request, res: Response) {
     }
 }
 
+async function setAiEnabled(req: Request, res: Response) {
+    try {
+        const { aiEnabled } = req.body;
+        if (typeof aiEnabled !== 'boolean') {
+            return res.status(400).json({ success: false, message: 'aiEnabled must be a boolean' });
+        }
+        await whatsappSupportService.setAiEnabled(req.params.id!, aiEnabled);
+        return res.status(200).json({ success: true });
+    } catch (err: any) {
+        return res.status(500).json({ success: false, message: err.message });
+    }
+}
+
 async function markRead(req: Request, res: Response) {
     try {
         await whatsappSupportService.markConversationRead(req.params.id!);
@@ -50,4 +63,4 @@ async function markRead(req: Request, res: Response) {
     }
 }
 
-export default { listConversations, getMessages, sendMessage, retryMessage, markRead };
+export default { listConversations, getMessages, sendMessage, retryMessage, setAiEnabled, markRead };

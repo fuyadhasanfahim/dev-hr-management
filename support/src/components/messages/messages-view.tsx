@@ -27,6 +27,7 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 import type { AppDispatch } from '@/store';
@@ -37,6 +38,7 @@ import {
     useMarkWhatsAppConversationReadMutation,
     useRetryWhatsAppMessageMutation,
     useSendWhatsAppMessageMutation,
+    useSetWhatsAppAiMutation,
     whatsappApi,
     type WhatsAppMessage,
     type WhatsAppMessageStatus,
@@ -150,6 +152,7 @@ export function MessagesView({ conversationId }: { conversationId?: string }) {
     });
     const [sendMessage] = useSendWhatsAppMessageMutation();
     const [retryMessage] = useRetryWhatsAppMessageMutation();
+    const [setAi] = useSetWhatsAppAiMutation();
     const [markRead] = useMarkWhatsAppConversationReadMutation();
 
     const filtered = useMemo(() => {
@@ -261,7 +264,7 @@ export function MessagesView({ conversationId }: { conversationId?: string }) {
                                             <span
                                                 className={cn(
                                                     'text-[11px] shrink-0',
-                                                    c.unreadCount > 0 ? 'text-primary font-medium' : 'text-muted-foreground',
+                                                    c.unreadCount > 0 ? 'text-destructive font-medium' : 'text-muted-foreground',
                                                 )}
                                             >
                                                 {formatListTime(c.lastMessageAt)}
@@ -272,11 +275,13 @@ export function MessagesView({ conversationId }: { conversationId?: string }) {
                                                 {c.lastMessageDirection === 'outbound' && (
                                                     <MessageTicks status={c.lastMessageStatus} onBubble={false} />
                                                 )}
-                                                <span className="truncate">{c.lastMessage}</span>
+                                                <span className={cn('truncate', c.unreadCount > 0 && 'font-medium text-foreground')}>
+                                                    {c.lastMessage}
+                                                </span>
                                             </span>
                                             {c.unreadCount > 0 && (
-                                                <Badge className="h-5 min-w-5 justify-center px-1.5 shrink-0">
-                                                    {c.unreadCount}
+                                                <Badge className="h-5 min-w-5 justify-center px-1.5 shrink-0 bg-destructive text-white tabular-nums">
+                                                    {c.unreadCount > 99 ? '99+' : c.unreadCount}
                                                 </Badge>
                                             )}
                                         </div>
@@ -313,6 +318,22 @@ export function MessagesView({ conversationId }: { conversationId?: string }) {
                                 </div>
                             </div>
                             <div className="flex items-center gap-1 shrink-0">
+                                <label
+                                    className="mr-2 flex cursor-pointer items-center gap-2 rounded-full border px-3 py-1 text-xs"
+                                    title={
+                                        selected.aiEnabled
+                                            ? 'AI answers new messages automatically. Replying yourself turns it off.'
+                                            : 'AI is off — you are handling this chat. Turn on to let AI reply again.'
+                                    }
+                                >
+                                    <Bot className={cn('size-3.5', selected.aiEnabled ? 'text-primary' : 'text-muted-foreground')} />
+                                    AI auto-reply
+                                    <Switch
+                                        size="sm"
+                                        checked={selected.aiEnabled}
+                                        onCheckedChange={(aiEnabled) => setAi({ conversationId: selected.id, aiEnabled })}
+                                    />
+                                </label>
                                 <Button variant="ghost" size="icon" className="size-8">
                                     <Phone className="size-4" />
                                 </Button>

@@ -109,6 +109,22 @@ export const whatsappApi = baseApi.injectEndpoints({
                 queryFulfilled.catch(patch.undo);
             },
         }),
+        setWhatsAppAi: builder.mutation<void, { conversationId: string; aiEnabled: boolean }>({
+            query: ({ conversationId, aiEnabled }) => ({
+                url: `/support/whatsapp/conversations/${conversationId}/ai`,
+                method: 'PATCH',
+                body: { aiEnabled },
+            }),
+            async onQueryStarted({ conversationId, aiEnabled }, { dispatch, queryFulfilled }) {
+                const patch = dispatch(
+                    whatsappApi.util.updateQueryData('getWhatsAppConversations', undefined, (draft) => {
+                        const c = draft.find((x) => x.id === conversationId);
+                        if (c) c.aiEnabled = aiEnabled;
+                    }),
+                );
+                queryFulfilled.catch(patch.undo);
+            },
+        }),
         markWhatsAppConversationRead: builder.mutation<void, string>({
             query: (conversationId) => ({
                 url: `/support/whatsapp/conversations/${conversationId}/read`,
@@ -124,5 +140,6 @@ export const {
     useGetWhatsAppMessagesQuery,
     useSendWhatsAppMessageMutation,
     useRetryWhatsAppMessageMutation,
+    useSetWhatsAppAiMutation,
     useMarkWhatsAppConversationReadMutation,
 } = whatsappApi;

@@ -184,6 +184,7 @@ router.get('/whatsapp/conversations', requireUnifiedAuth, restrictTo('admin', 's
 router.get('/whatsapp/conversations/:id/messages', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), WhatsAppSupportController.getMessages);
 router.post('/whatsapp/conversations/:id/messages', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), WhatsAppSupportController.sendMessage);
 router.post('/whatsapp/conversations/:id/messages/:messageId/retry', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), WhatsAppSupportController.retryMessage);
+router.patch('/whatsapp/conversations/:id/ai', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), WhatsAppSupportController.setAiEnabled);
 router.post('/whatsapp/conversations/:id/read', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), WhatsAppSupportController.markRead);
 
 export const SupportRoutes = router;

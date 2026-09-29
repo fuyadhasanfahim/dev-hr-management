@@ -53,6 +53,15 @@ const NAV_GROUPS: NavGroup[] = [
 
 const ALL_GROUP_LABELS = NAV_GROUPS.map((g) => g.groupLabel);
 
+// Solid red count pill — reads as "needs attention" on any item, including the active purple one.
+function CountBadge({ count }: { count: number }) {
+    return (
+        <SidebarMenuBadge className="bg-destructive text-white tabular-nums peer-hover/menu-button:text-white peer-data-active/menu-button:text-white">
+            {count > 99 ? '99+' : count}
+        </SidebarMenuBadge>
+    );
+}
+
 export function NavMain() {
     const pathname = usePathname();
     const { state } = useSidebar();
@@ -106,7 +115,7 @@ export function NavMain() {
                                         <span>{item.title}</span>
                                     </Link>
                                 </SidebarMenuButton>
-                                {badge > 0 && <SidebarMenuBadge>{badge}</SidebarMenuBadge>}
+                                {badge > 0 && <CountBadge count={badge} />}
                             </SidebarMenuItem>
                         );
                     })}
@@ -179,7 +188,7 @@ export function NavMain() {
                                                             <span>{item.title}</span>
                                                         </Link>
                                                     </SidebarMenuButton>
-                                                    {badge > 0 && <SidebarMenuBadge>{badge}</SidebarMenuBadge>}
+                                                    {badge > 0 && <CountBadge count={badge} />}
                                                 </SidebarMenuItem>
                                             );
                                         })}

@@ -1,5 +1,5 @@
 import { Types } from 'mongoose';
-import WhatsAppConversationModel from '../models/whatsapp-conversation.model.js';
+import WhatsAppConversationModel, { WhatsAppConversationStatus } from '../models/whatsapp-conversation.model.js';
 import WhatsAppMessageModel, {
     WhatsAppMessageDirection,
     WhatsAppMessageSender,
@@ -134,8 +134,21 @@ async function retryMessage(conversationId: string, messageId: string): Promise<
     return toMessageSummary(message);
 }
 
+// An agent reply switches AI off; this is how they hand the chat back. Turning
+// it on also returns an escalated chat to bot mode, since the webhook only lets
+// the AI answer conversations in that state (the linked ticket stays open).
+async function setAiEnabled(conversationId: string, aiEnabled: boolean): Promise<void> {
+    const conversation = await WhatsAppConversationModel.findById(conversationId);
+    if (!conversation) throw new Error('Conversation not found');
+    conversation.aiEnabled = aiEnabled;
+    if (aiEnabled && conversation.status === WhatsAppConversationStatus.ESCALATED) {
+        conversation.status = WhatsAppConversationStatus.BOT;
+    }
+    await conversation.save();
+}
+
 async function markConversationRead(conversationId: string): Promise<void> {
     await WhatsAppConversationModel.findByIdAndUpdate(conversationId, { lastReadAt: new Date() });
 }
 
-export default { listConversations, getMessages, sendAgentMessage, retryMessage, markConversationRead };
+export default { listConversations, getMessages, sendAgentMessage, retryMessage, setAiEnabled, markConversationRead };
