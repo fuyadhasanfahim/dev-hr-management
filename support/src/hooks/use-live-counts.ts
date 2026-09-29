@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { useDispatch } from 'react-redux';
-import { useGetQueuedSessionsQuery } from '@/store/api/chatApi';
+import { useGetQueuedSessionsQuery, useGetUnreadCountsQuery } from '@/store/api/chatApi';
 import { baseApi } from '@/store/api/baseApi';
 import { connectSocket, disconnectSocket } from '@/lib/socket';
 import { useNotificationSound } from '@/hooks/use-notification-sound';
@@ -23,6 +23,11 @@ export function useLiveCounts() {
         pollingInterval: 30_000,
     });
     const liveChatCount = queuedSessions.length;
+
+    const { data: unreadCounts = {} } = useGetUnreadCountsQuery(undefined, {
+        pollingInterval: 15_000,
+    });
+    const messagesUnreadCount = Object.values(unreadCounts).reduce((sum, n) => sum + n, 0);
 
     // Clear the unread-ticket badge once the agent is looking at the tickets view.
     useEffect(() => {
@@ -72,5 +77,5 @@ export function useLiveCounts() {
         };
     }, [dispatch, playSound]);
 
-    return { liveChatCount, ticketCount };
+    return { liveChatCount, ticketCount, messagesUnreadCount };
 }

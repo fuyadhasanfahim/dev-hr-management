@@ -1,6 +1,6 @@
 import AuthGuard from '@/components/providers/auth-guard';
 import { AppSidebar } from '@/components/sidebar/app-sidebar';
-import { SiteHeader } from '@/components/sidebar/site-header';
+import { SidebarFloatingTrigger } from '@/components/sidebar/sidebar-floating-trigger';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -15,10 +15,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 }
             >
                 <AppSidebar variant="floating" />
+                <SidebarFloatingTrigger />
                 <SidebarInset>
-                    <SiteHeader />
                     <div className="flex flex-1 flex-col min-h-0 overflow-auto">
-                        <div className="@container/main flex flex-1 flex-col gap-2 p-4 min-h-0 overflow-auto">
+                        <div className="@container/main flex flex-1 flex-col gap-2 p-2 min-h-0 overflow-auto">
                             {children}
                         </div>
                     </div>

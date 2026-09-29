@@ -13,6 +13,7 @@ import {
     SidebarMenu,
     SidebarMenuButton,
     SidebarMenuItem,
+    SidebarTrigger,
 } from '@/components/ui/sidebar';
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
@@ -20,12 +21,13 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <Sidebar collapsible="offcanvas" {...props}>
             <SidebarHeader>
                 <SidebarMenu>
-                    <SidebarMenuItem>
-                        <SidebarMenuButton asChild className="w-auto h-auto mx-auto hover:bg-transparent">
+                    <SidebarMenuItem className="flex items-center justify-between">
+                        <SidebarMenuButton asChild className="w-auto h-auto hover:bg-transparent">
                             <Link href="/dashboard">
                                 <Logo />
                             </Link>
                         </SidebarMenuButton>
+                        <SidebarTrigger className="opacity-0 transition-opacity group-hover:opacity-100" />
                     </SidebarMenuItem>
                 </SidebarMenu>
             </SidebarHeader>

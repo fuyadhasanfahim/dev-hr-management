@@ -34,7 +34,7 @@ const NAV_GROUPS: NavGroup[] = [
         items: [
             { title: 'Overview', url: '/dashboard', icon: LayoutDashboard },
             { title: 'Live Chat', url: '/live-chat', icon: MessageSquare },
-            { title: 'Your Messages', url: '/messages', icon: MessageCircle },
+            { title: 'Messages', url: '/messages', icon: MessageCircle },
         ],
     },
     {
@@ -56,10 +56,11 @@ const ALL_GROUP_LABELS = NAV_GROUPS.map((g) => g.groupLabel);
 export function NavMain() {
     const pathname = usePathname();
     const { state } = useSidebar();
-    const { liveChatCount, ticketCount } = useLiveCounts();
+    const { liveChatCount, ticketCount, messagesUnreadCount } = useLiveCounts();
     const badgeByUrl: Record<string, number> = {
         '/live-chat': liveChatCount,
         '/tickets': ticketCount,
+        '/messages': messagesUnreadCount,
     };
 
     const [searchQuery, setSearchQuery] = React.useState('');
