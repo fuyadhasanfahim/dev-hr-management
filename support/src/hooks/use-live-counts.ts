@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { useDispatch } from 'react-redux';
-import { useGetQueuedSessionsQuery, useGetUnreadCountsQuery } from '@/store/api/chatApi';
+import { useGetQueuedSessionsQuery } from '@/store/api/chatApi';
+import { useGetWhatsAppConversationsQuery } from '@/store/api/whatsappApi';
 import { baseApi } from '@/store/api/baseApi';
 import { connectSocket, disconnectSocket } from '@/lib/socket';
 import { useNotificationSound } from '@/hooks/use-notification-sound';
@@ -24,10 +25,10 @@ export function useLiveCounts() {
     });
     const liveChatCount = queuedSessions.length;
 
-    const { data: unreadCounts = {} } = useGetUnreadCountsQuery(undefined, {
-        pollingInterval: 15_000,
+    const { data: whatsappConversations = [] } = useGetWhatsAppConversationsQuery(undefined, {
+        pollingInterval: 30_000,
     });
-    const messagesUnreadCount = Object.values(unreadCounts).reduce((sum, n) => sum + n, 0);
+    const messagesUnreadCount = whatsappConversations.reduce((sum, c) => sum + c.unreadCount, 0);
 
     // Clear the unread-ticket badge once the agent is looking at the tickets view.
     useEffect(() => {
@@ -58,12 +59,22 @@ export function useLiveCounts() {
                 playSound();
             }
         };
+        const onWhatsAppMessage = ({ conversationId }: { conversationId: string }) => {
+            dispatch(
+                baseApi.util.invalidateTags([
+                    'WhatsAppConversations',
+                    { type: 'WhatsAppMessages', id: conversationId },
+                ]),
+            );
+            if (!pathnameRef.current.startsWith('/messages')) playSound();
+        };
 
         socket.on('connect', onConnect);
         socket.on('queue:new_message', onQueueUpdate);
         socket.on('session:state_change', onSessionStateChange);
         socket.on('ticket:new_reply', onTicketActivity);
         socket.on('ticket:created', onTicketActivity);
+        socket.on('whatsapp:new_message', onWhatsAppMessage);
 
         if (socket.connected) onConnect();
 
@@ -73,6 +84,7 @@ export function useLiveCounts() {
             socket.off('session:state_change', onSessionStateChange);
             socket.off('ticket:new_reply', onTicketActivity);
             socket.off('ticket:created', onTicketActivity);
+            socket.off('whatsapp:new_message', onWhatsAppMessage);
             disconnectSocket();
         };
     }, [dispatch, playSound]);

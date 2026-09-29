@@ -85,6 +85,8 @@ async function handleIncomingMessage(
     conversation.lastMessageAt = new Date();
     await conversation.save();
 
+    notifyAgents('whatsapp:new_message', { conversationId: conversation._id.toString() });
+
     void whatsappService.markMessageRead(whatsappMsgId).catch(() => {});
 
     // AI off (agent already handling it manually via the app) or already
@@ -109,6 +111,7 @@ async function handleIncomingMessage(
         body: ai.reply,
         whatsappMsgId: sentId,
     });
+    notifyAgents('whatsapp:new_message', { conversationId: conversation._id.toString() });
 
     if (ai.escalate) {
         const transcript = [...history, { role: 'user' as const, content: body }]

@@ -13,6 +13,7 @@ export interface IWhatsAppConversation extends Document {
     aiEnabled: boolean;
     linkedTicketId?: Types.ObjectId; // Ref: Ticket — set once escalated
     lastMessageAt: Date;
+    lastReadAt: Date; // Set when an agent opens the thread — messages after this are "unread".
     createdAt: Date;
     updatedAt: Date;
 }
@@ -45,6 +46,10 @@ const whatsAppConversationSchema = new Schema<IWhatsAppConversation>(
         lastMessageAt: {
             type: Date,
             default: Date.now,
+        },
+        lastReadAt: {
+            type: Date,
+            default: () => new Date(0),
         },
     },
     {

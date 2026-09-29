@@ -1,7 +1,8 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import {
+    Loader2,
     Mic,
     MessageCircle,
     MoreVertical,
@@ -12,49 +13,59 @@ import {
     Smile,
     Video,
 } from 'lucide-react';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
+import {
+    useGetWhatsAppConversationsQuery,
+    useGetWhatsAppMessagesQuery,
+    useMarkWhatsAppConversationReadMutation,
+    useSendWhatsAppMessageMutation,
+    type WhatsAppMessage,
+} from '@/store/api/whatsappApi';
 
-// Placeholder data — swap for real WhatsApp Cloud API conversations/messages
-// once the integration lands. Shape mirrors what that wiring will need.
-interface Conversation {
-    id: string;
-    name: string;
-    avatarUrl?: string;
-    lastMessage: string;
-    time: string;
-    unread: number;
+function formatTime(iso: string): string {
+    return new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 }
 
-interface ThreadMessage {
-    id: string;
-    from: 'them' | 'me';
-    text: string;
-    time: string;
-    dateLabel: string;
+function formatListTime(iso: string): string {
+    const date = new Date(iso);
+    const now = new Date();
+    const isToday = date.toDateString() === now.toDateString();
+    if (isToday) return formatTime(iso);
+    const yesterday = new Date(now);
+    yesterday.setDate(now.getDate() - 1);
+    if (date.toDateString() === yesterday.toDateString()) return 'Yesterday';
+    return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
 }
 
-const CONVERSATIONS: Conversation[] = [
-    { id: '1', name: 'Salim Bhai', lastMessage: 'Ok, thanks!', time: '4:01 PM', unread: 0 },
-    { id: '2', name: 'Client Hunting & Outreach', lastMessage: '~Shafiulla: https://facebook.com…', time: '3:56 PM', unread: 3 },
-    { id: '3', name: 'Masum', lastMessage: 'কেমন আছেন?', time: '3:21 PM', unread: 0 },
-    { id: '4', name: 'Rafi Ahmed', lastMessage: 'Invoice পাঠিয়ে দিয়েন', time: '3:08 PM', unread: 1 },
-    { id: '5', name: 'মানব সেবা কল্যাণ ফাউন্ডেশন', lastMessage: 'জরুরি ৫০ পজেটিভ রক্ত লাগবে', time: '12:15 PM', unread: 0 },
-];
+function dateLabel(iso: string): string {
+    const date = new Date(iso);
+    const now = new Date();
+    if (date.toDateString() === now.toDateString()) return 'Today';
+    const yesterday = new Date(now);
+    yesterday.setDate(now.getDate() - 1);
+    if (date.toDateString() === yesterday.toDateString()) return 'Yesterday';
+    return date.toLocaleDateString([], { month: 'long', day: 'numeric', year: 'numeric' });
+}
 
-const THREAD: ThreadMessage[] = [
-    { id: 'm1', from: 'them', text: 'Assalamu alaikum, price ta konfirm koren.', time: '1:20 PM', dateLabel: 'Yesterday' },
-    { id: 'm2', from: 'me', text: 'Walaikum salam! Package details পাঠাচ্ছি একটু পর।', time: '1:26 PM', dateLabel: 'Yesterday' },
-    { id: 'm3', from: 'them', text: 'Thik ache, wait korchi.', time: '2:41 PM', dateLabel: 'Yesterday' },
-    { id: 'm4', from: 'me', text: 'ধন্যবাদ আপনার অপেক্ষার জন্য। এই নিন — ৫,০০০৳ প্যাকেজে সব ফিচার আছে।', time: '4:00 PM', dateLabel: 'Today' },
-    { id: 'm5', from: 'them', text: 'Ok, confirm kore dilam.', time: '4:01 PM', dateLabel: 'Today' },
-];
+// Consecutive messages on the same day share one date divider.
+function groupByDate(messages: WhatsAppMessage[]) {
+    const groups: { label: string; messages: WhatsAppMessage[] }[] = [];
+    for (const message of messages) {
+        const label = dateLabel(message.createdAt);
+        const lastGroup = groups[groups.length - 1];
+        if (lastGroup?.label === label) lastGroup.messages.push(message);
+        else groups.push({ label, messages: [message] });
+    }
+    return groups;
+}
 
 const FILTERS = ['all', 'unread', 'favorites', 'groups'] as const;
 type Filter = (typeof FILTERS)[number];
@@ -65,30 +76,40 @@ export default function MessagesPage() {
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [draft, setDraft] = useState('');
 
+    const { data: conversations = [], isLoading: conversationsLoading } = useGetWhatsAppConversationsQuery(
+        undefined,
+        { pollingInterval: 30_000 },
+    );
+    const { data: messages = [], isLoading: messagesLoading } = useGetWhatsAppMessagesQuery(selectedId!, {
+        skip: !selectedId,
+    });
+    const [sendMessage, { isLoading: isSending }] = useSendWhatsAppMessageMutation();
+    const [markRead] = useMarkWhatsAppConversationReadMutation();
+
     const filtered = useMemo(() => {
         const q = search.trim().toLowerCase();
-        return CONVERSATIONS.filter((c) => {
+        return conversations.filter((c) => {
             const matchesQuery = !q || c.name.toLowerCase().includes(q) || c.lastMessage.toLowerCase().includes(q);
-            const matchesFilter = filter !== 'unread' || c.unread > 0;
+            const matchesFilter = filter !== 'unread' || c.unreadCount > 0;
             return matchesQuery && matchesFilter;
         });
-    }, [search, filter]);
+    }, [conversations, search, filter]);
 
-    const selected = CONVERSATIONS.find((c) => c.id === selectedId) ?? null;
+    const selected = conversations.find((c) => c.id === selectedId) ?? null;
+    const groupedThread = useMemo(() => groupByDate(messages), [messages]);
 
-    // Grouped once up front so consecutive messages on the same day share one divider.
-    const groupedThread = useMemo(() => {
-        const groups: { dateLabel: string; messages: ThreadMessage[] }[] = [];
-        for (const message of THREAD) {
-            const lastGroup = groups[groups.length - 1];
-            if (lastGroup?.dateLabel === message.dateLabel) {
-                lastGroup.messages.push(message);
-            } else {
-                groups.push({ dateLabel: message.dateLabel, messages: [message] });
-            }
-        }
-        return groups;
-    }, []);
+    // Clear the unread badge the moment an agent opens the thread.
+    useEffect(() => {
+        if (selectedId) markRead(selectedId);
+    }, [selectedId, markRead]);
+
+    const handleSend = async (e: FormEvent) => {
+        e.preventDefault();
+        const text = draft.trim();
+        if (!text || !selectedId) return;
+        setDraft('');
+        await sendMessage({ conversationId: selectedId, text });
+    };
 
     return (
         <div className="flex h-full overflow-hidden rounded-2xl border bg-sidebar">
@@ -118,7 +139,13 @@ export default function MessagesPage() {
 
                 <ScrollArea className="flex-1">
                     <div className="px-2 pb-2">
-                        {filtered.length === 0 ? (
+                        {conversationsLoading ? (
+                            <div className="space-y-2 px-1">
+                                {[...Array(4)].map((_, i) => (
+                                    <Skeleton key={i} className="h-14 w-full rounded-lg" />
+                                ))}
+                            </div>
+                        ) : filtered.length === 0 ? (
                             <p className="text-sm text-muted-foreground text-center py-8">No conversations found.</p>
                         ) : (
                             filtered.map((c) => (
@@ -131,18 +158,21 @@ export default function MessagesPage() {
                                     )}
                                 >
                                     <Avatar className="size-11 shrink-0">
-                                        <AvatarImage src={c.avatarUrl} alt={c.name} />
                                         <AvatarFallback>{c.name.charAt(0)}</AvatarFallback>
                                     </Avatar>
                                     <div className="flex-1 min-w-0">
                                         <div className="flex items-center justify-between gap-2">
                                             <span className="text-sm font-medium truncate">{c.name}</span>
-                                            <span className="text-[11px] text-muted-foreground shrink-0">{c.time}</span>
+                                            <span className="text-[11px] text-muted-foreground shrink-0">
+                                                {formatListTime(c.lastMessageAt)}
+                                            </span>
                                         </div>
                                         <div className="flex items-center justify-between gap-2 mt-0.5">
                                             <span className="text-xs text-muted-foreground truncate">{c.lastMessage}</span>
-                                            {c.unread > 0 && (
-                                                <Badge className="h-5 min-w-5 justify-center px-1.5 shrink-0">{c.unread}</Badge>
+                                            {c.unreadCount > 0 && (
+                                                <Badge className="h-5 min-w-5 justify-center px-1.5 shrink-0">
+                                                    {c.unreadCount}
+                                                </Badge>
                                             )}
                                         </div>
                                     </div>
@@ -168,12 +198,13 @@ export default function MessagesPage() {
                         <div className="flex items-center justify-between gap-3 px-4 h-16 shrink-0 border-b bg-sidebar">
                             <div className="flex items-center gap-3 min-w-0">
                                 <Avatar className="size-9 shrink-0">
-                                    <AvatarImage src={selected.avatarUrl} alt={selected.name} />
                                     <AvatarFallback>{selected.name.charAt(0)}</AvatarFallback>
                                 </Avatar>
                                 <div className="min-w-0">
                                     <p className="text-sm font-medium truncate">{selected.name}</p>
-                                    <p className="text-xs text-muted-foreground">WhatsApp</p>
+                                    <p className="text-xs text-muted-foreground">
+                                        {selected.aiEnabled ? 'AI replying' : 'You’re handling this chat'}
+                                    </p>
                                 </div>
                             </div>
                             <div className="flex items-center gap-1 shrink-0">
@@ -191,48 +222,58 @@ export default function MessagesPage() {
 
                         <ScrollArea className="flex-1">
                             <div className="px-4 py-4 space-y-4">
-                                {groupedThread.map((group) => (
-                                    <div key={group.dateLabel} className="space-y-3">
-                                        <div className="flex items-center justify-center">
-                                            <span className="text-[11px] text-muted-foreground bg-muted px-3 py-1 rounded-full">
-                                                {group.dateLabel}
-                                            </span>
-                                        </div>
-                                        {group.messages.map((m) => (
-                                            <div key={m.id} className={cn('flex', m.from === 'me' ? 'justify-end' : 'justify-start')}>
-                                                <div className="max-w-[70%] space-y-1">
-                                                    <div
-                                                        className={cn(
-                                                            'px-3.5 py-2.5 text-sm leading-relaxed break-words shadow-sm',
-                                                            m.from === 'me'
-                                                                ? 'bg-primary text-primary-foreground rounded-2xl rounded-br-md'
-                                                                : 'bg-muted text-foreground rounded-2xl rounded-bl-md',
-                                                        )}
-                                                    >
-                                                        {m.text}
-                                                    </div>
-                                                    <p
-                                                        className={cn(
-                                                            'text-[10px] text-muted-foreground px-1',
-                                                            m.from === 'me' ? 'text-right' : 'text-left',
-                                                        )}
-                                                    >
-                                                        {m.time}
-                                                    </p>
-                                                </div>
-                                            </div>
-                                        ))}
+                                {messagesLoading ? (
+                                    <div className="flex items-center justify-center py-8">
+                                        <Loader2 className="size-5 animate-spin text-muted-foreground" />
                                     </div>
-                                ))}
+                                ) : (
+                                    groupedThread.map((group) => (
+                                        <div key={group.label} className="space-y-3">
+                                            <div className="flex items-center justify-center">
+                                                <span className="text-[11px] text-muted-foreground bg-muted px-3 py-1 rounded-full">
+                                                    {group.label}
+                                                </span>
+                                            </div>
+                                            {group.messages.map((m) => {
+                                                const isMe = m.direction === 'outbound';
+                                                return (
+                                                    <div key={m.id} className={cn('flex', isMe ? 'justify-end' : 'justify-start')}>
+                                                        <div className="max-w-[70%] space-y-1">
+                                                            <div
+                                                                className={cn(
+                                                                    'px-3.5 py-2.5 text-sm leading-relaxed break-words shadow-sm',
+                                                                    isMe
+                                                                        ? 'bg-primary text-primary-foreground rounded-2xl rounded-br-md'
+                                                                        : 'bg-muted text-foreground rounded-2xl rounded-bl-md',
+                                                                )}
+                                                            >
+                                                                {m.body}
+                                                            </div>
+                                                            <p
+                                                                className={cn(
+                                                                    'text-[10px] text-muted-foreground px-1',
+                                                                    isMe ? 'text-right' : 'text-left',
+                                                                )}
+                                                            >
+                                                                {formatTime(m.createdAt)}
+                                                                {m.sender === 'ai' && ' · AI'}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    ))
+                                )}
                             </div>
                         </ScrollArea>
 
                         <Separator />
-                        <div className="flex items-center gap-2 px-3 py-3 shrink-0">
-                            <Button variant="ghost" size="icon" className="size-9 shrink-0">
+                        <form onSubmit={handleSend} className="flex items-center gap-2 px-3 py-3 shrink-0">
+                            <Button type="button" variant="ghost" size="icon" className="size-9 shrink-0">
                                 <Paperclip className="size-4" />
                             </Button>
-                            <Button variant="ghost" size="icon" className="size-9 shrink-0">
+                            <Button type="button" variant="ghost" size="icon" className="size-9 shrink-0">
                                 <Smile className="size-4" />
                             </Button>
                             <Input
@@ -240,11 +281,18 @@ export default function MessagesPage() {
                                 onChange={(e) => setDraft(e.target.value)}
                                 placeholder="Type a message"
                                 className="h-10"
+                                disabled={isSending}
                             />
-                            <Button size="icon" className="size-9 shrink-0" onClick={() => setDraft('')}>
-                                {draft.trim() ? <Send className="size-4" /> : <Mic className="size-4" />}
+                            <Button type="submit" size="icon" className="size-9 shrink-0" disabled={isSending}>
+                                {isSending ? (
+                                    <Loader2 className="size-4 animate-spin" />
+                                ) : draft.trim() ? (
+                                    <Send className="size-4" />
+                                ) : (
+                                    <Mic className="size-4" />
+                                )}
                             </Button>
-                        </div>
+                        </form>
                     </>
                 )}
             </div>

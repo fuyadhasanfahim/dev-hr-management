@@ -2,6 +2,7 @@ import express from 'express';
 import SupportController from '../controllers/support.controller.js';
 import MeetingController from '../controllers/meeting.controller.js';
 import KnowledgeBaseController from '../controllers/knowledge-base.controller.js';
+import WhatsAppSupportController from '../controllers/whatsapp-support.controller.js';
 import { requireAuth, restrictTo } from '../middlewares/auth.middleware.js';
 import { validateRequest } from '../middlewares/validateRequest.js';
 import {
@@ -177,6 +178,12 @@ router.get('/knowledge-base', requireUnifiedAuth, restrictTo('admin', 'super_adm
 router.post('/knowledge-base', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), KnowledgeBaseController.createChunk);
 router.patch('/knowledge-base/:id', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), KnowledgeBaseController.updateChunk);
 router.delete('/knowledge-base/:id', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), KnowledgeBaseController.deleteChunk);
+
+// WhatsApp inbox — agent-facing view over the Cloud API webhook pipeline (see whatsapp.route.ts).
+router.get('/whatsapp/conversations', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), WhatsAppSupportController.listConversations);
+router.get('/whatsapp/conversations/:id/messages', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), WhatsAppSupportController.getMessages);
+router.post('/whatsapp/conversations/:id/messages', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), WhatsAppSupportController.sendMessage);
+router.post('/whatsapp/conversations/:id/read', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), WhatsAppSupportController.markRead);
 
 export const SupportRoutes = router;
 export default SupportRoutes;
