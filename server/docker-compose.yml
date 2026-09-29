@@ -1,0 +1,22 @@
+name: dev-hr-knowledge
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${KNOWLEDGE_DB_USER:-devhr_knowledge}
+      POSTGRES_PASSWORD: ${KNOWLEDGE_DB_PASSWORD}
+      POSTGRES_DB: ${KNOWLEDGE_DB_NAME:-devhr_knowledge}
+    ports:
+      - "127.0.0.1:${KNOWLEDGE_DB_PORT:-5435}:5432"
+    volumes:
+      - knowledge_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${KNOWLEDGE_DB_USER:-devhr_knowledge}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  knowledge_postgres_data:

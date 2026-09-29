@@ -6,7 +6,7 @@ import { ThemeProvider } from '@/components/providers/theme-provider';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import ReduxProvider from '@/components/providers/redux-provider';
 
-const inter = Inter({ subsets: ['latin'], variable: '--font-sans' });
+const inter = Inter({subsets:['latin'],variable:'--font-sans'});
 
 export const metadata: Metadata = {
     title: 'WebBriks | Support',
@@ -25,9 +25,9 @@ export default function RootLayout({
         <html
             lang="en"
             suppressHydrationWarning
-            className={cn('h-full antialiased', inter.variable, 'font-sans')}
+            className={cn('h-full antialiased', 'font-sans', "font-sans", inter.variable)}
         >
-            <body className="min-h-full flex flex-col">
+            <body className={cn('min-h-full flex flex-col', inter.variable)}>
                 <ThemeProvider
                     attribute="class"
                     defaultTheme="system"

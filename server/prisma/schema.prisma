@@ -1,0 +1,26 @@
+generator client {
+  provider        = "prisma-client"
+  output          = "../src/generated/prisma"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  extensions = [vector]
+}
+
+// Business-knowledge chunks for the WhatsApp AI's retrieval-augmented replies.
+// Mirrors the old Mongo `KnowledgeChunk` shape (text, embedding, source), now
+// backed by pgvector so retrieval is a real ANN/exact vector query instead of
+// a brute-force cosine scan in Node. The `embedding` column has no native
+// Prisma type — reads/writes go through $queryRaw (see whatsapp-ai.service.ts).
+model KnowledgeChunk {
+  id        String                       @id @default(uuid())
+  text      String
+  embedding Unsupported("vector(1536)")?
+  source    String?
+  createdAt DateTime                     @default(now())
+  updatedAt DateTime                     @updatedAt
+
+  @@map("knowledge_chunks")
+}

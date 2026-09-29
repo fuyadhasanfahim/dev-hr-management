@@ -1,5 +1,6 @@
 import envConfig from '../config/env.config.js';
-import KnowledgeChunkModel from '../models/knowledge-chunk.model.js';
+import { prisma } from '../lib/prisma.js';
+import { embed } from '../lib/openai-embeddings.js';
 import { logger } from '../lib/logger.js';
 
 const SYSTEM_PROMPT = `You are the WhatsApp support assistant for Web Briks LLC, a digital agency. Be friendly and concise (2-3 sentences max).
@@ -35,37 +36,17 @@ async function openaiFetch(path: string, body: unknown) {
     return data;
 }
 
-async function embed(text: string): Promise<number[]> {
-    const data = await openaiFetch('embeddings', {
-        model: envConfig.openai_embedding_model,
-        input: text,
-    });
-    return data.data[0].embedding;
-}
-
-function cosineSimilarity(a: number[], b: number[]): number {
-    let dot = 0, normA = 0, normB = 0;
-    for (let i = 0; i < a.length; i++) {
-        const x = a[i] ?? 0, y = b[i] ?? 0;
-        dot += x * y;
-        normA += x * x;
-        normB += y * y;
-    }
-    return dot / (Math.sqrt(normA) * Math.sqrt(normB) || 1);
-}
-
-// Brute-force top-k over the KnowledgeChunk collection — see the model's
-// comment for why (no Atlas Vector Search on the local mongod).
+// Top-k nearest chunks by cosine distance, via pgvector's `<=>` operator —
+// a real ANN-ready query instead of a brute-force scan in Node.
 async function retrieveContext(queryEmbedding: number[], topK = 4): Promise<string> {
-    const chunks = await KnowledgeChunkModel.find().select('text embedding').lean();
-    if (chunks.length === 0) return '';
-
-    const ranked = chunks
-        .map((c) => ({ text: c.text, score: cosineSimilarity(queryEmbedding, c.embedding) }))
-        .sort((a, b) => b.score - a.score)
-        .slice(0, topK);
-
-    return ranked.map((r) => r.text).join('\n---\n');
+    const embeddingLiteral = `[${queryEmbedding.join(',')}]`;
+    const rows = await prisma.$queryRaw<{ text: string }[]>`
+        SELECT text FROM knowledge_chunks
+        WHERE embedding IS NOT NULL
+        ORDER BY embedding <=> ${embeddingLiteral}::vector
+        LIMIT ${topK}
+    `;
+    return rows.map((r) => r.text).join('\n---\n');
 }
 
 export async function processWhatsAppMessage(message: string, history: ChatTurn[]): Promise<WhatsAppAIResult> {

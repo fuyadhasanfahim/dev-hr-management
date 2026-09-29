@@ -1,28 +1,21 @@
 'use client';
 
-import {
-    Ticket,
-    MessageSquare,
-    CheckCircle,
-    Clock,
-    TrendingUp,
-    TrendingDown,
-    Minus,
-    Inbox,
-} from 'lucide-react';
-import { Card, CardContent } from '@/components/ui/card';
+import { Ticket, MessageSquare, CheckCircle, Clock, Inbox, Activity } from 'lucide-react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
-import { cn } from '@/lib/utils';
+import { StatCard } from '@/components/dashboard/stat-card';
 import {
     useGetDashboardStatsQuery,
     type DashboardStats,
     type ActivityItem,
 } from '@/store/api/chatApi';
 
-const ACTIVITY_ICON: Record<ActivityItem['type'], React.ElementType> = {
-    chat_new: MessageSquare,
-    chat_resolved: CheckCircle,
-    ticket_new: Ticket,
+const ACTIVITY_META: Record<ActivityItem['type'], { icon: React.ElementType; color: string; label: string }> = {
+    chat_new: { icon: MessageSquare, color: 'text-violet-500 bg-violet-500/10', label: 'chat' },
+    chat_resolved: { icon: CheckCircle, color: 'text-emerald-500 bg-emerald-500/10', label: 'resolved' },
+    ticket_new: { icon: Ticket, color: 'text-blue-500 bg-blue-500/10', label: 'ticket' },
 };
 
 function relativeTime(iso: string): string {
@@ -37,91 +30,26 @@ function relativeTime(iso: string): string {
     return new Date(iso).toLocaleDateString();
 }
 
-interface StatCardMeta {
-    label: string;
-    icon: React.ElementType;
-    color: string;
-    // Pull the display value for this card from the stats payload.
-    getValue: (d: DashboardStats | undefined) => string;
-}
-
 function fmtCount(n: number | undefined): string {
     return typeof n === 'number' ? String(n) : '—';
 }
 
 function fmtAvgResponse(mins: number | null | undefined): string {
-    // null/undefined → genuinely unavailable; show an em dash (no fabricated trend).
+    // null/undefined → genuinely unavailable; show an em dash (no fabricated value).
     if (mins == null) return '—';
     if (mins < 1) return `${Math.round(mins * 60)}s`;
     return `${Math.round(mins)}m`;
 }
 
-const STAT_CARDS: StatCardMeta[] = [
-    {
-        label: 'Open Tickets',
-        icon: Ticket,
-        color: 'bg-blue-500/15 text-blue-500',
-        getValue: (d) => fmtCount(d?.openTickets),
-    },
-    {
-        label: 'Live Chats',
-        icon: MessageSquare,
-        color: 'bg-violet-500/15 text-violet-500',
-        getValue: (d) => fmtCount(d?.liveChats),
-    },
-    {
-        label: 'Resolved Today',
-        icon: CheckCircle,
-        color: 'bg-emerald-500/15 text-emerald-500',
-        getValue: (d) => fmtCount(d?.resolvedToday),
-    },
-    {
-        label: 'Avg. Response Time',
-        icon: Clock,
-        color: 'bg-amber-500/15 text-amber-500',
-        getValue: (d) => fmtAvgResponse(d?.avgResponseTimeMinutes),
-    },
-];
-
-function TrendBadge({ trend }: { trend: number | null }) {
-    if (trend === null) return null;
-    const positive = trend > 0;
-    const neutral = trend === 0;
-    return (
-        <span
-            className={cn(
-                'inline-flex items-center gap-0.5 text-[11px] font-medium',
-                neutral
-                    ? 'text-muted-foreground'
-                    : positive
-                        ? 'text-emerald-500'
-                        : 'text-destructive',
-            )}
-        >
-            {neutral ? (
-                <Minus className="size-3" />
-            ) : positive ? (
-                <TrendingUp className="size-3" />
-            ) : (
-                <TrendingDown className="size-3" />
-            )}
-            {neutral ? 'No change' : `${Math.abs(trend)}% vs yesterday`}
-        </span>
-    );
-}
-
 function StatCardSkeleton() {
     return (
         <Card className="shadow-sm">
-            <CardContent className="p-5">
-                <div className="flex items-start justify-between">
-                    <div className="space-y-2 flex-1">
-                        <Skeleton className="h-3.5 w-24" />
-                        <Skeleton className="h-8 w-16" />
-                        <Skeleton className="h-3 w-28" />
-                    </div>
-                    <Skeleton className="size-10 rounded-xl" />
-                </div>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <Skeleton className="h-3.5 w-24" />
+                <Skeleton className="size-8 rounded-xl" />
+            </CardHeader>
+            <CardContent>
+                <Skeleton className="h-8 w-16" />
             </CardContent>
         </Card>
     );
@@ -143,34 +71,37 @@ export default function DashboardPage() {
 
             {/* Stat Cards */}
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                {isLoading
-                    ? STAT_CARDS.map((_, i) => <StatCardSkeleton key={i} />)
-                    : STAT_CARDS.map((card) => {
-                        const Icon = card.icon;
-                        return (
-                            <Card key={card.label} className="shadow-sm">
-                                <CardContent className="p-5">
-                                    <div className="flex items-start justify-between">
-                                        <div className="space-y-1">
-                                            <p className="text-sm text-muted-foreground">{card.label}</p>
-                                            <p className="text-3xl font-bold text-foreground">{card.getValue(data)}</p>
-                                            {/* TODO: real trends need a day-over-day snapshot; keep null until then. */}
-                                            <TrendBadge trend={null} />
-                                        </div>
-                                        <div className={cn('size-10 rounded-xl flex items-center justify-center shrink-0', card.color)}>
-                                            <Icon className="size-5" />
-                                        </div>
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        );
-                    })}
+                {isLoading ? (
+                    Array.from({ length: 4 }).map((_, i) => <StatCardSkeleton key={i} />)
+                ) : (
+                    <>
+                        <StatCard title="Open Tickets" value={fmtCount(data?.openTickets)} icon={Ticket} variant="primary" />
+                        <StatCard title="Live Chats" value={fmtCount(data?.liveChats)} icon={MessageSquare} variant="purple" />
+                        <StatCard title="Resolved Today" value={fmtCount(data?.resolvedToday)} icon={CheckCircle} variant="success" />
+                        <StatCard
+                            title="Avg. Response Time"
+                            value={fmtAvgResponse(data?.avgResponseTimeMinutes)}
+                            icon={Clock}
+                            variant="warning"
+                        />
+                    </>
+                )}
             </div>
 
             {/* Recent Activity */}
-            <Card className="shadow-sm">
-                <CardContent className="p-5">
-                    <p className="text-sm font-medium mb-4">Recent Activity</p>
+            <Card className="flex flex-col shadow-sm hover:shadow-md transition-shadow">
+                <CardHeader className="flex flex-row items-center justify-between pb-3">
+                    <div>
+                        <CardTitle className="text-base sm:text-lg font-bold flex items-center gap-2">
+                            <Activity className="size-5 text-primary" />
+                            Recent Activity
+                        </CardTitle>
+                        <CardDescription className="text-xs sm:text-sm">
+                            Latest chats, tickets and resolutions across the console
+                        </CardDescription>
+                    </div>
+                </CardHeader>
+                <CardContent className="pb-4">
                     {isLoading ? (
                         <div className="space-y-3">
                             {[...Array(4)].map((_, i) => (
@@ -184,19 +115,33 @@ export default function DashboardPage() {
                             ))}
                         </div>
                     ) : data?.recentActivity && data.recentActivity.length > 0 ? (
-                        <div className="space-y-1">
+                        <div className="space-y-2">
                             {data.recentActivity.map((item, i) => {
-                                const ActIcon = ACTIVITY_ICON[item.type] ?? Inbox;
+                                const meta = ACTIVITY_META[item.type] ?? {
+                                    icon: Inbox,
+                                    color: 'text-primary bg-primary/10',
+                                    label: item.type,
+                                };
+                                const Icon = meta.icon;
                                 return (
                                     <div
                                         key={`${item.type}-${item.at}-${i}`}
-                                        className="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-accent/50 transition-colors"
+                                        className="flex items-center gap-3 p-2.5 rounded-xl bg-muted/20 border border-border/40 hover:bg-muted/40 transition-colors"
                                     >
-                                        <div className="size-8 rounded-full bg-muted flex items-center justify-center shrink-0">
-                                            <ActIcon className="size-4 text-muted-foreground" />
+                                        <Avatar className="size-8 shrink-0">
+                                            <AvatarFallback className={meta.color}>
+                                                <Icon className="size-4" />
+                                            </AvatarFallback>
+                                        </Avatar>
+                                        <div className="flex-1 min-w-0 space-y-0.5">
+                                            <div className="flex items-center gap-1.5">
+                                                <Badge variant="outline" className="text-[9px] px-1 py-0 capitalize">
+                                                    {meta.label}
+                                                </Badge>
+                                            </div>
+                                            <p className="text-xs text-foreground truncate">{item.label}</p>
                                         </div>
-                                        <p className="flex-1 text-sm text-foreground truncate">{item.label}</p>
-                                        <span className="text-xs text-muted-foreground shrink-0">
+                                        <span className="text-[10px] text-muted-foreground shrink-0 font-medium">
                                             {relativeTime(item.at)}
                                         </span>
                                     </div>
@@ -209,9 +154,7 @@ export default function DashboardPage() {
                                 <Inbox className="size-5 text-muted-foreground" />
                             </div>
                             <p className="text-sm font-medium text-foreground">No recent activity</p>
-                            <p className="text-xs text-muted-foreground mt-1">
-                                No recent activity yet.
-                            </p>
+                            <p className="text-xs text-muted-foreground mt-1">No recent activity yet.</p>
                         </div>
                     )}
                 </CardContent>

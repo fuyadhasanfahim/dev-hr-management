@@ -56,7 +56,7 @@ const softWarnVars = [
     'STRIPE_SECRET_KEY', 'STRIPE_PUBLISHABLE_KEY', 'STRIPE_WEBHOOK_SECRET',
     'PAYPAL_CLIENT_ID', 'PAYPAL_CLIENT_SECRET',
     'META_APP_ID', 'META_APP_SECRET', 'META_WEBHOOK_VERIFY_TOKEN', 'META_ACCESS_TOKEN',
-    'WHATSAPP_PHONE_NUMBER_ID', 'OPENAI_API_KEY',
+    'WHATSAPP_PHONE_NUMBER_ID', 'OPENAI_API_KEY', 'DATABASE_URL',
 ] as const;
 const missingSoft = softWarnVars.filter((key) => !process.env[key]);
 if (missingSoft.length > 0) {
@@ -157,5 +157,8 @@ const envConfig = {
     openai_api_key: process.env.OPENAI_API_KEY || '',
     openai_chat_model: process.env.OPENAI_CHAT_MODEL || 'gpt-4.1-mini',
     openai_embedding_model: process.env.OPENAI_EMBEDDING_MODEL || 'text-embedding-3-small',
+
+    // Knowledge base (pgvector via Prisma) — WhatsApp AI RAG store, phase 3
+    database_url: process.env.DATABASE_URL || '',
 };
 export default envConfig;

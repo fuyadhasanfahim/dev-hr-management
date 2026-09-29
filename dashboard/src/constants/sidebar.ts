@@ -23,6 +23,7 @@ import {
     IconMessageChatbot,
     IconFileInvoice,
     IconBuildingCommunity,
+    IconHeadset,
 } from "@tabler/icons-react";
 
 
@@ -345,7 +346,7 @@ export const sidebarGroups: SidebarGroup[] = [
             {
                 title: "Support Console",
                 url: process.env.NEXT_PUBLIC_SUPPORT_URL || 'http://localhost:3002',
-                icon: IconSpeakerphone,
+                icon: IconHeadset,
                 external: true,
                 access: [
                     Role.SUPER_ADMIN,

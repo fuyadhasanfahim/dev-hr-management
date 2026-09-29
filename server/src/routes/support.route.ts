@@ -1,6 +1,7 @@
 import express from 'express';
 import SupportController from '../controllers/support.controller.js';
 import MeetingController from '../controllers/meeting.controller.js';
+import KnowledgeBaseController from '../controllers/knowledge-base.controller.js';
 import { requireAuth, restrictTo } from '../middlewares/auth.middleware.js';
 import { validateRequest } from '../middlewares/validateRequest.js';
 import {
@@ -170,6 +171,12 @@ router.post('/chats/claim', requireUnifiedAuth, restrictTo('admin', 'super_admin
 router.post('/chats/convert', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), validateRequest(ConvertChatToTicketBodyValidation), SupportController.convertChatToTicket);
 
 router.post('/admin/migrate-cloudinary', requireUnifiedAuth, restrictTo('admin', 'super_admin'), SupportController.triggerCloudinaryMigration);
+
+// Knowledge base (pgvector) — WhatsApp AI's RAG source, managed by staff.
+router.get('/knowledge-base', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), KnowledgeBaseController.listChunks);
+router.post('/knowledge-base', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), KnowledgeBaseController.createChunk);
+router.patch('/knowledge-base/:id', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), KnowledgeBaseController.updateChunk);
+router.delete('/knowledge-base/:id', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), KnowledgeBaseController.deleteChunk);
 
 export const SupportRoutes = router;
 export default SupportRoutes;
