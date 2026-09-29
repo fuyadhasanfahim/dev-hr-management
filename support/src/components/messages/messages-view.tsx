@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { useDispatch } from 'react-redux';
 import { AnimatePresence, MotionConfig, motion } from 'motion/react';
@@ -9,6 +9,7 @@ import {
     Bot,
     Check,
     CheckCheck,
+    ChevronDown,
     Clock3,
     Loader2,
     Mic,
@@ -156,18 +157,52 @@ function MessageTicks({ status, onBubble }: { status: WhatsAppMessageStatus | nu
 // those render instantly, and only messages that arrive afterwards animate in.
 function ThreadMessages({ messages, onRetry }: { messages: WhatsAppMessage[]; onRetry: (m: WhatsAppMessage) => void }) {
     const [openedWith] = useState(() => new Set(messages.map(messageKey)));
-    const bottomRef = useRef<HTMLDivElement>(null);
-    const hasScrolled = useRef(false);
+    const contentRef = useRef<HTMLDivElement>(null);
+    const stickToBottom = useRef(true);
+    const messageCount = useRef(messages.length);
+    // Message count at the moment the agent scrolled up to read history; null while at the bottom.
+    const [leftBottomAt, setLeftBottomAt] = useState<number | null>(null);
     const thread = useMemo(() => buildThread(messages), [messages]);
 
-    // Jump to the newest message when the thread opens; glide when one arrives.
-    useEffect(() => {
-        bottomRef.current?.scrollIntoView({ block: 'end', behavior: hasScrolled.current ? 'smooth' : 'auto' });
-        hasScrolled.current = true;
-    }, [messages.length]);
+    const viewport = () => contentRef.current?.closest<HTMLElement>('[data-slot=scroll-area-viewport]') ?? null;
+
+    // Stick-to-bottom: while the agent is at the bottom, any growth of the thread
+    // (new bubbles, late web-font / Bangla glyph reflow, a retry label) keeps it
+    // pinned there. Scrolling up releases it, so reading history is never yanked.
+    useLayoutEffect(() => {
+        const v = viewport();
+        const content = contentRef.current;
+        if (!v || !content) return;
+        v.scrollTop = v.scrollHeight;
+
+        const onScroll = () => {
+            const atBottom = v.scrollHeight - v.scrollTop - v.clientHeight < 80;
+            stickToBottom.current = atBottom;
+            setLeftBottomAt((prev) => (atBottom ? null : (prev ?? messageCount.current)));
+        };
+        const resize = new ResizeObserver(() => {
+            if (stickToBottom.current) v.scrollTop = v.scrollHeight;
+        });
+        v.addEventListener('scroll', onScroll, { passive: true });
+        resize.observe(content);
+        return () => {
+            v.removeEventListener('scroll', onScroll);
+            resize.disconnect();
+        };
+    }, []);
+
+    // Sending a message always brings the agent down to it, even from history.
+    // Layout effect so the flag is set before the ResizeObserver sees the new bubble.
+    const last = messages[messages.length - 1];
+    useLayoutEffect(() => {
+        messageCount.current = messages.length;
+        if (last && isLocalMessageId(last.id)) stickToBottom.current = true;
+    }, [messages.length, last]);
+
+    const unseen = leftBottomAt === null ? 0 : messages.length - leftBottomAt;
 
     return (
-        <>
+        <div ref={contentRef}>
             {thread.map((day) => (
                 <div key={day.label}>
                     <div className="sticky top-0 z-10 flex items-center justify-center py-2">
@@ -238,8 +273,36 @@ function ThreadMessages({ messages, onRetry }: { messages: WhatsAppMessage[]; on
                     })}
                 </div>
             ))}
-            <div ref={bottomRef} />
-        </>
+            {/* Zero-height sticky rail: the button floats over the viewport's bottom
+                edge while the agent is reading history, without adding scroll height. */}
+            <div className="pointer-events-none sticky bottom-3 z-20 h-0">
+                <AnimatePresence>
+                    {leftBottomAt !== null && (
+                        <motion.button
+                            type="button"
+                            aria-label="Jump to latest message"
+                            initial={{ opacity: 0, scale: 0.6, y: 8 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.6, y: 8 }}
+                            transition={bubbleSpring}
+                            onClick={() => {
+                                const v = viewport();
+                                stickToBottom.current = true;
+                                v?.scrollTo({ top: v.scrollHeight, behavior: 'smooth' });
+                            }}
+                            className="pointer-events-auto absolute right-0 bottom-0 flex size-10 items-center justify-center rounded-full border bg-popover text-foreground shadow-lg hover:bg-muted"
+                        >
+                            <ChevronDown className="size-5" />
+                            {unseen > 0 && (
+                                <span className="absolute -top-1.5 -right-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1 text-[11px] font-medium text-white tabular-nums">
+                                    {unseen > 99 ? '99+' : unseen}
+                                </span>
+                            )}
+                        </motion.button>
+                    )}
+                </AnimatePresence>
+            </div>
+        </div>
     );
 }
 
