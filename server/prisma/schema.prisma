@@ -15,12 +15,13 @@ datasource db {
 // a brute-force cosine scan in Node. The `embedding` column has no native
 // Prisma type — reads/writes go through $queryRaw (see whatsapp-ai.service.ts).
 model KnowledgeChunk {
-  id        String                       @id @default(uuid())
-  text      String
-  embedding Unsupported("vector(1536)")?
-  source    String?
-  createdAt DateTime                     @default(now())
-  updatedAt DateTime                     @updatedAt
+  id            String                       @id @default(uuid())
+  text          String
+  embedding     Unsupported("vector(1536)")?
+  source        String?
+  createdByName String?
+  createdAt     DateTime                     @default(now())
+  updatedAt     DateTime                     @updatedAt
 
   @@map("knowledge_chunks")
 }

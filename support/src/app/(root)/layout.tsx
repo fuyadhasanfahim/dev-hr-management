@@ -14,7 +14,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                     } as React.CSSProperties
                 }
             >
-                <AppSidebar variant="sidebar" />
+                <AppSidebar variant="floating" />
                 <SidebarInset>
                     <SiteHeader />
                     <div className="flex flex-1 flex-col min-h-0 overflow-auto">

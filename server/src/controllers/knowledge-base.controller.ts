@@ -16,7 +16,7 @@ async function createChunk(req: Request, res: Response) {
         if (!text || typeof text !== 'string' || !text.trim()) {
             return res.status(400).json({ success: false, message: 'text is required' });
         }
-        const chunk = await knowledgeBaseService.createChunk(text.trim(), source?.trim() || undefined);
+        const chunk = await knowledgeBaseService.createChunk(text.trim(), source?.trim() || undefined, req.user?.name);
         return res.status(201).json({ success: true, data: chunk });
     } catch (err: any) {
         return res.status(500).json({ success: false, message: err.message });

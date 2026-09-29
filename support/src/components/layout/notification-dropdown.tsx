@@ -8,6 +8,7 @@ import {
     DropdownMenuContent,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import {
     useGetUnreadNotificationCountQuery,
     useGetNotificationsQuery,
@@ -89,7 +90,7 @@ export function NotificationDropdown() {
                     )}
                 </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-[360px] p-0" sideOffset={8}>
+            <DropdownMenuContent side="right" align="start" className="w-[360px] p-0" sideOffset={8}>
                 <div className="flex items-center justify-between px-3 py-2.5 border-b">
                     <h4 className="text-sm font-semibold">Notifications</h4>
                     {unreadCount > 0 && (
@@ -109,7 +110,7 @@ export function NotificationDropdown() {
                         </Button>
                     )}
                 </div>
-                <div className="max-h-[400px] overflow-y-auto">
+                <ScrollArea className="h-[400px]">
                     {isLoading ? (
                         <div className="flex items-center justify-center py-8">
                             <Loader2 className="size-4 animate-spin text-muted-foreground" />
@@ -128,7 +129,7 @@ export function NotificationDropdown() {
                             />
                         ))
                     )}
-                </div>
+                </ScrollArea>
             </DropdownMenuContent>
         </DropdownMenu>
     );

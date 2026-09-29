@@ -4,6 +4,7 @@ export interface KnowledgeChunk {
     id: string;
     text: string;
     source: string | null;
+    createdByName: string | null;
     createdAt: string;
 }
 

@@ -5,24 +5,25 @@ export interface KnowledgeChunkSummary {
     id: string;
     text: string;
     source: string | null;
+    createdByName: string | null;
     createdAt: Date;
 }
 
 async function listChunks(): Promise<KnowledgeChunkSummary[]> {
     return prisma.$queryRaw<KnowledgeChunkSummary[]>`
-        SELECT id, text, source, "createdAt"
+        SELECT id, text, source, "createdByName", "createdAt"
         FROM knowledge_chunks
         ORDER BY "createdAt" DESC
     `;
 }
 
-async function createChunk(text: string, source?: string): Promise<KnowledgeChunkSummary> {
+async function createChunk(text: string, source?: string, createdByName?: string): Promise<KnowledgeChunkSummary> {
     const embedding = await embed(text);
     const embeddingLiteral = `[${embedding.join(',')}]`;
     const rows = await prisma.$queryRaw<KnowledgeChunkSummary[]>`
-        INSERT INTO knowledge_chunks (id, text, embedding, source, "createdAt", "updatedAt")
-        VALUES (gen_random_uuid()::text, ${text}, ${embeddingLiteral}::vector, ${source ?? null}, now(), now())
-        RETURNING id, text, source, "createdAt"
+        INSERT INTO knowledge_chunks (id, text, embedding, source, "createdByName", "createdAt", "updatedAt")
+        VALUES (gen_random_uuid()::text, ${text}, ${embeddingLiteral}::vector, ${source ?? null}, ${createdByName ?? null}, now(), now())
+        RETURNING id, text, source, "createdByName", "createdAt"
     `;
     return rows[0]!;
 }
@@ -35,7 +36,7 @@ async function updateChunk(id: string, text: string, source?: string): Promise<K
         UPDATE knowledge_chunks
         SET text = ${text}, embedding = ${embeddingLiteral}::vector, source = ${source ?? null}, "updatedAt" = now()
         WHERE id = ${id}
-        RETURNING id, text, source, "createdAt"
+        RETURNING id, text, source, "createdByName", "createdAt"
     `;
     if (!rows[0]) throw new Error('Knowledge chunk not found');
     return rows[0];

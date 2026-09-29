@@ -5,41 +5,41 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
+  --card: #ffffff;
+  --card-foreground: #0f172a;
+  --popover: #ffffff;
+  --popover-foreground: #0f172a;
 
   /* WebBriks Brand Colors - Light Mode */
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
+  --primary: #4E12D4;
+  --primary-foreground: #ffffff;
+  --secondary: #1E0078;
+  --secondary-foreground: #ffffff;
+  --accent: #f1f5f9;
+  --accent-foreground: #0f172a;
 
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
+  --muted: #f8fafc;
+  --muted-foreground: #64748b;
+  --destructive: #ef4444;
   --destructive-foreground: #ffffff;
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  --border: #e2e8f0;
+  --input: #e2e8f0;
+  --ring: #4E12D4;
 
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
+  --chart-1: #4E12D4;
+  --chart-2: #C850FA;
+  --chart-3: #1E0078;
+  --chart-4: #a855f7;
+  --chart-5: #ec4899;
 
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --sidebar: #ffffff;
+  --sidebar-foreground: #0f172a;
+  --sidebar-primary: #4E12D4;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #f1f5f9;
+  --sidebar-accent-foreground: #4E12D4;
+  --sidebar-border: #e2e8f0;
+  --sidebar-ring: #4E12D4;
 
   --font-sans: var(--font-sans), Inter, ui-sans-serif, system-ui, sans-serif;
   --font-serif: var(--font-sans), Inter, ui-sans-serif, system-ui, sans-serif;
@@ -71,51 +71,51 @@
   --brand-primary: #4E12D4;
   --brand-secondary: #1E0078;
   --brand-accent: #C850FA;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
+  --background: #ffffff;
+  --foreground: #0f172a;
 }
 
 .dark {
   /* Crisp, Elegant B2B Slate Dark Mode (Vercel / Supabase Style) */
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
+  --background: #0b0f19;
+  --foreground: #f8fafc;
+  --card: #151c2c;
+  --card-foreground: #f8fafc;
+  --popover: #151c2c;
+  --popover-foreground: #f8fafc;
 
-  /* WebBriks Brand Colors - Dark Mode */
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
+  /* WebBriks Brand Colors - Dark Mode (same brand purple as light mode, not a generic violet) */
+  --primary: #4E12D4;
+  --primary-foreground: #ffffff;
+  --secondary: #222d43;
+  --secondary-foreground: #f8fafc;
+  --accent: #222d43;
+  --accent-foreground: #f8fafc;
 
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
+  --muted: #1e293b;
+  --muted-foreground: #94a3b8;
+  --destructive: #f43f5e;
   --destructive-foreground: #ffffff;
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
+  --border: #2e3b52;
+  --input: #2e3b52;
+  --ring: #4E12D4;
 
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
+  --chart-1: #4E12D4;
+  --chart-2: #C850FA;
+  --chart-3: #1E0078;
+  --chart-4: #a855f7;
+  --chart-5: #ec4899;
 
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --sidebar: #0e1320;
+  --sidebar-foreground: #f8fafc;
+  --sidebar-primary: #4E12D4;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #1e293b;
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: #2e3b52;
+  --sidebar-ring: #4E12D4;
 
-  --radius: 1rem;
+  --radius: 0.625rem;
 
   --shadow-2xs: 0px 1px 2px 0px rgba(0, 0, 0, 0.2);
   --shadow-xs: 0px 1px 2px 0px rgba(0, 0, 0, 0.25);
@@ -126,9 +126,9 @@
   --shadow-xl: 0px 6px 18px 0px rgba(0, 0, 0, 0.45);
   --shadow-2xl: 0px 10px 24px 0px rgba(0, 0, 0, 0.5);
 
-  --brand-primary: #8b5cf6;
-  --brand-secondary: #222d43;
-  --brand-accent: #c084fc;
+  --brand-primary: #4E12D4;
+  --brand-secondary: #1E0078;
+  --brand-accent: #C850FA;
 }
 
 @theme inline {

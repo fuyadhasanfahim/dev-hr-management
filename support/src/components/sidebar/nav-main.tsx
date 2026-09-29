@@ -3,7 +3,7 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { BookOpen, LayoutDashboard, MessageSquare, Search, Settings, Ticket, Users, X } from 'lucide-react';
+import { BookOpen, LayoutDashboard, MessageCircle, MessageSquare, Search, Settings, Ticket, Users, X } from 'lucide-react';
 import {
     SidebarGroup,
     SidebarInput,
@@ -34,6 +34,7 @@ const NAV_GROUPS: NavGroup[] = [
         items: [
             { title: 'Overview', url: '/dashboard', icon: LayoutDashboard },
             { title: 'Live Chat', url: '/live-chat', icon: MessageSquare },
+            { title: 'Your Messages', url: '/messages', icon: MessageCircle },
         ],
     },
     {
@@ -147,14 +148,18 @@ export function NavMain() {
                         type="multiple"
                         value={expandedItems}
                         onValueChange={setExpandedItems}
-                        className="w-full space-y-1.5 border-none"
+                        className="w-full space-y-1.5 rounded-none border-none bg-transparent"
                     >
                         {filteredGroups.map((group) => (
-                            <AccordionItem key={group.groupLabel} value={group.groupLabel} className="border-none">
-                                <AccordionTrigger className="hover:no-underline py-1 px-3 text-[10px] font-bold text-sidebar-foreground/55 hover:text-sidebar-foreground transition-colors uppercase tracking-wider rounded-md hover:bg-sidebar-accent/30 [&[data-state=open]>svg]:rotate-180">
+                            <AccordionItem
+                                key={group.groupLabel}
+                                value={group.groupLabel}
+                                className="border-none bg-transparent data-open:bg-transparent"
+                            >
+                                <AccordionTrigger className="no-underline hover:no-underline py-1 px-3 text-[10px] font-bold text-sidebar-foreground/55 hover:text-sidebar-foreground transition-colors uppercase tracking-wider [&[data-state=open]>svg]:rotate-180">
                                     <span className="flex items-center gap-2">{group.groupLabel}</span>
                                 </AccordionTrigger>
-                                <AccordionContent className="pb-0 pt-1 px-1">
+                                <AccordionContent className="pb-0 pt-1 px-1 [&_a]:no-underline [&_a]:hover:no-underline">
                                     <SidebarMenu className="space-y-0.5">
                                         {group.items.map((item) => {
                                             const badge = badgeByUrl[item.url] ?? 0;
