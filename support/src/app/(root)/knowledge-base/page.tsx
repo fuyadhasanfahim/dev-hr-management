@@ -119,7 +119,8 @@ function EntryFormDialog({
                             value={text}
                             onChange={(e) => setText(e.target.value)}
                             placeholder="Our office hours are Sunday–Thursday, 9 AM–6 PM."
-                            rows={4}
+                            // Grows with the entry up to a fixed height, then scrolls.
+                            className="min-h-28 max-h-72 overflow-y-auto"
                             required
                             autoFocus
                         />

@@ -534,6 +534,7 @@ export const KnowledgeChunkScalarFieldEnum = {
   id: 'id',
   text: 'text',
   source: 'source',
+  createdByName: 'createdByName',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 } as const

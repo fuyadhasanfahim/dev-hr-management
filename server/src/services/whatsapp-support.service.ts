@@ -29,6 +29,7 @@ export interface MessageSummary {
     body: string;
     status: WhatsAppMessageStatus | null;
     error: string | null;
+    clientId: string | null;
     createdAt: string;
 }
 
@@ -40,6 +41,7 @@ function toMessageSummary(m: IWhatsAppMessage): MessageSummary {
         body: m.body,
         status: m.status ?? null,
         error: m.error ?? null,
+        clientId: m.clientId ?? null,
         createdAt: m.createdAt.toISOString(),
     };
 }
@@ -97,7 +99,7 @@ async function getMessages(conversationId: string): Promise<MessageSummary[]> {
 // Saves the reply as `pending` and hands the actual Cloud API call to the Redis
 // send queue, so the agent's UI never waits on Meta. Flips aiEnabled off: once
 // a human is typing, the bot should stay quiet on this conversation.
-async function sendAgentMessage(conversationId: string, body: string): Promise<MessageSummary> {
+async function sendAgentMessage(conversationId: string, body: string, clientId?: string): Promise<MessageSummary> {
     const conversation = await WhatsAppConversationModel.findById(conversationId);
     if (!conversation) throw new Error('Conversation not found');
 
@@ -110,6 +112,7 @@ async function sendAgentMessage(conversationId: string, body: string): Promise<M
         body,
         whatsappMsgId: `pending:${_id}`,
         status: WhatsAppMessageStatus.PENDING,
+        clientId,
     });
 
     conversation.lastMessageAt = new Date();

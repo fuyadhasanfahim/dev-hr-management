@@ -30,6 +30,7 @@ export interface IWhatsAppMessage extends Document {
     whatsappMsgId: string;
     status?: WhatsAppMessageStatus; // Outbound only.
     error?: string;
+    clientId?: string; // Id the agent's browser gave its optimistic bubble, so the UI keeps one stable key.
     createdAt: Date;
     updatedAt: Date;
 }
@@ -67,6 +68,9 @@ const whatsAppMessageSchema = new Schema<IWhatsAppMessage>(
             enum: Object.values(WhatsAppMessageStatus),
         },
         error: {
+            type: String,
+        },
+        clientId: {
             type: String,
         },
     },

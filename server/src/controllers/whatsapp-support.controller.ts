@@ -21,11 +21,12 @@ async function getMessages(req: Request, res: Response) {
 
 async function sendMessage(req: Request, res: Response) {
     try {
-        const { text } = req.body;
+        const { text, clientId } = req.body;
         if (!text || typeof text !== 'string' || !text.trim()) {
             return res.status(400).json({ success: false, message: 'text is required' });
         }
-        const message = await whatsappSupportService.sendAgentMessage(req.params.id!, text.trim());
+        const safeClientId = typeof clientId === 'string' && clientId.length <= 64 ? clientId : undefined;
+        const message = await whatsappSupportService.sendAgentMessage(req.params.id!, text.trim(), safeClientId);
         return res.status(201).json({ success: true, data: message });
     } catch (err: any) {
         return res.status(500).json({ success: false, message: err.message });

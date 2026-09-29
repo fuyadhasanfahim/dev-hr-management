@@ -22,8 +22,12 @@ export interface WhatsAppMessage {
     body: string;
     status: WhatsAppMessageStatus | null;
     error: string | null;
+    clientId: string | null;
     createdAt: string;
 }
+
+// One key per bubble for its whole life: optimistic → saved → refetched.
+export const messageKey = (m: WhatsAppMessage) => m.clientId ?? m.id;
 
 // Client-side id for an optimistic bubble that the server hasn't acknowledged yet.
 export const isLocalMessageId = (id: string) => id.startsWith('local-');
@@ -43,10 +47,10 @@ export const whatsappApi = baseApi.injectEndpoints({
         // Optimistic: the bubble is in the thread before the request leaves; the
         // server only queues the send, and ticks arrive later over the socket.
         sendWhatsAppMessage: builder.mutation<WhatsAppMessage, { conversationId: string; text: string; localId: string }>({
-            query: ({ conversationId, text }) => ({
+            query: ({ conversationId, text, localId }) => ({
                 url: `/support/whatsapp/conversations/${conversationId}/messages`,
                 method: 'POST',
-                body: { text },
+                body: { text, clientId: localId },
             }),
             transformResponse: (res: { data: WhatsAppMessage }) => res.data,
             invalidatesTags: ['WhatsAppConversations'],
@@ -62,6 +66,7 @@ export const whatsappApi = baseApi.injectEndpoints({
                         body: text,
                         status: 'pending',
                         error: null,
+                        clientId: localId,
                         createdAt: new Date().toISOString(),
                     });
                 });
