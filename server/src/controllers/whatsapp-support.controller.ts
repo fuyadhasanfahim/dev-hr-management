@@ -32,6 +32,15 @@ async function sendMessage(req: Request, res: Response) {
     }
 }
 
+async function retryMessage(req: Request, res: Response) {
+    try {
+        const message = await whatsappSupportService.retryMessage(req.params.id!, req.params.messageId!);
+        return res.status(200).json({ success: true, data: message });
+    } catch (err: any) {
+        return res.status(500).json({ success: false, message: err.message });
+    }
+}
+
 async function markRead(req: Request, res: Response) {
     try {
         await whatsappSupportService.markConversationRead(req.params.id!);
@@ -41,4 +50,4 @@ async function markRead(req: Request, res: Response) {
     }
 }
 
-export default { listConversations, getMessages, sendMessage, markRead };
+export default { listConversations, getMessages, sendMessage, retryMessage, markRead };

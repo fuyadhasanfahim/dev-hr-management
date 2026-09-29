@@ -25,7 +25,8 @@ export async function sendTextMessage(to: string, body: string): Promise<string>
 
     const data: any = await res.json();
     if (!res.ok) {
-        throw new Error(`WhatsApp send failed: ${res.status} ${JSON.stringify(data)}`);
+        const reason = data?.error?.error_data?.details || data?.error?.message || `HTTP ${res.status}`;
+        throw new Error(`WhatsApp send failed: ${reason}`);
     }
     return data.messages?.[0]?.id;
 }

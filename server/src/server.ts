@@ -9,6 +9,7 @@ import { logger } from "./lib/logger.js";
 import { initSentry } from "./lib/sentry.js";
 import { createGracefulShutdown } from "./lib/gracefulShutdown.js";
 import { initPermissionCacheSync } from "./lib/permissions.js";
+import { startWhatsAppSendWorker } from "./services/whatsapp-send.queue.js";
 
 import { cleanupDuplicateOverviewInDB } from './utils/cleanupDuplicateOverview.js';
 
@@ -39,6 +40,8 @@ async function Server() {
         // Start all schedulers (attendance, overtime, leave)
         schedulerService.startAllSchedulers();
 
+        const whatsappSendWorker = startWhatsAppSendWorker();
+
         // Graceful shutdown: stop accepting new connections, let in-flight
         // requests finish, close the DB connection, then exit — bounded by
         // a timeout so a hung request/connection can never block shutdown
@@ -50,6 +53,7 @@ async function Server() {
                 // Phase 1) so no new background work starts against a DB
                 // connection that's about to close, then close the connection.
                 await schedulerService.stopAllSchedulers();
+                await whatsappSendWorker.close();
                 await mongoose.connection.close();
             },
             onLog: (level, event, meta) => logger[level](meta, event),

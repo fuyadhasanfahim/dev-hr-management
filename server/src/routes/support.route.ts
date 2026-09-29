@@ -183,6 +183,7 @@ router.delete('/knowledge-base/:id', requireUnifiedAuth, restrictTo('admin', 'su
 router.get('/whatsapp/conversations', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), WhatsAppSupportController.listConversations);
 router.get('/whatsapp/conversations/:id/messages', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), WhatsAppSupportController.getMessages);
 router.post('/whatsapp/conversations/:id/messages', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), WhatsAppSupportController.sendMessage);
+router.post('/whatsapp/conversations/:id/messages/:messageId/retry', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), WhatsAppSupportController.retryMessage);
 router.post('/whatsapp/conversations/:id/read', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), WhatsAppSupportController.markRead);
 
 export const SupportRoutes = router;

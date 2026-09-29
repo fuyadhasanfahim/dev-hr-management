@@ -4,7 +4,12 @@ import { logger } from '../lib/logger.js';
 import whatsappService from '../services/whatsapp.service.js';
 import whatsappAiService from '../services/whatsapp-ai.service.js';
 import WhatsAppConversationModel, { WhatsAppConversationStatus } from '../models/whatsapp-conversation.model.js';
-import WhatsAppMessageModel, { WhatsAppMessageDirection, WhatsAppMessageSender } from '../models/whatsapp-message.model.js';
+import WhatsAppMessageModel, {
+    WhatsAppMessageDirection,
+    WhatsAppMessageSender,
+    WhatsAppMessageStatus,
+} from '../models/whatsapp-message.model.js';
+import { notifyMessageStatus } from '../services/whatsapp-send.queue.js';
 import { createTicket } from '../services/support-ticket.service.js';
 import { TicketSource } from '../models/ticket.model.js';
 import { notifyAgents } from '../socket/support.namespace.js';
@@ -48,8 +53,53 @@ export function receiveWebhook(req: Request, res: Response) {
                     (err) => logger.error(`Failed to handle WhatsApp message ${message.id}: ${err.message}`),
                 );
             }
+            for (const status of (value.statuses ?? []) as StatusUpdate[]) {
+                void handleStatusUpdate(status).catch(
+                    (err) => logger.error(`Failed to handle WhatsApp status for ${status.id}: ${err.message}`),
+                );
+            }
         }
     }
+}
+
+interface StatusUpdate {
+    id: string; // Meta's message id of OUR outbound message
+    status: 'sent' | 'delivered' | 'read' | 'failed';
+    errors?: { title?: string; message?: string; error_data?: { details?: string } }[];
+}
+
+const STATUS_RANK: Record<string, number> = {
+    [WhatsAppMessageStatus.PENDING]: 0,
+    [WhatsAppMessageStatus.SENT]: 1,
+    [WhatsAppMessageStatus.DELIVERED]: 2,
+    [WhatsAppMessageStatus.READ]: 3,
+};
+
+// Status webhooks can arrive out of order (read before delivered), so only ever
+// move a message forward: sent → delivered → read. `failed` wins unless it was
+// already read.
+// ponytail: a status that beats the send worker's save of the Meta id finds no
+// message and is dropped; Meta sends the next status later, so ticks self-heal.
+async function handleStatusUpdate(update: StatusUpdate) {
+    let set: Record<string, unknown>;
+    let allowedFrom: string[];
+    if (update.status === 'failed') {
+        const e = update.errors?.[0];
+        set = { status: WhatsAppMessageStatus.FAILED, error: e?.error_data?.details || e?.message || e?.title || 'Not delivered' };
+        allowedFrom = [WhatsAppMessageStatus.PENDING, WhatsAppMessageStatus.SENT, WhatsAppMessageStatus.DELIVERED];
+    } else {
+        const rank = STATUS_RANK[update.status];
+        if (rank === undefined) return;
+        set = { status: update.status };
+        allowedFrom = Object.keys(STATUS_RANK).filter((s) => STATUS_RANK[s]! < rank);
+    }
+
+    const message = await WhatsAppMessageModel.findOneAndUpdate(
+        { whatsappMsgId: update.id, status: { $in: allowedFrom } },
+        set,
+        { new: true },
+    );
+    if (message) notifyMessageStatus(message);
 }
 
 async function handleIncomingMessage(
@@ -110,6 +160,7 @@ async function handleIncomingMessage(
         sender: WhatsAppMessageSender.AI,
         body: ai.reply,
         whatsappMsgId: sentId,
+        status: WhatsAppMessageStatus.SENT,
     });
     notifyAgents('whatsapp:new_message', { conversationId: conversation._id.toString() });
 

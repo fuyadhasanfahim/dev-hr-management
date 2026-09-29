@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { useDispatch } from 'react-redux';
 import { useGetQueuedSessionsQuery } from '@/store/api/chatApi';
-import { useGetWhatsAppConversationsQuery } from '@/store/api/whatsappApi';
+import { useGetWhatsAppConversationsQuery, whatsappApi, type WhatsAppMessageStatus } from '@/store/api/whatsappApi';
 import { baseApi } from '@/store/api/baseApi';
 import { connectSocket, disconnectSocket } from '@/lib/socket';
 import { useNotificationSound } from '@/hooks/use-notification-sound';
@@ -68,6 +68,30 @@ export function useLiveCounts() {
             );
             if (!pathnameRef.current.startsWith('/messages')) playSound();
         };
+        // Tick updates (sent / delivered / read / failed) — patched in place so the
+        // thread doesn't refetch and flicker on every status change.
+        const onWhatsAppStatus = ({
+            conversationId,
+            messageId,
+            status,
+            error,
+        }: {
+            conversationId: string;
+            messageId: string;
+            status: WhatsAppMessageStatus;
+            error?: string;
+        }) => {
+            dispatch(
+                whatsappApi.util.updateQueryData('getWhatsAppMessages', conversationId, (draft) => {
+                    const message = draft.find((m) => m.id === messageId);
+                    if (message) {
+                        message.status = status;
+                        message.error = error ?? null;
+                    }
+                }),
+            );
+            dispatch(baseApi.util.invalidateTags(['WhatsAppConversations']));
+        };
 
         socket.on('connect', onConnect);
         socket.on('queue:new_message', onQueueUpdate);
@@ -75,6 +99,7 @@ export function useLiveCounts() {
         socket.on('ticket:new_reply', onTicketActivity);
         socket.on('ticket:created', onTicketActivity);
         socket.on('whatsapp:new_message', onWhatsAppMessage);
+        socket.on('whatsapp:message_status', onWhatsAppStatus);
 
         if (socket.connected) onConnect();
 
@@ -85,6 +110,7 @@ export function useLiveCounts() {
             socket.off('ticket:new_reply', onTicketActivity);
             socket.off('ticket:created', onTicketActivity);
             socket.off('whatsapp:new_message', onWhatsAppMessage);
+            socket.off('whatsapp:message_status', onWhatsAppStatus);
             disconnectSocket();
         };
     }, [dispatch, playSound]);

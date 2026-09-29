@@ -1,6 +1,12 @@
+import { Types } from 'mongoose';
 import WhatsAppConversationModel from '../models/whatsapp-conversation.model.js';
-import WhatsAppMessageModel, { WhatsAppMessageDirection, WhatsAppMessageSender } from '../models/whatsapp-message.model.js';
-import whatsappService from './whatsapp.service.js';
+import WhatsAppMessageModel, {
+    WhatsAppMessageDirection,
+    WhatsAppMessageSender,
+    WhatsAppMessageStatus,
+} from '../models/whatsapp-message.model.js';
+import { enqueueWhatsAppSend } from './whatsapp-send.queue.js';
+import { notifyAgents } from '../socket/support.namespace.js';
 import type { IWhatsAppMessage } from '../models/whatsapp-message.model.js';
 
 export interface ConversationSummary {
@@ -10,6 +16,8 @@ export interface ConversationSummary {
     status: string;
     aiEnabled: boolean;
     lastMessage: string;
+    lastMessageDirection: WhatsAppMessageDirection | null;
+    lastMessageStatus: WhatsAppMessageStatus | null;
     lastMessageAt: string;
     unreadCount: number;
 }
@@ -19,6 +27,8 @@ export interface MessageSummary {
     direction: WhatsAppMessageDirection;
     sender: WhatsAppMessageSender;
     body: string;
+    status: WhatsAppMessageStatus | null;
+    error: string | null;
     createdAt: string;
 }
 
@@ -28,6 +38,8 @@ function toMessageSummary(m: IWhatsAppMessage): MessageSummary {
         direction: m.direction,
         sender: m.sender,
         body: m.body,
+        status: m.status ?? null,
+        error: m.error ?? null,
         createdAt: m.createdAt.toISOString(),
     };
 }
@@ -44,7 +56,7 @@ async function listConversations(): Promise<ConversationSummary[]> {
         conversationId: { $in: conversations.map((c) => c._id) },
     })
         .sort({ createdAt: 1 })
-        .select('conversationId direction body createdAt')
+        .select('conversationId direction body status createdAt')
         .lean();
 
     const byConversation = new Map<string, typeof messages>();
@@ -69,6 +81,8 @@ async function listConversations(): Promise<ConversationSummary[]> {
             status: c.status,
             aiEnabled: c.aiEnabled,
             lastMessage: lastMessage?.body ?? '',
+            lastMessageDirection: lastMessage?.direction ?? null,
+            lastMessageStatus: lastMessage?.status ?? null,
             lastMessageAt: c.lastMessageAt.toISOString(),
             unreadCount,
         };
@@ -80,28 +94,43 @@ async function getMessages(conversationId: string): Promise<MessageSummary[]> {
     return messages.map(toMessageSummary);
 }
 
-// Sends via the real WhatsApp Cloud API (whatsappService — same Graph API path
-// the AI pipeline uses) so agent replies are indistinguishable from any other
-// official-API message. Flips aiEnabled off: once a human is typing, the bot
-// should stay quiet on this conversation.
+// Saves the reply as `pending` and hands the actual Cloud API call to the Redis
+// send queue, so the agent's UI never waits on Meta. Flips aiEnabled off: once
+// a human is typing, the bot should stay quiet on this conversation.
 async function sendAgentMessage(conversationId: string, body: string): Promise<MessageSummary> {
     const conversation = await WhatsAppConversationModel.findById(conversationId);
     if (!conversation) throw new Error('Conversation not found');
 
-    const whatsappMsgId = await whatsappService.sendTextMessage(conversation.customerPhone, body);
-
+    const _id = new Types.ObjectId();
     const message = await WhatsAppMessageModel.create({
+        _id,
         conversationId: conversation._id,
         direction: WhatsAppMessageDirection.OUTBOUND,
         sender: WhatsAppMessageSender.AGENT,
         body,
-        whatsappMsgId,
+        whatsappMsgId: `pending:${_id}`,
+        status: WhatsAppMessageStatus.PENDING,
     });
 
     conversation.lastMessageAt = new Date();
     conversation.aiEnabled = false;
     await conversation.save();
 
+    await enqueueWhatsAppSend(_id.toString());
+    notifyAgents('whatsapp:new_message', { conversationId });
+
+    return toMessageSummary(message);
+}
+
+async function retryMessage(conversationId: string, messageId: string): Promise<MessageSummary> {
+    const message = await WhatsAppMessageModel.findOneAndUpdate(
+        { _id: messageId, conversationId, status: WhatsAppMessageStatus.FAILED },
+        { status: WhatsAppMessageStatus.PENDING, $unset: { error: 1 } },
+        { new: true },
+    );
+    if (!message) throw new Error('Failed message not found');
+
+    await enqueueWhatsAppSend(messageId);
     return toMessageSummary(message);
 }
 
@@ -109,4 +138,4 @@ async function markConversationRead(conversationId: string): Promise<void> {
     await WhatsAppConversationModel.findByIdAndUpdate(conversationId, { lastReadAt: new Date() });
 }
 
-export default { listConversations, getMessages, sendAgentMessage, markConversationRead };
+export default { listConversations, getMessages, sendAgentMessage, retryMessage, markConversationRead };

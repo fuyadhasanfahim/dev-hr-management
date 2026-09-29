@@ -1,8 +1,14 @@
 'use client';
 
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
+import { useDispatch } from 'react-redux';
 import {
+    AlertCircle,
+    Bot,
+    Check,
+    CheckCheck,
+    Clock3,
     Loader2,
     Mic,
     MessageCircle,
@@ -23,13 +29,21 @@ import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
+import type { AppDispatch } from '@/store';
 import {
+    isLocalMessageId,
     useGetWhatsAppConversationsQuery,
     useGetWhatsAppMessagesQuery,
     useMarkWhatsAppConversationReadMutation,
+    useRetryWhatsAppMessageMutation,
     useSendWhatsAppMessageMutation,
+    whatsappApi,
     type WhatsAppMessage,
+    type WhatsAppMessageStatus,
 } from '@/store/api/whatsappApi';
+
+// Messages from the same sender closer together than this stack as one group.
+const GROUP_WINDOW_MS = 5 * 60 * 1000;
 
 function formatTime(iso: string): string {
     return new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
@@ -56,16 +70,60 @@ function dateLabel(iso: string): string {
     return date.toLocaleDateString([], { month: 'long', day: 'numeric', year: 'numeric' });
 }
 
-// Consecutive messages on the same day share one date divider.
-function groupByDate(messages: WhatsAppMessage[]) {
-    const groups: { label: string; messages: WhatsAppMessage[] }[] = [];
-    for (const message of messages) {
+interface ThreadItem {
+    message: WhatsAppMessage;
+    isFirstInRun: boolean;
+    isLastInRun: boolean;
+}
+
+// Date dividers, and within each day the "runs" of back-to-back messages from
+// the same sender — the WhatsApp/iMessage grouping that joins bubble corners.
+function buildThread(messages: WhatsAppMessage[]) {
+    const days: { label: string; items: ThreadItem[] }[] = [];
+    const sameRun = (a: WhatsAppMessage, b: WhatsAppMessage) =>
+        a.sender === b.sender &&
+        dateLabel(a.createdAt) === dateLabel(b.createdAt) &&
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime() < GROUP_WINDOW_MS;
+
+    messages.forEach((message, i) => {
         const label = dateLabel(message.createdAt);
-        const lastGroup = groups[groups.length - 1];
-        if (lastGroup?.label === label) lastGroup.messages.push(message);
-        else groups.push({ label, messages: [message] });
+        const prev = messages[i - 1];
+        const next = messages[i + 1];
+        const item = {
+            message,
+            isFirstInRun: !prev || !sameRun(prev, message),
+            isLastInRun: !next || !sameRun(message, next),
+        };
+        const day = days[days.length - 1];
+        if (day?.label === label) day.items.push(item);
+        else days.push({ label, items: [item] });
+    });
+    return days;
+}
+
+// Only the sender-side corners that touch another bubble in the same run get
+// squared off, so a stack reads as one block and a lone bubble stays round.
+function bubbleCorners(isMe: boolean, first: boolean, last: boolean): string {
+    const joinedTop = isMe ? 'rounded-tr-md' : 'rounded-tl-md';
+    const joinedBottom = isMe ? 'rounded-br-md' : 'rounded-bl-md';
+    return cn('rounded-2xl', !first && joinedTop, !last && joinedBottom);
+}
+
+// WhatsApp convention: clock = queued, ✓ = sent, ✓✓ = delivered, blue ✓✓ = read.
+function MessageTicks({ status, onBubble }: { status: WhatsAppMessageStatus | null; onBubble: boolean }) {
+    const muted = onBubble ? 'text-primary-foreground/70' : 'text-muted-foreground';
+    switch (status) {
+        case 'pending':
+            return <Clock3 aria-label="Sending" className={cn('size-3.5 shrink-0', muted)} />;
+        case 'delivered':
+            return <CheckCheck aria-label="Delivered" className={cn('size-3.5 shrink-0', muted)} />;
+        case 'read':
+            return <CheckCheck aria-label="Read" className="size-3.5 shrink-0 text-sky-400" />;
+        case 'failed':
+            return <AlertCircle aria-label="Not delivered" className="size-3.5 shrink-0 text-red-400" />;
+        default:
+            return <Check aria-label="Sent" className={cn('size-3.5 shrink-0', muted)} />;
     }
-    return groups;
 }
 
 const FILTERS = ['all', 'unread', 'favorites', 'groups'] as const;
@@ -73,9 +131,13 @@ type Filter = (typeof FILTERS)[number];
 
 export function MessagesView({ conversationId }: { conversationId?: string }) {
     const router = useRouter();
+    const dispatch = useDispatch<AppDispatch>();
     const [search, setSearch] = useState('');
     const [filter, setFilter] = useState<Filter>('all');
     const [draft, setDraft] = useState('');
+    const inputRef = useRef<HTMLInputElement>(null);
+    const bottomRef = useRef<HTMLDivElement>(null);
+    const lastScrolledThread = useRef<string | null>(null);
 
     const selectedId = conversationId ?? null;
 
@@ -86,7 +148,8 @@ export function MessagesView({ conversationId }: { conversationId?: string }) {
     const { data: messages = [], isLoading: messagesLoading } = useGetWhatsAppMessagesQuery(selectedId!, {
         skip: !selectedId,
     });
-    const [sendMessage, { isLoading: isSending }] = useSendWhatsAppMessageMutation();
+    const [sendMessage] = useSendWhatsAppMessageMutation();
+    const [retryMessage] = useRetryWhatsAppMessageMutation();
     const [markRead] = useMarkWhatsAppConversationReadMutation();
 
     const filtered = useMemo(() => {
@@ -99,19 +162,48 @@ export function MessagesView({ conversationId }: { conversationId?: string }) {
     }, [conversations, search, filter]);
 
     const selected = conversations.find((c) => c.id === selectedId) ?? null;
-    const groupedThread = useMemo(() => groupByDate(messages), [messages]);
+    const thread = useMemo(() => buildThread(messages), [messages]);
 
     // Clear the unread badge the moment an agent opens the thread.
     useEffect(() => {
         if (selectedId) markRead(selectedId);
     }, [selectedId, markRead]);
 
-    const handleSend = async (e: FormEvent) => {
+    // Jump to the newest message when a thread opens; glide when one arrives.
+    useEffect(() => {
+        if (!selectedId || messages.length === 0) return;
+        const opening = lastScrolledThread.current !== selectedId;
+        lastScrolledThread.current = selectedId;
+        bottomRef.current?.scrollIntoView({ block: 'end', behavior: opening ? 'auto' : 'smooth' });
+    }, [selectedId, messages.length]);
+
+    const send = (text: string) => {
+        if (!selectedId) return;
+        void sendMessage({ conversationId: selectedId, text, localId: `local-${crypto.randomUUID()}` });
+    };
+
+    const handleSend = (e: FormEvent) => {
         e.preventDefault();
         const text = draft.trim();
-        if (!text || !selectedId) return;
+        if (!text) return;
         setDraft('');
-        await sendMessage({ conversationId: selectedId, text });
+        send(text);
+        inputRef.current?.focus();
+    };
+
+    const handleRetry = (message: WhatsAppMessage) => {
+        if (!selectedId) return;
+        if (isLocalMessageId(message.id)) {
+            // The server never got this one — drop the dead bubble and send it fresh.
+            dispatch(
+                whatsappApi.util.updateQueryData('getWhatsAppMessages', selectedId, (draftThread) =>
+                    draftThread.filter((m) => m.id !== message.id),
+                ),
+            );
+            send(message.body);
+        } else {
+            void retryMessage({ conversationId: selectedId, messageId: message.id });
+        }
     };
 
     return (
@@ -166,12 +258,22 @@ export function MessagesView({ conversationId }: { conversationId?: string }) {
                                     <div className="flex-1 min-w-0">
                                         <div className="flex items-center justify-between gap-2">
                                             <span className="text-sm font-medium truncate">{c.name}</span>
-                                            <span className="text-[11px] text-muted-foreground shrink-0">
+                                            <span
+                                                className={cn(
+                                                    'text-[11px] shrink-0',
+                                                    c.unreadCount > 0 ? 'text-primary font-medium' : 'text-muted-foreground',
+                                                )}
+                                            >
                                                 {formatListTime(c.lastMessageAt)}
                                             </span>
                                         </div>
                                         <div className="flex items-center justify-between gap-2 mt-0.5">
-                                            <span className="text-xs text-muted-foreground truncate">{c.lastMessage}</span>
+                                            <span className="flex items-center gap-1 min-w-0 text-xs text-muted-foreground">
+                                                {c.lastMessageDirection === 'outbound' && (
+                                                    <MessageTicks status={c.lastMessageStatus} onBubble={false} />
+                                                )}
+                                                <span className="truncate">{c.lastMessage}</span>
+                                            </span>
                                             {c.unreadCount > 0 && (
                                                 <Badge className="h-5 min-w-5 justify-center px-1.5 shrink-0">
                                                     {c.unreadCount}
@@ -223,51 +325,77 @@ export function MessagesView({ conversationId }: { conversationId?: string }) {
                             </div>
                         </div>
 
-                        <ScrollArea className="flex-1">
-                            <div className="px-4 py-4 space-y-4">
+                        <ScrollArea className="flex-1 min-h-0">
+                            <div className="px-4 py-4">
                                 {messagesLoading ? (
                                     <div className="flex items-center justify-center py-8">
                                         <Loader2 className="size-5 animate-spin text-muted-foreground" />
                                     </div>
                                 ) : (
-                                    groupedThread.map((group) => (
-                                        <div key={group.label} className="space-y-3">
-                                            <div className="flex items-center justify-center">
-                                                <span className="text-[11px] text-muted-foreground bg-muted px-3 py-1 rounded-full">
-                                                    {group.label}
+                                    thread.map((day) => (
+                                        <div key={day.label}>
+                                            <div className="sticky top-0 z-10 flex items-center justify-center py-2">
+                                                <span className="text-[11px] text-muted-foreground bg-muted/90 backdrop-blur px-3 py-1 rounded-full shadow-sm">
+                                                    {day.label}
                                                 </span>
                                             </div>
-                                            {group.messages.map((m) => {
+                                            {day.items.map(({ message: m, isFirstInRun, isLastInRun }) => {
                                                 const isMe = m.direction === 'outbound';
+                                                const failed = m.status === 'failed';
                                                 return (
-                                                    <div key={m.id} className={cn('flex', isMe ? 'justify-end' : 'justify-start')}>
-                                                        <div className="max-w-[70%] space-y-1">
-                                                            <div
+                                                    <div
+                                                        key={m.id}
+                                                        className={cn(
+                                                            'flex flex-col',
+                                                            isMe ? 'items-end' : 'items-start',
+                                                            isFirstInRun ? 'mt-3' : 'mt-0.5',
+                                                        )}
+                                                    >
+                                                        {isFirstInRun && m.sender === 'ai' && (
+                                                            <span className="mb-1 flex items-center gap-1 px-1 text-[10px] font-medium text-muted-foreground">
+                                                                <Bot className="size-3" /> AI assistant
+                                                            </span>
+                                                        )}
+                                                        <div
+                                                            className={cn(
+                                                                'max-w-[70%] px-3 py-1.5 text-sm leading-relaxed break-words shadow-sm',
+                                                                bubbleCorners(isMe, isFirstInRun, isLastInRun),
+                                                                isMe
+                                                                    ? 'bg-primary text-primary-foreground'
+                                                                    : 'bg-muted text-foreground',
+                                                                m.status === 'pending' && 'opacity-80',
+                                                            )}
+                                                        >
+                                                            <span className="whitespace-pre-wrap">{m.body}</span>
+                                                            {/* WhatsApp-style meta: floats into the last line when it fits. */}
+                                                            <span
                                                                 className={cn(
-                                                                    'px-3.5 py-2.5 text-sm leading-relaxed break-words shadow-sm',
-                                                                    isMe
-                                                                        ? 'bg-primary text-primary-foreground rounded-2xl rounded-br-md'
-                                                                        : 'bg-muted text-foreground rounded-2xl rounded-bl-md',
+                                                                    'float-right ml-2 mt-1.5 flex items-center gap-1 text-[10px] leading-none',
+                                                                    isMe ? 'text-primary-foreground/70' : 'text-muted-foreground',
                                                                 )}
-                                                            >
-                                                                {m.body}
-                                                            </div>
-                                                            <p
-                                                                className={cn(
-                                                                    'text-[10px] text-muted-foreground px-1',
-                                                                    isMe ? 'text-right' : 'text-left',
-                                                                )}
+                                                                title={failed ? (m.error ?? 'Not delivered') : undefined}
                                                             >
                                                                 {formatTime(m.createdAt)}
-                                                                {m.sender === 'ai' && ' · AI'}
-                                                            </p>
+                                                                {isMe && <MessageTicks status={m.status} onBubble />}
+                                                            </span>
                                                         </div>
+                                                        {failed && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleRetry(m)}
+                                                                className="mt-1 px-1 text-[11px] text-destructive hover:underline"
+                                                                title={m.error ?? undefined}
+                                                            >
+                                                                Not delivered · Retry
+                                                            </button>
+                                                        )}
                                                     </div>
                                                 );
                                             })}
                                         </div>
                                     ))
                                 )}
+                                <div ref={bottomRef} />
                             </div>
                         </ScrollArea>
 
@@ -280,20 +408,15 @@ export function MessagesView({ conversationId }: { conversationId?: string }) {
                                 <Smile className="size-4" />
                             </Button>
                             <Input
+                                ref={inputRef}
                                 value={draft}
                                 onChange={(e) => setDraft(e.target.value)}
                                 placeholder="Type a message"
                                 className="h-10"
-                                disabled={isSending}
+                                autoFocus
                             />
-                            <Button type="submit" size="icon" className="size-9 shrink-0" disabled={isSending}>
-                                {isSending ? (
-                                    <Loader2 className="size-4 animate-spin" />
-                                ) : draft.trim() ? (
-                                    <Send className="size-4" />
-                                ) : (
-                                    <Mic className="size-4" />
-                                )}
+                            <Button type="submit" size="icon" className="size-9 shrink-0" aria-label="Send">
+                                {draft.trim() ? <Send className="size-4" /> : <Mic className="size-4" />}
                             </Button>
                         </form>
                     </>

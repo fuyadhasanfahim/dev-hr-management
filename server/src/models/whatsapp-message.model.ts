@@ -11,12 +11,25 @@ export enum WhatsAppMessageSender {
     AGENT    = 'agent',
 }
 
+// Outbound delivery lifecycle, driven by the send queue then Meta's status webhooks.
+export enum WhatsAppMessageStatus {
+    PENDING   = 'pending',
+    SENT      = 'sent',
+    DELIVERED = 'delivered',
+    READ      = 'read',
+    FAILED    = 'failed',
+}
+
 export interface IWhatsAppMessage extends Document {
     conversationId: Types.ObjectId; // Ref: WhatsAppConversation
     direction: WhatsAppMessageDirection;
     sender: WhatsAppMessageSender;
     body: string;
-    whatsappMsgId: string; // Meta's message id — dedupe key for inbound, delivery id for outbound
+    // Meta's message id — dedupe key for inbound, delivery id for outbound.
+    // Queued outbound messages hold a `pending:<_id>` placeholder until Meta accepts them.
+    whatsappMsgId: string;
+    status?: WhatsAppMessageStatus; // Outbound only.
+    error?: string;
     createdAt: Date;
     updatedAt: Date;
 }
@@ -48,6 +61,13 @@ const whatsAppMessageSchema = new Schema<IWhatsAppMessage>(
             required: true,
             unique: true,
             index: true,
+        },
+        status: {
+            type: String,
+            enum: Object.values(WhatsAppMessageStatus),
+        },
+        error: {
+            type: String,
         },
     },
     {
