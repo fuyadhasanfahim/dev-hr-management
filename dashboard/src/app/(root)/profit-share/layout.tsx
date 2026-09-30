@@ -1,7 +1,7 @@
 import { Metadata } from 'next';
 
 export const metadata: Metadata = {
-    title: 'Profit Share | Hr Management - Web Briks LLC',
+    title: 'Profit Share',
     description: 'Manage profit sharing and transfers',
 };
 

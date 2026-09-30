@@ -1,7 +1,7 @@
 import { Metadata } from 'next';
 
 export const metadata: Metadata = {
-    title: 'Leave | Hr Management - Web Briks LLC',
+    title: 'Leave',
     description: 'Manage staff leave applications',
 };
 

@@ -10,7 +10,12 @@ import { Toaster } from '@/components/ui/sonner';
 const inter = Inter({subsets:['latin'],variable:'--font-sans'});
 
 export const metadata: Metadata = {
-    title: 'WebBriks | Support',
+    // Every page names itself first so the tab says where you are:
+    // "Leads | Support | WebBriks - Global Creative Agency".
+    title: {
+        template: '%s | Support | WebBriks - Global Creative Agency',
+        default: 'Support | WebBriks - Global Creative Agency',
+    },
     description: 'WebBriks HR Support Portal',
     icons: {
         icon: '/favicon.ico',

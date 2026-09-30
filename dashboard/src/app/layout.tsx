@@ -10,7 +10,12 @@ const fontSans = Inter({
 });
 
 export const metadata: Metadata = {
-    title: 'HR Management - Web Briks LLC',
+    // Every page names itself first so the tab says where you are:
+    // "Leads | Dashboard | WebBriks - Global Creative Agency".
+    title: {
+        template: '%s | Dashboard | WebBriks - Global Creative Agency',
+        default: 'Dashboard | WebBriks - Global Creative Agency',
+    },
     description: 'HR Management - Web Briks LLC',
 };
 

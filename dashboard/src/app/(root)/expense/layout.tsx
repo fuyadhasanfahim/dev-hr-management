@@ -1,7 +1,7 @@
 import { Metadata } from 'next';
 
 export const metadata: Metadata = {
-    title: 'Expense | Hr Management - Web Briks LLC',
+    title: 'Expenses',
     description: 'Manage business expenses',
 };
 

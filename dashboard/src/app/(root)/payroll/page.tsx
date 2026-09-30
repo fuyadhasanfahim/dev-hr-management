@@ -2,7 +2,7 @@ import { Metadata } from 'next';
 import PayrollClient from './payroll-client';
 
 export const metadata: Metadata = {
-    title: 'Payroll | HR Management - Web Briks LLC',
+    title: 'Payroll',
     description:
         'Manage monthly salaries, attendance corrections, and payments.',
 };

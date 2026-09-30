@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-    title: 'Careers | HR Management',
+    title: 'Careers',
     description: 'Manage job applications',
 };
 

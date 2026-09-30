@@ -4,7 +4,7 @@ import { Loader } from 'lucide-react';
 import SigninForm from '@/components/auth/sign-in';
 
 export const metadata: Metadata = {
-    title: 'Sign In | WebBriks',
+    title: 'Sign In',
 };
 
 export default function SigninPage() {

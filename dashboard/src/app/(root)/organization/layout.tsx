@@ -1,7 +1,7 @@
 import { Metadata } from 'next';
 
 export const metadata: Metadata = {
-    title: 'Organization Settings | Hr Management - Web Briks LLC',
+    title: 'Organization Settings',
     description: 'Manage departments, designations, and company branches',
 };
 

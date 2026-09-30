@@ -1,7 +1,7 @@
 import { Metadata } from 'next';
 
 export const metadata: Metadata = {
-    title: 'Notices | Hr Management - Web Briks LLC',
+    title: 'Notices',
     description: 'View company notices and announcements',
 };
 

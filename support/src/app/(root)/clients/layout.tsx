@@ -1,7 +1,7 @@
 import { Metadata } from 'next';
 
 export const metadata: Metadata = {
-    title: 'Clients | WebBriks Support',
+    title: 'Clients',
     description: 'Manage client information',
 };
 
