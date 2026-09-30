@@ -87,7 +87,7 @@ const createLead = async (req: Request, res: Response) => {
 const updateLead = async (req: Request, res: Response) => {
     try {
         const { id } = req.params;
-        const result = await LeadService.updateLead(id as string, req.body);
+        const result = await LeadService.updateLead(id as string, req.body, req.user?.id);
         res.status(200).json({
             success: true,
             message: 'Lead updated successfully',

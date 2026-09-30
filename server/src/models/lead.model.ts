@@ -66,10 +66,21 @@ const LeadSchema = new Schema<ILead>(
             ref: 'User',
             index: true,
         },
+        // null = created by the system (e.g. a new WhatsApp contact), not a person.
         createdBy: {
             type: Schema.Types.ObjectId,
             ref: 'User',
-            required: true,
+            default: null,
+        },
+        updatedBy: {
+            type: Schema.Types.ObjectId,
+            ref: 'User',
+            default: null,
+        },
+        origin: {
+            type: String,
+            enum: ['manual', 'whatsapp'],
+            default: 'manual',
         },
     },
     {

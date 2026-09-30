@@ -3,7 +3,7 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { BookOpen, LayoutDashboard, MessageCircle, MessageSquare, Search, Settings, Ticket, Users, X } from 'lucide-react';
+import { BookOpen, CalendarCheck, LayoutDashboard, MessageCircle, MessageSquare, Search, Settings, Target, Ticket, Users, X } from 'lucide-react';
 import {
     SidebarGroup,
     SidebarInput,
@@ -15,12 +15,14 @@ import {
 } from '@/components/ui/sidebar';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { useLiveCounts } from '@/hooks/use-live-counts';
+import { usePermissions } from '@/hooks/use-permissions';
 import { cn } from '@/lib/utils';
 
 interface NavItem {
     title: string;
     url: string;
     icon: React.ElementType;
+    permission?: string; // Hidden unless the user holds it (the API enforces it too).
 }
 
 interface NavGroup {
@@ -34,14 +36,21 @@ const NAV_GROUPS: NavGroup[] = [
         items: [
             { title: 'Overview', url: '/dashboard', icon: LayoutDashboard },
             { title: 'Live Chat', url: '/live-chat', icon: MessageSquare },
-            { title: 'Messages', url: '/messages', icon: MessageCircle },
+            { title: 'Messages', url: '/messages', icon: MessageCircle, permission: 'support.access' },
+        ],
+    },
+    {
+        groupLabel: 'Sales',
+        items: [
+            { title: 'Leads', url: '/leads', icon: Target, permission: 'lead.read' },
+            { title: 'Consultations', url: '/consultations', icon: CalendarCheck, permission: 'consultation.read' },
+            { title: 'Clients', url: '/clients', icon: Users, permission: 'client.read' },
         ],
     },
     {
         groupLabel: 'Support',
         items: [
             { title: 'Tickets', url: '/tickets', icon: Ticket },
-            { title: 'Clients', url: '/clients', icon: Users },
             { title: 'Knowledge Base', url: '/knowledge-base', icon: BookOpen },
         ],
     },
@@ -73,15 +82,17 @@ export function NavMain() {
     };
 
     const [searchQuery, setSearchQuery] = React.useState('');
+    const { can } = usePermissions();
 
     const filteredGroups = React.useMemo(() => {
-        if (searchQuery.trim() === '') return NAV_GROUPS;
-        const q = searchQuery.toLowerCase();
+        const q = searchQuery.trim().toLowerCase();
         return NAV_GROUPS.map((group) => ({
             ...group,
-            items: group.items.filter((item) => item.title.toLowerCase().includes(q)),
+            items: group.items.filter(
+                (item) => (!item.permission || can(item.permission)) && (!q || item.title.toLowerCase().includes(q)),
+            ),
         })).filter((group) => group.items.length > 0);
-    }, [searchQuery]);
+    }, [searchQuery, can]);
 
     const [expandedItems, setExpandedItems] = React.useState<string[]>(ALL_GROUP_LABELS);
 
@@ -98,7 +109,7 @@ export function NavMain() {
         return (
             <SidebarGroup className="py-0">
                 <SidebarMenu className="space-y-1">
-                    {NAV_GROUPS.flatMap((g) => g.items).map((item) => {
+                    {filteredGroups.flatMap((g) => g.items).map((item) => {
                         const badge = badgeByUrl[item.url] ?? 0;
                         return (
                             <SidebarMenuItem key={item.url}>

@@ -5,6 +5,10 @@ import ClientModel from '../models/client.model.js';
 import { Types } from 'mongoose';
 import LeadSettingModel from '../models/lead-setting.model.js';
 import { escapeRegex } from '../lib/sanitize.js';
+import { logger } from '../lib/logger.js';
+
+// User fields shown for "created by" / "updated by" / activity authors.
+const PERSON_FIELDS = 'name email firstName lastName';
 
 class DuplicatePhoneError extends Error {
     constructor(message: string) {
@@ -67,6 +71,8 @@ const getAllLeads = async (params: LeadQueryParams) => {
             .populate('source')
             .populate('nextActionType')
             .populate('assignedTo', 'firstName lastName email')
+            .populate('createdBy', PERSON_FIELDS)
+            .populate('updatedBy', PERSON_FIELDS)
             .sort({ createdAt: -1 })
             .skip(skip)
             .limit(limit)
@@ -88,15 +94,17 @@ const getLeadById = async (id: string) => {
         .populate('source')
         .populate('nextActionType')
         .populate('assignedTo', 'firstName lastName email')
+        .populate('createdBy', PERSON_FIELDS)
+        .populate('updatedBy', PERSON_FIELDS)
         .lean();
-    
+
     if (!lead) return null;
 
     const activities = await LeadActivityModel.find({ leadId: id })
         .populate('previousStatus')
         .populate('newStatus')
         .populate('nextActionType')
-        .populate('createdBy', 'firstName lastName email')
+        .populate('createdBy', PERSON_FIELDS)
         .sort({ createdAt: -1 })
         .lean();
 
@@ -112,7 +120,7 @@ const createLead = async (data: Partial<ILead>, createdBy: string) => {
         }
     }
 
-    const lead = new LeadModel({ ...data, createdBy });
+    const lead = new LeadModel({ ...data, createdBy, updatedBy: createdBy, origin: 'manual' });
     await lead.save();
 
     // Log creation activity
@@ -126,29 +134,120 @@ const createLead = async (data: Partial<ILead>, createdBy: string) => {
     return lead;
 };
 
-const updateLead = async (id: string, data: Partial<ILead>) => {
+// Fields whose edits go into the lead's history. Status and notes get their
+// own old → new columns; everything else is listed under `changes`.
+const TRACKED_FIELDS = [
+    'name',
+    'phone',
+    'email',
+    'website',
+    'source',
+    'priority',
+    'nextActionType',
+    'nextActionDate',
+    'assignedTo',
+] as const;
+
+const asText = (v: unknown): string | null => {
+    if (v === undefined || v === null || v === '') return null;
+    if (v instanceof Date) return v.toISOString();
+    return String(v);
+};
+
+const updateLead = async (id: string, data: Partial<ILead>, updatedBy?: string) => {
     if (data.phone) {
         const existing = await LeadModel.findOne({ phone: data.phone, _id: { $ne: id } });
         if (existing) {
             throw new DuplicatePhoneError('A lead with this phone number already exists.');
         }
     }
-    return await LeadModel.findByIdAndUpdate(id, data, { new: true });
+
+    const before = await LeadModel.findById(id).lean();
+    if (!before) return null;
+
+    // Never let the client rewrite who created it or the audit fields.
+    const { createdBy: _c, updatedBy: _u, origin: _o, ...changes } = data as Record<string, unknown>;
+    const updated = await LeadModel.findByIdAndUpdate(id, { ...changes, updatedBy: updatedBy ?? null }, { new: true });
+
+    const fieldChanges = TRACKED_FIELDS.filter((f) => f in changes && asText(changes[f]) !== asText((before as any)[f])).map(
+        (f) => ({ field: f, from: asText((before as any)[f]), to: asText(changes[f]) }),
+    );
+    const statusChanged = 'status' in changes && asText(changes.status) !== asText(before.status);
+    const notesChanged = 'currentNotes' in changes && asText(changes.currentNotes) !== asText(before.currentNotes);
+
+    if (fieldChanges.length || statusChanged || notesChanged) {
+        await LeadActivityModel.create({
+            leadId: id,
+            activityType: 'UPDATED',
+            ...(statusChanged ? { previousStatus: before.status, newStatus: changes.status as Types.ObjectId } : {}),
+            ...(notesChanged ? { previousNotes: before.currentNotes, notes: changes.currentNotes as string } : {}),
+            changes: fieldChanges.length ? fieldChanges : undefined,
+            createdBy: updatedBy ?? null,
+        });
+    }
+    return updated;
+};
+
+const lastDigits = (phone: string, n = 10) => phone.replace(/\D/g, '').slice(-n);
+
+/**
+ * A brand-new WhatsApp contact becomes a lead automatically (createdBy null,
+ * origin "whatsapp"). Matches existing leads on the last 10 digits, since
+ * staff type phones in many formats. Never throws — a lead is a nice-to-have
+ * next to the conversation itself.
+ */
+const createLeadFromWhatsApp = async (waPhone: string, name?: string) => {
+    try {
+        const tail = lastDigits(waPhone);
+        const candidates = await LeadModel.find({ phone: { $regex: escapeRegex(tail.slice(-4)) } })
+            .select('phone')
+            .limit(50)
+            .lean();
+        if (candidates.some((c) => lastDigits(c.phone) === tail)) return null;
+
+        const [source, status] = await Promise.all([
+            LeadSettingModel.findOne({ type: 'SOURCE', name: { $regex: '^whats\\s*app$', $options: 'i' } }),
+            LeadSettingModel.findOne({ type: 'STATUS', isDefault: true }),
+        ]);
+        const lead = await LeadModel.create({
+            name: name?.trim() || undefined,
+            phone: `+${waPhone.replace(/\D/g, '')}`,
+            source: source?._id ?? (await LeadSettingModel.create({ type: 'SOURCE', name: 'WhatsApp', color: '#25D366' }))._id,
+            ...(status ? { status: status._id } : {}),
+            origin: 'whatsapp',
+            createdBy: null,
+            updatedBy: null,
+        });
+        await LeadActivityModel.create({
+            leadId: lead._id,
+            activityType: 'CREATED',
+            ...(status ? { newStatus: status._id } : {}),
+            notes: 'Lead created automatically from a new WhatsApp conversation',
+            createdBy: null,
+        });
+        return lead;
+    } catch (err: any) {
+        logger.warn(`Auto-creating a lead for WhatsApp contact failed: ${err.message}`);
+        return null;
+    }
 };
 
 const addActivity = async (leadId: string, data: Partial<ILeadActivity>, createdBy: string) => {
     const lead = await LeadModel.findById(leadId);
     if (!lead) throw new Error('Lead not found');
 
+    // Snapshot what the lead looked like before, so the history reads old → new.
     const activity = new LeadActivityModel({
         ...data,
+        ...(data.newStatus && !data.previousStatus && lead.status ? { previousStatus: lead.status } : {}),
+        ...(data.notes && lead.currentNotes ? { previousNotes: lead.currentNotes } : {}),
         leadId,
         createdBy,
     });
     await activity.save();
 
     // Update main lead if status or next action changed
-    const updateData: Partial<ILead> = {};
+    const updateData: Partial<ILead> = { updatedBy: new Types.ObjectId(createdBy) };
     if (data.newStatus) updateData.status = data.newStatus as Types.ObjectId;
     if (data.nextActionType) updateData.nextActionType = data.nextActionType as Types.ObjectId;
     if (data.nextActionDate) updateData.nextActionDate = data.nextActionDate;
@@ -179,6 +278,7 @@ const convertToClient = async (leadId: string, clientData: any, createdBy: strin
     // Update lead
     lead.isConverted = true;
     lead.convertedClientId = client._id as Types.ObjectId;
+    lead.updatedBy = new Types.ObjectId(createdBy);
     if (convertedStatus) {
         lead.status = convertedStatus._id as Types.ObjectId;
     }
@@ -203,5 +303,6 @@ export default {
     updateLead,
     addActivity,
     convertToClient,
+    createLeadFromWhatsApp,
     DuplicatePhoneError,
 };

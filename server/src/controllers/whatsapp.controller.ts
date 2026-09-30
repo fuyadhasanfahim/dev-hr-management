@@ -11,7 +11,7 @@ import WhatsAppMessageModel, {
     WhatsAppMessageType,
 } from '../models/whatsapp-message.model.js';
 import { parseIncoming, type IncomingMessage, type InboundContent } from '../lib/whatsapp-inbound.js';
-import { findOrCreateConversation } from '../services/whatsapp-support.service.js';
+import { findOrCreateConversation, previewText } from '../services/whatsapp-support.service.js';
 import { handleCallEvent, handleCallStatus, type CallEvent, type CallStatus } from '../services/whatsapp-call.service.js';
 import { notifyMessageStatus } from '../services/whatsapp-send.queue.js';
 import { createTicket } from '../services/support-ticket.service.js';
@@ -124,7 +124,14 @@ async function handleIncomingMessage(fromPhone: string, content: InboundContent,
     conversation.lastMessageAt = new Date();
     await conversation.save();
 
-    notifyAgents('whatsapp:new_message', { conversationId: conversation._id.toString() });
+    // Enough for a live toast anywhere (support or dashboard) without a refetch.
+    notifyAgents('whatsapp:new_message', {
+        conversationId: conversation._id.toString(),
+        fromCustomer: true,
+        name: conversation.customerName || conversation.customerPhone,
+        preview: previewText(content),
+        assignedTo: conversation.assignedTo?.id ? conversation.assignedTo : null,
+    });
 
     void whatsappService.markMessageRead(whatsappMsgId).catch(() => {});
 

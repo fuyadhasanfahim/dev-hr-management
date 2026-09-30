@@ -87,6 +87,18 @@ function loadOffset(): { x: number; y: number } {
 
 type ApiError = { status?: number; data?: { code?: string; canRequest?: boolean; message?: string } };
 
+// One short, plain sentence per failure — the technical detail is in the server log.
+function callErrorText(err: unknown): string {
+    if (err instanceof DOMException && err.name === 'NotAllowedError') return 'Allow microphone access to make calls.';
+    if (err instanceof DOMException && err.name === 'NotFoundError') return 'No microphone found on this device.';
+    const { status, data } = (err ?? {}) as ApiError;
+    if (data?.code === 'ASSIGNED') return data.message ?? 'Another agent is handling this chat.';
+    if (data?.code === 'PAYMENT_REQUIRED') return 'WhatsApp calling isn’t active on our account yet.';
+    if (status === 410) return 'The call already ended.';
+    if (status === 409) return 'Another agent already answered this call.';
+    return 'The call couldn’t connect. Please try again.';
+}
+
 // Socket events that can beat the "call placed" HTTP response for an outbound call.
 interface EarlyEvents {
     sdp?: string;
@@ -225,17 +237,8 @@ export function CallProvider({ children }: { children: ReactNode }) {
                 const data = (err as ApiError).data;
                 if (data?.code === 'NO_PERMISSION') {
                     setPermissionFor({ ...conversation, canRequest: !!data.canRequest });
-                } else if (data?.code === 'PAYMENT_REQUIRED') {
-                    toast.error('Calling isn’t enabled for billing yet', { description: data.message, duration: 12000 });
-                } else if (data?.code === 'ASSIGNED') {
-                    toast.error('Can’t call from this chat', { description: data.message });
                 } else {
-                    const micDenied = err instanceof DOMException && err.name === 'NotAllowedError';
-                    toast.error(micDenied ? 'Microphone blocked' : 'Call couldn’t be started', {
-                        description: micDenied
-                            ? 'Allow microphone access for this site to make calls.'
-                            : (data?.message ?? (err instanceof Error ? err.message : undefined)),
-                    });
+                    toast.error(callErrorText(err), { id: 'call-error' });
                 }
             }
         },
@@ -256,11 +259,8 @@ export function CallProvider({ children }: { children: ReactNode }) {
             await acceptCallApi({ callId: c.callId, sdp: pc.localDescription!.sdp }).unwrap();
             update((cur) => cur && { ...cur, phase: 'active', answeredAt: Date.now() });
         } catch (err) {
-            const message = (err as { data?: { message?: string } }).data?.message;
             cleanup();
-            toast.error('Couldn’t answer the call', {
-                description: message ?? (err instanceof Error ? err.message : undefined),
-            });
+            toast.error(callErrorText(err), { id: 'call-error' });
         }
     };
 
@@ -405,8 +405,8 @@ export function CallProvider({ children }: { children: ReactNode }) {
                                     requestPermission(permissionFor.id)
                                         .unwrap()
                                         .then(() => toast.success('Call request sent', { description: `${permissionFor.name} will see an “Allow calls” button.` }))
-                                        .catch((err: { data?: { message?: string } }) =>
-                                            toast.error('Couldn’t send the request', { description: err.data?.message }),
+                                        .catch(() =>
+                                            toast.error('Couldn’t send the call request. Please try again.'),
                                         );
                                 }}
                             >

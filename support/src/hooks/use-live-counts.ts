@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useDispatch } from 'react-redux';
 import { useGetQueuedSessionsQuery } from '@/store/api/chatApi';
 import { useGetWhatsAppConversationsQuery, whatsappApi, type WhatsAppMessageStatus } from '@/store/api/whatsappApi';
@@ -10,11 +10,19 @@ import { connectSocket, disconnectSocket } from '@/lib/socket';
 import { useNotificationSound } from '@/hooks/use-notification-sound';
 import type { AppDispatch } from '@/store';
 import type { Socket } from 'socket.io-client';
+import { showWhatsAppMessageToast, type IncomingMessageEvent } from '@/components/messages/whatsapp-message-toast';
+import { useSupportAgent } from '@/hooks/use-support-agent';
 
 // Live sidebar badge counts + the presence/ticket socket wiring behind them.
 export function useLiveCounts() {
     const pathname = usePathname();
+    const router = useRouter();
     const dispatch = useDispatch<AppDispatch>();
+    const agent = useSupportAgent();
+    const agentRef = useRef(agent);
+    useEffect(() => {
+        agentRef.current = agent;
+    }, [agent]);
     const socketRef = useRef<Socket | null>(null);
     const pathnameRef = useRef(pathname);
     const [ticketCount, setTicketCount] = useState(0);
@@ -59,14 +67,22 @@ export function useLiveCounts() {
                 playSound();
             }
         };
-        const onWhatsAppMessage = ({ conversationId }: { conversationId: string }) => {
+        const onWhatsAppMessage = (event: IncomingMessageEvent) => {
+            const { conversationId } = event;
             dispatch(
                 baseApi.util.invalidateTags([
                     'WhatsAppConversations',
                     { type: 'WhatsAppMessages', id: conversationId },
                 ]),
             );
-            if (!pathnameRef.current.startsWith('/messages')) playSound();
+            if (!event.fromCustomer) return;
+            // Live toast unless the agent is already looking at this chat, or it's a teammate's.
+            const me = agentRef.current;
+            if (event.assignedTo && event.assignedTo.id !== me.id && !me.canManage) return;
+            const viewing = pathnameRef.current === `/messages/${conversationId}` && document.visibilityState === 'visible';
+            if (viewing) return;
+            playSound();
+            showWhatsAppMessageToast(event, () => router.push(`/messages/${conversationId}`));
         };
         // Tick updates (sent / delivered / read / failed) — patched in place so the
         // thread doesn't refetch and flicker on every status change.
@@ -125,7 +141,7 @@ export function useLiveCounts() {
             socket.off('whatsapp:message_status', onWhatsAppStatus);
             disconnectSocket();
         };
-    }, [dispatch, playSound]);
+    }, [dispatch, playSound, router]);
 
     return { liveChatCount, ticketCount, messagesUnreadCount };
 }

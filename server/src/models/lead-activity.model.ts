@@ -11,7 +11,7 @@ const LeadActivitySchema = new Schema<ILeadActivity>(
         },
         activityType: {
             type: String,
-            enum: ['STATUS_CHANGE', 'NOTE_ADDED', 'FOLLOW_UP_SET', 'CONVERTED', 'CREATED'],
+            enum: ['STATUS_CHANGE', 'NOTE_ADDED', 'FOLLOW_UP_SET', 'CONVERTED', 'CREATED', 'UPDATED'],
             required: true,
         },
         previousStatus: {
@@ -33,10 +33,20 @@ const LeadActivitySchema = new Schema<ILeadActivity>(
             type: String,
             trim: true,
         },
+        // The lead's note before this change, so the history shows old → new.
+        previousNotes: {
+            type: String,
+            trim: true,
+        },
+        changes: {
+            type: [{ field: String, from: String, to: String, _id: false }],
+            default: undefined,
+        },
+        // null = automated (system-created leads).
         createdBy: {
             type: Schema.Types.ObjectId,
             ref: 'User',
-            required: true,
+            default: null,
         },
     },
     {

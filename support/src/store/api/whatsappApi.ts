@@ -297,11 +297,6 @@ export const whatsappApi = baseApi.injectEndpoints({
                 queryFulfilled.catch(patch.undo);
             },
         }),
-        getMyPermissions: builder.query<string[], void>({
-            query: () => '/me/permissions',
-            transformResponse: (res: { data: { permissions: string[] } }) => res.data?.permissions ?? [],
-            providesTags: ['MyPermissions'],
-        }),
         // claim = take the chat (or take it over, with support.manage); release = let it go.
         setWhatsAppAssignment: builder.mutation<void, { conversationId: string; action: 'claim' | 'release' }>({
             query: ({ conversationId, action }) => ({
@@ -367,7 +362,6 @@ export const {
     useRetryWhatsAppMessageMutation,
     useSetWhatsAppAiMutation,
     useMarkWhatsAppConversationReadMutation,
-    useGetMyPermissionsQuery,
     useSetWhatsAppAssignmentMutation,
     useGetWhatsAppDetailsQuery,
     useGetWhatsAppNotesQuery,

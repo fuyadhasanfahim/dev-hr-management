@@ -12,6 +12,7 @@ import WhatsAppNoteModel from '../models/whatsapp-note.model.js';
 import ClientModel from '../models/client.model.js';
 import LeadModel from '../models/lead.model.js';
 import { escapeRegex } from '../lib/sanitize.js';
+import leadService from './lead.service.js';
 import WhatsAppMessageModel, {
     WhatsAppMessageDirection,
     WhatsAppMessageSender,
@@ -78,11 +79,14 @@ export async function findOrCreateConversation(customerPhone: string, customerNa
         status: { $ne: WhatsAppConversationStatus.RESOLVED },
     }).sort({ lastMessageAt: -1 });
     if (existing) return existing;
-    return WhatsAppConversationModel.create({
+    const conversation = await WhatsAppConversationModel.create({
         customerPhone,
         customerName,
         status: WhatsAppConversationStatus.BOT,
     });
+    // A new person writing in is a new lead (skipped if we already know the number).
+    void leadService.createLeadFromWhatsApp(customerPhone, customerName);
+    return conversation;
 }
 
 const PREVIEW_LABEL: Record<string, string> = {
@@ -94,7 +98,7 @@ const PREVIEW_LABEL: Record<string, string> = {
 };
 
 // Chat-list preview line, WhatsApp style: caption if there is one, else a label.
-function previewText(m: { type?: string; body: string; media?: { voice?: boolean; filename?: string } | null }): string {
+export function previewText(m: { type?: string; body: string; media?: { voice?: boolean; filename?: string } | null }): string {
     if (!m.type || m.type === WhatsAppMessageType.TEXT || m.type === WhatsAppMessageType.CALL) return m.body;
     if (m.type === WhatsAppMessageType.AUDIO && m.media?.voice) return '🎤 Voice message';
     const label = m.type === WhatsAppMessageType.DOCUMENT && m.media?.filename ? `📄 ${m.media.filename}` : PREVIEW_LABEL[m.type];

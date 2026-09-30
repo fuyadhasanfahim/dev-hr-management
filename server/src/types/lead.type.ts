@@ -26,12 +26,21 @@ export interface ILead extends Document {
     isConverted: boolean;
     convertedClientId?: Types.ObjectId; // Ref to Client
     assignedTo?: Types.ObjectId; // Ref to User
-    createdBy: Types.ObjectId; // Ref to User
+    createdBy?: Types.ObjectId | null; // Ref to User — null when the system created it (e.g. from WhatsApp)
+    updatedBy?: Types.ObjectId | null; // Ref to User — last person to change it
+    origin?: 'manual' | 'whatsapp';
     createdAt: Date;
     updatedAt: Date;
 }
 
-export type LeadActivityType = 'STATUS_CHANGE' | 'NOTE_ADDED' | 'FOLLOW_UP_SET' | 'CONVERTED' | 'CREATED';
+export type LeadActivityType = 'STATUS_CHANGE' | 'NOTE_ADDED' | 'FOLLOW_UP_SET' | 'CONVERTED' | 'CREATED' | 'UPDATED';
+
+/** One field edit recorded on an UPDATED activity (values as display strings). */
+export interface LeadFieldChange {
+    field: string;
+    from?: string | null;
+    to?: string | null;
+}
 
 export interface ILeadActivity extends Document {
     leadId: Types.ObjectId; // Ref to Lead
@@ -41,7 +50,9 @@ export interface ILeadActivity extends Document {
     nextActionType?: Types.ObjectId;
     nextActionDate?: Date;
     notes?: string;
-    createdBy: Types.ObjectId;
+    previousNotes?: string; // What the lead's note said before this change
+    changes?: LeadFieldChange[];
+    createdBy?: Types.ObjectId | null; // null = automated
     createdAt: Date;
     updatedAt: Date;
 }

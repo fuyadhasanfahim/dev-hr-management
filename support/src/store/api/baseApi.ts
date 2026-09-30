@@ -6,6 +6,8 @@ export const baseApi = createApi({
         baseUrl: `${process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:5000'}/api`,
         credentials: 'include',
     }),
-    tagTypes: ['QueuedSessions', 'ActiveSessions', 'ResolvedSessions', 'SessionMessages', 'UnreadCounts', 'Notifications', 'ClientMeetings', 'Tickets', 'TicketDetail', 'DashboardStats', 'KnowledgeBase', 'WhatsAppConversations', 'WhatsAppMessages', 'WhatsAppNotes', 'WhatsAppDetails', 'MyPermissions'],
+    tagTypes: ['QueuedSessions', 'ActiveSessions', 'ResolvedSessions', 'SessionMessages', 'UnreadCounts', 'Notifications', 'ClientMeetings', 'Tickets', 'TicketDetail', 'DashboardStats', 'KnowledgeBase', 'WhatsAppConversations', 'WhatsAppMessages', 'WhatsAppNotes', 'WhatsAppDetails', 'MyPermissions',
+        // Shared with the dashboard's lead / client / consultation APIs (src/redux).
+        'Lead', 'LeadSetting', 'Client', 'Consultation', 'Meeting', 'Order', 'Service', 'Staff', 'WalletTransaction', 'Quotation'],
     endpoints: () => ({}),
 });

@@ -31,7 +31,7 @@ export function MediaLightbox({
         <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
             <DialogContent
                 showCloseButton={false}
-                className="max-w-[min(92vw,1100px)] border-none bg-black/95 p-0 text-white sm:max-w-[min(92vw,1100px)]"
+                className="max-w-[min(92vw,1100px)] overflow-hidden rounded-2xl border-none bg-black/95 p-0 text-white sm:max-w-[min(92vw,1100px)]"
                 onKeyDown={(e) => {
                     if (items.length < 2) return;
                     if (e.key === 'ArrowRight') go(1);
@@ -43,7 +43,7 @@ export function MediaLightbox({
                     {items.length > 1 ? `Item ${current + 1} of ${items.length}` : 'Attachment'}
                 </DialogDescription>
                 {item && (
-                    <div className="relative flex h-[82vh] items-center justify-center overflow-hidden">
+                    <div className="relative flex h-[82vh] items-center justify-center overflow-hidden rounded-2xl">
                         <AnimatePresence initial={false} custom={direction} mode="popLayout">
                             <motion.div
                                 key={item.id}
