@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Eye, Edit, UserPlus, Loader, Phone, Calendar, Users } from 'lucide-react';
+import { Eye, Edit, UserPlus, Loader, Phone, Calendar, Users, MessageSquarePlus } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Lead } from '@/types/lead.type';
 import { format } from 'date-fns';
@@ -22,6 +22,7 @@ interface LeadTableProps {
     isLoading: boolean;
     onEdit: (lead: Lead) => void;
     onView: (lead: Lead) => void;
+    onLog: (lead: Lead) => void;
 }
 
 const PRIORITY_STYLES: Record<string, string> = {
@@ -35,6 +36,7 @@ export function LeadTable({
     isLoading,
     onEdit,
     onView,
+    onLog,
 }: LeadTableProps) {
     const { can } = usePermissions();
     const canEdit = can('lead.update');
@@ -114,6 +116,7 @@ export function LeadTable({
                                 <TableCell><Skeleton className="h-3.5 w-[100px]" /></TableCell>
                                 <TableCell className="pr-6">
                                     <div className="flex justify-end gap-1">
+                                        <Skeleton className="h-7 w-7 rounded-md" />
                                         <Skeleton className="h-7 w-7 rounded-md" />
                                         <Skeleton className="h-7 w-7 rounded-md" />
                                         <Skeleton className="h-7 w-7 rounded-md" />
@@ -257,6 +260,18 @@ export function LeadTable({
                                         >
                                             <Eye className="h-3.5 w-3.5" />
                                         </Button>
+                                        {canEdit && (
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                title="Log activity"
+                                                aria-label="Log activity"
+                                                onClick={() => onLog(lead)}
+                                                className="h-7 w-7 text-muted-foreground hover:text-sky-600 hover:bg-sky-500/10"
+                                            >
+                                                <MessageSquarePlus className="h-3.5 w-3.5" />
+                                            </Button>
+                                        )}
                                         {canEdit && (
                                             <Button
                                                 variant="ghost"

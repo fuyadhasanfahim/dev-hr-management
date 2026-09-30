@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { format, formatDistanceToNow } from 'date-fns';
 import { toast } from 'sonner';
@@ -20,22 +20,18 @@ import {
     User,
     UserCheck,
 } from 'lucide-react';
-import { useAddLeadActivityMutation, useConvertLeadToClientMutation, useGetLeadByIdQuery } from '@/redux/features/lead/leadApi';
+import { useConvertLeadToClientMutation, useGetLeadByIdQuery } from '@/redux/features/lead/leadApi';
+import { LogActivityDialog } from '@/components/lead/LogActivityDialog';
 import { useGetLeadSettingsQuery } from '@/redux/features/lead/leadSettingApi';
 import { usePermissions } from '@/hooks/use-permissions';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Calendar as CalendarComponent } from '@/components/ui/calendar';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Textarea } from '@/components/ui/textarea';
-import { cn } from '@/lib/utils';
 
 /* eslint-disable @typescript-eslint/no-explicit-any -- lead payloads are untyped in the shared lead API */
 
@@ -107,50 +103,16 @@ export function LeadDetailsDialog({ leadId, onClose }: { leadId: string | null; 
     const { can } = usePermissions();
     const { data: leadData, isLoading, isFetching } = useGetLeadByIdQuery(leadId!, { skip: !leadId });
     const { data: settingsData } = useGetLeadSettingsQuery(undefined);
-    const [addActivity, { isLoading: isAddingActivity }] = useAddLeadActivityMutation();
     const [convertLead, { isLoading: isConverting }] = useConvertLeadToClientMutation();
 
-    const statuses = useMemo(() => settingsData?.data?.filter((s: any) => s.type === 'STATUS') || [], [settingsData]);
-    const actionTypes = useMemo(() => settingsData?.data?.filter((s: any) => s.type === 'ACTION_TYPE') || [], [settingsData]);
     const settingName = (id?: string | null) => settingsData?.data?.find((s: any) => s._id === id)?.name;
 
     const lead = leadData?.data?.lead;
     const activities: any[] = leadData?.data?.activities || [];
 
     const [isActivityOpen, setIsActivityOpen] = useState(false);
-    const [activityNote, setActivityNote] = useState('');
-    const [newStatus, setNewStatus] = useState('none');
-    const [nextActionType, setNextActionType] = useState('none');
-    const [nextActionDate, setNextActionDate] = useState<Date | undefined>(undefined);
     const [isConvertOpen, setIsConvertOpen] = useState(false);
     const [clientId, setClientId] = useState('');
-
-    const handleAddActivity = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!lead) return;
-        try {
-            const payload: any = { activityType: 'NOTE_ADDED', notes: activityNote };
-            if (newStatus !== 'none' && newStatus !== lead.status?._id) {
-                payload.newStatus = newStatus;
-                payload.activityType = 'STATUS_CHANGE';
-            }
-            if (nextActionType !== 'none') {
-                payload.nextActionType = nextActionType;
-                payload.activityType = 'FOLLOW_UP_SET';
-            }
-            if (nextActionDate) payload.nextActionDate = nextActionDate.toISOString();
-
-            await addActivity({ id: lead._id, data: payload }).unwrap();
-            toast.success('Activity logged');
-            setIsActivityOpen(false);
-            setActivityNote('');
-            setNewStatus('none');
-            setNextActionType('none');
-            setNextActionDate(undefined);
-        } catch (error: any) {
-            toast.error(error?.data?.message || 'Couldn’t log the activity');
-        }
-    };
 
     const handleConvert = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -396,89 +358,7 @@ export function LeadDetailsDialog({ leadId, onClose }: { leadId: string | null; 
                 </DialogContent>
             </Dialog>
 
-            {/* Log activity */}
-            <Dialog open={isActivityOpen} onOpenChange={setIsActivityOpen}>
-                <DialogContent className="sm:max-w-[500px]">
-                    <DialogHeader>
-                        <DialogTitle>Log activity</DialogTitle>
-                        <DialogDescription>Record a note, update the status, or schedule a follow-up.</DialogDescription>
-                    </DialogHeader>
-                    <form onSubmit={handleAddActivity} className="space-y-4 pt-2">
-                        <div className="space-y-2">
-                            <Label>Notes</Label>
-                            <Textarea
-                                required
-                                value={activityNote}
-                                onChange={(e) => setActivityNote(e.target.value)}
-                                placeholder="What happened? E.g., had a great call…"
-                                className="resize-none"
-                            />
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                                <Label>Update status (optional)</Label>
-                                <Select value={newStatus} onValueChange={setNewStatus}>
-                                    <SelectTrigger className="w-full">
-                                        <SelectValue placeholder="Current status" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="none">Don’t change</SelectItem>
-                                        {statuses.map((s: any) => (
-                                            <SelectItem key={s._id} value={s._id}>
-                                                {s.name}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                            <div className="space-y-2">
-                                <Label>Next action (optional)</Label>
-                                <Select value={nextActionType} onValueChange={setNextActionType}>
-                                    <SelectTrigger className="w-full">
-                                        <SelectValue placeholder="Select type" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="none">None</SelectItem>
-                                        {actionTypes.map((a: any) => (
-                                            <SelectItem key={a._id} value={a._id}>
-                                                {a.name}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                        </div>
-                        {nextActionType !== 'none' && (
-                            <div className="flex flex-col space-y-2">
-                                <Label>Next action date</Label>
-                                <Popover>
-                                    <PopoverTrigger asChild>
-                                        <Button
-                                            variant="outline"
-                                            className={cn('w-full justify-start text-left font-normal', !nextActionDate && 'text-muted-foreground')}
-                                        >
-                                            <Calendar className="size-4" />
-                                            {nextActionDate ? format(nextActionDate, 'PPP') : <span>Pick a date</span>}
-                                        </Button>
-                                    </PopoverTrigger>
-                                    <PopoverContent className="w-auto p-0" align="start">
-                                        <CalendarComponent mode="single" selected={nextActionDate} onSelect={setNextActionDate} autoFocus />
-                                    </PopoverContent>
-                                </Popover>
-                            </div>
-                        )}
-                        <div className="flex justify-end gap-2 border-t pt-4">
-                            <Button type="button" variant="outline" onClick={() => setIsActivityOpen(false)}>
-                                Cancel
-                            </Button>
-                            <Button type="submit" disabled={isAddingActivity}>
-                                {isAddingActivity && <Loader className="size-4 animate-spin" />}
-                                Log activity
-                            </Button>
-                        </div>
-                    </form>
-                </DialogContent>
-            </Dialog>
+            <LogActivityDialog lead={isActivityOpen ? lead : null} onClose={() => setIsActivityOpen(false)} />
 
             {/* Convert to client */}
             <Dialog open={isConvertOpen} onOpenChange={setIsConvertOpen}>

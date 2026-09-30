@@ -15,12 +15,20 @@ export const leadApi = apiSlice.injectEndpoints({
                 if (params?.nextActionDateFrom) queryParams.append('nextActionDateFrom', params.nextActionDateFrom);
                 if (params?.nextActionDateTo) queryParams.append('nextActionDateTo', params.nextActionDateTo);
                 if (params?.isConverted !== undefined) queryParams.append('isConverted', params.isConverted.toString());
+                if (params?.createdBy) queryParams.append('createdBy', params.createdBy);
+                if (params?.updatedBy) queryParams.append('updatedBy', params.updatedBy);
 
                 return {
                     url: `/leads?${queryParams.toString()}`,
                     method: 'GET',
                 };
             },
+            providesTags: ['Lead'],
+        }),
+        // People who created/updated leads — options for the "Created by" / "Updated by" filters.
+        getLeadPeople: builder.query<{ id: string; name: string }[], void>({
+            query: () => '/leads/people',
+            transformResponse: (res: { data: { id: string; name: string }[] }) => res.data ?? [],
             providesTags: ['Lead'],
         }),
         getLeadById: builder.query({
@@ -67,6 +75,7 @@ export const leadApi = apiSlice.injectEndpoints({
 
 export const {
     useGetLeadsQuery,
+    useGetLeadPeopleQuery,
     useGetLeadByIdQuery,
     useCreateLeadMutation,
     useUpdateLeadMutation,

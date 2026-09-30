@@ -32,7 +32,13 @@ interface LeadFiltersProps {
   statuses: LeadSetting[];
   sources: LeadSetting[];
   actionTypes: LeadSetting[];
+  createdBy: string;
+  updatedBy: string;
+  people: { id: string; name: string }[];
 }
+
+// "Automated" = leads the system made (new WhatsApp contacts) / nobody has edited.
+const AUTOMATED = "automated";
 
 const PRIORITY_OPTIONS = [
   { value: "High", label: "High", dotColor: "bg-red-500" },
@@ -116,7 +122,12 @@ export function LeadFilters({
   statuses,
   sources,
   actionTypes,
+  createdBy,
+  updatedBy,
+  people,
 }: LeadFiltersProps) {
+  const personLabel = (id: string) =>
+    id === AUTOMATED ? "Automated" : people.find((p) => p.id === id)?.name || "Someone";
   const [localSearch, setLocalSearch] = useState(search);
   const debouncedSearch = useDebounce(localSearch, 500);
   const [datePreset, setDatePreset] = useState(() =>
@@ -178,6 +189,8 @@ export function LeadFilters({
     const s = sources.find((s) => s._id === source);
     activeFilters.push({ key: "source", label: s?.name || "Source", color: s?.color });
   }
+  if (createdBy) activeFilters.push({ key: "createdBy", label: `Created by ${personLabel(createdBy)}` });
+  if (updatedBy) activeFilters.push({ key: "updatedBy", label: `Updated by ${personLabel(updatedBy)}` });
   if (nextActionType) {
     const a = actionTypes.find((a) => a._id === nextActionType);
     activeFilters.push({ key: "nextActionType", label: a?.name || "Action Type", color: a?.color });
@@ -235,7 +248,7 @@ export function LeadFilters({
             value={status || "all"}
             onValueChange={(val) => onFilterChange("status", val === "all" ? "" : val)}
           >
-            <SelectTrigger className="w-[120px] h-9 bg-background border-input text-foreground text-sm focus:ring-brand-primary">
+            <SelectTrigger className="w-auto min-w-[110px] h-9 bg-background border-input text-foreground text-sm focus:ring-brand-primary">
               <SelectValue placeholder="Status" />
             </SelectTrigger>
             <SelectContent>
@@ -261,7 +274,7 @@ export function LeadFilters({
             value={priority || "all"}
             onValueChange={(val) => onFilterChange("priority", val === "all" ? "" : val)}
           >
-            <SelectTrigger className="w-[115px] h-9 bg-background border-input text-foreground text-sm focus:ring-brand-primary">
+            <SelectTrigger className="w-auto min-w-[110px] h-9 bg-background border-input text-foreground text-sm focus:ring-brand-primary">
               <SelectValue placeholder="Priority" />
             </SelectTrigger>
             <SelectContent>
@@ -282,7 +295,7 @@ export function LeadFilters({
             value={source || "all"}
             onValueChange={(val) => onFilterChange("source", val === "all" ? "" : val)}
           >
-            <SelectTrigger className="w-[120px] h-9 bg-background border-input text-foreground text-sm focus:ring-brand-primary">
+            <SelectTrigger className="w-auto min-w-[110px] h-9 bg-background border-input text-foreground text-sm focus:ring-brand-primary">
               <SelectValue placeholder="Source" />
             </SelectTrigger>
             <SelectContent>
@@ -302,6 +315,28 @@ export function LeadFilters({
               ))}
             </SelectContent>
           </Select>
+
+          {/* Created by / Updated by — pick yourself to see only your leads */}
+          {(["createdBy", "updatedBy"] as const).map((key) => (
+            <Select
+              key={key}
+              value={(key === "createdBy" ? createdBy : updatedBy) || "all"}
+              onValueChange={(val) => onFilterChange(key, val === "all" ? "" : val)}
+            >
+              <SelectTrigger className="w-auto min-w-[110px] h-9 bg-background border-input text-foreground text-sm focus:ring-brand-primary">
+                <SelectValue placeholder={key === "createdBy" ? "Created by" : "Updated by"} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">{key === "createdBy" ? "Created by: anyone" : "Updated by: anyone"}</SelectItem>
+                <SelectItem value={AUTOMATED}>Automated</SelectItem>
+                {people.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    {p.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ))}
 
           {/* More Filters (Next Action type + date) */}
           <Popover>

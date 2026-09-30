@@ -69,4 +69,6 @@ export interface LeadQueryParams {
     nextActionDateFrom?: Date | string;
     nextActionDateTo?: Date | string;
     assignedTo?: string;
+    createdBy?: string; // user id, or 'automated' for system-created leads
+    updatedBy?: string; // user id, or 'automated' (never touched by a person)
 }

@@ -1,10 +1,11 @@
 'use client';
 
 import { useState, useMemo, Suspense, useEffect } from 'react';
-import { useRouter, usePathname, useSearchParams } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { motion } from 'motion/react';
 import {
     useGetLeadsQuery,
+    useGetLeadPeopleQuery,
     useCreateLeadMutation,
     useUpdateLeadMutation,
 } from '@/redux/features/lead/leadApi';
@@ -16,8 +17,6 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
-import { Card, CardContent } from '@/components/ui/card';
-import { Separator } from '@/components/ui/separator';
 import { Button } from '@/components/ui/button';
 import { Plus, Loader, FileDown, Settings } from 'lucide-react';
 import { toast } from 'sonner';
@@ -28,6 +27,7 @@ import { LeadStats } from '@/components/lead/LeadStats';
 import { LeadFilters } from '@/components/lead/LeadFilters';
 import { LeadTable } from '@/components/lead/LeadTable';
 import { LeadDetailsDialog } from '@/components/lead/LeadDetailsDialog';
+import { LogActivityDialog } from '@/components/lead/LogActivityDialog';
 import { LeadPagination } from '@/components/lead/LeadPagination';
 import { Lead } from '@/types/lead.type';
 
@@ -46,7 +46,6 @@ export default function LeadsPage() {
 }
 
 function LeadsPageContent() {
-    const router = useRouter();
     const pathname = usePathname();
     const searchParams = useSearchParams();
     const { can } = usePermissions();
@@ -62,6 +61,8 @@ function LeadsPageContent() {
     const [nextActionType, setNextActionType] = useState(() => searchParams.get('nextActionType') || '');
     const [nextActionDateFrom, setNextActionDateFrom] = useState(() => searchParams.get('nextActionDateFrom') || '');
     const [nextActionDateTo, setNextActionDateTo] = useState(() => searchParams.get('nextActionDateTo') || '');
+    const [createdBy, setCreatedBy] = useState(() => searchParams.get('createdBy') || '');
+    const [updatedBy, setUpdatedBy] = useState(() => searchParams.get('updatedBy') || '');
 
     // Synchronize URL changes (e.g. back/forward browser navigation) with local states
     useEffect(() => {
@@ -74,6 +75,8 @@ function LeadsPageContent() {
         setNextActionType(searchParams.get('nextActionType') || '');
         setNextActionDateFrom(searchParams.get('nextActionDateFrom') || '');
         setNextActionDateTo(searchParams.get('nextActionDateTo') || '');
+        setCreatedBy(searchParams.get('createdBy') || '');
+        setUpdatedBy(searchParams.get('updatedBy') || '');
     }, [searchParams]);
 
     // Helper to update local filter states and synchronize browser URL silently
@@ -91,6 +94,8 @@ function LeadsPageContent() {
             if (key === 'nextActionType') setNextActionType(strVal);
             if (key === 'nextActionDateFrom') setNextActionDateFrom(strVal);
             if (key === 'nextActionDateTo') setNextActionDateTo(strVal);
+            if (key === 'createdBy') setCreatedBy(strVal);
+            if (key === 'updatedBy') setUpdatedBy(strVal);
         });
 
         const params = new URLSearchParams(window.location.search);
@@ -140,7 +145,10 @@ function LeadsPageContent() {
         nextActionType: nextActionType || undefined,
         nextActionDateFrom: nextActionDateFrom || undefined,
         nextActionDateTo: nextActionDateTo || undefined,
+        createdBy: createdBy || undefined,
+        updatedBy: updatedBy || undefined,
     });
+    const { data: people = [] } = useGetLeadPeopleQuery();
 
     const [createLead, { isLoading: isCreating }] = useCreateLeadMutation();
     const [updateLead, { isLoading: isUpdating }] = useUpdateLeadMutation();
@@ -179,6 +187,8 @@ function LeadsPageContent() {
         setNextActionType('');
         setNextActionDateFrom('');
         setNextActionDateTo('');
+        setCreatedBy('');
+        setUpdatedBy('');
         window.history.replaceState({ ...window.history.state, as: pathname, url: pathname }, '', pathname);
     };
 
@@ -216,18 +226,19 @@ function LeadsPageContent() {
     // View opens a dialog instead of a separate page (support keeps agents on one screen).
     const [viewLeadId, setViewLeadId] = useState<string | null>(null);
     const handleViewLead = (lead: Lead) => setViewLeadId(lead._id);
+    const [loggingLead, setLoggingLead] = useState<Lead | null>(null);
 
     return (
         <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
-            className="w-full min-h-screen pb-10"
+            className="w-full p-6 pb-10"
         >
             {/* ── Page Header ──────────────────────────────────────────── */}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
                 <div>
-                    <h1 className="text-2xl font-bold tracking-tight text-foreground">
+                    <h1 className="text-xl font-semibold tracking-tight text-foreground">
                         Leads
                     </h1>
                     <p className="text-sm text-muted-foreground mt-0.5 flex items-center gap-2">
@@ -281,62 +292,55 @@ function LeadsPageContent() {
                 isLoading={isLoading}
             />
 
-            {/* ── Filters Card ─────────────────────────────────────────── */}
-            <Card className="mt-5 py-0 shadow-sm">
-                <div className="px-5 py-4">
-                    <LeadFilters
-                        search={search}
-                        status={status}
-                        priority={priority}
-                        source={source}
-                        nextActionType={nextActionType}
-                        nextActionDateFrom={nextActionDateFrom}
-                        nextActionDateTo={nextActionDateTo}
-                        onFilterChange={handleFilterChange}
-                        onClearFilters={handleClearFilters}
-                        statuses={statuses}
-                        sources={sources}
-                        actionTypes={actionTypes}
-                    />
-                </div>
-            </Card>
+            {/* ── Filters (same pattern as the Knowledge Base page) ─────── */}
+            <div className="mt-5">
+                <LeadFilters
+                    search={search}
+                    status={status}
+                    priority={priority}
+                    source={source}
+                    nextActionType={nextActionType}
+                    nextActionDateFrom={nextActionDateFrom}
+                    nextActionDateTo={nextActionDateTo}
+                    createdBy={createdBy}
+                    updatedBy={updatedBy}
+                    people={people}
+                    onFilterChange={handleFilterChange}
+                    onClearFilters={handleClearFilters}
+                    statuses={statuses}
+                    sources={sources}
+                    actionTypes={actionTypes}
+                />
+            </div>
 
-            {/* ── Table Card ───────────────────────────────────────────── */}
-            <Card className="mt-4 py-0 gap-0 overflow-hidden shadow-sm">
+            {/* ── Table ───────────────────────────────────────────────── */}
+            <div className="mt-4 overflow-hidden rounded-lg border bg-sidebar">
                 <div className="overflow-x-auto">
                     <LeadTable
                         leads={leads}
                         isLoading={isLoading}
                         onEdit={openEditDialog}
                         onView={handleViewLead}
+                        onLog={setLoggingLead}
                     />
                 </div>
+            </div>
 
-                <Separator />
-
-                {/* Footer: Count + Pagination */}
-                <CardContent className="flex items-center justify-between gap-4 px-5 py-3">
-                    <p className="hidden flex-1 text-sm text-muted-foreground lg:flex">
-                        Showing{' '}
-                        <span className="mx-1 font-medium text-foreground/80">
-                            {leads.length}
-                        </span>{' '}
-                        of{' '}
-                        <span className="mx-1 font-medium text-foreground/80">
-                            {pagination.total}
-                        </span>{' '}
-                        leads
-                    </p>
-                    <LeadPagination
-                        currentPage={page}
-                        totalPages={pagination.totalPages}
-                        limit={limit}
-                        onPageChange={(p) => updateFilters({ page: p })}
-                        onLimitChange={(l) => updateFilters({ limit: l, page: 1 })}
-                        isLoading={isLoading}
-                    />
-                </CardContent>
-            </Card>
+            {/* ── Footer: count + pagination ──────────────────────────── */}
+            <div className="mt-3 flex items-center justify-between gap-4 px-1">
+                <p className="hidden flex-1 text-sm text-muted-foreground lg:flex">
+                    Showing <span className="mx-1 font-medium text-foreground/80">{leads.length}</span> of
+                    <span className="mx-1 font-medium text-foreground/80">{pagination.total}</span> leads
+                </p>
+                <LeadPagination
+                    currentPage={page}
+                    totalPages={pagination.totalPages}
+                    limit={limit}
+                    onPageChange={(p) => updateFilters({ page: p })}
+                    onLimitChange={(l) => updateFilters({ limit: l, page: 1 })}
+                    isLoading={isLoading}
+                />
+            </div>
 
             {/* ── Add Lead Dialog ──────────────────────────────────────── */}
             <Dialog
@@ -411,6 +415,7 @@ function LeadsPageContent() {
             />
 
             <LeadDetailsDialog leadId={viewLeadId} onClose={() => setViewLeadId(null)} />
+            <LogActivityDialog lead={loggingLead} onClose={() => setLoggingLead(null)} />
         </motion.div>
     );
 }

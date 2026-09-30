@@ -31,12 +31,23 @@ export interface Lead {
         lastName: string;
         email: string;
     };
-    createdBy: string;
+    createdBy?: LeadPerson | null; // null = created automatically (e.g. from WhatsApp)
+    updatedBy?: LeadPerson | null;
+    origin?: 'manual' | 'whatsapp';
     createdAt: string;
     updatedAt: string;
 }
 
-export type LeadActivityType = 'STATUS_CHANGE' | 'NOTE_ADDED' | 'FOLLOW_UP_SET' | 'CONVERTED' | 'CREATED';
+/** A user as populated on leads (created/updated by, activity author). */
+export interface LeadPerson {
+    _id: string;
+    name?: string;
+    firstName?: string;
+    lastName?: string;
+    email?: string;
+}
+
+export type LeadActivityType = 'STATUS_CHANGE' | 'NOTE_ADDED' | 'FOLLOW_UP_SET' | 'CONVERTED' | 'CREATED' | 'UPDATED';
 
 export interface LeadActivity {
     _id: string;

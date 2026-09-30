@@ -2,7 +2,7 @@ import LeadModel from '../models/lead.model.js';
 import LeadActivityModel from '../models/lead-activity.model.js';
 import type { ILead, ILeadActivity, LeadQueryParams } from '../types/lead.type.js';
 import ClientModel from '../models/client.model.js';
-import { Types } from 'mongoose';
+import mongoose, { Types } from 'mongoose';
 import LeadSettingModel from '../models/lead-setting.model.js';
 import { escapeRegex } from '../lib/sanitize.js';
 import { logger } from '../lib/logger.js';
@@ -30,6 +30,8 @@ const getAllLeads = async (params: LeadQueryParams) => {
         nextActionType,
         nextActionDateFrom,
         nextActionDateTo,
+        createdBy,
+        updatedBy,
     } = params;
 
     const query: Record<string, any> = {};
@@ -48,6 +50,12 @@ const getAllLeads = async (params: LeadQueryParams) => {
     if (assignedTo) query.assignedTo = assignedTo;
     if (isConverted !== undefined) query.isConverted = isConverted;
     if (nextActionType) query.nextActionType = nextActionType;
+    // 'automated' = no person (system-created / never edited by a person).
+    const byPerson = (v?: string) => (v === 'automated' ? null : Types.ObjectId.isValid(v ?? '') ? new Types.ObjectId(v) : undefined);
+    const createdByValue = byPerson(createdBy);
+    const updatedByValue = byPerson(updatedBy);
+    if (createdByValue !== undefined) query.createdBy = createdByValue;
+    if (updatedByValue !== undefined) query.updatedBy = updatedByValue;
 
     // Date range filtering for nextActionDate
     if (nextActionDateFrom || nextActionDateTo) {
@@ -86,6 +94,22 @@ const getAllLeads = async (params: LeadQueryParams) => {
         page,
         totalPages: Math.ceil(total / limit),
     };
+};
+
+const getLeadPeople = async () => {
+    const [creators, updaters] = await Promise.all([
+        LeadModel.distinct('createdBy', { createdBy: { $ne: null } }),
+        LeadModel.distinct('updatedBy', { updatedBy: { $ne: null } }),
+    ]);
+    const ids = [...new Set([...creators, ...updaters].map(String))];
+    if (!ids.length) return [];
+    const users = await mongoose.connection
+        .collection('user')
+        .find({ _id: { $in: ids.map((id) => new Types.ObjectId(id)) } }, { projection: { name: 1, email: 1 } })
+        .toArray();
+    return users
+        .map((u) => ({ id: u._id.toString(), name: (u.name as string) || (u.email as string) || 'Unknown user' }))
+        .sort((a, b) => a.name.localeCompare(b.name));
 };
 
 const getLeadById = async (id: string) => {
@@ -232,15 +256,33 @@ const createLeadFromWhatsApp = async (waPhone: string, name?: string) => {
     }
 };
 
-const addActivity = async (leadId: string, data: Partial<ILeadActivity>, createdBy: string) => {
+const PRIORITIES = ['High', 'Medium', 'Low'];
+
+// `priority` / `source` ride along on an activity (the "Log activity" form can
+// change them too); they aren't activity fields, so they're recorded as changes.
+const addActivity = async (
+    leadId: string,
+    data: Partial<ILeadActivity> & { priority?: string; source?: string },
+    createdBy: string,
+) => {
     const lead = await LeadModel.findById(leadId);
     if (!lead) throw new Error('Lead not found');
 
+    const { priority, source, changes: _ignored, ...activityData } = data;
+    const changes: { field: string; from: string | null; to: string | null }[] = [];
+    if (priority && PRIORITIES.includes(priority) && priority !== lead.priority) {
+        changes.push({ field: 'priority', from: lead.priority ?? null, to: priority });
+    }
+    if (source && Types.ObjectId.isValid(source) && source !== lead.source?.toString()) {
+        changes.push({ field: 'source', from: lead.source?.toString() ?? null, to: source });
+    }
+
     // Snapshot what the lead looked like before, so the history reads old → new.
     const activity = new LeadActivityModel({
-        ...data,
+        ...activityData,
         ...(data.newStatus && !data.previousStatus && lead.status ? { previousStatus: lead.status } : {}),
         ...(data.notes && lead.currentNotes ? { previousNotes: lead.currentNotes } : {}),
+        ...(changes.length ? { changes } : {}),
         leadId,
         createdBy,
     });
@@ -248,6 +290,10 @@ const addActivity = async (leadId: string, data: Partial<ILeadActivity>, created
 
     // Update main lead if status or next action changed
     const updateData: Partial<ILead> = { updatedBy: new Types.ObjectId(createdBy) };
+    for (const c of changes) {
+        if (c.field === 'priority') updateData.priority = c.to as ILead['priority'];
+        if (c.field === 'source') updateData.source = new Types.ObjectId(c.to!);
+    }
     if (data.newStatus) updateData.status = data.newStatus as Types.ObjectId;
     if (data.nextActionType) updateData.nextActionType = data.nextActionType as Types.ObjectId;
     if (data.nextActionDate) updateData.nextActionDate = data.nextActionDate;
@@ -298,6 +344,7 @@ const convertToClient = async (leadId: string, clientData: any, createdBy: strin
 
 export default {
     getAllLeads,
+    getLeadPeople,
     getLeadById,
     createLead,
     updateLead,

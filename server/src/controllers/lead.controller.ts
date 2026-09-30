@@ -14,6 +14,8 @@ const getAllLeads = async (req: Request, res: Response) => {
             nextActionType: req.query.nextActionType as string,
             nextActionDateFrom: req.query.nextActionDateFrom as string,
             nextActionDateTo: req.query.nextActionDateTo as string,
+            createdBy: req.query.createdBy as string,
+            updatedBy: req.query.updatedBy as string,
         };
 
         if (req.query.isConverted !== undefined) {
@@ -31,6 +33,16 @@ const getAllLeads = async (req: Request, res: Response) => {
             success: false,
             message: err.message || 'Failed to fetch leads',
         });
+    }
+};
+
+// Everyone who has created or updated a lead — options for the list's
+// "Created by" / "Updated by" filters.
+const getLeadPeople = async (_req: Request, res: Response) => {
+    try {
+        res.status(200).json({ success: true, data: await LeadService.getLeadPeople() });
+    } catch (error: unknown) {
+        res.status(500).json({ success: false, message: (error as Error).message || 'Failed to load people' });
     }
 };
 
@@ -164,5 +176,6 @@ export default {
     createLead,
     updateLead,
     addActivity,
+    getLeadPeople,
     convertToClient,
 };
