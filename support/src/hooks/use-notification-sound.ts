@@ -13,8 +13,8 @@ export function useNotificationSound() {
         const stored = localStorage.getItem(STORAGE_KEY);
         if (stored !== null) setEnabled(stored === 'true');
 
-        audioRef.current = new Audio('/sounds/notification.wav');
-        audioRef.current.volume = 0.5;
+        audioRef.current = new Audio('/sounds/message.wav');
+        audioRef.current.volume = 1;
 
         const onVisibility = () => {
             isPageVisible.current = document.visibilityState === 'visible';

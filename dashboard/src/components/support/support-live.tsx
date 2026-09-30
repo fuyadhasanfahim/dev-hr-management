@@ -20,7 +20,7 @@ function SupportAlerts() {
 
     useEffect(() => {
         const socket = connectSocket();
-        sound.current = new Audio('/sounds/notification.wav');
+        sound.current = new Audio('/sounds/message.wav');
         const register = () => socket.emit('agent:register_presence');
         if (socket.connected) register();
         const offs = [

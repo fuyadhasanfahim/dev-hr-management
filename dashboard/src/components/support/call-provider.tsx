@@ -174,7 +174,8 @@ export function CallProvider({ children }: { children: ReactNode }) {
     // ── Socket: incoming calls + outbound call progress ───────────────────────
     useEffect(() => {
         connectSocket();
-        ringRef.current = new Audio('/sounds/notification.wav');
+        ringRef.current = new Audio('/sounds/ringtone.wav');
+        ringRef.current.volume = 1;
         ringRef.current.loop = true;
 
         const offs = [
