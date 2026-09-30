@@ -347,8 +347,8 @@ function LeadsPageContent() {
                 open={isAddDialogOpen && canCreateLead}
                 onOpenChange={setIsAddDialogOpen}
             >
-                <DialogContent className="max-w-3xl h-[90vh] max-h-[90vh] flex flex-col p-0 overflow-hidden gap-0">
-                    <div className="px-6 py-4 border-b border-border shrink-0">
+                <DialogContent className="flex max-h-[90vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-3xl">
+                    <div className="shrink-0 border-b px-6 py-4">
                         <DialogHeader>
                             <DialogTitle className="text-xl font-semibold">
                                 Add New Lead
@@ -372,8 +372,8 @@ function LeadsPageContent() {
 
             {/* ── Edit Lead Dialog ─────────────────────────────────────── */}
             <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-                <DialogContent className="max-w-3xl h-[90vh] max-h-[90vh] flex flex-col p-0 overflow-hidden gap-0">
-                    <div className="px-6 py-4 border-b border-border shrink-0">
+                <DialogContent className="flex max-h-[90vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-3xl">
+                    <div className="shrink-0 border-b px-6 py-4">
                         <DialogHeader>
                             <DialogTitle className="text-xl font-semibold">
                                 Edit Lead

@@ -14,6 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Loader, User, Info, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { LeadSetting } from "@/types/lead.type";
@@ -34,6 +35,12 @@ export const leadFormSchema = z.object({
 });
 
 export type LeadFormValues = z.infer<typeof leadFormSchema>;
+
+const PRIORITY_OPTIONS = [
+  { value: "High", dot: "bg-red-500" },
+  { value: "Medium", dot: "bg-amber-500" },
+  { value: "Low", dot: "bg-blue-500" },
+] as const;
 
 interface LeadFormProps {
   defaultValues?: Partial<LeadFormValues>;
@@ -105,54 +112,71 @@ export function LeadForm({
   return (
     <form
       onSubmit={handleSubmit(handleFormSubmit)}
-      className="flex flex-col h-full flex-1 overflow-hidden"
+      className="flex min-h-0 flex-1 flex-col"
     >
-      <div className="flex-1 overflow-y-auto p-6 space-y-10">
-        <section className="space-y-6">
-          <div className="flex items-center gap-3 border-b border-border pb-2">
-            <User className="h-5 w-5 text-primary" />
-            <h3 className="font-semibold text-foreground text-lg">
-              Contact Information
-            </h3>
-          </div>
-          <LeadContactInfo form={form} getFieldError={getFieldError} />
-        </section>
+      {/* Scrolls inside the dialog, so a long note never pushes the buttons off-screen. */}
+      <ScrollArea className="min-h-0 flex-1">
+        <div className="space-y-6 px-6 py-5">
+          <FormSection
+            icon={User}
+            title="Contact information"
+            description="How to reach this lead."
+          >
+            <LeadContactInfo form={form} getFieldError={getFieldError} />
+          </FormSection>
 
-        <section className="space-y-6">
-          <div className="flex items-center gap-3 border-b border-border pb-2">
-            <Info className="h-5 w-5 text-primary" />
-            <h3 className="font-semibold text-foreground text-lg">
-              Lead Details
-            </h3>
-          </div>
-          <LeadDetails
-            form={form}
-            getFieldError={getFieldError}
-            statuses={statuses}
-            sources={sources}
-          />
-        </section>
-      </div>
+          <FormSection
+            icon={Info}
+            title="Pipeline"
+            description={isEditMode ? "Where this lead stands right now." : "Where this lead starts in the pipeline."}
+          >
+            <LeadDetails
+              form={form}
+              getFieldError={getFieldError}
+              statuses={statuses}
+              sources={sources}
+            />
+          </FormSection>
+        </div>
+      </ScrollArea>
 
-      <div className="p-4 border-t border-border bg-muted/40 flex items-center justify-end gap-3 sticky bottom-0 z-20 shrink-0 shadow-[0_-1px_2px_rgba(0,0,0,0.02)]">
-        <Button
-          type="button"
-          variant="outline"
-          onClick={onCancel}
-          className="bg-background border-border"
-        >
+      <div className="flex shrink-0 items-center justify-end gap-2 border-t bg-muted/30 px-6 py-3">
+        <Button type="button" variant="outline" onClick={onCancel}>
           Cancel
         </Button>
-        <Button
-          type="submit"
-          disabled={isSubmitting}
-          className="min-w-[120px] bg-primary hover:bg-primary/90 text-white shadow-sm"
-        >
+        <Button type="submit" disabled={isSubmitting} className="min-w-[120px]">
           {isSubmitting && <Loader className="h-4 w-4 animate-spin shrink-0" />}
           <span>{submitLabel}</span>
         </Button>
       </div>
     </form>
+  );
+}
+
+function FormSection({
+  icon: Icon,
+  title,
+  description,
+  children,
+}: {
+  icon: typeof User;
+  title: string;
+  description: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="rounded-xl border bg-card/50 p-5">
+      <div className="mb-4 flex items-start gap-3">
+        <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+          <Icon className="size-4" />
+        </span>
+        <div>
+          <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+          <p className="text-xs text-muted-foreground">{description}</p>
+        </div>
+      </div>
+      {children}
+    </section>
   );
 }
 
@@ -166,8 +190,8 @@ function LeadContactInfo({
   const { register } = form;
 
   return (
-    <div className="space-y-6">
-      <div className="grid md:grid-cols-2 gap-6">
+    <div className="space-y-4">
+      <div className="grid md:grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label htmlFor="phone" className="text-foreground/90">
             Phone Number <span className="text-red-500">*</span>
@@ -201,7 +225,7 @@ function LeadContactInfo({
         </div>
       </div>
 
-      <div className="grid md:grid-cols-2 gap-6">
+      <div className="grid md:grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label htmlFor="email" className="text-foreground/90">
             Email
@@ -256,8 +280,8 @@ function LeadDetails({
   const source = useWatch({ control, name: "source" });
 
   return (
-    <div className="space-y-6">
-      <div className="grid md:grid-cols-3 gap-6">
+    <div className="space-y-4">
+      <div className="grid md:grid-cols-3 gap-4">
         <div className="space-y-2">
           <Label className="text-foreground/90">Status</Label>
           <Select
@@ -298,9 +322,14 @@ function LeadDetails({
               <SelectValue placeholder="Select priority" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="High">High</SelectItem>
-              <SelectItem value="Medium">Medium</SelectItem>
-              <SelectItem value="Low">Low</SelectItem>
+              {PRIORITY_OPTIONS.map((p) => (
+                <SelectItem key={p.value} value={p.value}>
+                  <div className="flex items-center gap-2">
+                    <div className={cn("w-2.5 h-2.5 rounded-full", p.dot)} />
+                    {p.value}
+                  </div>
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
@@ -318,7 +347,15 @@ function LeadDetails({
               <SelectItem value="none">None</SelectItem>
               {sources?.map((opt) => (
                 <SelectItem key={opt._id} value={opt._id}>
-                  {opt.name}
+                  <div className="flex items-center gap-2">
+                    {opt.color && (
+                      <div
+                        className="w-2.5 h-2.5 rounded-full"
+                        style={{ backgroundColor: opt.color }}
+                      />
+                    )}
+                    {opt.name}
+                  </div>
                 </SelectItem>
               ))}
             </SelectContent>
@@ -334,7 +371,7 @@ function LeadDetails({
           id="currentNotes"
           placeholder="Add any initial notes or context about this lead..."
           {...register("currentNotes")}
-          className="min-h-[120px] bg-background border-border focus-visible:ring-primary resize-y"
+          className="min-h-28 max-h-60 overflow-y-auto break-words resize-none bg-background border-border focus-visible:ring-primary"
         />
       </div>
     </div>

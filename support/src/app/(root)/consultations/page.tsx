@@ -9,14 +9,12 @@ import {
 import {
     Card,
     CardAction,
-    CardContent,
     CardDescription,
     CardFooter,
     CardHeader,
     CardTitle,
 } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
 import { Button } from '@/components/ui/button';
 import { Loader, RefreshCw, TrendingUp, TrendingDown } from 'lucide-react';
 import { ConsultationFilters } from '@/components/consultation/ConsultationFilters';
@@ -93,12 +91,12 @@ export default function ConsultationsPage() {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
-            className="w-full min-h-screen pb-10"
+            className="w-full p-6 pb-10"
         >
             {/* ── Page Header ──────────────────────────────────────────── */}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
                 <div>
-                    <h1 className="text-2xl font-bold tracking-tight text-foreground">
+                    <h1 className="text-xl font-semibold tracking-tight text-foreground">
                         Consultations
                     </h1>
                     <p className="text-sm text-muted-foreground mt-0.5 flex items-center gap-2">
@@ -149,28 +147,25 @@ export default function ConsultationsPage() {
                 })}
             </div>
 
-            {/* ── Filters Card ─────────────────────────────────────────── */}
-            <Card className="mt-5 py-0 shadow-sm">
-                <div className="px-5 py-4">
+            {/* ── Filters (Knowledge Base pattern) ──────────────────────── */}
+            <div className="mt-5">
                     <ConsultationFilters
-                        search={search}
-                        status={statusFilter}
-                        onFilterChange={handleFilterChange}
-                        onClearFilters={handleClearFilters}
-                    />
-                </div>
-            </Card>
+                    search={search}
+                    status={statusFilter}
+                    onFilterChange={handleFilterChange}
+                    onClearFilters={handleClearFilters}
+                />
+            </div>
 
-            {/* ── Table Card ───────────────────────────────────────────── */}
-            <Card className="mt-4 py-0 gap-0 overflow-hidden shadow-sm">
+            {/* ── Table ───────────────────────────────────────────────── */}
+            <div className="mt-4 overflow-hidden rounded-lg border bg-sidebar">
                 <div className="overflow-x-auto">
                     <ConsultationTable consultations={consultations} isLoading={isLoading} />
                 </div>
+            </div>
 
-                <Separator />
-
-                {/* Footer: Count + Pagination */}
-                <CardContent className="flex items-center justify-between gap-4 px-5 py-3">
+            {/* ── Footer: count + pagination ──────────────────────────── */}
+            <div className="mt-3 flex items-center justify-between gap-4 px-1">
                     <p className="hidden flex-1 text-sm text-muted-foreground lg:flex">
                         Showing{' '}
                         <span className="mx-1 font-medium text-foreground/80">
@@ -193,8 +188,7 @@ export default function ConsultationsPage() {
                         }}
                         isLoading={isFetching}
                     />
-                </CardContent>
-            </Card>
+            </div>
         </motion.div>
     );
 }

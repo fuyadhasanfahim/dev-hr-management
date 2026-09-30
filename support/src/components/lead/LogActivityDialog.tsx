@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import type { Lead, LeadSetting } from '@/types/lead.type';
@@ -24,7 +25,12 @@ const PRIORITIES = [
 ] as const;
 
 function Dot({ color, className }: { color?: string; className?: string }) {
-    return <span className={cn('inline-block size-2 shrink-0 rounded-full', className)} style={color ? { backgroundColor: color } : undefined} />;
+    return (
+        <span
+            className={cn('inline-block size-2 shrink-0 rounded-full', className)}
+            style={color ? { backgroundColor: color } : undefined}
+        />
+    );
 }
 
 /**
@@ -87,131 +93,147 @@ export function LogActivityDialog({ lead, onClose }: { lead: Lead | null; onClos
 
     return (
         <Dialog open={!!lead} onOpenChange={(open) => !open && close()}>
-            <DialogContent className="sm:max-w-[560px]">
-                <DialogHeader>
-                    <DialogTitle>Log activity</DialogTitle>
-                    <DialogDescription>
+            <DialogContent className="flex max-h-[90vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl">
+                <DialogHeader className="shrink-0 border-b px-6 py-4 text-left">
+                    <DialogTitle className="text-lg">Log activity</DialogTitle>
+                    <DialogDescription className="break-words">
                         {lead?.name || lead?.phone} — add a note, move the status or priority, or plan a follow-up.
                     </DialogDescription>
                 </DialogHeader>
-                <form onSubmit={submit} className="space-y-4 pt-1">
-                    <div className="space-y-2">
-                        <Label>Notes</Label>
-                        <Textarea
-                            value={notes}
-                            onChange={(e) => setNotes(e.target.value)}
-                            placeholder="What happened? E.g. had a great call, sending the quote tomorrow…"
-                            className="min-h-24 resize-none"
-                        />
-                    </div>
-
-                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                        <div className="space-y-2">
-                            <Label>Status</Label>
-                            <Select value={status} onValueChange={setStatus}>
-                                <SelectTrigger className="w-full">
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value={KEEP}>
-                                        <span className="text-muted-foreground">Keep · {lead?.status?.name ?? 'None'}</span>
-                                    </SelectItem>
-                                    {byType('STATUS').map((s) => (
-                                        <SelectItem key={s._id} value={s._id}>
-                                            <span className="flex items-center gap-2">
-                                                <Dot color={s.color} />
-                                                {s.name}
-                                            </span>
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <div className="space-y-2">
-                            <Label>Priority</Label>
-                            <Select value={priority} onValueChange={setPriority}>
-                                <SelectTrigger className="w-full">
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value={KEEP}>
-                                        <span className="text-muted-foreground">Keep · {lead?.priority ?? 'Medium'}</span>
-                                    </SelectItem>
-                                    {PRIORITIES.map((p) => (
-                                        <SelectItem key={p.value} value={p.value}>
-                                            <span className="flex items-center gap-2">
-                                                <Dot className={p.dot} />
-                                                {p.value}
-                                            </span>
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <div className="space-y-2">
-                            <Label>Source</Label>
-                            <Select value={source} onValueChange={setSource}>
-                                <SelectTrigger className="w-full">
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value={KEEP}>
-                                        <span className="text-muted-foreground">Keep · {lead?.source?.name ?? 'None'}</span>
-                                    </SelectItem>
-                                    {byType('SOURCE').map((s) => (
-                                        <SelectItem key={s._id} value={s._id}>
-                                            <span className="flex items-center gap-2">
-                                                <Dot color={s.color} />
-                                                {s.name}
-                                            </span>
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                        <div className="space-y-2">
-                            <Label>Next action</Label>
-                            <Select value={actionType} onValueChange={setActionType}>
-                                <SelectTrigger className="w-full">
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value={KEEP}>
-                                        <span className="text-muted-foreground">None</span>
-                                    </SelectItem>
-                                    {byType('ACTION_TYPE').map((a) => (
-                                        <SelectItem key={a._id} value={a._id}>
-                                            {a.name}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        {followUp && (
-                            <div className="flex flex-col space-y-2">
-                                <Label>Date</Label>
-                                <Popover>
-                                    <PopoverTrigger asChild>
-                                        <Button
-                                            variant="outline"
-                                            className={cn('w-full justify-start text-left font-normal', !actionDate && 'text-muted-foreground')}
-                                        >
-                                            <Calendar className="size-4" />
-                                            {actionDate ? format(actionDate, 'PPP') : 'Pick a date'}
-                                        </Button>
-                                    </PopoverTrigger>
-                                    <PopoverContent className="w-auto p-0" align="start">
-                                        <CalendarComponent mode="single" selected={actionDate} onSelect={setActionDate} autoFocus />
-                                    </PopoverContent>
-                                </Popover>
+                <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col">
+                    <ScrollArea className="min-h-0 flex-1">
+                        <div className="space-y-5 px-6 py-5">
+                            <div className="space-y-2">
+                                <Label>Notes</Label>
+                                <Textarea
+                                    value={notes}
+                                    onChange={(e) => setNotes(e.target.value)}
+                                    placeholder="What happened? E.g. had a great call, sending the quote tomorrow…"
+                                    className="min-h-28 max-h-60 resize-none overflow-y-auto break-words"
+                                />
                             </div>
-                        )}
-                    </div>
 
-                    <div className="flex justify-end gap-2 border-t pt-4">
+                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                                <div className="space-y-2">
+                                    <Label>Status</Label>
+                                    <Select value={status} onValueChange={setStatus}>
+                                        <SelectTrigger className="w-full">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value={KEEP}>
+                                                <span className="text-muted-foreground">
+                                                    Keep · {lead?.status?.name ?? 'None'}
+                                                </span>
+                                            </SelectItem>
+                                            {byType('STATUS').map((s) => (
+                                                <SelectItem key={s._id} value={s._id}>
+                                                    <span className="flex items-center gap-2">
+                                                        <Dot color={s.color} />
+                                                        {s.name}
+                                                    </span>
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Priority</Label>
+                                    <Select value={priority} onValueChange={setPriority}>
+                                        <SelectTrigger className="w-full">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value={KEEP}>
+                                                <span className="text-muted-foreground">Keep · {lead?.priority ?? 'Medium'}</span>
+                                            </SelectItem>
+                                            {PRIORITIES.map((p) => (
+                                                <SelectItem key={p.value} value={p.value}>
+                                                    <span className="flex items-center gap-2">
+                                                        <Dot className={p.dot} />
+                                                        {p.value}
+                                                    </span>
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Source</Label>
+                                    <Select value={source} onValueChange={setSource}>
+                                        <SelectTrigger className="w-full">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value={KEEP}>
+                                                <span className="text-muted-foreground">
+                                                    Keep · {lead?.source?.name ?? 'None'}
+                                                </span>
+                                            </SelectItem>
+                                            {byType('SOURCE').map((s) => (
+                                                <SelectItem key={s._id} value={s._id}>
+                                                    <span className="flex items-center gap-2">
+                                                        <Dot color={s.color} />
+                                                        {s.name}
+                                                    </span>
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                                <div className="space-y-2">
+                                    <Label>Next action</Label>
+                                    <Select value={actionType} onValueChange={setActionType}>
+                                        <SelectTrigger className="w-full">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value={KEEP}>
+                                                <span className="text-muted-foreground">None</span>
+                                            </SelectItem>
+                                            {byType('ACTION_TYPE').map((a) => (
+                                                <SelectItem key={a._id} value={a._id}>
+                                                    {a.name}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                {followUp && (
+                                    <div className="flex flex-col space-y-2">
+                                        <Label>Date</Label>
+                                        <Popover>
+                                            <PopoverTrigger asChild>
+                                                <Button
+                                                    variant="outline"
+                                                    className={cn(
+                                                        'w-full justify-start text-left font-normal',
+                                                        !actionDate && 'text-muted-foreground',
+                                                    )}
+                                                >
+                                                    <Calendar className="size-4" />
+                                                    {actionDate ? format(actionDate, 'PPP') : 'Pick a date'}
+                                                </Button>
+                                            </PopoverTrigger>
+                                            <PopoverContent className="w-auto p-0" align="start">
+                                                <CalendarComponent
+                                                    mode="single"
+                                                    selected={actionDate}
+                                                    onSelect={setActionDate}
+                                                    autoFocus
+                                                />
+                                            </PopoverContent>
+                                        </Popover>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </ScrollArea>
+
+                    <div className="flex shrink-0 justify-end gap-2 border-t bg-muted/30 px-6 py-3">
                         <Button type="button" variant="outline" onClick={close}>
                             Cancel
                         </Button>

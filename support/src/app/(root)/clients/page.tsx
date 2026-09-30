@@ -16,8 +16,6 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
-import { Card, CardContent } from '@/components/ui/card';
-import { Separator } from '@/components/ui/separator';
 import { Button } from '@/components/ui/button';
 import { Plus, Loader, FileDown } from 'lucide-react';
 import { toast } from 'sonner';
@@ -211,12 +209,12 @@ function ClientsPageContent() {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
-            className="w-full min-h-screen pb-10"
+            className="w-full p-6 pb-10"
         >
             {/* ── Page Header ──────────────────────────────────────────── */}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
                 <div>
-                    <h1 className="text-2xl font-bold tracking-tight text-foreground">
+                    <h1 className="text-xl font-semibold tracking-tight text-foreground">
                         Clients
                     </h1>
                     <p className="text-sm text-muted-foreground mt-0.5 flex items-center gap-2">
@@ -261,20 +259,18 @@ function ClientsPageContent() {
                 isLoading={isLoading}
             />
 
-            {/* ── Filters Card ─────────────────────────────────────────── */}
-            <Card className="mt-5 py-0 shadow-sm">
-                <div className="px-5 py-4">
+            {/* ── Filters (Knowledge Base pattern) ──────────────────────── */}
+            <div className="mt-5">
                     <ClientFilters
-                        search={search}
-                        status={status}
-                        onFilterChange={handleFilterChange}
-                        onClearFilters={handleClearFilters}
-                    />
-                </div>
-            </Card>
+                    search={search}
+                    status={status}
+                    onFilterChange={handleFilterChange}
+                    onClearFilters={handleClearFilters}
+                />
+            </div>
 
-            {/* ── Table Card ───────────────────────────────────────────── */}
-            <Card className="mt-4 py-0 gap-0 overflow-hidden shadow-sm">
+            {/* ── Table ───────────────────────────────────────────────── */}
+            <div className="mt-4 overflow-hidden rounded-lg border bg-sidebar">
                 <div className="overflow-x-auto">
                     <ClientTable
                         clients={clients}
@@ -283,11 +279,10 @@ function ClientsPageContent() {
                         onView={handleViewClient}
                     />
                 </div>
+            </div>
 
-                <Separator />
-
-                {/* Footer: Count + Pagination */}
-                <CardContent className="flex items-center justify-between gap-4 px-5 py-3">
+            {/* ── Footer: count + pagination ──────────────────────────── */}
+            <div className="mt-3 flex items-center justify-between gap-4 px-1">
                     <p className="hidden flex-1 text-sm text-muted-foreground lg:flex">
                         Showing{' '}
                         <span className="mx-1 font-medium text-foreground/80">
@@ -307,15 +302,14 @@ function ClientsPageContent() {
                         onLimitChange={(l) => updateFilters({ limit: l, page: 1 })}
                         isLoading={isLoading}
                     />
-                </CardContent>
-            </Card>
+            </div>
 
             {/* ── Add Client Dialog ────────────────────────────────────── */}
             <Dialog
                 open={isAddDialogOpen && canCreateClient}
                 onOpenChange={setIsAddDialogOpen}
             >
-                <DialogContent className="max-w-4xl h-[90vh] max-h-[90vh] flex flex-col p-0 overflow-hidden gap-0">
+                <DialogContent className="h-[90vh] max-h-[90vh] flex flex-col p-0 overflow-hidden gap-0 sm:max-w-4xl">
                     <div className="px-6 py-4 border-b border-border shrink-0">
                         <DialogHeader>
                             <DialogTitle className="text-xl font-semibold">
@@ -338,7 +332,7 @@ function ClientsPageContent() {
 
             {/* ── Edit Client Dialog ───────────────────────────────────── */}
             <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-                <DialogContent className="max-w-4xl h-[90vh] max-h-[90vh] flex flex-col p-0 overflow-hidden gap-0">
+                <DialogContent className="h-[90vh] max-h-[90vh] flex flex-col p-0 overflow-hidden gap-0 sm:max-w-4xl">
                     <div className="px-6 py-4 border-b border-border shrink-0">
                         <DialogHeader>
                             <DialogTitle className="text-xl font-semibold">

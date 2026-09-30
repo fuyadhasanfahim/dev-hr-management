@@ -230,7 +230,7 @@ export function LeadDetailsDialog({ leadId, onClose }: { leadId: string | null; 
                                             {lead.currentNotes && (
                                                 <div>
                                                     <p className="mb-1 text-xs text-muted-foreground">Latest note</p>
-                                                    <p className="rounded-lg border bg-muted/50 p-2.5 text-sm whitespace-pre-wrap">{lead.currentNotes}</p>
+                                                    <p className="rounded-lg border bg-muted/50 p-2.5 text-sm whitespace-pre-wrap break-words">{lead.currentNotes}</p>
                                                 </div>
                                             )}
                                         </section>
@@ -325,13 +325,13 @@ export function LeadDetailsDialog({ leadId, onClose }: { leadId: string | null; 
                                                             {act.previousNotes && act.notes && act.previousNotes !== act.notes && (
                                                                 <div className="mt-2">
                                                                     <p className="mb-1 text-[11px] text-muted-foreground">Previous note</p>
-                                                                    <p className="rounded-lg border border-dashed p-2 text-xs whitespace-pre-wrap text-muted-foreground">
+                                                                    <p className="rounded-lg border border-dashed p-2 text-xs whitespace-pre-wrap break-words text-muted-foreground">
                                                                         {act.previousNotes}
                                                                     </p>
                                                                 </div>
                                                             )}
                                                             {act.notes && (
-                                                                <p className="mt-2 rounded-lg border bg-muted/50 p-2.5 text-sm whitespace-pre-wrap">{act.notes}</p>
+                                                                <p className="mt-2 rounded-lg border bg-muted/50 p-2.5 text-sm whitespace-pre-wrap break-words">{act.notes}</p>
                                                             )}
 
                                                             {act.nextActionType && act.nextActionDate && (
