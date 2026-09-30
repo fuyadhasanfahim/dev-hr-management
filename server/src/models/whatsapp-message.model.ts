@@ -20,11 +20,32 @@ export enum WhatsAppMessageStatus {
     FAILED    = 'failed',
 }
 
+// `call` rows are call-log / call-permission events shown inline in the thread.
+export enum WhatsAppMessageType {
+    TEXT     = 'text',
+    IMAGE    = 'image',
+    VIDEO    = 'video',
+    AUDIO    = 'audio',
+    DOCUMENT = 'document',
+    STICKER  = 'sticker',
+    CALL     = 'call',
+}
+
+// Meta keeps the file; we keep its media id and stream it through our API.
+export interface IWhatsAppMedia {
+    id: string;
+    mimeType: string;
+    filename?: string;
+    voice?: boolean; // Voice note (push-to-talk), not an audio file.
+}
+
 export interface IWhatsAppMessage extends Document {
     conversationId: Types.ObjectId; // Ref: WhatsAppConversation
     direction: WhatsAppMessageDirection;
     sender: WhatsAppMessageSender;
-    body: string;
+    type: WhatsAppMessageType;
+    body: string; // Text, or the caption of a media message ('' when none).
+    media?: IWhatsAppMedia;
     // Meta's message id — dedupe key for inbound, delivery id for outbound.
     // Queued outbound messages hold a `pending:<_id>` placeholder until Meta accepts them.
     whatsappMsgId: string;
@@ -53,9 +74,25 @@ const whatsAppMessageSchema = new Schema<IWhatsAppMessage>(
             enum: Object.values(WhatsAppMessageSender),
             required: true,
         },
+        type: {
+            type: String,
+            enum: Object.values(WhatsAppMessageType),
+            default: WhatsAppMessageType.TEXT,
+        },
         body: {
             type: String,
-            required: true,
+            default: '',
+        },
+        media: {
+            type: new Schema<IWhatsAppMedia>(
+                {
+                    id: { type: String, required: true },
+                    mimeType: { type: String, required: true },
+                    filename: String,
+                    voice: Boolean,
+                },
+                { _id: false },
+            ),
         },
         whatsappMsgId: {
             type: String,

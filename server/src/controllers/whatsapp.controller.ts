@@ -3,12 +3,16 @@ import envConfig from '../config/env.config.js';
 import { logger } from '../lib/logger.js';
 import whatsappService from '../services/whatsapp.service.js';
 import whatsappAiService from '../services/whatsapp-ai.service.js';
-import WhatsAppConversationModel, { WhatsAppConversationStatus } from '../models/whatsapp-conversation.model.js';
+import { WhatsAppConversationStatus } from '../models/whatsapp-conversation.model.js';
 import WhatsAppMessageModel, {
     WhatsAppMessageDirection,
     WhatsAppMessageSender,
     WhatsAppMessageStatus,
+    WhatsAppMessageType,
 } from '../models/whatsapp-message.model.js';
+import { parseIncoming, type IncomingMessage, type InboundContent } from '../lib/whatsapp-inbound.js';
+import { findOrCreateConversation } from '../services/whatsapp-support.service.js';
+import { handleCallEvent, handleCallStatus, type CallEvent, type CallStatus } from '../services/whatsapp-call.service.js';
 import { notifyMessageStatus } from '../services/whatsapp-send.queue.js';
 import { createTicket } from '../services/support-ticket.service.js';
 import { TicketSource } from '../models/ticket.model.js';
@@ -27,14 +31,6 @@ export function verifyWebhook(req: Request, res: Response) {
     res.sendStatus(403);
 }
 
-interface IncomingMessage {
-    from: string;
-    id: string;
-    timestamp: string;
-    type: string;
-    text?: { body: string };
-}
-
 // POST — Meta pushes incoming messages + delivery/read statuses, and (with
 // coexistence) message echoes for replies an agent sent from the WhatsApp
 // Business app itself. Acknowledge immediately (Meta retries on
@@ -48,13 +44,20 @@ export function receiveWebhook(req: Request, res: Response) {
             const value = change.value ?? {};
             const contactName = value.contacts?.[0]?.profile?.name;
             for (const message of (value.messages ?? []) as IncomingMessage[]) {
-                if (message.type !== 'text' || !message.text?.body) continue;
-                void handleIncomingMessage(message.from, message.text.body, message.id, contactName).catch(
+                const content = parseIncoming(message);
+                if (!content) continue;
+                void handleIncomingMessage(message.from, { ...content, whatsappMsgId: message.id }, contactName).catch(
                     (err) => logger.error(`Failed to handle WhatsApp message ${message.id}: ${err.message}`),
                 );
             }
-            for (const status of (value.statuses ?? []) as StatusUpdate[]) {
-                void handleStatusUpdate(status).catch(
+            for (const call of (value.calls ?? []) as CallEvent[]) {
+                void handleCallEvent(call, contactName).catch(
+                    (err) => logger.error(`Failed to handle WhatsApp call ${call.id}: ${err.message}`),
+                );
+            }
+            for (const status of (value.statuses ?? []) as (StatusUpdate | CallStatus)[]) {
+                const handled = status.type === 'call' ? handleCallStatus(status as CallStatus) : handleStatusUpdate(status as StatusUpdate);
+                void handled.catch(
                     (err) => logger.error(`Failed to handle WhatsApp status for ${status.id}: ${err.message}`),
                 );
             }
@@ -64,6 +67,7 @@ export function receiveWebhook(req: Request, res: Response) {
 
 interface StatusUpdate {
     id: string; // Meta's message id of OUR outbound message
+    type?: string;
     status: 'sent' | 'delivered' | 'read' | 'failed';
     errors?: { title?: string; message?: string; error_data?: { details?: string } }[];
 }
@@ -102,35 +106,20 @@ async function handleStatusUpdate(update: StatusUpdate) {
     if (message) notifyMessageStatus(message);
 }
 
-async function handleIncomingMessage(
-    fromPhone: string,
-    body: string,
-    whatsappMsgId: string,
-    contactName?: string,
-) {
+
+async function handleIncomingMessage(fromPhone: string, content: InboundContent, contactName?: string) {
+    const { whatsappMsgId, body } = content;
     // Idempotency: Meta may redeliver the same message on retry.
     const existing = await WhatsAppMessageModel.findOne({ whatsappMsgId });
     if (existing) return;
 
-    let conversation = await WhatsAppConversationModel.findOne({
-        customerPhone: fromPhone,
-        status: { $ne: WhatsAppConversationStatus.RESOLVED },
-    }).sort({ lastMessageAt: -1 });
-
-    if (!conversation) {
-        conversation = await WhatsAppConversationModel.create({
-            customerPhone: fromPhone,
-            customerName: contactName,
-            status: WhatsAppConversationStatus.BOT,
-        });
-    }
+    const conversation = await findOrCreateConversation(fromPhone, contactName);
 
     await WhatsAppMessageModel.create({
         conversationId: conversation._id,
         direction: WhatsAppMessageDirection.INBOUND,
         sender: WhatsAppMessageSender.CUSTOMER,
-        body,
-        whatsappMsgId,
+        ...content,
     });
     conversation.lastMessageAt = new Date();
     await conversation.save();
@@ -141,9 +130,11 @@ async function handleIncomingMessage(
 
     // AI off (agent already handling it manually via the app) or already
     // escalated to a human ticket — the bot stays quiet either way.
+    // The AI only reads text — media and call events wait for a human.
     if (!conversation.aiEnabled || conversation.status !== WhatsAppConversationStatus.BOT) return;
+    if (content.type !== WhatsAppMessageType.TEXT) return;
 
-    const priorMessages = await WhatsAppMessageModel.find({ conversationId: conversation._id })
+    const priorMessages = await WhatsAppMessageModel.find({ conversationId: conversation._id, body: { $ne: '' } })
         .sort({ createdAt: 1 })
         .limit(20);
     const history = priorMessages.map((m) => ({

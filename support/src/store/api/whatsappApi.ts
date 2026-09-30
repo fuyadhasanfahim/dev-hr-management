@@ -15,15 +15,41 @@ export interface WhatsAppConversation {
     unreadCount: number;
 }
 
+export type WhatsAppMessageType = 'text' | 'image' | 'video' | 'audio' | 'document' | 'sticker' | 'call';
+
+export interface WhatsAppMedia {
+    id: string;
+    mimeType: string;
+    filename?: string;
+    voice?: boolean;
+}
+
 export interface WhatsAppMessage {
     id: string;
     direction: 'inbound' | 'outbound';
     sender: 'customer' | 'ai' | 'agent';
+    type: WhatsAppMessageType;
     body: string;
+    media: WhatsAppMedia | null;
+    localUrl?: string; // Blob URL of an optimistic upload, until the server copy is fetched.
     status: WhatsAppMessageStatus | null;
     error: string | null;
     clientId: string | null;
     createdAt: string;
+}
+
+const API_URL = `${process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:5000'}/api`;
+
+// Media is streamed through our API (Meta's own URLs need the business token).
+export const mediaUrl = (m: WhatsAppMessage) =>
+    m.localUrl ?? (m.media ? `${API_URL}/support/whatsapp/media/${m.media.id}` : '');
+
+// Same-type guess the server makes, so the optimistic bubble renders right.
+function guessType(mimeType: string, voice: boolean): WhatsAppMessageType {
+    if (voice || mimeType.startsWith('audio/')) return 'audio';
+    if (mimeType === 'image/jpeg' || mimeType === 'image/png') return 'image';
+    if (mimeType === 'video/mp4' || mimeType === 'video/3gpp') return 'video';
+    return 'document';
 }
 
 // One key per bubble for its whole life: optimistic → saved → refetched.
@@ -63,7 +89,9 @@ export const whatsappApi = baseApi.injectEndpoints({
                         id: localId,
                         direction: 'outbound',
                         sender: 'agent',
+                        type: 'text',
                         body: text,
+                        media: null,
                         status: 'pending',
                         error: null,
                         clientId: localId,
@@ -94,6 +122,87 @@ export const whatsappApi = baseApi.injectEndpoints({
                     });
                 }
             },
+        }),
+        // Same optimistic flow as text; the bubble plays the local blob until the
+        // server copy (streamed from Meta) replaces it.
+        sendWhatsAppMedia: builder.mutation<
+            WhatsAppMessage,
+            { conversationId: string; file: Blob; filename: string; caption?: string; voice?: boolean; localId: string }
+        >({
+            query: ({ conversationId, file, filename, caption, voice, localId }) => {
+                const form = new FormData();
+                form.append('file', file, filename);
+                if (caption) form.append('caption', caption);
+                if (voice) form.append('voice', 'true');
+                form.append('clientId', localId);
+                return { url: `/support/whatsapp/conversations/${conversationId}/media`, method: 'POST', body: form };
+            },
+            transformResponse: (res: { data: WhatsAppMessage }) => res.data,
+            invalidatesTags: ['WhatsAppConversations'],
+            async onQueryStarted({ conversationId, file, filename, caption, voice, localId }, { dispatch, queryFulfilled }) {
+                const patchThread = (recipe: (draft: WhatsAppMessage[]) => void) =>
+                    dispatch(whatsappApi.util.updateQueryData('getWhatsAppMessages', conversationId, recipe));
+                const localUrl = URL.createObjectURL(file);
+                const type = guessType(file.type, !!voice);
+
+                patchThread((draft) => {
+                    draft.push({
+                        id: localId,
+                        direction: 'outbound',
+                        sender: 'agent',
+                        type,
+                        body: type === 'audio' ? '' : (caption ?? ''),
+                        media: { id: localId, mimeType: file.type, filename, voice },
+                        localUrl,
+                        status: 'pending',
+                        error: null,
+                        clientId: localId,
+                        createdAt: new Date().toISOString(),
+                    });
+                });
+
+                try {
+                    const { data } = await queryFulfilled;
+                    // Keep playing the local blob — no re-download of a file we already have.
+                    patchThread((draft) => {
+                        const i = draft.findIndex((m) => m.id === localId);
+                        if (i >= 0) draft[i] = { ...data, localUrl };
+                        else if (!draft.some((m) => m.id === data.id)) draft.push({ ...data, localUrl });
+                    });
+                } catch (err) {
+                    const message = (err as { error?: { data?: { message?: string } } })?.error?.data?.message;
+                    patchThread((draft) => {
+                        const local = draft.find((m) => m.id === localId);
+                        if (local) {
+                            local.status = 'failed';
+                            local.error = message ?? 'Upload failed';
+                        }
+                    });
+                }
+            },
+        }),
+        startWhatsAppCall: builder.mutation<{ callId: string }, { conversationId: string; sdp: string }>({
+            query: ({ conversationId, sdp }) => ({
+                url: `/support/whatsapp/conversations/${conversationId}/call`,
+                method: 'POST',
+                body: { sdp },
+            }),
+            transformResponse: (res: { data: { callId: string } }) => res.data,
+        }),
+        requestWhatsAppCallPermission: builder.mutation<void, string>({
+            query: (conversationId) => ({
+                url: `/support/whatsapp/conversations/${conversationId}/call-permission`,
+                method: 'POST',
+            }),
+        }),
+        acceptWhatsAppCall: builder.mutation<void, { callId: string; sdp: string }>({
+            query: ({ callId, sdp }) => ({ url: `/support/whatsapp/calls/${callId}/accept`, method: 'POST', body: { sdp } }),
+        }),
+        rejectWhatsAppCall: builder.mutation<void, string>({
+            query: (callId) => ({ url: `/support/whatsapp/calls/${callId}/reject`, method: 'POST' }),
+        }),
+        endWhatsAppCall: builder.mutation<void, string>({
+            query: (callId) => ({ url: `/support/whatsapp/calls/${callId}/end`, method: 'POST' }),
         }),
         retryWhatsAppMessage: builder.mutation<WhatsAppMessage, { conversationId: string; messageId: string }>({
             query: ({ conversationId, messageId }) => ({
@@ -144,6 +253,12 @@ export const {
     useGetWhatsAppConversationsQuery,
     useGetWhatsAppMessagesQuery,
     useSendWhatsAppMessageMutation,
+    useSendWhatsAppMediaMutation,
+    useStartWhatsAppCallMutation,
+    useRequestWhatsAppCallPermissionMutation,
+    useAcceptWhatsAppCallMutation,
+    useRejectWhatsAppCallMutation,
+    useEndWhatsAppCallMutation,
     useRetryWhatsAppMessageMutation,
     useSetWhatsAppAiMutation,
     useMarkWhatsAppConversationReadMutation,

@@ -148,7 +148,7 @@ const envConfig = {
     // Meta (WhatsApp Cloud API) — webhook verification + Graph API calls
     meta_app_id: process.env.META_APP_ID || '',
     meta_app_secret: process.env.META_APP_SECRET || '',
-    meta_api_version: process.env.META_API_VERSION || 'v21.0',
+    meta_api_version: process.env.META_API_VERSION || 'v26.0',
     meta_webhook_verify_token: process.env.META_WEBHOOK_VERIFY_TOKEN || '',
     meta_access_token: process.env.META_ACCESS_TOKEN || '',
     whatsapp_phone_number_id: process.env.WHATSAPP_PHONE_NUMBER_ID || '',

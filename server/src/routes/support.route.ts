@@ -17,6 +17,11 @@ import envConfig from '../config/env.config.js';
 import GuestModel from '../models/guest.model.js';
 import { otpLimiter, generalPublicLimiter } from '../middlewares/rate-limit.middleware.js';
 import type { Request, Response, NextFunction } from 'express';
+import multer from 'multer';
+
+// 16 MB = WhatsApp's cap for video/audio (images 5 MB, enforced by Meta).
+// ponytail: documents may be up to 100 MB on WhatsApp — raise this if agents need big PDFs.
+const whatsappUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 16 * 1024 * 1024 } });
 
 const router = express.Router();
 
@@ -186,6 +191,14 @@ router.post('/whatsapp/conversations/:id/messages', requireUnifiedAuth, restrict
 router.post('/whatsapp/conversations/:id/messages/:messageId/retry', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), WhatsAppSupportController.retryMessage);
 router.patch('/whatsapp/conversations/:id/ai', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), WhatsAppSupportController.setAiEnabled);
 router.post('/whatsapp/conversations/:id/read', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), WhatsAppSupportController.markRead);
+router.post('/whatsapp/conversations/:id/media', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), whatsappUpload.single('file'), WhatsAppSupportController.sendMedia);
+router.get('/whatsapp/media/:mediaId', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), WhatsAppSupportController.getMedia);
+// Calling API — the agent's browser does WebRTC with Meta; these relay the SDP.
+router.post('/whatsapp/conversations/:id/call', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), WhatsAppSupportController.startCall);
+router.post('/whatsapp/conversations/:id/call-permission', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), WhatsAppSupportController.requestCallPermission);
+router.post('/whatsapp/calls/:callId/accept', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), WhatsAppSupportController.acceptCall);
+router.post('/whatsapp/calls/:callId/reject', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), WhatsAppSupportController.rejectCall);
+router.post('/whatsapp/calls/:callId/end', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), WhatsAppSupportController.endCall);
 
 export const SupportRoutes = router;
 export default SupportRoutes;

@@ -3,7 +3,7 @@ import { getRedisClient } from '../lib/redis.js';
 import { logger } from '../lib/logger.js';
 import WhatsAppMessageModel, { WhatsAppMessageStatus, type IWhatsAppMessage } from '../models/whatsapp-message.model.js';
 import WhatsAppConversationModel from '../models/whatsapp-conversation.model.js';
-import whatsappService from './whatsapp.service.js';
+import whatsappService, { type OutboundMediaType } from './whatsapp.service.js';
 import { notifyAgents } from '../socket/support.namespace.js';
 
 const QUEUE_NAME = 'whatsapp-send';
@@ -45,7 +45,14 @@ async function processSend(job: Job<SendJob>): Promise<void> {
     const conversation = await WhatsAppConversationModel.findById(message.conversationId);
     if (!conversation) throw new Error('Conversation not found');
 
-    message.whatsappMsgId = await whatsappService.sendTextMessage(conversation.customerPhone, message.body);
+    message.whatsappMsgId = message.media
+        ? await whatsappService.sendMediaMessage(conversation.customerPhone, message.type as OutboundMediaType, {
+              id: message.media.id,
+              caption: message.body,
+              filename: message.media.filename,
+              voice: message.media.voice,
+          })
+        : await whatsappService.sendTextMessage(conversation.customerPhone, message.body);
     message.status = WhatsAppMessageStatus.SENT;
     await message.save();
     notifyMessageStatus(message);

@@ -1,6 +1,15 @@
 'use client';
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
+import {
+    useEffect,
+    useLayoutEffect,
+    useMemo,
+    useRef,
+    useState,
+    type ChangeEvent,
+    type FormEvent,
+    type KeyboardEvent,
+} from 'react';
 import { useRouter } from 'next/navigation';
 import { useDispatch } from 'react-redux';
 import { AnimatePresence, MotionConfig, motion } from 'motion/react';
@@ -11,19 +20,25 @@ import {
     CheckCheck,
     ChevronDown,
     Clock3,
+    FileText,
     Loader2,
     Mic,
     MessageCircle,
     MoreVertical,
     Paperclip,
     Phone,
+    PhoneIncoming,
+    PhoneMissed,
+    PhoneOutgoing,
     Search,
     Send,
     Smile,
-    Video,
+    Trash2,
 } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
+import { EmojiPicker, EmojiPickerContent, EmojiPickerFooter, EmojiPickerSearch } from '@/components/ui/emoji-picker';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -33,14 +48,17 @@ import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
+import { useCall } from '@/components/messages/call-provider';
 import type { AppDispatch } from '@/store';
 import {
     isLocalMessageId,
+    mediaUrl,
     messageKey,
     useGetWhatsAppConversationsQuery,
     useGetWhatsAppMessagesQuery,
     useMarkWhatsAppConversationReadMutation,
     useRetryWhatsAppMessageMutation,
+    useSendWhatsAppMediaMutation,
     useSendWhatsAppMessageMutation,
     useSetWhatsAppAiMutation,
     whatsappApi,
@@ -153,6 +171,73 @@ function MessageTicks({ status, onBubble }: { status: WhatsAppMessageStatus | nu
     );
 }
 
+// The attachment part of a bubble; the caption (if any) renders below it as text.
+function MessageMedia({ message: m, isMe }: { message: WhatsAppMessage; isMe: boolean }) {
+    const src = mediaUrl(m);
+    switch (m.type) {
+        case 'image':
+        case 'sticker':
+            return (
+                <a href={src} target="_blank" rel="noreferrer" className="block">
+                    {/* eslint-disable-next-line @next/next/no-img-element -- streamed from our API, not a static asset */}
+                    <img
+                        src={src}
+                        alt={m.body || (m.type === 'sticker' ? 'Sticker' : 'Photo')}
+                        loading="lazy"
+                        className={cn('rounded-xl object-cover', m.type === 'sticker' ? 'size-32' : 'max-h-72 min-w-40')}
+                    />
+                </a>
+            );
+        case 'video':
+            return <video src={src} controls preload="metadata" className="max-h-72 rounded-xl" />;
+        case 'audio':
+            return (
+                <div className="flex items-center gap-2 py-1">
+                    {m.media?.voice && <Mic className={cn('size-4 shrink-0', isMe ? 'text-primary-foreground/80' : 'text-primary')} />}
+                    <audio src={src} controls preload="metadata" className="h-9 w-60 max-w-full" />
+                </div>
+            );
+        case 'document':
+            return (
+                <a
+                    href={src}
+                    target="_blank"
+                    rel="noreferrer"
+                    download={m.media?.filename}
+                    className={cn(
+                        'flex items-center gap-3 rounded-xl px-3 py-2.5',
+                        isMe ? 'bg-primary-foreground/15 hover:bg-primary-foreground/25' : 'bg-background/70 hover:bg-background',
+                    )}
+                >
+                    <FileText className="size-6 shrink-0" />
+                    <span className="min-w-0">
+                        <span className="block truncate text-sm font-medium">{m.media?.filename ?? 'Document'}</span>
+                        <span className={cn('block text-[11px]', isMe ? 'text-primary-foreground/70' : 'text-muted-foreground')}>
+                            {m.media?.mimeType.split('/')[1]?.toUpperCase() ?? 'FILE'} · Open
+                        </span>
+                    </span>
+                </a>
+            );
+        default:
+            return null;
+    }
+}
+
+// Call logs and call-permission events: a centered system line, not a bubble.
+function CallLine({ message: m }: { message: WhatsAppMessage }) {
+    const missed = /missed|no answer|declined/i.test(m.body);
+    const Icon = missed ? PhoneMissed : m.direction === 'inbound' ? PhoneIncoming : PhoneOutgoing;
+    return (
+        <div className="my-3 flex justify-center">
+            <span className="flex items-center gap-1.5 rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground shadow-sm">
+                <Icon className={cn('size-3.5', missed && 'text-destructive')} />
+                {m.body}
+                <span className="text-[10px]">· {formatTime(m.createdAt)}</span>
+            </span>
+        </div>
+    );
+}
+
 // Keyed by conversation, so each thread snapshots the messages it opened with:
 // those render instantly, and only messages that arrive afterwards animate in.
 function ThreadMessages({ messages, onRetry }: { messages: WhatsAppMessage[]; onRetry: (m: WhatsAppMessage) => void }) {
@@ -214,6 +299,8 @@ function ThreadMessages({ messages, onRetry }: { messages: WhatsAppMessage[]; on
                         const isMe = m.direction === 'outbound';
                         const failed = m.status === 'failed';
                         const key = messageKey(m);
+                        if (m.type === 'call') return <CallLine key={key} message={m} />;
+                        const hasMedia = !!m.media;
                         return (
                             <motion.div
                                 key={key}
@@ -234,17 +321,22 @@ function ThreadMessages({ messages, onRetry }: { messages: WhatsAppMessage[]; on
                                 )}
                                 <div
                                     className={cn(
-                                        'max-w-[70%] px-3 py-1.5 text-sm leading-relaxed break-words shadow-sm transition-opacity',
+                                        'max-w-[70%] text-sm leading-relaxed break-words shadow-sm transition-opacity',
+                                        hasMedia ? 'p-1' : 'px-3 py-1.5',
                                         bubbleCorners(isMe, isFirstInRun, isLastInRun),
                                         isMe ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground',
                                         m.status === 'pending' && 'opacity-80',
                                     )}
                                 >
-                                    <span className="whitespace-pre-wrap">{m.body}</span>
+                                    {hasMedia && <MessageMedia message={m} isMe={isMe} />}
+                                    {m.body && (
+                                        <span className={cn('whitespace-pre-wrap', hasMedia && 'block px-2 pt-1')}>{m.body}</span>
+                                    )}
                                     {/* WhatsApp-style meta: floats into the last line when it fits. */}
                                     <span
                                         className={cn(
                                             'float-right ml-2 mt-1.5 flex items-center gap-1 text-[10px] leading-none',
+                                            hasMedia && 'mr-1.5 mb-1',
                                             isMe ? 'text-primary-foreground/70' : 'text-muted-foreground',
                                         )}
                                         title={failed ? (m.error ?? 'Not delivered') : undefined}
@@ -306,6 +398,60 @@ function ThreadMessages({ messages, onRetry }: { messages: WhatsAppMessage[]; on
     );
 }
 
+// Opus is what WhatsApp voice notes use; the server re-encodes whatever
+// container the browser gives us (WebM on Chrome, MP4 on Safari) to OGG.
+const RECORDER_TYPES = ['audio/ogg;codecs=opus', 'audio/webm;codecs=opus', 'audio/mp4'];
+
+function useVoiceRecorder() {
+    const recorderRef = useRef<MediaRecorder | null>(null);
+    const [startedAt, setStartedAt] = useState<number | null>(null);
+    const [now, setNow] = useState(() => Date.now());
+
+    useEffect(() => {
+        if (!startedAt) return;
+        const id = setInterval(() => setNow(Date.now()), 250);
+        return () => clearInterval(id);
+    }, [startedAt]);
+
+    // Release the mic if the agent leaves the page mid-recording.
+    useEffect(() => () => recorderRef.current?.stream.getTracks().forEach((t) => t.stop()), []);
+
+    const start = async () => {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const mimeType = RECORDER_TYPES.find((t) => MediaRecorder.isTypeSupported(t));
+        const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+        recorder.start();
+        recorderRef.current = recorder;
+        setStartedAt(Date.now());
+        setNow(Date.now());
+    };
+
+    // Resolves with the recording, or null when cancelled.
+    const finish = (keep: boolean) =>
+        new Promise<Blob | null>((resolve) => {
+            const recorder = recorderRef.current;
+            recorderRef.current = null;
+            setStartedAt(null);
+            if (!recorder) return resolve(null);
+            const chunks: Blob[] = [];
+            recorder.ondataavailable = (e) => chunks.push(e.data);
+            recorder.onstop = () => {
+                recorder.stream.getTracks().forEach((t) => t.stop());
+                resolve(keep ? new Blob(chunks, { type: recorder.mimeType }) : null);
+            };
+            recorder.stop();
+        });
+
+    const seconds = startedAt ? Math.floor((now - startedAt) / 1000) : 0;
+    return {
+        recording: startedAt !== null,
+        elapsed: `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`,
+        start,
+        stop: () => finish(true),
+        cancel: () => void finish(false),
+    };
+}
+
 const FILTERS = ['all', 'unread', 'favorites', 'groups'] as const;
 type Filter = (typeof FILTERS)[number];
 
@@ -315,7 +461,11 @@ export function MessagesView({ conversationId }: { conversationId?: string }) {
     const [search, setSearch] = useState('');
     const [filter, setFilter] = useState<Filter>('all');
     const [draft, setDraft] = useState('');
+    const [emojiOpen, setEmojiOpen] = useState(false);
     const inputRef = useRef<HTMLTextAreaElement>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const recorder = useVoiceRecorder();
+    const { call, startCall } = useCall();
 
     const selectedId = conversationId ?? null;
 
@@ -327,6 +477,7 @@ export function MessagesView({ conversationId }: { conversationId?: string }) {
         skip: !selectedId,
     });
     const [sendMessage] = useSendWhatsAppMessageMutation();
+    const [sendMedia] = useSendWhatsAppMediaMutation();
     const [retryMessage] = useRetryWhatsAppMessageMutation();
     const [setAi] = useSetWhatsAppAiMutation();
     const [markRead] = useMarkWhatsAppConversationReadMutation();
@@ -352,10 +503,44 @@ export function MessagesView({ conversationId }: { conversationId?: string }) {
         void sendMessage({ conversationId: selectedId, text, localId: `local-${crypto.randomUUID()}` });
     };
 
-    const handleSend = (e?: FormEvent) => {
+    const sendFile = (file: Blob, filename: string, options: { caption?: string; voice?: boolean } = {}) => {
+        if (!selectedId) return;
+        void sendMedia({ conversationId: selectedId, file, filename, ...options, localId: `local-${crypto.randomUUID()}` });
+    };
+
+    // Like WhatsApp Web's attach flow, text already typed goes along as the caption.
+    const handleFilePicked = (e: ChangeEvent<HTMLInputElement>) => {
+        const files = Array.from(e.target.files ?? []);
+        e.target.value = '';
+        const caption = draft.trim() || undefined;
+        if (caption) setDraft('');
+        files.forEach((file, i) => sendFile(file, file.name, { caption: i === 0 ? caption : undefined }));
+    };
+
+    const insertEmoji = (emoji: string) => {
+        const input = inputRef.current;
+        const start = input?.selectionStart ?? draft.length;
+        const end = input?.selectionEnd ?? draft.length;
+        setDraft(draft.slice(0, start) + emoji + draft.slice(end));
+        requestAnimationFrame(() => {
+            input?.focus();
+            input?.setSelectionRange(start + emoji.length, start + emoji.length);
+        });
+    };
+
+    const handleSend = async (e?: FormEvent) => {
         e?.preventDefault();
+        if (recorder.recording) {
+            const blob = await recorder.stop();
+            if (blob && blob.size > 0) sendFile(blob, 'voice-message', { voice: true });
+            return;
+        }
         const text = draft.trim();
-        if (!text) return;
+        if (!text) {
+            // Empty composer: the button is the mic.
+            recorder.start().catch(() => window.alert('Microphone access is needed to record a voice message.'));
+            return;
+        }
         setDraft('');
         send(text);
         inputRef.current?.focus();
@@ -366,7 +551,7 @@ export function MessagesView({ conversationId }: { conversationId?: string }) {
     const handleComposerKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
         if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
             e.preventDefault();
-            handleSend();
+            if (draft.trim()) void handleSend();
         }
     };
 
@@ -379,7 +564,15 @@ export function MessagesView({ conversationId }: { conversationId?: string }) {
                     draftThread.filter((m) => m.id !== message.id),
                 ),
             );
-            send(message.body);
+            if (message.media && message.localUrl) {
+                // Re-read the file from its blob URL — the original File is long gone.
+                const { localUrl, media, body } = message;
+                void fetch(localUrl)
+                    .then((r) => r.blob())
+                    .then((blob) => sendFile(blob, media.filename ?? 'file', { caption: body || undefined, voice: media.voice }));
+            } else {
+                send(message.body);
+            }
         } else {
             void retryMessage({ conversationId: selectedId, messageId: message.id });
         }
@@ -523,11 +716,16 @@ export function MessagesView({ conversationId }: { conversationId?: string }) {
                                             onCheckedChange={(aiEnabled) => setAi({ conversationId: selected.id, aiEnabled })}
                                         />
                                     </label>
-                                    <Button variant="ghost" size="icon" className="size-8">
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="size-8"
+                                        aria-label="WhatsApp voice call"
+                                        title="WhatsApp voice call"
+                                        disabled={!!call}
+                                        onClick={() => startCall({ id: selected.id, name: selected.name })}
+                                    >
                                         <Phone className="size-4" />
-                                    </Button>
-                                    <Button variant="ghost" size="icon" className="size-8">
-                                        <Video className="size-4" />
                                     </Button>
                                     <Button variant="ghost" size="icon" className="size-8">
                                         <MoreVertical className="size-4" />
@@ -549,34 +747,90 @@ export function MessagesView({ conversationId }: { conversationId?: string }) {
 
                             <Separator />
                             <form onSubmit={handleSend} className="flex items-end gap-2 px-3 py-3 shrink-0">
-                                <Button type="button" variant="ghost" size="icon" className="size-10 shrink-0">
-                                    <Paperclip className="size-4" />
-                                </Button>
-                                <Button type="button" variant="ghost" size="icon" className="size-10 shrink-0">
-                                    <Smile className="size-4" />
-                                </Button>
-                                {/* Grows with the text up to ~6 lines, then scrolls — like WhatsApp. */}
-                                <Textarea
-                                    ref={inputRef}
-                                    rows={1}
-                                    value={draft}
-                                    onChange={(e) => setDraft(e.target.value)}
-                                    onKeyDown={handleComposerKeyDown}
-                                    placeholder="Type a message"
-                                    className="min-h-10 max-h-36 overflow-y-auto py-2.5 leading-5"
-                                    autoFocus
-                                />
-                                <Button type="submit" size="icon" className="size-10 shrink-0 rounded-full" aria-label="Send">
+                                {recorder.recording ? (
+                                    <>
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="icon"
+                                            className="size-10 shrink-0 text-destructive"
+                                            aria-label="Discard recording"
+                                            onClick={recorder.cancel}
+                                        >
+                                            <Trash2 className="size-4" />
+                                        </Button>
+                                        <div className="flex h-10 flex-1 items-center gap-2 rounded-md border px-3 text-sm" aria-live="polite">
+                                            <motion.span
+                                                className="size-2.5 rounded-full bg-destructive"
+                                                animate={{ opacity: [1, 0.3, 1] }}
+                                                transition={{ duration: 1.2, repeat: Infinity }}
+                                            />
+                                            <span className="tabular-nums">{recorder.elapsed}</span>
+                                            <span className="text-muted-foreground">Recording voice message…</span>
+                                        </div>
+                                    </>
+                                ) : (
+                                    <>
+                                        <input
+                                            ref={fileInputRef}
+                                            type="file"
+                                            multiple
+                                            className="hidden"
+                                            onChange={handleFilePicked}
+                                        />
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="icon"
+                                            className="size-10 shrink-0"
+                                            aria-label="Attach a file"
+                                            onClick={() => fileInputRef.current?.click()}
+                                        >
+                                            <Paperclip className="size-4" />
+                                        </Button>
+                                        <Popover open={emojiOpen} onOpenChange={setEmojiOpen}>
+                                            <PopoverTrigger asChild>
+                                                <Button type="button" variant="ghost" size="icon" className="size-10 shrink-0" aria-label="Emoji">
+                                                    <Smile className="size-4" />
+                                                </Button>
+                                            </PopoverTrigger>
+                                            <PopoverContent side="top" align="start" className="w-fit p-0">
+                                                <EmojiPicker className="h-[342px]" onEmojiSelect={({ emoji }) => insertEmoji(emoji)}>
+                                                    <EmojiPickerSearch />
+                                                    <EmojiPickerContent />
+                                                    <EmojiPickerFooter />
+                                                </EmojiPicker>
+                                            </PopoverContent>
+                                        </Popover>
+                                        {/* Grows with the text up to ~6 lines, then scrolls — like WhatsApp. */}
+                                        <Textarea
+                                            ref={inputRef}
+                                            rows={1}
+                                            value={draft}
+                                            onChange={(e) => setDraft(e.target.value)}
+                                            onKeyDown={handleComposerKeyDown}
+                                            placeholder="Type a message"
+                                            className="min-h-10 max-h-36 overflow-y-auto py-2.5 leading-5"
+                                            autoFocus
+                                        />
+                                    </>
+                                )}
+                                <Button
+                                    type="submit"
+                                    size="icon"
+                                    className="size-10 shrink-0 rounded-full"
+                                    aria-label={recorder.recording || draft.trim() ? 'Send' : 'Record voice message'}
+                                >
                                     <AnimatePresence mode="popLayout" initial={false}>
                                         <motion.span
-                                            key={draft.trim() ? 'send' : 'mic'}
+                                            key={recorder.recording || draft.trim() ? 'send' : 'mic'}
                                             initial={{ scale: 0.5, opacity: 0, rotate: -30 }}
                                             animate={{ scale: 1, opacity: 1, rotate: 0 }}
                                             exit={{ scale: 0.5, opacity: 0, rotate: 30 }}
                                             transition={{ duration: 0.15 }}
                                             className="inline-flex"
                                         >
-                                            {draft.trim() ? <Send className="size-4" /> : <Mic className="size-4" />}
+                                            {recorder.recording || draft.trim() ? <Send className="size-4" /> : <Mic className="size-4" />}
                                         </motion.span>
                                     </AnimatePresence>
                                 </Button>
