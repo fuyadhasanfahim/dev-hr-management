@@ -49,6 +49,7 @@ export const SYSTEM_ROLE_PERMISSIONS: Record<Role, readonly string[]> = {
         'notification.*',
         'invitation.*',
         'outbox.*', // Phase 6d — was OUTBOX_ADMIN_ROLES
+        'support.*',
         'wallet.*',
         'returnFileFormat.*',
         // Admin may VIEW roles/permissions but not create/edit/assign them —

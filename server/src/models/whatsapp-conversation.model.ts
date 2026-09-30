@@ -6,12 +6,21 @@ export enum WhatsAppConversationStatus {
     RESOLVED  = 'resolved',
 }
 
+// The agent handling a chat. Only they may reply until they release it or
+// someone with support.manage takes it over — two agents never answer at once.
+export interface IWhatsAppAssignee {
+    id: string;
+    name: string;
+}
+
 export interface IWhatsAppConversation extends Document {
     customerPhone: string;
     customerName?: string;
     status: WhatsAppConversationStatus;
     aiEnabled: boolean;
     linkedTicketId?: Types.ObjectId; // Ref: Ticket — set once escalated
+    assignedTo?: IWhatsAppAssignee | null;
+    assignedAt?: Date | null;
     lastMessageAt: Date;
     lastReadAt: Date; // Set when an agent opens the thread — messages after this are "unread".
     createdAt: Date;
@@ -42,6 +51,14 @@ const whatsAppConversationSchema = new Schema<IWhatsAppConversation>(
         linkedTicketId: {
             type: Schema.Types.ObjectId,
             ref: 'Ticket',
+        },
+        assignedTo: {
+            type: new Schema<IWhatsAppAssignee>({ id: { type: String, required: true }, name: String }, { _id: false }),
+            default: null,
+        },
+        assignedAt: {
+            type: Date,
+            default: null,
         },
         lastMessageAt: {
             type: Date,

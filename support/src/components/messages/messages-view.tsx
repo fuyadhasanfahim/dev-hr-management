@@ -25,18 +25,19 @@ import {
     Loader2,
     Mic,
     MessageCircle,
-    MoreVertical,
+    Info,
+    Lock,
     Phone,
     PhoneIncoming,
     PhoneMissed,
     PhoneOutgoing,
+    Play,
     Search,
     Send,
     Smile,
     Trash2,
     Upload,
 } from 'lucide-react';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { EmojiPicker, EmojiPickerContent, EmojiPickerFooter, EmojiPickerSearch } from '@/components/ui/emoji-picker';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -58,6 +59,10 @@ import {
     type PendingAttachment,
 } from '@/components/messages/composer-attachments';
 import { LiveWaveform, VoicePlayer, useVoiceRecorder } from '@/components/messages/voice-message';
+import { CustomerAvatar } from '@/components/messages/customer-avatar';
+import { ConversationInfoPanel } from '@/components/messages/conversation-info-panel';
+import { MediaLightbox } from '@/components/messages/media-lightbox';
+import { useSupportAgent } from '@/hooks/use-support-agent';
 import { toast } from 'sonner';
 import type { AppDispatch } from '@/store';
 import {
@@ -71,6 +76,7 @@ import {
     useSendWhatsAppMediaMutation,
     useSendWhatsAppMessageMutation,
     useSetWhatsAppAiMutation,
+    useSetWhatsAppAssignmentMutation,
     whatsappApi,
     type WhatsAppMessage,
     type WhatsAppMessageStatus,
@@ -107,10 +113,47 @@ function dateLabel(iso: string): string {
     return date.toLocaleDateString([], { month: 'long', day: 'numeric', year: 'numeric' });
 }
 
+// One bubble in the thread: a single message, or several attachments sent
+// together that WhatsApp-style render as one album / one stack of files.
 interface ThreadItem {
-    message: WhatsAppMessage;
+    kind: 'single' | 'album' | 'files';
+    messages: WhatsAppMessage[];
     isFirstInRun: boolean;
     isLastInRun: boolean;
+}
+
+// Attachments this close together from the same sender are one "send".
+const ALBUM_WINDOW_MS = 2 * 60 * 1000;
+const isVisual = (m: WhatsAppMessage) => m.type === 'image' || m.type === 'video';
+const groupKind = (m: WhatsAppMessage): ThreadItem['kind'] =>
+    isVisual(m) ? 'album' : m.type === 'document' ? 'files' : 'single';
+
+function mergeAttachments(items: ThreadItem[]): ThreadItem[] {
+    const out: ThreadItem[] = [];
+    for (const item of items) {
+        const prev = out[out.length - 1];
+        const m = item.messages[0]!;
+        const kind = groupKind(m);
+        const prevLast = prev?.messages[prev.messages.length - 1];
+        const joins =
+            prev &&
+            prevLast &&
+            kind !== 'single' &&
+            groupKind(prevLast) === kind &&
+            prevLast.sender === m.sender &&
+            // Only one caption per album, like WhatsApp; a second caption starts a new bubble.
+            !(prev.messages.some((x) => x.body) && m.body) &&
+            new Date(m.createdAt).getTime() - new Date(prevLast.createdAt).getTime() < ALBUM_WINDOW_MS;
+        if (joins) {
+            prev.messages.push(m);
+            prev.kind = kind;
+            prev.isLastInRun = item.isLastInRun;
+        } else {
+            out.push({ ...item, messages: [...item.messages] });
+        }
+    }
+    // A "group" of one is just a normal bubble.
+    return out.map((i) => (i.messages.length === 1 ? { ...i, kind: 'single' } : i));
 }
 
 // Date dividers, and within each day the "runs" of back-to-back messages from
@@ -126,8 +169,9 @@ function buildThread(messages: WhatsAppMessage[]) {
         const label = dateLabel(message.createdAt);
         const prev = messages[i - 1];
         const next = messages[i + 1];
-        const item = {
-            message,
+        const item: ThreadItem = {
+            kind: 'single',
+            messages: [message],
             isFirstInRun: !prev || !sameRun(prev, message),
             isLastInRun: !next || !sameRun(message, next),
         };
@@ -135,7 +179,7 @@ function buildThread(messages: WhatsAppMessage[]) {
         if (day?.label === label) day.items.push(item);
         else days.push({ label, items: [item] });
     });
-    return days;
+    return days.map((d) => ({ ...d, items: mergeAttachments(d.items) }));
 }
 
 // Only the sender-side corners that touch another bubble in the same run get
@@ -182,13 +226,13 @@ function MessageTicks({ status, onBubble }: { status: WhatsAppMessageStatus | nu
 }
 
 // The attachment part of a bubble; the caption (if any) renders below it as text.
-function MessageMedia({ message: m, isMe }: { message: WhatsAppMessage; isMe: boolean }) {
+function MessageMedia({ message: m, isMe, onOpen }: { message: WhatsAppMessage; isMe: boolean; onOpen: () => void }) {
     const src = mediaUrl(m);
     switch (m.type) {
         case 'image':
         case 'sticker':
             return (
-                <a href={src} target="_blank" rel="noreferrer" className="block">
+                <button type="button" onClick={onOpen} className="block cursor-zoom-in" aria-label="Open photo">
                     {/* eslint-disable-next-line @next/next/no-img-element -- streamed from our API, not a static asset */}
                     <img
                         src={src}
@@ -196,7 +240,7 @@ function MessageMedia({ message: m, isMe }: { message: WhatsAppMessage; isMe: bo
                         loading="lazy"
                         className={cn('rounded-xl object-cover', m.type === 'sticker' ? 'size-32' : 'max-h-72 min-w-40')}
                     />
-                </a>
+                </button>
             );
         case 'video':
             return <video src={src} controls preload="metadata" className="max-h-72 rounded-xl" />;
@@ -228,6 +272,56 @@ function MessageMedia({ message: m, isMe }: { message: WhatsAppMessage; isMe: bo
     }
 }
 
+// Several photos/videos sent together: a 2-column grid, "+N" on the last tile.
+function AlbumGrid({ messages, onOpen }: { messages: WhatsAppMessage[]; onOpen: (index: number) => void }) {
+    const shown = messages.slice(0, 4);
+    const extra = messages.length - shown.length;
+    return (
+        <div className="grid w-72 max-w-full grid-cols-2 gap-1">
+            {shown.map((m, i) => (
+                <button
+                    key={messageKey(m)}
+                    type="button"
+                    data-msg-key={messageKey(m)}
+                    onClick={() => onOpen(i)}
+                    aria-label={m.type === 'video' ? 'Open video' : 'Open photo'}
+                    className={cn(
+                        'relative cursor-zoom-in overflow-hidden rounded-lg bg-black/10',
+                        shown.length === 3 && i === 0 ? 'col-span-2 aspect-[2/1]' : 'aspect-square',
+                    )}
+                >
+                    {m.type === 'video' ? (
+                        <>
+                            <video src={mediaUrl(m)} muted preload="metadata" className="size-full object-cover" />
+                            <span className="absolute inset-0 flex items-center justify-center">
+                                <span className="flex size-9 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm">
+                                    <Play className="size-4 translate-x-px fill-current" />
+                                </span>
+                            </span>
+                        </>
+                    ) : (
+                        // eslint-disable-next-line @next/next/no-img-element -- streamed from our API
+                        <img src={mediaUrl(m)} alt={m.body || 'Photo'} loading="lazy" className="size-full object-cover" />
+                    )}
+                    {extra > 0 && i === shown.length - 1 && (
+                        <span className="absolute inset-0 flex items-center justify-center bg-black/55 text-2xl font-semibold text-white">
+                            +{extra}
+                        </span>
+                    )}
+                </button>
+            ))}
+        </div>
+    );
+}
+
+// The status a group shows: failed if any failed, else the least-advanced.
+const STATUS_ORDER: WhatsAppMessageStatus[] = ['pending', 'sent', 'delivered', 'read'];
+function groupStatus(messages: WhatsAppMessage[]): WhatsAppMessageStatus | null {
+    if (messages.some((m) => m.status === 'failed')) return 'failed';
+    const ranks = messages.map((m) => (m.status ? STATUS_ORDER.indexOf(m.status) : 1));
+    return STATUS_ORDER[Math.min(...ranks)] ?? null;
+}
+
 // Call logs and call-permission events: a centered system line, not a bubble.
 function CallLine({ message: m }: { message: WhatsAppMessage }) {
     const missed = /missed|no answer|declined/i.test(m.body);
@@ -245,7 +339,15 @@ function CallLine({ message: m }: { message: WhatsAppMessage }) {
 
 // Keyed by conversation, so each thread snapshots the messages it opened with:
 // those render instantly, and only messages that arrive afterwards animate in.
-function ThreadMessages({ messages, onRetry }: { messages: WhatsAppMessage[]; onRetry: (m: WhatsAppMessage) => void }) {
+function ThreadMessages({
+    messages,
+    onRetry,
+    onOpenMedia,
+}: {
+    messages: WhatsAppMessage[];
+    onRetry: (m: WhatsAppMessage) => void;
+    onOpenMedia: (items: WhatsAppMessage[], index: number) => void;
+}) {
     const [openedWith] = useState(() => new Set(messages.map(messageKey)));
     const contentRef = useRef<HTMLDivElement>(null);
     const stickToBottom = useRef(true);
@@ -300,21 +402,26 @@ function ThreadMessages({ messages, onRetry }: { messages: WhatsAppMessage[]; on
                             {day.label}
                         </span>
                     </div>
-                    {day.items.map(({ message: m, isFirstInRun, isLastInRun }) => {
+                    {day.items.map(({ kind, messages: group, isFirstInRun, isLastInRun }) => {
+                        const m = group[0]!;
+                        const last = group[group.length - 1]!;
                         const isMe = m.direction === 'outbound';
-                        const failed = m.status === 'failed';
+                        const status = groupStatus(group);
+                        const failed = group.filter((x) => x.status === 'failed');
                         const key = messageKey(m);
                         if (m.type === 'call') return <CallLine key={key} message={m} />;
                         const hasMedia = !!m.media;
+                        const caption = group.map((x) => x.body).filter(Boolean).join('\n');
                         return (
                             <motion.div
                                 key={key}
+                                data-msg-key={kind === 'single' ? key : undefined}
                                 initial={openedWith.has(key) ? false : { opacity: 0, y: 14, scale: 0.94 }}
                                 animate={{ opacity: 1, y: 0, scale: 1 }}
                                 transition={bubbleSpring}
                                 style={{ transformOrigin: isMe ? 'bottom right' : 'bottom left' }}
                                 className={cn(
-                                    'flex flex-col',
+                                    'flex flex-col rounded-2xl',
                                     isMe ? 'items-end' : 'items-start',
                                     isFirstInRun ? 'mt-3' : 'mt-0.5',
                                 )}
@@ -330,12 +437,26 @@ function ThreadMessages({ messages, onRetry }: { messages: WhatsAppMessage[]; on
                                         hasMedia ? 'p-1' : 'px-3 py-1.5',
                                         bubbleCorners(isMe, isFirstInRun, isLastInRun),
                                         isMe ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground',
-                                        m.status === 'pending' && 'opacity-80',
+                                        status === 'pending' && 'opacity-80',
                                     )}
                                 >
-                                    {hasMedia && <MessageMedia message={m} isMe={isMe} />}
-                                    {m.body && (
-                                        <span className={cn('whitespace-pre-wrap', hasMedia && 'block px-2 pt-1')}>{m.body}</span>
+                                    {kind === 'album' ? (
+                                        <AlbumGrid messages={group} onOpen={(i) => onOpenMedia(group, i)} />
+                                    ) : kind === 'files' ? (
+                                        <div className="flex w-72 max-w-full flex-col gap-1">
+                                            {group.map((x) => (
+                                                <div key={messageKey(x)} data-msg-key={messageKey(x)} className="rounded-xl">
+                                                    <MessageMedia message={x} isMe={isMe} onOpen={() => {}} />
+                                                </div>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        hasMedia && (
+                                            <MessageMedia message={m} isMe={isMe} onOpen={() => onOpenMedia([m], 0)} />
+                                        )
+                                    )}
+                                    {caption && (
+                                        <span className={cn('whitespace-pre-wrap', hasMedia && 'block px-2 pt-1')}>{caption}</span>
                                     )}
                                     {/* WhatsApp-style meta: floats into the last line when it fits. */}
                                     <span
@@ -344,24 +465,25 @@ function ThreadMessages({ messages, onRetry }: { messages: WhatsAppMessage[]; on
                                             hasMedia && 'mr-1.5 mb-1',
                                             isMe ? 'text-primary-foreground/70' : 'text-muted-foreground',
                                         )}
-                                        title={failed ? (m.error ?? 'Not delivered') : undefined}
+                                        title={failed.length ? (failed[0]!.error ?? 'Not delivered') : undefined}
                                     >
-                                        {formatTime(m.createdAt)}
-                                        {isMe && <MessageTicks status={m.status} onBubble />}
+                                        {group.length > 1 && <span>{group.length} files ·</span>}
+                                        {formatTime(last.createdAt)}
+                                        {isMe && <MessageTicks status={status} onBubble />}
                                     </span>
                                 </div>
                                 <AnimatePresence initial={false}>
-                                    {failed && (
+                                    {failed.length > 0 && (
                                         <motion.button
                                             type="button"
                                             initial={{ opacity: 0, y: -4 }}
                                             animate={{ opacity: 1, y: 0 }}
                                             exit={{ opacity: 0, y: -4 }}
-                                            onClick={() => onRetry(m)}
+                                            onClick={() => failed.forEach(onRetry)}
                                             className="mt-1 px-1 text-[11px] text-destructive hover:underline"
-                                            title={m.error ?? undefined}
+                                            title={failed[0]!.error ?? undefined}
                                         >
-                                            Not delivered · Retry
+                                            {failed.length > 1 ? `${failed.length} not delivered` : 'Not delivered'} · Retry
                                         </motion.button>
                                     )}
                                 </AnimatePresence>
@@ -406,7 +528,7 @@ function ThreadMessages({ messages, onRetry }: { messages: WhatsAppMessage[]; on
 // WhatsApp's cap for video/audio (and our server's upload limit).
 const MAX_UPLOAD_BYTES = 16 * 1024 * 1024;
 
-const FILTERS = ['all', 'unread', 'favorites', 'groups'] as const;
+const FILTERS = ['all', 'unread', 'mine', 'unassigned'] as const;
 type Filter = (typeof FILTERS)[number];
 
 export function MessagesView({ conversationId }: { conversationId?: string }) {
@@ -421,6 +543,9 @@ export function MessagesView({ conversationId }: { conversationId?: string }) {
     const [dragging, setDragging] = useState(false);
     const recorder = useVoiceRecorder();
     const { call, startCall } = useCall();
+    const agent = useSupportAgent();
+    const [infoOpen, setInfoOpen] = useState(false);
+    const [lightbox, setLightbox] = useState<{ items: WhatsAppMessage[]; index: number; key: number } | null>(null);
 
     const selectedId = conversationId ?? null;
 
@@ -436,22 +561,70 @@ export function MessagesView({ conversationId }: { conversationId?: string }) {
     const [retryMessage] = useRetryWhatsAppMessageMutation();
     const [setAi] = useSetWhatsAppAiMutation();
     const [markRead] = useMarkWhatsAppConversationReadMutation();
+    const [setAssignment, { isLoading: assigning }] = useSetWhatsAppAssignmentMutation();
 
     const filtered = useMemo(() => {
         const q = search.trim().toLowerCase();
         return conversations.filter((c) => {
-            const matchesQuery = !q || c.name.toLowerCase().includes(q) || c.lastMessage.toLowerCase().includes(q);
-            const matchesFilter = filter !== 'unread' || c.unreadCount > 0;
+            const matchesQuery =
+                !q || c.name.toLowerCase().includes(q) || c.phone.includes(q) || c.lastMessage.toLowerCase().includes(q);
+            const matchesFilter =
+                filter === 'all' ||
+                (filter === 'unread' && c.unreadCount > 0) ||
+                (filter === 'mine' && c.assignedTo?.id === agent.id) ||
+                (filter === 'unassigned' && !c.assignedTo);
             return matchesQuery && matchesFilter;
         });
-    }, [conversations, search, filter]);
+    }, [conversations, search, filter, agent.id]);
 
     const selected = conversations.find((c) => c.id === selectedId) ?? null;
 
-    // Clear the unread badge the moment an agent opens the thread.
+    // Read = the agent is looking at it: on open, when new messages land while
+    // it's on screen, and when they come back to the tab.
+    const unread = selected?.unreadCount ?? 0;
     useEffect(() => {
-        if (selectedId) markRead(selectedId);
+        if (!selectedId) return;
+        const readIfVisible = () => {
+            if (document.visibilityState === 'visible') markRead(selectedId);
+        };
+        readIfVisible();
+        document.addEventListener('visibilitychange', readIfVisible);
+        return () => document.removeEventListener('visibilitychange', readIfVisible);
     }, [selectedId, markRead]);
+    useEffect(() => {
+        if (selectedId && unread > 0 && document.visibilityState === 'visible') markRead(selectedId);
+    }, [selectedId, unread, markRead]);
+
+    // Assignment: someone else owns this chat → my composer is locked.
+    const assignee = selected?.assignedTo ?? null;
+    const lockedByOther = !!assignee && assignee.id !== agent.id;
+
+    const handleAssignment = (action: 'claim' | 'release') => {
+        if (!selected) return;
+        setAssignment({ conversationId: selected.id, action })
+            .unwrap()
+            .then(() =>
+                toast.success(action === 'claim' ? (lockedByOther ? 'You took over this chat' : 'Chat assigned to you') : 'Chat released', {
+                    description: action === 'release' ? 'Any teammate can pick it up now.' : undefined,
+                }),
+            )
+            .catch((err: { data?: { message?: string } }) => toast.error('Couldn’t update assignment', { description: err.data?.message }));
+    };
+
+    // Shared-files panel → scroll the thread to that message and flash it.
+    const jumpTo = (key: string) => {
+        const el = document.querySelector<HTMLElement>(`[data-msg-key="${CSS.escape(key)}"]`);
+        if (!el) return;
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.animate(
+            [
+                { boxShadow: '0 0 0 0 transparent' },
+                { boxShadow: '0 0 0 4px color-mix(in oklab, var(--primary) 45%, transparent)' },
+                { boxShadow: '0 0 0 0 transparent' },
+            ],
+            { duration: 1400, delay: 350, easing: 'ease-in-out' },
+        );
+    };
 
     const send = (text: string) => {
         if (!selectedId) return;
@@ -618,12 +791,25 @@ export function MessagesView({ conversationId }: { conversationId?: string }) {
                                             selectedId === c.id && 'bg-sidebar-accent',
                                         )}
                                     >
-                                        <Avatar className="size-11 shrink-0">
-                                            <AvatarFallback>{c.name.charAt(0)}</AvatarFallback>
-                                        </Avatar>
+                                        <CustomerAvatar name={c.name} seed={c.phone} className="size-11 shrink-0" />
                                         <div className="flex-1 min-w-0">
                                             <div className="flex items-center justify-between gap-2">
-                                                <span className="text-sm font-medium truncate">{c.name}</span>
+                                                <span className="flex min-w-0 items-center gap-1.5">
+                                                    <span className="text-sm font-medium truncate">{c.name}</span>
+                                                    {c.assignedTo && (
+                                                        <span
+                                                            title={`Assigned to ${c.assignedTo.name}`}
+                                                            className={cn(
+                                                                'shrink-0 rounded-full px-1.5 py-px text-[10px] font-medium',
+                                                                c.assignedTo.id === agent.id
+                                                                    ? 'bg-primary/15 text-primary'
+                                                                    : 'bg-muted text-muted-foreground',
+                                                            )}
+                                                        >
+                                                            {c.assignedTo.id === agent.id ? 'You' : c.assignedTo.name.split(' ')[0]}
+                                                        </span>
+                                                    )}
+                                                </span>
                                                 <span
                                                     className={cn(
                                                         'text-[11px] shrink-0',
@@ -709,15 +895,26 @@ export function MessagesView({ conversationId }: { conversationId?: string }) {
                         <>
                             <div className="flex items-center justify-between gap-3 px-4 h-16 shrink-0 border-b bg-sidebar">
                                 <div className="flex items-center gap-3 min-w-0">
-                                    <Avatar className="size-9 shrink-0">
-                                        <AvatarFallback>{selected.name.charAt(0)}</AvatarFallback>
-                                    </Avatar>
-                                    <div className="min-w-0">
-                                        <p className="text-sm font-medium truncate">{selected.name}</p>
-                                        <p className="text-xs text-muted-foreground">
-                                            {selected.aiEnabled ? 'AI replying' : 'You’re handling this chat'}
-                                        </p>
-                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => setInfoOpen(true)}
+                                        className="flex min-w-0 items-center gap-3 rounded-lg text-left"
+                                        aria-label="Open contact info"
+                                    >
+                                        <CustomerAvatar name={selected.name} seed={selected.phone} className="size-9 shrink-0" />
+                                        <div className="min-w-0">
+                                            <p className="text-sm font-medium truncate">{selected.name}</p>
+                                            <p className="text-xs text-muted-foreground truncate">
+                                                {assignee
+                                                    ? assignee.id === agent.id
+                                                        ? 'Assigned to you'
+                                                        : `${assignee.name} is handling this chat`
+                                                    : selected.aiEnabled
+                                                      ? 'AI replying · unassigned'
+                                                      : 'Unassigned'}
+                                            </p>
+                                        </div>
+                                    </button>
                                 </div>
                                 <div className="flex items-center gap-1 shrink-0">
                                     <label
@@ -733,7 +930,14 @@ export function MessagesView({ conversationId }: { conversationId?: string }) {
                                         <Switch
                                             size="sm"
                                             checked={selected.aiEnabled}
-                                            onCheckedChange={(aiEnabled) => setAi({ conversationId: selected.id, aiEnabled })}
+                                            disabled={lockedByOther && !agent.canManage}
+                                            onCheckedChange={(aiEnabled) =>
+                                                setAi({ conversationId: selected.id, aiEnabled })
+                                                    .unwrap()
+                                                    .catch((err: { data?: { message?: string } }) =>
+                                                        toast.error('Couldn’t change AI auto-reply', { description: err.data?.message }),
+                                                    )
+                                            }
                                         />
                                     </label>
                                     <Button
@@ -742,13 +946,33 @@ export function MessagesView({ conversationId }: { conversationId?: string }) {
                                         className="size-8"
                                         aria-label="WhatsApp voice call"
                                         title="WhatsApp voice call"
-                                        disabled={!!call}
+                                        disabled={!!call || (lockedByOther && !agent.canManage)}
                                         onClick={() => startCall({ id: selected.id, name: selected.name })}
                                     >
                                         <Phone className="size-4" />
                                     </Button>
-                                    <Button variant="ghost" size="icon" className="size-8">
-                                        <MoreVertical className="size-4" />
+                                    {assignee?.id === agent.id && (
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            className="h-8 text-xs text-muted-foreground"
+                                            disabled={assigning}
+                                            onClick={() => handleAssignment('release')}
+                                            title="Let a teammate pick this chat up"
+                                        >
+                                            Release
+                                        </Button>
+                                    )}
+                                    <Button
+                                        variant={infoOpen ? 'secondary' : 'ghost'}
+                                        size="icon"
+                                        className="size-8"
+                                        aria-label="Contact info"
+                                        aria-pressed={infoOpen}
+                                        title="Contact info"
+                                        onClick={() => setInfoOpen((o) => !o)}
+                                    >
+                                        <Info className="size-4" />
                                     </Button>
                                 </div>
                             </div>
@@ -760,12 +984,41 @@ export function MessagesView({ conversationId }: { conversationId?: string }) {
                                             <Loader2 className="size-5 animate-spin text-muted-foreground" />
                                         </div>
                                     ) : (
-                                        <ThreadMessages key={selected.id} messages={messages} onRetry={handleRetry} />
+                                        <ThreadMessages
+                                            key={selected.id}
+                                            messages={messages}
+                                            onRetry={handleRetry}
+                                            onOpenMedia={(items, index) => setLightbox({ items, index, key: Date.now() })}
+                                        />
                                     )}
                                 </div>
                             </ScrollArea>
 
                             <Separator />
+                            {lockedByOther ? (
+                                // One agent per chat: everyone else sees who has it instead of a composer.
+                                <div className="flex shrink-0 items-center justify-between gap-3 bg-muted/40 px-4 py-3">
+                                    <div className="flex min-w-0 items-center gap-2.5 text-sm">
+                                        <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400">
+                                            <Lock className="size-4" />
+                                        </span>
+                                        <span className="min-w-0">
+                                            <span className="block truncate font-medium">{assignee?.name} is handling this chat</span>
+                                            <span className="block text-xs text-muted-foreground">
+                                                {agent.canManage
+                                                    ? 'Take it over to reply — they’ll see it move to you.'
+                                                    : 'Only they can reply. Ask them or a manager to hand it over.'}
+                                            </span>
+                                        </span>
+                                    </div>
+                                    {agent.canManage && (
+                                        <Button size="sm" variant="outline" disabled={assigning} onClick={() => handleAssignment('claim')}>
+                                            Take over
+                                        </Button>
+                                    )}
+                                </div>
+                            ) : (
+                            <>
                             <AttachmentTray items={pending} onRemove={removeAttachment} />
                             <form onSubmit={handleSend} className="flex items-end gap-2 px-3 py-3 shrink-0">
                                 {recorder.recording ? (
@@ -844,10 +1097,28 @@ export function MessagesView({ conversationId }: { conversationId?: string }) {
                                     </AnimatePresence>
                                 </Button>
                             </form>
+                            </>
+                            )}
                         </>
                     )}
                 </div>
+
+                <AnimatePresence initial={false}>
+                    {infoOpen && selected && (
+                        <ConversationInfoPanel
+                            key={selected.id}
+                            conversation={selected}
+                            messages={messages}
+                            onJump={jumpTo}
+                            onClose={() => setInfoOpen(false)}
+                        />
+                    )}
+                </AnimatePresence>
             </div>
+
+            {lightbox && (
+                <MediaLightbox key={lightbox.key} items={lightbox.items} index={lightbox.index} onClose={() => setLightbox(null)} />
+            )}
         </MotionConfig>
     );
 }

@@ -3,6 +3,7 @@ import { auth } from '../lib/auth.js';
 import jwt from 'jsonwebtoken';
 import envConfig from '../config/env.config.js';
 import GuestModel from '../models/guest.model.js';
+import { getEffectivePermissions } from '../lib/permissions.js';
 
 export async function socketAuthMiddleware(socket: Socket, next: (err?: Error) => void) {
     try {
@@ -20,11 +21,23 @@ export async function socketAuthMiddleware(socket: Socket, next: (err?: Error) =
         });
 
         if (session && session.user) {
+            const sessionUser = session.user as typeof session.user & {
+                extraPermissions?: string[];
+                deniedPermissions?: string[];
+            };
+            const role = session.user.role || 'staff';
             socket.data.user = {
                 id: session.user.id,
                 name: session.user.name,
                 email: session.user.email,
-                role: session.user.role || 'staff',
+                role,
+                // Resolved once per connection — gates the support inbox's live events.
+                permissions: await getEffectivePermissions({
+                    userId: sessionUser.id,
+                    role,
+                    extraPermissions: sessionUser.extraPermissions,
+                    deniedPermissions: sessionUser.deniedPermissions,
+                }),
             };
             return next();
         }

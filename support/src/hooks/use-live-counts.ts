@@ -93,7 +93,17 @@ export function useLiveCounts() {
             dispatch(baseApi.util.invalidateTags(['WhatsAppConversations']));
         };
 
+        // Assignment / read-state / AI switch changed by any agent.
+        const onWhatsAppConversation = ({ conversationId }: { conversationId: string }) => {
+            dispatch(baseApi.util.invalidateTags(['WhatsAppConversations', { type: 'WhatsAppDetails', id: conversationId }]));
+        };
+        const onWhatsAppNotes = ({ conversationId }: { conversationId: string }) => {
+            dispatch(baseApi.util.invalidateTags([{ type: 'WhatsAppNotes', id: conversationId }]));
+        };
+
         socket.on('connect', onConnect);
+        socket.on('whatsapp:conversation_updated', onWhatsAppConversation);
+        socket.on('whatsapp:notes_updated', onWhatsAppNotes);
         socket.on('queue:new_message', onQueueUpdate);
         socket.on('session:state_change', onSessionStateChange);
         socket.on('ticket:new_reply', onTicketActivity);
@@ -105,6 +115,8 @@ export function useLiveCounts() {
 
         return () => {
             socket.off('connect', onConnect);
+            socket.off('whatsapp:conversation_updated', onWhatsAppConversation);
+            socket.off('whatsapp:notes_updated', onWhatsAppNotes);
             socket.off('queue:new_message', onQueueUpdate);
             socket.off('session:state_change', onSessionStateChange);
             socket.off('ticket:new_reply', onTicketActivity);

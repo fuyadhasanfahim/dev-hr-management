@@ -1,6 +1,43 @@
+import { toast } from 'sonner';
 import { baseApi } from './baseApi';
 
 export type WhatsAppMessageStatus = 'pending' | 'sent' | 'delivered' | 'read' | 'failed';
+
+export interface WhatsAppAssignee {
+    id: string;
+    name: string;
+}
+
+export interface WhatsAppNote {
+    id: string;
+    body: string;
+    author: WhatsAppAssignee;
+    createdAt: string;
+}
+
+export interface WhatsAppCustomerDetails {
+    name: string | null;
+    phone: string;
+    status: 'bot' | 'escalated' | 'resolved';
+    aiEnabled: boolean;
+    assignedTo: WhatsAppAssignee | null;
+    assignedAt: string | null;
+    firstContactAt: string;
+    messageCount: number;
+    conversationCount: number;
+    linkedTicketId: string | null;
+    client: {
+        id: string;
+        clientId: string | null;
+        name: string;
+        email: string | null;
+        status: string;
+        currency: string | null;
+        address: string | null;
+        since: string | null;
+    } | null;
+    lead: { id: string; name: string; email: string | null; status: string; source: string | null } | null;
+}
 
 export interface WhatsAppConversation {
     id: string;
@@ -13,6 +50,7 @@ export interface WhatsAppConversation {
     lastMessageStatus: WhatsAppMessageStatus | null;
     lastMessageAt: string;
     unreadCount: number;
+    assignedTo: WhatsAppAssignee | null;
 }
 
 export type WhatsAppMessageType = 'text' | 'image' | 'video' | 'audio' | 'document' | 'sticker' | 'call';
@@ -50,6 +88,12 @@ function guessType(mimeType: string, voice: boolean): WhatsAppMessageType {
     if (mimeType === 'image/jpeg' || mimeType === 'image/png') return 'image';
     if (mimeType === 'video/mp4' || mimeType === 'video/3gpp') return 'video';
     return 'document';
+}
+
+// 409 = another agent owns the chat: drop the bubble (it was never sent) and say who.
+function rejectedByAssignment(err: unknown): string | null {
+    const e = (err as { error?: { status?: number; data?: { message?: string; code?: string } } })?.error;
+    return e?.status === 409 && e.data?.code === 'ASSIGNED' ? (e.data.message ?? 'Another agent is handling this chat') : null;
 }
 
 // One key per bubble for its whole life: optimistic → saved → refetched.
@@ -112,7 +156,14 @@ export const whatsappApi = baseApi.injectEndpoints({
                             draft.push(data);
                         }
                     });
-                } catch {
+                } catch (err) {
+                    const assigned = rejectedByAssignment(err);
+                    if (assigned) {
+                        patchThread((draft) => draft.filter((m) => m.id !== localId));
+                        toast.error('Message not sent', { description: assigned });
+                        dispatch(whatsappApi.util.invalidateTags(['WhatsAppConversations']));
+                        return;
+                    }
                     patchThread((draft) => {
                         const local = draft.find((m) => m.id === localId);
                         if (local) {
@@ -170,6 +221,13 @@ export const whatsappApi = baseApi.injectEndpoints({
                         else if (!draft.some((m) => m.id === data.id)) draft.push({ ...data, localUrl });
                     });
                 } catch (err) {
+                    const assigned = rejectedByAssignment(err);
+                    if (assigned) {
+                        patchThread((draft) => draft.filter((m) => m.id !== localId));
+                        toast.error('File not sent', { description: assigned });
+                        dispatch(whatsappApi.util.invalidateTags(['WhatsAppConversations']));
+                        return;
+                    }
                     const message = (err as { error?: { data?: { message?: string } } })?.error?.data?.message;
                     patchThread((draft) => {
                         const local = draft.find((m) => m.id === localId);
@@ -239,12 +297,59 @@ export const whatsappApi = baseApi.injectEndpoints({
                 queryFulfilled.catch(patch.undo);
             },
         }),
+        getMyPermissions: builder.query<string[], void>({
+            query: () => '/me/permissions',
+            transformResponse: (res: { data: { permissions: string[] } }) => res.data?.permissions ?? [],
+            providesTags: ['MyPermissions'],
+        }),
+        // claim = take the chat (or take it over, with support.manage); release = let it go.
+        setWhatsAppAssignment: builder.mutation<void, { conversationId: string; action: 'claim' | 'release' }>({
+            query: ({ conversationId, action }) => ({
+                url: `/support/whatsapp/conversations/${conversationId}/assignment`,
+                method: 'POST',
+                body: { action },
+            }),
+            invalidatesTags: (_r, _e, { conversationId }) => ['WhatsAppConversations', { type: 'WhatsAppDetails', id: conversationId }],
+        }),
+        getWhatsAppDetails: builder.query<WhatsAppCustomerDetails, string>({
+            query: (conversationId) => `/support/whatsapp/conversations/${conversationId}/details`,
+            transformResponse: (res: { data: WhatsAppCustomerDetails }) => res.data,
+            providesTags: (_r, _e, conversationId) => [{ type: 'WhatsAppDetails', id: conversationId }],
+        }),
+        getWhatsAppNotes: builder.query<WhatsAppNote[], string>({
+            query: (conversationId) => `/support/whatsapp/conversations/${conversationId}/notes`,
+            transformResponse: (res: { data: WhatsAppNote[] }) => res.data ?? [],
+            providesTags: (_r, _e, conversationId) => [{ type: 'WhatsAppNotes', id: conversationId }],
+        }),
+        addWhatsAppNote: builder.mutation<WhatsAppNote, { conversationId: string; body: string }>({
+            query: ({ conversationId, body }) => ({
+                url: `/support/whatsapp/conversations/${conversationId}/notes`,
+                method: 'POST',
+                body: { body },
+            }),
+            invalidatesTags: (_r, _e, { conversationId }) => [{ type: 'WhatsAppNotes', id: conversationId }],
+        }),
+        deleteWhatsAppNote: builder.mutation<void, { conversationId: string; noteId: string }>({
+            query: ({ conversationId, noteId }) => ({
+                url: `/support/whatsapp/conversations/${conversationId}/notes/${noteId}`,
+                method: 'DELETE',
+            }),
+            invalidatesTags: (_r, _e, { conversationId }) => [{ type: 'WhatsAppNotes', id: conversationId }],
+        }),
         markWhatsAppConversationRead: builder.mutation<void, string>({
             query: (conversationId) => ({
                 url: `/support/whatsapp/conversations/${conversationId}/read`,
                 method: 'POST',
             }),
-            invalidatesTags: ['WhatsAppConversations'],
+            // Zero the badge immediately; the server broadcasts to other agents.
+            async onQueryStarted(conversationId, { dispatch }) {
+                dispatch(
+                    whatsappApi.util.updateQueryData('getWhatsAppConversations', undefined, (draft) => {
+                        const c = draft.find((x) => x.id === conversationId);
+                        if (c) c.unreadCount = 0;
+                    }),
+                );
+            },
         }),
     }),
 });
@@ -262,4 +367,10 @@ export const {
     useRetryWhatsAppMessageMutation,
     useSetWhatsAppAiMutation,
     useMarkWhatsAppConversationReadMutation,
+    useGetMyPermissionsQuery,
+    useSetWhatsAppAssignmentMutation,
+    useGetWhatsAppDetailsQuery,
+    useGetWhatsAppNotesQuery,
+    useAddWhatsAppNoteMutation,
+    useDeleteWhatsAppNoteMutation,
 } = whatsappApi;

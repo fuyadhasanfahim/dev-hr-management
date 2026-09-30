@@ -6,6 +6,7 @@ import TicketModel from '../models/ticket.model.js';
 import { addToChatQueue, removeFromChatQueue } from '../services/redis-queue.service.js';
 import { logger } from '../lib/logger.js';
 import { Types } from 'mongoose';
+import { hasPermission } from '../lib/permissions.js';
 
 let supportNamespaceRef: Namespace | null = null;
 
@@ -283,8 +284,10 @@ export function registerSupportNamespace(io: Server) {
             }
         });
 
+        // Only staff with support access get support alerts — new chats,
+        // tickets, WhatsApp messages and incoming calls all go to this room.
         socket.on('agent:register_presence', () => {
-            if (user.role !== 'Guest' && user.role !== 'client') {
+            if (user.role !== 'Guest' && user.role !== 'client' && hasPermission(user.permissions, 'support.access')) {
                 socket.join('agents_presence');
                 logger.info(`[Support Socket] Agent registered for presence updates: ${user.name}`);
             }

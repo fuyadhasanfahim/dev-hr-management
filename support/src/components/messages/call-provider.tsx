@@ -2,7 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Loader2, Mic, MicOff, Phone, PhoneOff } from 'lucide-react';
+import { GripHorizontal, Loader2, Mic, MicOff, Phone, PhoneOff } from 'lucide-react';
 import {
     AlertDialog,
     AlertDialogAction,
@@ -17,6 +17,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { connectSocket, onSocketEvent } from '@/lib/socket';
+import { useSupportAgent } from '@/hooks/use-support-agent';
 import {
     useAcceptWhatsAppCallMutation,
     useEndWhatsAppCallMutation,
@@ -74,6 +75,18 @@ function useElapsed(since?: number): string {
     return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
+// Where the agent last dragged the call widget (per browser — a convenience, not state).
+const POSITION_KEY = 'support-call-widget-offset';
+function loadOffset(): { x: number; y: number } {
+    try {
+        const saved = JSON.parse(localStorage.getItem(POSITION_KEY) ?? 'null');
+        if (typeof saved?.x === 'number' && typeof saved?.y === 'number') return saved;
+    } catch {}
+    return { x: 0, y: 0 };
+}
+
+type ApiError = { status?: number; data?: { code?: string; canRequest?: boolean; message?: string } };
+
 // Socket events that can beat the "call placed" HTTP response for an outbound call.
 interface EarlyEvents {
     sdp?: string;
@@ -90,6 +103,13 @@ export function CallProvider({ children }: { children: ReactNode }) {
     const offerRef = useRef<string | null>(null); // Incoming call's SDP offer, until accepted.
     const earlyRef = useRef(new Map<string, EarlyEvents>());
     const remoteAudioRef = useRef<HTMLAudioElement>(null);
+    const dragBoundsRef = useRef<HTMLDivElement>(null);
+    const [offset] = useState(loadOffset);
+    const agent = useSupportAgent();
+    const agentRef = useRef(agent);
+    useEffect(() => {
+        agentRef.current = agent;
+    }, [agent]);
     const ringRef = useRef<HTMLAudioElement | null>(null);
 
     const [startCallApi] = useStartWhatsAppCallMutation();
@@ -146,12 +166,18 @@ export function CallProvider({ children }: { children: ReactNode }) {
         ringRef.current.loop = true;
 
         const offs = [
-            onSocketEvent('whatsapp:call_incoming', (p: { callId: string; conversationId: string; name: string; sdp?: string }) => {
+            onSocketEvent(
+                'whatsapp:call_incoming',
+                (p: { callId: string; conversationId: string; name: string; sdp?: string; assignedTo?: { id: string } | null }) => {
                 if (callRef.current || !p.sdp) return; // Busy — the other agents can take it.
+                // An assigned chat's calls ring for its agent (and managers), not the whole team.
+                const me = agentRef.current;
+                if (p.assignedTo && p.assignedTo.id !== me.id && !me.canManage) return;
                 offerRef.current = p.sdp;
                 update({ callId: p.callId, conversationId: p.conversationId, name: p.name, direction: 'inbound', phase: 'incoming', muted: false });
                 ringRef.current?.play().catch(() => {});
-            }),
+                },
+            ),
             // Another agent picked it up: stop ringing here.
             onSocketEvent('whatsapp:call_claimed', ({ callId }: { callId: string }) => {
                 const c = callRef.current;
@@ -196,9 +222,13 @@ export function CallProvider({ children }: { children: ReactNode }) {
                 if (early?.status) applyStatus(early.status);
             } catch (err) {
                 cleanup();
-                const data = (err as { data?: { code?: string; canRequest?: boolean; message?: string } }).data;
+                const data = (err as ApiError).data;
                 if (data?.code === 'NO_PERMISSION') {
                     setPermissionFor({ ...conversation, canRequest: !!data.canRequest });
+                } else if (data?.code === 'PAYMENT_REQUIRED') {
+                    toast.error('Calling isn’t enabled for billing yet', { description: data.message, duration: 12000 });
+                } else if (data?.code === 'ASSIGNED') {
+                    toast.error('Can’t call from this chat', { description: data.message });
                 } else {
                     const micDenied = err instanceof DOMException && err.name === 'NotAllowedError';
                     toast.error(micDenied ? 'Microphone blocked' : 'Call couldn’t be started', {
@@ -267,17 +297,38 @@ export function CallProvider({ children }: { children: ReactNode }) {
             {children}
             <audio ref={remoteAudioRef} autoPlay />
 
+            {/* Drag bounds: the whole viewport. */}
+            <div ref={dragBoundsRef} className="pointer-events-none fixed inset-2 z-40" aria-hidden />
             <AnimatePresence>
                 {call && (
                     <motion.div
                         role="dialog"
                         aria-label={`Call with ${call.name}`}
-                        initial={{ opacity: 0, y: 24, scale: 0.95 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: 24, scale: 0.95 }}
+                        drag
+                        dragMomentum={false}
+                        dragElastic={0.08}
+                        dragConstraints={dragBoundsRef}
+                        onDragEnd={(e) => {
+                            // Persist where it was dropped, relative to its starting corner.
+                            const el = (e.target as HTMLElement | null)?.closest<HTMLElement>('[data-call-widget]');
+                            if (!el) return;
+                            const m = new DOMMatrixReadOnly(getComputedStyle(el).transform);
+                            try {
+                                localStorage.setItem(POSITION_KEY, JSON.stringify({ x: m.m41, y: m.m42 }));
+                            } catch {}
+                        }}
+                        data-call-widget
+                        initial={{ opacity: 0, scale: 0.9, x: offset.x, y: offset.y + 24 }}
+                        animate={{ opacity: 1, scale: 1, y: offset.y }}
+                        exit={{ opacity: 0, scale: 0.9 }}
                         transition={{ type: 'spring', stiffness: 420, damping: 32 }}
-                        className="fixed right-4 bottom-4 z-50 w-72 rounded-2xl border bg-popover p-4 shadow-2xl"
+                        whileDrag={{ scale: 1.03, cursor: 'grabbing' }}
+                        // Starts over the chat list (clear of the composer), then goes wherever it's dragged.
+                        className="fixed bottom-4 left-[calc(18rem+1.5rem)] z-50 w-72 cursor-grab touch-none rounded-2xl border bg-popover p-4 pt-2 shadow-2xl select-none"
                     >
+                        <div className="mb-1 flex justify-center text-muted-foreground/50" aria-hidden>
+                            <GripHorizontal className="size-4" />
+                        </div>
                         <div className="flex items-center gap-3">
                             <div className="relative">
                                 {call.phase !== 'active' && (

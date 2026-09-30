@@ -179,6 +179,13 @@ export const PERMISSION_GROUPS = {
         label: 'Invitations',
         actions: ['read', 'create', 'delete'],
     },
+    support: {
+        label: 'Support Inbox (WhatsApp)',
+        // access — see the WhatsApp inbox, get its notifications + calls, and
+        //          reply to chats that are unassigned or assigned to you
+        // manage — take over / reassign a chat another agent is handling
+        actions: ['access', 'manage'],
+    },
     outbox: {
         label: 'Outbox / Event Log',
         actions: ['read', 'replay'],

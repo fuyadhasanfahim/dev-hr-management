@@ -6,14 +6,8 @@ import WhatsAppMessageModel, {
     WhatsAppMessageType,
 } from '../models/whatsapp-message.model.js';
 import whatsappService from './whatsapp.service.js';
-import { findOrCreateConversation } from './whatsapp-support.service.js';
+import { claimConversation, findOrCreateConversation, InboxError, type Agent } from './whatsapp-support.service.js';
 import { notifyAgents } from '../socket/support.namespace.js';
-
-export class CallError extends Error {
-    constructor(message: string, public status: number, public code?: string, public extra?: Record<string, unknown>) {
-        super(message);
-    }
-}
 
 interface LiveCall {
     conversationId: string;
@@ -106,6 +100,8 @@ export async function handleCallEvent(event: CallEvent, contactName?: string): P
             name: conversation.customerName || conversation.customerPhone,
             phone: conversation.customerPhone,
             sdp: event.session?.sdp,
+            // The browser rings only for the assignee (and managers) when the chat has one.
+            assignedTo: conversation.assignedTo?.id ? conversation.assignedTo : null,
         });
         return;
     }
@@ -127,27 +123,44 @@ export async function handleCallStatus(status: CallStatus): Promise<void> {
 
 // ── Agent side ──────────────────────────────────────────────────────────────
 
-export async function startCall(conversationId: string, sdpOffer: string, agentId: string): Promise<string> {
-    const conversation = await WhatsAppConversationModel.findById(conversationId);
-    if (!conversation) throw new CallError('Conversation not found', 404);
+// Meta's billing gate for business-initiated calls: no valid payment method on the WABA.
+const PAYMENT_ERROR = /#13104[24]\b/;
+
+export async function startCall(conversationId: string, sdpOffer: string, agent: Agent): Promise<string> {
+    const conversation = await claimConversation(conversationId, agent);
 
     const permission = await whatsappService.getCallPermission(conversation.customerPhone);
     if (!permission.canCall) {
-        throw new CallError('Customer has not allowed calls yet', 409, 'NO_PERMISSION', {
+        throw new InboxError('Customer has not allowed calls yet', 409, 'NO_PERMISSION', {
             canRequest: permission.canRequest,
         });
     }
 
-    const callId = await whatsappService.startCall(conversation.customerPhone, sdpOffer);
-    liveCalls.set(callId, { conversationId, direction: 'outbound', agentId, startedAt: new Date() });
+    let callId: string;
+    try {
+        callId = await whatsappService.startCall(conversation.customerPhone, sdpOffer);
+    } catch (err: any) {
+        if (PAYMENT_ERROR.test(err.message)) {
+            throw new InboxError(
+                'WhatsApp needs a payment method on the business account before you can place calls. Add one in Meta Business Suite → Billing & payments → WhatsApp.',
+                402,
+                'PAYMENT_REQUIRED',
+            );
+        }
+        throw err;
+    }
+    liveCalls.set(callId, { conversationId, direction: 'outbound', agentId: agent.id, startedAt: new Date() });
     return callId;
 }
 
 // First agent to accept wins; everyone else's ringing stops via `call_claimed`.
-export async function acceptCall(callId: string, sdpAnswer: string, agentId: string): Promise<void> {
+export async function acceptCall(callId: string, sdpAnswer: string, agent: Agent): Promise<void> {
     const call = liveCalls.get(callId);
-    if (!call) throw new CallError('This call has already ended', 410);
-    if (call.agentId && call.agentId !== agentId) throw new CallError('Another agent already answered', 409);
+    if (!call) throw new InboxError('This call has already ended', 410);
+    if (call.agentId && call.agentId !== agent.id) throw new InboxError('Another agent already answered', 409);
+    // Answering makes you the chat's handler (managers may pick up an assigned chat's call).
+    if (!agent.canManage) await claimConversation(call.conversationId, agent);
+    const agentId = agent.id;
     call.agentId = agentId;
     notifyAgents('whatsapp:call_claimed', { callId, agentId });
 
@@ -179,7 +192,7 @@ export async function endCall(callId: string): Promise<void> {
 
 export async function requestCallPermission(conversationId: string): Promise<void> {
     const conversation = await WhatsAppConversationModel.findById(conversationId);
-    if (!conversation) throw new CallError('Conversation not found', 404);
+    if (!conversation) throw new InboxError('Conversation not found', 404);
     await whatsappService.sendCallPermissionRequest(
         conversation.customerPhone,
         'We would like to call you about your support request. Tap below to allow calls from us.',

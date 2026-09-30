@@ -4,7 +4,14 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
-import WhatsAppConversationModel, { WhatsAppConversationStatus } from '../models/whatsapp-conversation.model.js';
+import WhatsAppConversationModel, {
+    WhatsAppConversationStatus,
+    type IWhatsAppAssignee,
+} from '../models/whatsapp-conversation.model.js';
+import WhatsAppNoteModel from '../models/whatsapp-note.model.js';
+import ClientModel from '../models/client.model.js';
+import LeadModel from '../models/lead.model.js';
+import { escapeRegex } from '../lib/sanitize.js';
 import WhatsAppMessageModel, {
     WhatsAppMessageDirection,
     WhatsAppMessageSender,
@@ -18,6 +25,48 @@ import { notifyAgents } from '../socket/support.namespace.js';
 import type { IWhatsAppMessage } from '../models/whatsapp-message.model.js';
 
 const run = promisify(execFile);
+
+/** An inbox rule the agent hit (assignment, permission…) — carries its own HTTP status. */
+export class InboxError extends Error {
+    constructor(message: string, public status: number, public code?: string, public extra?: Record<string, unknown>) {
+        super(message);
+    }
+}
+
+/** The signed-in agent acting on the inbox. */
+export interface Agent {
+    id: string;
+    name: string;
+    canManage: boolean; // support.manage — may take over another agent's chat
+}
+
+/**
+ * Makes `agent` the chat's handler if nobody is, atomically — two agents
+ * replying at the same moment can't both win. Throws if someone else has it.
+ */
+export async function claimConversation(conversationId: string, agent: Agent) {
+    const conversation = await WhatsAppConversationModel.findOneAndUpdate(
+        { _id: conversationId, $or: [{ assignedTo: null }, { 'assignedTo.id': agent.id }] },
+        { $set: { assignedTo: { id: agent.id, name: agent.name } } },
+        { new: false }, // the pre-update doc tells us whether this was a fresh claim
+    );
+    if (conversation) {
+        if (!conversation.assignedTo?.id) {
+            const assignedAt = new Date();
+            await WhatsAppConversationModel.updateOne({ _id: conversationId }, { assignedAt });
+            conversation.assignedTo = { id: agent.id, name: agent.name };
+            conversation.assignedAt = assignedAt;
+            notifyAgents('whatsapp:conversation_updated', { conversationId });
+        }
+        return conversation;
+    }
+
+    const existing = await WhatsAppConversationModel.findById(conversationId).select('assignedTo').lean();
+    if (!existing) throw new InboxError('Conversation not found', 404);
+    throw new InboxError(`${existing.assignedTo?.name ?? 'Another agent'} is already handling this chat`, 409, 'ASSIGNED', {
+        assignedTo: existing.assignedTo,
+    });
+}
 
 /**
  * The customer's open (not resolved) conversation, or a new one. Shared by the
@@ -63,6 +112,7 @@ export interface ConversationSummary {
     lastMessageStatus: WhatsAppMessageStatus | null;
     lastMessageAt: string;
     unreadCount: number;
+    assignedTo: IWhatsAppAssignee | null;
 }
 
 export interface MessageSummary {
@@ -134,6 +184,7 @@ async function listConversations(): Promise<ConversationSummary[]> {
             lastMessageStatus: lastMessage?.status ?? null,
             lastMessageAt: c.lastMessageAt.toISOString(),
             unreadCount,
+            assignedTo: c.assignedTo?.id ? { id: c.assignedTo.id, name: c.assignedTo.name } : null,
         };
     });
 }
@@ -146,9 +197,8 @@ async function getMessages(conversationId: string): Promise<MessageSummary[]> {
 // Saves the reply as `pending` and hands the actual Cloud API call to the Redis
 // send queue, so the agent's UI never waits on Meta. Flips aiEnabled off: once
 // a human is typing, the bot should stay quiet on this conversation.
-async function sendAgentMessage(conversationId: string, body: string, clientId?: string): Promise<MessageSummary> {
-    const conversation = await WhatsAppConversationModel.findById(conversationId);
-    if (!conversation) throw new Error('Conversation not found');
+async function sendAgentMessage(conversationId: string, body: string, agent: Agent, clientId?: string): Promise<MessageSummary> {
+    const conversation = await claimConversation(conversationId, agent);
 
     const _id = new Types.ObjectId();
     const message = await WhatsAppMessageModel.create({
@@ -162,14 +212,22 @@ async function sendAgentMessage(conversationId: string, body: string, clientId?:
         clientId,
     });
 
-    conversation.lastMessageAt = new Date();
-    conversation.aiEnabled = false;
+    touchAfterAgentReply(conversation);
     await conversation.save();
 
     await enqueueWhatsAppSend(_id.toString());
     notifyAgents('whatsapp:new_message', { conversationId });
 
     return toMessageSummary(message);
+}
+
+// Replying means the agent has read everything so far, and that the bot
+// should stay quiet on this chat from now on.
+function touchAfterAgentReply(conversation: { lastMessageAt: Date; lastReadAt: Date; aiEnabled: boolean }) {
+    const now = new Date();
+    conversation.lastMessageAt = now;
+    conversation.lastReadAt = now;
+    conversation.aiEnabled = false;
 }
 
 // Mime types WhatsApp accepts per message type; anything else goes as a document.
@@ -207,9 +265,9 @@ async function sendAgentMedia(
     conversationId: string,
     file: { buffer: Buffer; mimeType: string; filename: string },
     options: { caption?: string; voice?: boolean; clientId?: string },
+    agent: Agent,
 ): Promise<MessageSummary> {
-    const conversation = await WhatsAppConversationModel.findById(conversationId);
-    if (!conversation) throw new Error('Conversation not found');
+    const conversation = await claimConversation(conversationId, agent);
 
     let { buffer, mimeType, filename } = file;
     if (options.voice) {
@@ -234,8 +292,7 @@ async function sendAgentMedia(
         clientId: options.clientId,
     });
 
-    conversation.lastMessageAt = new Date();
-    conversation.aiEnabled = false;
+    touchAfterAgentReply(conversation);
     await conversation.save();
 
     await enqueueWhatsAppSend(_id.toString());
@@ -266,18 +323,154 @@ async function retryMessage(conversationId: string, messageId: string): Promise<
 // An agent reply switches AI off; this is how they hand the chat back. Turning
 // it on also returns an escalated chat to bot mode, since the webhook only lets
 // the AI answer conversations in that state (the linked ticket stays open).
-async function setAiEnabled(conversationId: string, aiEnabled: boolean): Promise<void> {
+// Handing a chat back to the AI also releases it, so the bot owns it again.
+async function setAiEnabled(conversationId: string, aiEnabled: boolean, agent: Agent): Promise<void> {
     const conversation = await WhatsAppConversationModel.findById(conversationId);
-    if (!conversation) throw new Error('Conversation not found');
+    if (!conversation) throw new InboxError('Conversation not found', 404);
+    assertCanAct(conversation.assignedTo, agent);
     conversation.aiEnabled = aiEnabled;
-    if (aiEnabled && conversation.status === WhatsAppConversationStatus.ESCALATED) {
-        conversation.status = WhatsAppConversationStatus.BOT;
+    if (aiEnabled) {
+        if (conversation.status === WhatsAppConversationStatus.ESCALATED) conversation.status = WhatsAppConversationStatus.BOT;
+        conversation.assignedTo = null;
+        conversation.assignedAt = null;
     }
     await conversation.save();
+    notifyAgents('whatsapp:conversation_updated', { conversationId });
 }
 
+function assertCanAct(assignedTo: IWhatsAppAssignee | null | undefined, agent: Agent) {
+    if (assignedTo?.id && assignedTo.id !== agent.id && !agent.canManage) {
+        throw new InboxError(`${assignedTo.name} is handling this chat`, 409, 'ASSIGNED', { assignedTo });
+    }
+}
+
+/**
+ * claim   — take an unassigned chat (or, with support.manage, someone else's)
+ * release — let go of your chat (managers can release anyone's)
+ */
+async function setAssignment(conversationId: string, action: 'claim' | 'release', agent: Agent): Promise<void> {
+    const conversation = await WhatsAppConversationModel.findById(conversationId);
+    if (!conversation) throw new InboxError('Conversation not found', 404);
+    assertCanAct(conversation.assignedTo, agent);
+
+    if (action === 'claim') {
+        const takingOver = conversation.assignedTo?.id !== agent.id;
+        conversation.assignedTo = { id: agent.id, name: agent.name };
+        if (takingOver) conversation.assignedAt = new Date();
+        conversation.aiEnabled = false; // A human owns it now.
+    } else {
+        conversation.assignedTo = null;
+        conversation.assignedAt = null;
+    }
+    await conversation.save();
+    notifyAgents('whatsapp:conversation_updated', { conversationId });
+}
+
+// Read state is shared by the team (one inbox), so everyone's badge updates live.
 async function markConversationRead(conversationId: string): Promise<void> {
     await WhatsAppConversationModel.findByIdAndUpdate(conversationId, { lastReadAt: new Date() });
+    notifyAgents('whatsapp:conversation_updated', { conversationId });
+}
+
+// ── Info panel: notes + customer details ─────────────────────────────────────
+
+export interface NoteSummary {
+    id: string;
+    body: string;
+    author: { id: string; name: string };
+    createdAt: string;
+}
+
+async function phoneOf(conversationId: string): Promise<string> {
+    const conversation = await WhatsAppConversationModel.findById(conversationId).select('customerPhone').lean();
+    if (!conversation) throw new InboxError('Conversation not found', 404);
+    return conversation.customerPhone;
+}
+
+async function listNotes(conversationId: string): Promise<NoteSummary[]> {
+    const notes = await WhatsAppNoteModel.find({ customerPhone: await phoneOf(conversationId) }).sort({ createdAt: -1 }).lean();
+    return notes.map((n) => ({ id: n._id.toString(), body: n.body, author: n.author, createdAt: n.createdAt.toISOString() }));
+}
+
+async function addNote(conversationId: string, body: string, agent: Agent): Promise<NoteSummary> {
+    const note = await WhatsAppNoteModel.create({
+        customerPhone: await phoneOf(conversationId),
+        body,
+        author: { id: agent.id, name: agent.name },
+    });
+    notifyAgents('whatsapp:notes_updated', { conversationId });
+    return { id: note._id.toString(), body: note.body, author: note.author, createdAt: note.createdAt.toISOString() };
+}
+
+// Authors delete their own notes; managers can delete any.
+async function deleteNote(conversationId: string, noteId: string, agent: Agent): Promise<void> {
+    const filter: Record<string, unknown> = { _id: noteId, customerPhone: await phoneOf(conversationId) };
+    if (!agent.canManage) filter['author.id'] = agent.id;
+    const { deletedCount } = await WhatsAppNoteModel.deleteOne(filter);
+    if (!deletedCount) throw new InboxError('Note not found, or it isn’t yours to delete', 404);
+    notifyAgents('whatsapp:notes_updated', { conversationId });
+}
+
+const lastDigits = (phone: string, n = 10) => phone.replace(/\D/g, '').slice(-n);
+
+// Phones are stored however staff typed them ("+880 17…", "017…"), so match
+// on the last 10 digits after a cheap regex pre-filter on the last 4.
+async function findByPhone<T extends { phone?: string }>(model: any, phone: string, select: string): Promise<T | null> {
+    const tail = lastDigits(phone);
+    if (tail.length < 7) return null;
+    const candidates: T[] = await model
+        .find({ phone: { $regex: escapeRegex(tail.slice(-4)) } })
+        .select(select)
+        .limit(50)
+        .lean();
+    return candidates.find((c) => c.phone && lastDigits(c.phone) === tail) ?? null;
+}
+
+async function getCustomerDetails(conversationId: string) {
+    const conversation = await WhatsAppConversationModel.findById(conversationId).lean();
+    if (!conversation) throw new InboxError('Conversation not found', 404);
+
+    const [client, lead, firstMessage, messageCount, conversationCount] = await Promise.all([
+        findByPhone<any>(ClientModel, conversation.customerPhone, 'clientId name emails phone status currency address createdAt'),
+        findByPhone<any>(LeadModel, conversation.customerPhone, 'name email phone status source createdAt'),
+        WhatsAppMessageModel.findOne({ conversationId }).sort({ createdAt: 1 }).select('createdAt').lean(),
+        WhatsAppMessageModel.countDocuments({ conversationId }),
+        WhatsAppConversationModel.countDocuments({ customerPhone: conversation.customerPhone }),
+    ]);
+
+    return {
+        name: conversation.customerName ?? null,
+        phone: conversation.customerPhone,
+        status: conversation.status,
+        aiEnabled: conversation.aiEnabled,
+        assignedTo: conversation.assignedTo?.id ? conversation.assignedTo : null,
+        assignedAt: conversation.assignedAt?.toISOString() ?? null,
+        firstContactAt: (firstMessage?.createdAt ?? conversation.createdAt).toISOString(),
+        messageCount,
+        conversationCount,
+        linkedTicketId: conversation.linkedTicketId?.toString() ?? null,
+        client: client
+            ? {
+                  id: client._id.toString(),
+                  clientId: client.clientId ?? null,
+                  name: client.name,
+                  email: client.emails?.[0] ?? null,
+                  status: client.status,
+                  currency: client.currency ?? null,
+                  address: client.address ?? null,
+                  since: client.createdAt?.toISOString() ?? null,
+              }
+            : null,
+        lead: lead
+            ? {
+                  id: lead._id.toString(),
+                  name: lead.name,
+                  email: lead.email ?? null,
+                  status: lead.status,
+                  source: lead.source ?? null,
+              }
+            : null,
+    };
 }
 
 export default {
@@ -288,5 +481,10 @@ export default {
     getMedia,
     retryMessage,
     setAiEnabled,
+    setAssignment,
     markConversationRead,
+    listNotes,
+    addNote,
+    deleteNote,
+    getCustomerDetails,
 };

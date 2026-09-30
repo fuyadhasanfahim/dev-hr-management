@@ -1,8 +1,24 @@
 import type { Request, Response } from 'express';
 import { Readable } from 'node:stream';
 import { logger } from '../lib/logger.js';
-import whatsappSupportService from '../services/whatsapp-support.service.js';
-import whatsappCallService, { CallError } from '../services/whatsapp-call.service.js';
+import whatsappSupportService, { InboxError, type Agent } from '../services/whatsapp-support.service.js';
+import whatsappCallService from '../services/whatsapp-call.service.js';
+import { userCan } from '../middlewares/require-permission.js';
+
+// The signed-in agent, as the inbox services see them.
+const agentOf = (req: Request): Agent => ({
+    id: req.user?.id ?? '',
+    name: req.user?.name ?? 'Agent',
+    canManage: userCan(req, 'support.manage'),
+});
+
+// Inbox rule errors (assignment, permission, billing) keep their own status; anything else is a 500.
+function sendError(res: Response, err: any, fallback = 500) {
+    if (err instanceof InboxError) {
+        return res.status(err.status).json({ success: false, message: err.message, code: err.code, ...err.extra });
+    }
+    return res.status(fallback).json({ success: false, message: err.message });
+}
 
 const safeClientIdOf = (clientId: unknown) =>
     typeof clientId === 'string' && clientId.length <= 64 ? clientId : undefined;
@@ -31,10 +47,10 @@ async function sendMessage(req: Request, res: Response) {
         if (!text || typeof text !== 'string' || !text.trim()) {
             return res.status(400).json({ success: false, message: 'text is required' });
         }
-        const message = await whatsappSupportService.sendAgentMessage(req.params.id!, text.trim(), safeClientIdOf(clientId));
+        const message = await whatsappSupportService.sendAgentMessage(req.params.id!, text.trim(), agentOf(req), safeClientIdOf(clientId));
         return res.status(201).json({ success: true, data: message });
     } catch (err: any) {
-        return res.status(500).json({ success: false, message: err.message });
+        return sendError(res, err);
     }
 }
 
@@ -53,10 +69,10 @@ async function setAiEnabled(req: Request, res: Response) {
         if (typeof aiEnabled !== 'boolean') {
             return res.status(400).json({ success: false, message: 'aiEnabled must be a boolean' });
         }
-        await whatsappSupportService.setAiEnabled(req.params.id!, aiEnabled);
+        await whatsappSupportService.setAiEnabled(req.params.id!, aiEnabled, agentOf(req));
         return res.status(200).json({ success: true });
     } catch (err: any) {
-        return res.status(500).json({ success: false, message: err.message });
+        return sendError(res, err);
     }
 }
 
@@ -82,11 +98,12 @@ async function sendMedia(req: Request, res: Response) {
                 voice: voice === 'true',
                 clientId: safeClientIdOf(clientId),
             },
+            agentOf(req),
         );
         return res.status(201).json({ success: true, data: message });
     } catch (err: any) {
         logger.error(`WhatsApp media send failed (${req.file?.mimetype}, ${req.file?.size} bytes): ${err.message}`);
-        return res.status(500).json({ success: false, message: err.message });
+        return sendError(res, err);
     }
 }
 
@@ -109,17 +126,14 @@ async function getMedia(req: Request, res: Response) {
 
 function sendCallError(res: Response, err: any) {
     logger.error(`WhatsApp call action failed: ${err.message}`);
-    if (err instanceof CallError) {
-        return res.status(err.status).json({ success: false, message: err.message, code: err.code, ...err.extra });
-    }
-    return res.status(502).json({ success: false, message: err.message });
+    return sendError(res, err, 502);
 }
 
 async function startCall(req: Request, res: Response) {
     try {
         const { sdp } = req.body ?? {};
         if (typeof sdp !== 'string' || !sdp) return res.status(400).json({ success: false, message: 'sdp is required' });
-        const callId = await whatsappCallService.startCall(req.params.id!, sdp, req.user?.id ?? '');
+        const callId = await whatsappCallService.startCall(req.params.id!, sdp, agentOf(req));
         return res.status(201).json({ success: true, data: { callId } });
     } catch (err: any) {
         return sendCallError(res, err);
@@ -130,7 +144,7 @@ async function acceptCall(req: Request, res: Response) {
     try {
         const { sdp } = req.body ?? {};
         if (typeof sdp !== 'string' || !sdp) return res.status(400).json({ success: false, message: 'sdp is required' });
-        await whatsappCallService.acceptCall(req.params.callId!, sdp, req.user?.id ?? '');
+        await whatsappCallService.acceptCall(req.params.callId!, sdp, agentOf(req));
         return res.status(200).json({ success: true });
     } catch (err: any) {
         return sendCallError(res, err);
@@ -164,7 +178,63 @@ async function requestCallPermission(req: Request, res: Response) {
     }
 }
 
+// body: { action: 'claim' | 'release' }
+async function setAssignment(req: Request, res: Response) {
+    try {
+        const { action } = req.body ?? {};
+        if (action !== 'claim' && action !== 'release') {
+            return res.status(400).json({ success: false, message: "action must be 'claim' or 'release'" });
+        }
+        await whatsappSupportService.setAssignment(req.params.id!, action, agentOf(req));
+        return res.status(200).json({ success: true });
+    } catch (err: any) {
+        return sendError(res, err);
+    }
+}
+
+async function getDetails(req: Request, res: Response) {
+    try {
+        return res.status(200).json({ success: true, data: await whatsappSupportService.getCustomerDetails(req.params.id!) });
+    } catch (err: any) {
+        return sendError(res, err);
+    }
+}
+
+async function listNotes(req: Request, res: Response) {
+    try {
+        return res.status(200).json({ success: true, data: await whatsappSupportService.listNotes(req.params.id!) });
+    } catch (err: any) {
+        return sendError(res, err);
+    }
+}
+
+async function addNote(req: Request, res: Response) {
+    try {
+        const body = typeof req.body?.body === 'string' ? req.body.body.trim() : '';
+        if (!body) return res.status(400).json({ success: false, message: 'body is required' });
+        if (body.length > 4000) return res.status(400).json({ success: false, message: 'Notes are limited to 4000 characters' });
+        const note = await whatsappSupportService.addNote(req.params.id!, body, agentOf(req));
+        return res.status(201).json({ success: true, data: note });
+    } catch (err: any) {
+        return sendError(res, err);
+    }
+}
+
+async function deleteNote(req: Request, res: Response) {
+    try {
+        await whatsappSupportService.deleteNote(req.params.id!, req.params.noteId!, agentOf(req));
+        return res.status(200).json({ success: true });
+    } catch (err: any) {
+        return sendError(res, err);
+    }
+}
+
 export default {
+    setAssignment,
+    getDetails,
+    listNotes,
+    addNote,
+    deleteNote,
     listConversations,
     getMessages,
     sendMessage,

@@ -4,6 +4,7 @@ import MeetingController from '../controllers/meeting.controller.js';
 import KnowledgeBaseController from '../controllers/knowledge-base.controller.js';
 import WhatsAppSupportController from '../controllers/whatsapp-support.controller.js';
 import { requireAuth, restrictTo } from '../middlewares/auth.middleware.js';
+import { requirePermission } from '../middlewares/require-permission.js';
 import { validateRequest } from '../middlewares/validateRequest.js';
 import {
     CreateTicketValidation,
@@ -24,6 +25,9 @@ import multer from 'multer';
 const whatsappUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 16 * 1024 * 1024 } });
 
 const router = express.Router();
+
+// WhatsApp inbox: only staff granted support.access (admins have it by default).
+const supportAccess = requirePermission('support.access');
 
 export async function requireUnifiedAuth(req: Request, res: Response, next: NextFunction) {
     const sessionToken = req.headers.authorization?.split(' ')[1];
@@ -185,20 +189,26 @@ router.patch('/knowledge-base/:id', requireUnifiedAuth, restrictTo('admin', 'sup
 router.delete('/knowledge-base/:id', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), KnowledgeBaseController.deleteChunk);
 
 // WhatsApp inbox — agent-facing view over the Cloud API webhook pipeline (see whatsapp.route.ts).
-router.get('/whatsapp/conversations', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), WhatsAppSupportController.listConversations);
-router.get('/whatsapp/conversations/:id/messages', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), WhatsAppSupportController.getMessages);
-router.post('/whatsapp/conversations/:id/messages', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), WhatsAppSupportController.sendMessage);
-router.post('/whatsapp/conversations/:id/messages/:messageId/retry', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), WhatsAppSupportController.retryMessage);
-router.patch('/whatsapp/conversations/:id/ai', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), WhatsAppSupportController.setAiEnabled);
-router.post('/whatsapp/conversations/:id/read', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), WhatsAppSupportController.markRead);
-router.post('/whatsapp/conversations/:id/media', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), whatsappUpload.single('file'), WhatsAppSupportController.sendMedia);
-router.get('/whatsapp/media/:mediaId', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), WhatsAppSupportController.getMedia);
+router.get('/whatsapp/conversations', requireUnifiedAuth, supportAccess, WhatsAppSupportController.listConversations);
+router.get('/whatsapp/conversations/:id/messages', requireUnifiedAuth, supportAccess, WhatsAppSupportController.getMessages);
+router.post('/whatsapp/conversations/:id/messages', requireUnifiedAuth, supportAccess, WhatsAppSupportController.sendMessage);
+router.post('/whatsapp/conversations/:id/messages/:messageId/retry', requireUnifiedAuth, supportAccess, WhatsAppSupportController.retryMessage);
+router.patch('/whatsapp/conversations/:id/ai', requireUnifiedAuth, supportAccess, WhatsAppSupportController.setAiEnabled);
+router.post('/whatsapp/conversations/:id/read', requireUnifiedAuth, supportAccess, WhatsAppSupportController.markRead);
+router.post('/whatsapp/conversations/:id/media', requireUnifiedAuth, supportAccess, whatsappUpload.single('file'), WhatsAppSupportController.sendMedia);
+router.get('/whatsapp/media/:mediaId', requireUnifiedAuth, supportAccess, WhatsAppSupportController.getMedia);
 // Calling API — the agent's browser does WebRTC with Meta; these relay the SDP.
-router.post('/whatsapp/conversations/:id/call', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), WhatsAppSupportController.startCall);
-router.post('/whatsapp/conversations/:id/call-permission', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), WhatsAppSupportController.requestCallPermission);
-router.post('/whatsapp/calls/:callId/accept', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), WhatsAppSupportController.acceptCall);
-router.post('/whatsapp/calls/:callId/reject', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), WhatsAppSupportController.rejectCall);
-router.post('/whatsapp/calls/:callId/end', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), WhatsAppSupportController.endCall);
+router.post('/whatsapp/conversations/:id/call', requireUnifiedAuth, supportAccess, WhatsAppSupportController.startCall);
+router.post('/whatsapp/conversations/:id/call-permission', requireUnifiedAuth, supportAccess, WhatsAppSupportController.requestCallPermission);
+router.post('/whatsapp/calls/:callId/accept', requireUnifiedAuth, supportAccess, WhatsAppSupportController.acceptCall);
+router.post('/whatsapp/calls/:callId/reject', requireUnifiedAuth, supportAccess, WhatsAppSupportController.rejectCall);
+router.post('/whatsapp/calls/:callId/end', requireUnifiedAuth, supportAccess, WhatsAppSupportController.endCall);
+// Assignment (one agent per chat), internal notes and the customer info panel.
+router.post('/whatsapp/conversations/:id/assignment', requireUnifiedAuth, supportAccess, WhatsAppSupportController.setAssignment);
+router.get('/whatsapp/conversations/:id/details', requireUnifiedAuth, supportAccess, WhatsAppSupportController.getDetails);
+router.get('/whatsapp/conversations/:id/notes', requireUnifiedAuth, supportAccess, WhatsAppSupportController.listNotes);
+router.post('/whatsapp/conversations/:id/notes', requireUnifiedAuth, supportAccess, WhatsAppSupportController.addNote);
+router.delete('/whatsapp/conversations/:id/notes/:noteId', requireUnifiedAuth, supportAccess, WhatsAppSupportController.deleteNote);
 
 export const SupportRoutes = router;
 export default SupportRoutes;
