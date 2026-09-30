@@ -3,7 +3,21 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { BookOpen, CalendarCheck, LayoutDashboard, MessageCircle, MessageSquare, Search, Settings, Target, Ticket, Users, X } from 'lucide-react';
+import {
+    BookOpen,
+    CalendarCheck,
+    Inbox,
+    LayoutDashboard,
+    Library,
+    MessageCircle,
+    MessageSquare,
+    Search,
+    Target,
+    Ticket,
+    TrendingUp,
+    Users,
+    X,
+} from 'lucide-react';
 import {
     SidebarGroup,
     SidebarInput,
@@ -27,20 +41,29 @@ interface NavItem {
 
 interface NavGroup {
     groupLabel: string;
+    icon: React.ElementType;
     items: NavItem[];
 }
 
+// Grouped by what the agent is doing: talking to people, selling, looking things up.
 const NAV_GROUPS: NavGroup[] = [
     {
-        groupLabel: 'Main',
+        groupLabel: 'Dashboard',
+        icon: LayoutDashboard,
+        items: [{ title: 'Overview', url: '/dashboard', icon: LayoutDashboard }],
+    },
+    {
+        groupLabel: 'Inbox',
+        icon: Inbox,
         items: [
-            { title: 'Overview', url: '/dashboard', icon: LayoutDashboard },
-            { title: 'Live Chat', url: '/live-chat', icon: MessageSquare },
             { title: 'Messages', url: '/messages', icon: MessageCircle, permission: 'support.access' },
+            { title: 'Live Chat', url: '/live-chat', icon: MessageSquare },
+            { title: 'Tickets', url: '/tickets', icon: Ticket },
         ],
     },
     {
         groupLabel: 'Sales',
+        icon: TrendingUp,
         items: [
             { title: 'Leads', url: '/leads', icon: Target, permission: 'lead.read' },
             { title: 'Consultations', url: '/consultations', icon: CalendarCheck, permission: 'consultation.read' },
@@ -48,15 +71,9 @@ const NAV_GROUPS: NavGroup[] = [
         ],
     },
     {
-        groupLabel: 'Support',
-        items: [
-            { title: 'Tickets', url: '/tickets', icon: Ticket },
-            { title: 'Knowledge Base', url: '/knowledge-base', icon: BookOpen },
-        ],
-    },
-    {
-        groupLabel: 'System',
-        items: [{ title: 'Settings', url: '/settings', icon: Settings }],
+        groupLabel: 'Resources',
+        icon: Library,
+        items: [{ title: 'Knowledge Base', url: '/knowledge-base', icon: BookOpen }],
     },
 ];
 
@@ -178,7 +195,10 @@ export function NavMain() {
                                 className="border-none bg-transparent data-open:bg-transparent"
                             >
                                 <AccordionTrigger className="no-underline hover:no-underline py-1 px-3 text-[10px] font-bold text-sidebar-foreground/55 hover:text-sidebar-foreground transition-colors uppercase tracking-wider [&[data-state=open]>svg]:rotate-180">
-                                    <span className="flex items-center gap-2">{group.groupLabel}</span>
+                                    <span className="flex items-center gap-2">
+                                        <group.icon className="size-3.5" />
+                                        {group.groupLabel}
+                                    </span>
                                 </AccordionTrigger>
                                 <AccordionContent className="pb-0 pt-1 px-1 [&_a]:no-underline [&_a]:hover:no-underline">
                                     <SidebarMenu className="space-y-0.5">
