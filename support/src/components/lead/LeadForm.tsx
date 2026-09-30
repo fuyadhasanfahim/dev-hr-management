@@ -115,7 +115,7 @@ export function LeadForm({
       className="flex min-h-0 flex-1 flex-col"
     >
       {/* Scrolls inside the dialog, so a long note never pushes the buttons off-screen. */}
-      <ScrollArea className="min-h-0 flex-1">
+      <ScrollArea className="min-h-0 flex-1 [&>[data-slot=scroll-area-viewport]]:max-h-[calc(90vh-10rem)]">
         <div className="space-y-6 px-6 py-5">
           <FormSection
             icon={User}

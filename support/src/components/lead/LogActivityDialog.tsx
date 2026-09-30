@@ -101,7 +101,7 @@ export function LogActivityDialog({ lead, onClose }: { lead: Lead | null; onClos
                     </DialogDescription>
                 </DialogHeader>
                 <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col">
-                    <ScrollArea className="min-h-0 flex-1">
+                    <ScrollArea className="min-h-0 flex-1 [&>[data-slot=scroll-area-viewport]]:max-h-[calc(90vh-10rem)]">
                         <div className="space-y-5 px-6 py-5">
                             <div className="space-y-2">
                                 <Label>Notes</Label>

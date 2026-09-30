@@ -184,7 +184,7 @@ export function LeadDetailsDialog({ leadId, onClose }: { leadId: string | null; 
                             </DialogHeader>
 
                             <div className="grid min-h-0 flex-1 md:grid-cols-[280px_1fr]">
-                                <ScrollArea className="min-h-0 border-b md:border-r md:border-b-0">
+                                <ScrollArea className="min-h-0 border-b md:border-r md:border-b-0 [&>[data-slot=scroll-area-viewport]]:max-h-[calc(90vh-9.5rem)]">
                                     <div className="space-y-5 p-5">
                                         <section className="space-y-3">
                                             <h3 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">Contact</h3>
@@ -255,7 +255,7 @@ export function LeadDetailsDialog({ leadId, onClose }: { leadId: string | null; 
                                     </div>
                                 </ScrollArea>
 
-                                <ScrollArea className="min-h-0">
+                                <ScrollArea className="min-h-0 [&>[data-slot=scroll-area-viewport]]:max-h-[calc(90vh-9.5rem)]">
                                     <div className="p-5">
                                         <h3 className="mb-4 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
                                             History · {activities.length}
