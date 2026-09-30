@@ -6,7 +6,8 @@ import {
     useMemo,
     useRef,
     useState,
-    type ChangeEvent,
+    type ClipboardEvent,
+    type DragEvent,
     type FormEvent,
     type KeyboardEvent,
 } from 'react';
@@ -25,7 +26,6 @@ import {
     Mic,
     MessageCircle,
     MoreVertical,
-    Paperclip,
     Phone,
     PhoneIncoming,
     PhoneMissed,
@@ -34,6 +34,7 @@ import {
     Send,
     Smile,
     Trash2,
+    Upload,
 } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -49,6 +50,15 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import { useCall } from '@/components/messages/call-provider';
+import {
+    AttachMenu,
+    AttachmentTray,
+    releasePending,
+    toPending,
+    type PendingAttachment,
+} from '@/components/messages/composer-attachments';
+import { LiveWaveform, VoicePlayer, useVoiceRecorder } from '@/components/messages/voice-message';
+import { toast } from 'sonner';
 import type { AppDispatch } from '@/store';
 import {
     isLocalMessageId,
@@ -191,12 +201,7 @@ function MessageMedia({ message: m, isMe }: { message: WhatsAppMessage; isMe: bo
         case 'video':
             return <video src={src} controls preload="metadata" className="max-h-72 rounded-xl" />;
         case 'audio':
-            return (
-                <div className="flex items-center gap-2 py-1">
-                    {m.media?.voice && <Mic className={cn('size-4 shrink-0', isMe ? 'text-primary-foreground/80' : 'text-primary')} />}
-                    <audio src={src} controls preload="metadata" className="h-9 w-60 max-w-full" />
-                </div>
-            );
+            return <VoicePlayer src={src} isMe={isMe} voice={m.media?.voice} />;
         case 'document':
             return (
                 <a
@@ -398,59 +403,8 @@ function ThreadMessages({ messages, onRetry }: { messages: WhatsAppMessage[]; on
     );
 }
 
-// Opus is what WhatsApp voice notes use; the server re-encodes whatever
-// container the browser gives us (WebM on Chrome, MP4 on Safari) to OGG.
-const RECORDER_TYPES = ['audio/ogg;codecs=opus', 'audio/webm;codecs=opus', 'audio/mp4'];
-
-function useVoiceRecorder() {
-    const recorderRef = useRef<MediaRecorder | null>(null);
-    const [startedAt, setStartedAt] = useState<number | null>(null);
-    const [now, setNow] = useState(() => Date.now());
-
-    useEffect(() => {
-        if (!startedAt) return;
-        const id = setInterval(() => setNow(Date.now()), 250);
-        return () => clearInterval(id);
-    }, [startedAt]);
-
-    // Release the mic if the agent leaves the page mid-recording.
-    useEffect(() => () => recorderRef.current?.stream.getTracks().forEach((t) => t.stop()), []);
-
-    const start = async () => {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        const mimeType = RECORDER_TYPES.find((t) => MediaRecorder.isTypeSupported(t));
-        const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
-        recorder.start();
-        recorderRef.current = recorder;
-        setStartedAt(Date.now());
-        setNow(Date.now());
-    };
-
-    // Resolves with the recording, or null when cancelled.
-    const finish = (keep: boolean) =>
-        new Promise<Blob | null>((resolve) => {
-            const recorder = recorderRef.current;
-            recorderRef.current = null;
-            setStartedAt(null);
-            if (!recorder) return resolve(null);
-            const chunks: Blob[] = [];
-            recorder.ondataavailable = (e) => chunks.push(e.data);
-            recorder.onstop = () => {
-                recorder.stream.getTracks().forEach((t) => t.stop());
-                resolve(keep ? new Blob(chunks, { type: recorder.mimeType }) : null);
-            };
-            recorder.stop();
-        });
-
-    const seconds = startedAt ? Math.floor((now - startedAt) / 1000) : 0;
-    return {
-        recording: startedAt !== null,
-        elapsed: `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`,
-        start,
-        stop: () => finish(true),
-        cancel: () => void finish(false),
-    };
-}
+// WhatsApp's cap for video/audio (and our server's upload limit).
+const MAX_UPLOAD_BYTES = 16 * 1024 * 1024;
 
 const FILTERS = ['all', 'unread', 'favorites', 'groups'] as const;
 type Filter = (typeof FILTERS)[number];
@@ -463,7 +417,8 @@ export function MessagesView({ conversationId }: { conversationId?: string }) {
     const [draft, setDraft] = useState('');
     const [emojiOpen, setEmojiOpen] = useState(false);
     const inputRef = useRef<HTMLTextAreaElement>(null);
-    const fileInputRef = useRef<HTMLInputElement>(null);
+    const [pending, setPending] = useState<PendingAttachment[]>([]);
+    const [dragging, setDragging] = useState(false);
     const recorder = useVoiceRecorder();
     const { call, startCall } = useCall();
 
@@ -508,13 +463,38 @@ export function MessagesView({ conversationId }: { conversationId?: string }) {
         void sendMedia({ conversationId: selectedId, file, filename, ...options, localId: `local-${crypto.randomUUID()}` });
     };
 
-    // Like WhatsApp Web's attach flow, text already typed goes along as the caption.
-    const handleFilePicked = (e: ChangeEvent<HTMLInputElement>) => {
-        const files = Array.from(e.target.files ?? []);
-        e.target.value = '';
-        const caption = draft.trim() || undefined;
-        if (caption) setDraft('');
-        files.forEach((file, i) => sendFile(file, file.name, { caption: i === 0 ? caption : undefined }));
+    const addAttachments = (files: File[]) => {
+        const tooBig = files.filter((f) => f.size > MAX_UPLOAD_BYTES);
+        if (tooBig.length) {
+            toast.error('File too large', { description: `${tooBig.map((f) => f.name).join(', ')} — WhatsApp allows up to 16 MB.` });
+        }
+        const ok = files.filter((f) => f.size <= MAX_UPLOAD_BYTES);
+        if (ok.length) setPending((prev) => [...prev, ...toPending(ok)]);
+        inputRef.current?.focus();
+    };
+
+    const removeAttachment = (id: string) =>
+        setPending((prev) => {
+            releasePending(prev.filter((p) => p.id === id));
+            return prev.filter((p) => p.id !== id);
+        });
+
+    // Switching chats drops unsent attachments (and their preview URLs).
+    useEffect(
+        () => () =>
+            setPending((prev) => {
+                releasePending(prev);
+                return [];
+            }),
+        [selectedId],
+    );
+
+    // Ctrl+V a copied image/file → it lands in the tray, like WhatsApp Web.
+    const handlePaste = (e: ClipboardEvent<HTMLTextAreaElement>) => {
+        const files = Array.from(e.clipboardData.files);
+        if (!files.length) return;
+        e.preventDefault();
+        addAttachments(files);
     };
 
     const insertEmoji = (emoji: string) => {
@@ -536,9 +516,20 @@ export function MessagesView({ conversationId }: { conversationId?: string }) {
             return;
         }
         const text = draft.trim();
+        if (pending.length) {
+            // Typed text rides along as the first file's caption.
+            pending.forEach((p, i) => sendFile(p.file, p.file.name, { caption: i === 0 ? text || undefined : undefined }));
+            releasePending(pending);
+            setPending([]);
+            setDraft('');
+            inputRef.current?.focus();
+            return;
+        }
         if (!text) {
             // Empty composer: the button is the mic.
-            recorder.start().catch(() => window.alert('Microphone access is needed to record a voice message.'));
+            recorder.start().catch(() =>
+                toast.error('Microphone blocked', { description: 'Allow microphone access for this site to record voice messages.' }),
+            );
             return;
         }
         setDraft('');
@@ -551,7 +542,7 @@ export function MessagesView({ conversationId }: { conversationId?: string }) {
     const handleComposerKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
         if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
             e.preventDefault();
-            if (draft.trim()) void handleSend();
+            if (draft.trim() || pending.length) void handleSend();
         }
     };
 
@@ -676,7 +667,36 @@ export function MessagesView({ conversationId }: { conversationId?: string }) {
                 </aside>
 
                 {/* ── Thread ─────────────────────────────────────────────────────── */}
-                <div className="flex-1 flex flex-col min-w-0">
+                <div
+                    className="relative flex-1 flex flex-col min-w-0"
+                    onDragOver={(e: DragEvent) => {
+                        if (!selected || !e.dataTransfer.types.includes('Files')) return;
+                        e.preventDefault();
+                        setDragging(true);
+                    }}
+                    onDragLeave={(e: DragEvent) => {
+                        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragging(false);
+                    }}
+                    onDrop={(e: DragEvent) => {
+                        if (!selected) return;
+                        e.preventDefault();
+                        setDragging(false);
+                        addAttachments(Array.from(e.dataTransfer.files));
+                    }}
+                >
+                    <AnimatePresence>
+                        {dragging && (
+                            <motion.div
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                className="pointer-events-none absolute inset-2 z-30 flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-primary bg-background/85 backdrop-blur-sm"
+                            >
+                                <Upload className="size-8 text-primary" />
+                                <p className="text-sm font-medium">Drop to attach</p>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
                     {!selected ? (
                         <div className="flex-1 flex flex-col items-center justify-center text-center gap-2">
                             <div className="size-14 rounded-full bg-muted flex items-center justify-center">
@@ -746,6 +766,7 @@ export function MessagesView({ conversationId }: { conversationId?: string }) {
                             </ScrollArea>
 
                             <Separator />
+                            <AttachmentTray items={pending} onRemove={removeAttachment} />
                             <form onSubmit={handleSend} className="flex items-end gap-2 px-3 py-3 shrink-0">
                                 {recorder.recording ? (
                                     <>
@@ -759,35 +780,22 @@ export function MessagesView({ conversationId }: { conversationId?: string }) {
                                         >
                                             <Trash2 className="size-4" />
                                         </Button>
-                                        <div className="flex h-10 flex-1 items-center gap-2 rounded-md border px-3 text-sm" aria-live="polite">
+                                        <div
+                                            className="flex h-10 min-w-0 flex-1 items-center gap-3 rounded-full border bg-muted/40 px-4 text-sm"
+                                            aria-label="Recording voice message"
+                                        >
                                             <motion.span
-                                                className="size-2.5 rounded-full bg-destructive"
+                                                className="size-2.5 shrink-0 rounded-full bg-destructive"
                                                 animate={{ opacity: [1, 0.3, 1] }}
                                                 transition={{ duration: 1.2, repeat: Infinity }}
                                             />
-                                            <span className="tabular-nums">{recorder.elapsed}</span>
-                                            <span className="text-muted-foreground">Recording voice message…</span>
+                                            <span className="shrink-0 tabular-nums">{recorder.elapsed}</span>
+                                            <LiveWaveform levels={recorder.levels} />
                                         </div>
                                     </>
                                 ) : (
                                     <>
-                                        <input
-                                            ref={fileInputRef}
-                                            type="file"
-                                            multiple
-                                            className="hidden"
-                                            onChange={handleFilePicked}
-                                        />
-                                        <Button
-                                            type="button"
-                                            variant="ghost"
-                                            size="icon"
-                                            className="size-10 shrink-0"
-                                            aria-label="Attach a file"
-                                            onClick={() => fileInputRef.current?.click()}
-                                        >
-                                            <Paperclip className="size-4" />
-                                        </Button>
+                                        <AttachMenu onPick={addAttachments} />
                                         <Popover open={emojiOpen} onOpenChange={setEmojiOpen}>
                                             <PopoverTrigger asChild>
                                                 <Button type="button" variant="ghost" size="icon" className="size-10 shrink-0" aria-label="Emoji">
@@ -809,7 +817,8 @@ export function MessagesView({ conversationId }: { conversationId?: string }) {
                                             value={draft}
                                             onChange={(e) => setDraft(e.target.value)}
                                             onKeyDown={handleComposerKeyDown}
-                                            placeholder="Type a message"
+                                            onPaste={handlePaste}
+                                            placeholder={pending.length ? 'Add a caption' : 'Type a message'}
                                             className="min-h-10 max-h-36 overflow-y-auto py-2.5 leading-5"
                                             autoFocus
                                         />
@@ -819,18 +828,18 @@ export function MessagesView({ conversationId }: { conversationId?: string }) {
                                     type="submit"
                                     size="icon"
                                     className="size-10 shrink-0 rounded-full"
-                                    aria-label={recorder.recording || draft.trim() ? 'Send' : 'Record voice message'}
+                                    aria-label={recorder.recording || draft.trim() || pending.length ? 'Send' : 'Record voice message'}
                                 >
                                     <AnimatePresence mode="popLayout" initial={false}>
                                         <motion.span
-                                            key={recorder.recording || draft.trim() ? 'send' : 'mic'}
+                                            key={recorder.recording || draft.trim() || pending.length ? 'send' : 'mic'}
                                             initial={{ scale: 0.5, opacity: 0, rotate: -30 }}
                                             animate={{ scale: 1, opacity: 1, rotate: 0 }}
                                             exit={{ scale: 0.5, opacity: 0, rotate: 30 }}
                                             transition={{ duration: 0.15 }}
                                             className="inline-flex"
                                         >
-                                            {recorder.recording || draft.trim() ? <Send className="size-4" /> : <Mic className="size-4" />}
+                                            {recorder.recording || draft.trim() || pending.length ? <Send className="size-4" /> : <Mic className="size-4" />}
                                         </motion.span>
                                     </AnimatePresence>
                                 </Button>

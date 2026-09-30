@@ -1,5 +1,6 @@
 import type { Request, Response } from 'express';
 import { Readable } from 'node:stream';
+import { logger } from '../lib/logger.js';
 import whatsappSupportService from '../services/whatsapp-support.service.js';
 import whatsappCallService, { CallError } from '../services/whatsapp-call.service.js';
 
@@ -84,6 +85,7 @@ async function sendMedia(req: Request, res: Response) {
         );
         return res.status(201).json({ success: true, data: message });
     } catch (err: any) {
+        logger.error(`WhatsApp media send failed (${req.file?.mimetype}, ${req.file?.size} bytes): ${err.message}`);
         return res.status(500).json({ success: false, message: err.message });
     }
 }
@@ -106,6 +108,7 @@ async function getMedia(req: Request, res: Response) {
 }
 
 function sendCallError(res: Response, err: any) {
+    logger.error(`WhatsApp call action failed: ${err.message}`);
     if (err instanceof CallError) {
         return res.status(err.status).json({ success: false, message: err.message, code: err.code, ...err.extra });
     }

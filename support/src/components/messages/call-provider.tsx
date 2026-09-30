@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
+import { toast } from 'sonner';
 import { connectSocket, onSocketEvent } from '@/lib/socket';
 import {
     useAcceptWhatsAppCallMutation,
@@ -119,7 +120,9 @@ export function CallProvider({ children }: { children: ReactNode }) {
     const openPeer = useCallback(async () => {
         const mic = await navigator.mediaDevices.getUserMedia({ audio: true });
         micRef.current = mic;
-        const pc = new RTCPeerConnection();
+        // STUN adds our public (NAT) address to the SDP; with only private host
+        // candidates Meta has no reachable address for us.
+        const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
         pcRef.current = pc;
         mic.getTracks().forEach((t) => pc.addTrack(t, mic));
         pc.ontrack = (e) => {
@@ -197,8 +200,12 @@ export function CallProvider({ children }: { children: ReactNode }) {
                 if (data?.code === 'NO_PERMISSION') {
                     setPermissionFor({ ...conversation, canRequest: !!data.canRequest });
                 } else {
-                    const message = data?.message ?? (err instanceof Error ? err.message : 'Could not start the call');
-                    window.alert(message);
+                    const micDenied = err instanceof DOMException && err.name === 'NotAllowedError';
+                    toast.error(micDenied ? 'Microphone blocked' : 'Call couldn’t be started', {
+                        description: micDenied
+                            ? 'Allow microphone access for this site to make calls.'
+                            : (data?.message ?? (err instanceof Error ? err.message : undefined)),
+                    });
                 }
             }
         },
@@ -221,7 +228,9 @@ export function CallProvider({ children }: { children: ReactNode }) {
         } catch (err) {
             const message = (err as { data?: { message?: string } }).data?.message;
             cleanup();
-            if (message) window.alert(message);
+            toast.error('Couldn’t answer the call', {
+                description: message ?? (err instanceof Error ? err.message : undefined),
+            });
         }
     };
 
@@ -341,7 +350,13 @@ export function CallProvider({ children }: { children: ReactNode }) {
                             <AlertDialogAction
                                 disabled={requestingPermission}
                                 onClick={() => {
-                                    if (permissionFor) void requestPermission(permissionFor.id);
+                                    if (!permissionFor) return;
+                                    requestPermission(permissionFor.id)
+                                        .unwrap()
+                                        .then(() => toast.success('Call request sent', { description: `${permissionFor.name} will see an “Allow calls” button.` }))
+                                        .catch((err: { data?: { message?: string } }) =>
+                                            toast.error('Couldn’t send the request', { description: err.data?.message }),
+                                        );
                                 }}
                             >
                                 Send request

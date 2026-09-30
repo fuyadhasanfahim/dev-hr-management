@@ -5,6 +5,14 @@ function graphUrl(path: string): string {
     return `https://graph.facebook.com/${envConfig.meta_api_version}/${path}`;
 }
 
+// Meta's error text: message, plus the more specific details and code when present.
+function graphErrorText(data: any, status: number): string {
+    const e = data?.error;
+    if (!e) return `HTTP ${status}`;
+    const details = e.error_data?.details;
+    return `${e.message ?? `HTTP ${status}`}${details && details !== e.message ? ` — ${details}` : ''}${e.code ? ` (#${e.code})` : ''}`;
+}
+
 const authHeader = () => ({ Authorization: `Bearer ${envConfig.meta_access_token}` });
 
 // POSTs JSON to the Graph API and throws Meta's own error text on failure.
@@ -15,10 +23,7 @@ async function graphPost(path: string, payload: Record<string, unknown>, what: s
         body: JSON.stringify({ messaging_product: 'whatsapp', ...payload }),
     });
     const data: any = await res.json();
-    if (!res.ok) {
-        const reason = data?.error?.error_data?.details || data?.error?.message || `HTTP ${res.status}`;
-        throw new Error(`WhatsApp ${what} failed: ${reason}`);
-    }
+    if (!res.ok) throw new Error(`WhatsApp ${what} failed: ${graphErrorText(data, res.status)}`);
     return data;
 }
 
@@ -68,7 +73,7 @@ export async function uploadMedia(file: Buffer, mimeType: string, filename: stri
         body: form,
     });
     const data: any = await res.json();
-    if (!res.ok) throw new Error(`WhatsApp media upload failed: ${data?.error?.message || `HTTP ${res.status}`}`);
+    if (!res.ok) throw new Error(`WhatsApp media upload failed: ${graphErrorText(data, res.status)}`);
     return data.id;
 }
 
