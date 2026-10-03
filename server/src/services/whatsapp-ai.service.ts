@@ -45,6 +45,26 @@ async function openaiFetch(path: string, body: unknown) {
     return data;
 }
 
+// The knowledge base is English, and embeddings match Bengali-script queries poorly
+// against English chunks — so translate those to English for retrieval only.
+async function toRetrievalQuery(message: string): Promise<string> {
+    if (!/[\u0980-\u09FF]/.test(message)) return message;
+    try {
+        const data = await openaiFetch('chat/completions', {
+            model: envConfig.openai_chat_model,
+            temperature: 0,
+            messages: [
+                { role: 'system', content: 'Translate the customer message into English for a knowledge-base search. Output only the translation.' },
+                { role: 'user', content: message },
+            ],
+        });
+        return data.choices[0].message.content.trim() || message;
+    } catch (err: any) {
+        logger.error(`Retrieval query translation failed, using original: ${err.message}`);
+        return message;
+    }
+}
+
 // Top-k nearest chunks by cosine distance, via pgvector's `<=>` operator —
 // a real ANN-ready query instead of a brute-force scan in Node.
 async function retrieveContext(queryEmbedding: number[], topK = 4): Promise<string> {
@@ -65,7 +85,7 @@ export async function processWhatsAppMessage(message: string, history: ChatTurn[
 
     let context = '';
     try {
-        const queryEmbedding = await embed(message);
+        const queryEmbedding = await embed(await toRetrievalQuery(message));
         context = await retrieveContext(queryEmbedding);
     } catch (err: any) {
         logger.error(`WhatsApp AI retrieval failed, answering without context: ${err.message}`);
