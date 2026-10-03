@@ -46,21 +46,31 @@ async function openaiFetch(path: string, body: unknown) {
 }
 
 // The knowledge base is English, and embeddings match Bengali-script queries poorly
-// against English chunks — so translate those to English for retrieval only.
-async function toRetrievalQuery(message: string): Promise<string> {
-    if (!/[\u0980-\u09FF]/.test(message)) return message;
+// against English chunks. Short follow-ups ("Bdt price") also lose their topic without
+// the conversation. So rewrite the latest message into a standalone English search
+// query using the recent turns — for retrieval only; the reply is unaffected.
+async function toRetrievalQuery(message: string, history: ChatTurn[]): Promise<string> {
+    const recent = history.slice(-4);
+    if (!recent.length && !/[\u0980-\u09FF]/.test(message)) return message;
     try {
+        const convo = recent.map((t) => `${t.role === 'user' ? 'Customer' : 'Agent'}: ${t.content}`).join('\n');
         const data = await openaiFetch('chat/completions', {
             model: envConfig.openai_chat_model,
             temperature: 0,
             messages: [
-                { role: 'system', content: 'Translate the customer message into English for a knowledge-base search. Output only the translation.' },
-                { role: 'user', content: message },
+                {
+                    role: 'system',
+                    content:
+                        'Rewrite the customer\'s latest message as one standalone English search query for a business knowledge base. ' +
+                        'Use the earlier conversation to resolve what a short or vague message refers to (e.g. "price?" after talking about photography). ' +
+                        'If the latest message starts a new topic, ignore the earlier conversation. Output only the query.',
+                },
+                { role: 'user', content: `${convo ? `Earlier conversation:\n${convo}\n\n` : ''}Latest customer message: ${message}` },
             ],
         });
         return data.choices[0].message.content.trim() || message;
     } catch (err: any) {
-        logger.error(`Retrieval query translation failed, using original: ${err.message}`);
+        logger.error(`Retrieval query rewrite failed, using original: ${err.message}`);
         return message;
     }
 }
@@ -85,7 +95,7 @@ export async function processWhatsAppMessage(message: string, history: ChatTurn[
 
     let context = '';
     try {
-        const queryEmbedding = await embed(await toRetrievalQuery(message));
+        const queryEmbedding = await embed(await toRetrievalQuery(message, history));
         context = await retrieveContext(queryEmbedding);
     } catch (err: any) {
         logger.error(`WhatsApp AI retrieval failed, answering without context: ${err.message}`);
