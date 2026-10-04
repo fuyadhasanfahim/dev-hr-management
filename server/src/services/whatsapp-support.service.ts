@@ -1,3 +1,4 @@
+import { isPhoneId } from '../lib/whatsapp-inbound.js';
 import { Types } from 'mongoose';
 import { execFile } from 'node:child_process';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
@@ -85,7 +86,7 @@ export async function findOrCreateConversation(customerPhone: string, customerNa
         status: WhatsAppConversationStatus.BOT,
     });
     // A new person writing in is a new lead (skipped if we already know the number).
-    void leadService.createLeadFromWhatsApp(customerPhone, customerName);
+    if (isPhoneId(customerPhone)) void leadService.createLeadFromWhatsApp(customerPhone, customerName);
     return conversation;
 }
 
@@ -421,7 +422,7 @@ const lastDigits = (phone: string, n = 10) => phone.replace(/\D/g, '').slice(-n)
 // on the last 10 digits after a cheap regex pre-filter on the last 4.
 async function findByPhone<T extends { phone?: string }>(model: any, phone: string, select: string): Promise<T | null> {
     const tail = lastDigits(phone);
-    if (tail.length < 7) return null;
+    if (!isPhoneId(phone) || tail.length < 7) return null; // BSUIDs have digits but aren't numbers
     const candidates: T[] = await model
         .find({ phone: { $regex: escapeRegex(tail.slice(-4)) } })
         .select(select)

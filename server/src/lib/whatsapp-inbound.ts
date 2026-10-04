@@ -19,7 +19,8 @@ export interface IncomingMedia {
 }
 
 export interface IncomingMessage {
-    from: string;
+    from?: string; // absent when the sender uses a WhatsApp username and hasn't shared a number
+    from_user_id?: string; // BSUID, always present once usernames are on
     id: string;
     timestamp: string;
     type: string;
@@ -34,6 +35,12 @@ export interface IncomingMessage {
         call_permission_reply?: { response: 'accept' | 'reject'; is_permanent?: boolean };
     };
 }
+
+// Who to key the conversation on: phone number if Meta sent one, else the BSUID.
+export const senderId = (m: { from?: string; from_user_id?: string }) => m.from || m.from_user_id;
+
+// BSUIDs look like "BD.1349…"; phone numbers are digits only.
+export const isPhoneId = (id: string) => /^\d+$/.test(id);
 
 const MEDIA_TYPES = ['image', 'video', 'audio', 'document', 'sticker'] as const;
 

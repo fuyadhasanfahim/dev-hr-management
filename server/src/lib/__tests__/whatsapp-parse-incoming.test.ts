@@ -40,3 +40,33 @@ test('reactions are ignored, location gets a placeholder', () => {
     assert.equal(parseIncoming({ ...base, type: 'reaction' }), null);
     assert.equal(parseIncoming({ ...base, type: 'location' })?.body, '[location message — open WhatsApp to view]');
 });
+
+test('username sender: no phone, falls back to BSUID', async () => {
+    const { senderId, isPhoneId } = await import('../whatsapp-inbound.js');
+    assert.equal(senderId({ from: '8801700000000', from_user_id: 'BD.123' }), '8801700000000');
+    assert.equal(senderId({ from_user_id: 'BD.13491208655302741918' }), 'BD.13491208655302741918');
+    assert.equal(senderId({}), undefined);
+    assert.ok(isPhoneId('8801700000000'));
+    assert.ok(!isPhoneId('BD.13491208655302741918'));
+});
+
+test('outbound payload: phone → to, BSUID → recipient', async () => {
+    process.env.NODE_ENV ??= 'test';
+    const { default: svc } = await import('../../services/whatsapp.service.js');
+    const bodies: any[] = [];
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = (async (_u: any, init: any) => {
+        bodies.push(JSON.parse(init.body));
+        return { ok: true, json: async () => ({ messages: [{ id: 'x' }] }) };
+    }) as any;
+    try {
+        await svc.sendTextMessage('8801700000000', 'hi');
+        await svc.sendTextMessage('BD.123', 'hi');
+    } finally {
+        globalThis.fetch = realFetch;
+    }
+    assert.equal(bodies[0].to, '8801700000000');
+    assert.equal(bodies[0].recipient, undefined);
+    assert.equal(bodies[1].recipient, 'BD.123');
+    assert.equal(bodies[1].to, undefined);
+});

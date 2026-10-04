@@ -1,5 +1,6 @@
 import envConfig from '../config/env.config.js';
 import { logger } from '../lib/logger.js';
+import { isPhoneId } from '../lib/whatsapp-inbound.js';
 
 function graphUrl(path: string): string {
     return `https://graph.facebook.com/${envConfig.meta_api_version}/${path}`;
@@ -27,6 +28,9 @@ async function graphPost(path: string, payload: Record<string, unknown>, what: s
     return data;
 }
 
+// Phone numbers go in `to`; username-only users (BSUID) go in `recipient`.
+const target = (id: string) => (isPhoneId(id) ? { to: id } : { recipient: id });
+
 const messagesPath = () => `${envConfig.whatsapp_phone_number_id}/messages`;
 const callsPath = () => `${envConfig.whatsapp_phone_number_id}/calls`;
 
@@ -34,7 +38,7 @@ const callsPath = () => `${envConfig.whatsapp_phone_number_id}/calls`;
  * Sends a plain text WhatsApp message and returns Meta's message id for it.
  */
 export async function sendTextMessage(to: string, body: string): Promise<string> {
-    const data = await graphPost(messagesPath(), { to, type: 'text', text: { body } }, 'send');
+    const data = await graphPost(messagesPath(), { ...target(to), type: 'text', text: { body } }, 'send');
     return data.messages?.[0]?.id;
 }
 
@@ -54,7 +58,7 @@ export async function sendMediaMessage(
     if (type === 'document' && media.filename) object.filename = media.filename;
     if (type === 'audio' && media.voice) object.voice = true;
 
-    const data = await graphPost(messagesPath(), { to, type, [type]: object }, 'send');
+    const data = await graphPost(messagesPath(), { ...target(to), type, [type]: object }, 'send');
     return data.messages?.[0]?.id;
 }
 
@@ -109,7 +113,7 @@ export async function markMessageRead(whatsappMsgId: string): Promise<void> {
 export async function startCall(to: string, sdpOffer: string): Promise<string> {
     const data = await graphPost(
         callsPath(),
-        { to, action: 'connect', session: { sdp_type: 'offer', sdp: sdpOffer } },
+        { ...target(to), action: 'connect', session: { sdp_type: 'offer', sdp: sdpOffer } },
         'call',
     );
     return data.calls?.[0]?.id;
@@ -137,7 +141,7 @@ export async function terminateCall(callId: string): Promise<void> {
  */
 export async function getCallPermission(userPhone: string): Promise<{ canCall: boolean; canRequest: boolean }> {
     const res = await fetch(
-        graphUrl(`${envConfig.whatsapp_phone_number_id}/call_permissions?user_wa_id=${encodeURIComponent(userPhone)}`),
+        graphUrl(`${envConfig.whatsapp_phone_number_id}/call_permissions?${isPhoneId(userPhone) ? 'user_wa_id' : 'recipient'}=${encodeURIComponent(userPhone)}`),
         { headers: authHeader() },
     );
     const data: any = await res.json();
@@ -154,7 +158,7 @@ export async function sendCallPermissionRequest(to: string, text: string): Promi
         messagesPath(),
         {
             recipient_type: 'individual',
-            to,
+            ...target(to),
             type: 'interactive',
             interactive: {
                 type: 'call_permission_request',

@@ -1,3 +1,4 @@
+import { senderId } from '../lib/whatsapp-inbound.js';
 import { logger } from '../lib/logger.js';
 import WhatsAppConversationModel from '../models/whatsapp-conversation.model.js';
 import WhatsAppMessageModel, {
@@ -26,7 +27,8 @@ const liveCalls = new Map<string, LiveCall>();
 // Payload shapes from the `calls` webhook field.
 export interface CallEvent {
     id: string;
-    from: string;
+    from?: string;
+    from_user_id?: string;
     to: string;
     event: 'connect' | 'terminate';
     direction: 'USER_INITIATED' | 'BUSINESS_INITIATED';
@@ -91,7 +93,7 @@ export async function handleCallEvent(event: CallEvent, contactName?: string): P
 
     if (event.direction === 'USER_INITIATED') {
         // Customer is calling us: ring every online agent with Meta's SDP offer.
-        const conversation = await findOrCreateConversation(event.from, contactName);
+        const conversation = await findOrCreateConversation(senderId(event)!, contactName);
         const conversationId = conversation._id.toString();
         liveCalls.set(event.id, { conversationId, direction: 'inbound', startedAt: new Date() });
         notifyAgents('whatsapp:call_incoming', {

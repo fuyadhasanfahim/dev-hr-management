@@ -10,7 +10,7 @@ import WhatsAppMessageModel, {
     WhatsAppMessageStatus,
     WhatsAppMessageType,
 } from '../models/whatsapp-message.model.js';
-import { parseIncoming, type IncomingMessage, type InboundContent } from '../lib/whatsapp-inbound.js';
+import { parseIncoming, senderId, type IncomingMessage, type InboundContent } from '../lib/whatsapp-inbound.js';
 import { findOrCreateConversation, previewText } from '../services/whatsapp-support.service.js';
 import { handleCallEvent, handleCallStatus, type CallEvent, type CallStatus } from '../services/whatsapp-call.service.js';
 import { notifyMessageStatus } from '../services/whatsapp-send.queue.js';
@@ -42,11 +42,12 @@ export function receiveWebhook(req: Request, res: Response) {
     for (const entry of entries) {
         for (const change of entry.changes ?? []) {
             const value = change.value ?? {};
-            const contactName = value.contacts?.[0]?.profile?.name;
+            const contactName = value.contacts?.[0]?.profile?.name || value.contacts?.[0]?.profile?.username;
             for (const message of (value.messages ?? []) as IncomingMessage[]) {
                 const content = parseIncoming(message);
-                if (!content) continue;
-                void handleIncomingMessage(message.from, { ...content, whatsappMsgId: message.id }, contactName).catch(
+                const sender = senderId(message);
+                if (!content || !sender) continue;
+                void handleIncomingMessage(sender, { ...content, whatsappMsgId: message.id }, contactName).catch(
                     (err) => logger.error(`Failed to handle WhatsApp message ${message.id}: ${err.message}`),
                 );
             }
