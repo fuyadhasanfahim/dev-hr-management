@@ -11,8 +11,8 @@ import WhatsAppMessageModel, {
     WhatsAppMessageType,
 } from '../models/whatsapp-message.model.js';
 import { isValidMetaSignature } from '../lib/whatsapp-signature.js';
-import { parseEcho, parseIncoming, senderId, type EchoMessage, type IncomingMessage, type InboundContent } from '../lib/whatsapp-inbound.js';
-import { findOrCreateConversation, previewText } from '../services/whatsapp-support.service.js';
+import { parseEcho, parseIncoming, senderId, type EchoMessage, type HistoryThread, type IncomingMessage, type InboundContent } from '../lib/whatsapp-inbound.js';
+import whatsappSupportService, { findOrCreateConversation, previewText } from '../services/whatsapp-support.service.js';
 import { handleCallEvent, handleCallStatus, type CallEvent, type CallStatus } from '../services/whatsapp-call.service.js';
 import { notifyMessageStatus } from '../services/whatsapp-send.queue.js';
 import { createTicket } from '../services/support-ticket.service.js';
@@ -70,6 +70,25 @@ export function receiveWebhook(req: Request, res: Response) {
             }
             for (const echo of (value.message_echoes ?? []) as EchoMessage[]) {
                 void handleEcho(echo).catch((err) => logger.error(`Failed to handle WhatsApp echo ${echo.id}: ${err.message}`));
+            }
+            for (const batch of (value.history ?? []) as { threads?: HistoryThread[]; errors?: { code?: number; title?: string }[] }[]) {
+                if (batch.errors?.length) {
+                    logger.warn(`WhatsApp history sync refused: ${JSON.stringify(batch.errors)}`);
+                    continue;
+                }
+                void whatsappSupportService
+                    .importHistoryThreads(batch.threads ?? [])
+                    .then(({ conversationIds, messages }) => {
+                        logger.info(`Imported ${messages} WhatsApp history messages across ${conversationIds.length} chats`);
+                        for (const conversationId of conversationIds) notifyAgents('whatsapp:message_updated', { conversationId });
+                    })
+                    .catch((err) => logger.error(`Failed to import WhatsApp history: ${err.message}`));
+            }
+            for (const sync of (value.state_sync ?? []) as { type?: string; action?: string; contact?: { full_name?: string; phone_number?: string } }[]) {
+                if (sync.type !== 'contact' || sync.action !== 'add' || !sync.contact) continue;
+                void whatsappSupportService
+                    .applyContactNames([sync.contact])
+                    .catch((err) => logger.error(`Failed to apply WhatsApp contact name: ${err.message}`));
             }
             for (const call of (value.calls ?? []) as CallEvent[]) {
                 void handleCallEvent(call, contactName).catch(

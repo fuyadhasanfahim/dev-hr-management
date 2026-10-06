@@ -1,4 +1,4 @@
-import { isPhoneId } from '../lib/whatsapp-inbound.js';
+import { isPhoneId, parseHistoryThread, type HistoryThread } from '../lib/whatsapp-inbound.js';
 import { Types } from 'mongoose';
 import { execFile } from 'node:child_process';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
@@ -198,6 +198,74 @@ async function listConversations(): Promise<ConversationSummary[]> {
             assignedTo: c.assignedTo?.id ? { id: c.assignedTo.id, name: c.assignedTo.name } : null,
         };
     });
+}
+
+// Coexistence history sync: files the app's past chats into the inbox, oldest
+// timestamps preserved. Idempotent (upsert by Meta id), so Meta re-sending a
+// chunk is harmless. Imported chats are marked read and the bot stays off —
+// a human has been handling these customers.
+async function importHistoryThreads(threads: HistoryThread[]): Promise<{ conversationIds: string[]; messages: number }> {
+    const conversationIds: string[] = [];
+    let messages = 0;
+    for (const thread of threads) {
+        const rows = parseHistoryThread(thread);
+        if (!thread.id || rows.length === 0) continue;
+
+        const conversation =
+            (await WhatsAppConversationModel.findOne({ customerPhone: thread.id }).sort({ lastMessageAt: -1 })) ??
+            (await WhatsAppConversationModel.create({
+                customerPhone: thread.id,
+                status: WhatsAppConversationStatus.BOT,
+                aiEnabled: false,
+            }));
+
+        await WhatsAppMessageModel.bulkWrite(
+            rows.map((r) => ({
+                updateOne: {
+                    filter: { whatsappMsgId: r.whatsappMsgId },
+                    update: {
+                        $setOnInsert: {
+                            conversationId: conversation._id,
+                            direction: r.direction,
+                            sender: r.direction === 'inbound' ? WhatsAppMessageSender.CUSTOMER : WhatsAppMessageSender.AGENT,
+                            ...r.content,
+                            whatsappMsgId: r.whatsappMsgId,
+                            status: r.status,
+                            fromApp: r.direction === 'outbound' ? true : undefined,
+                            createdAt: r.at,
+                            updatedAt: r.at,
+                        },
+                    },
+                    upsert: true,
+                },
+            })),
+            { ordered: false, timestamps: false },
+        );
+
+        const newest = new Date(Math.max(...rows.map((r) => r.at.getTime())));
+        if (newest > conversation.lastMessageAt) {
+            conversation.lastMessageAt = newest;
+            conversation.lastReadAt = newest;
+            await conversation.save();
+        }
+        conversationIds.push(conversation._id.toString());
+        messages += rows.length;
+    }
+    return { conversationIds, messages };
+}
+
+// Coexistence contact sync: the names saved in the phone's address book, for
+// chats we already have. (Never creates chats — most contacts never wrote in.)
+async function applyContactNames(contacts: { full_name?: string; phone_number?: string }[]): Promise<void> {
+    for (const c of contacts) {
+        const phone = c.phone_number?.replace(/\D/g, '');
+        const name = c.full_name?.trim();
+        if (!phone || !name) continue;
+        await WhatsAppConversationModel.updateMany(
+            { customerPhone: phone, $or: [{ customerName: { $exists: false } }, { customerName: '' }, { customerName: null }] },
+            { customerName: name },
+        );
+    }
 }
 
 async function getMessages(conversationId: string, agentId: string): Promise<MessageSummary[]> {
@@ -524,6 +592,8 @@ async function getCustomerDetails(conversationId: string) {
 export default {
     listConversations,
     getMessages,
+    importHistoryThreads,
+    applyContactNames,
     editMessage,
     deleteMessage,
     sendAgentMessage,

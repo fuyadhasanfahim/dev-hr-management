@@ -123,15 +123,16 @@ function EditForm({
 
 export function DeleteMessageDialog({
     message,
-    busy,
+    busyScope,
     onClose,
     onDelete,
 }: {
     message: WhatsAppMessage | null;
-    busy: boolean;
+    busyScope: 'me' | 'everyone' | null; // The delete in flight, so only its own button spins.
     onClose: () => void;
     onDelete: (scope: 'me' | 'everyone') => void;
 }) {
+    const busy = busyScope !== null;
     return (
         <Dialog open={!!message} onOpenChange={(open) => !open && !busy && onClose()}>
             <DialogContent>
@@ -147,10 +148,10 @@ export function DeleteMessageDialog({
                         Cancel
                     </Button>
                     <Button variant="outline" onClick={() => onDelete('me')} disabled={busy}>
-                        Delete for me
+                        {busyScope === 'me' && <Loader2 className="animate-spin" />} Delete for me
                     </Button>
                     <Button variant="destructive" onClick={() => onDelete('everyone')} disabled={busy}>
-                        {busy && <Loader2 className="animate-spin" />} Delete for everyone
+                        {busyScope === 'everyone' && <Loader2 className="animate-spin" />} Delete for everyone
                     </Button>
                 </DialogFooter>
             </DialogContent>

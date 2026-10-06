@@ -104,3 +104,45 @@ export function parseEcho(echo: EchoMessage): ParsedEcho | null {
     const customer = echo.to;
     return content && customer && echo.id ? { kind: 'message', customer, content, whatsappMsgId: echo.id } : null;
 }
+
+// Coexistence history sync: the app's past chats, delivered in chunks of threads.
+export interface HistoryMessage extends IncomingMessage {
+    to?: string;
+    history_context?: { status?: string };
+}
+export interface HistoryThread {
+    id: string; // the customer
+    messages?: HistoryMessage[];
+}
+
+export interface HistoryRow {
+    whatsappMsgId: string;
+    direction: 'inbound' | 'outbound';
+    content: Omit<InboundContent, 'whatsappMsgId'>;
+    at: Date;
+    status?: 'sent' | 'delivered' | 'read' | 'failed';
+}
+
+const HISTORY_STATUS: Record<string, HistoryRow['status']> = { READ: 'read', PLAYED: 'read', DELIVERED: 'delivered', ERROR: 'failed' };
+
+// Media arrives as `media_placeholder` (the file itself comes later, if at all),
+// so it becomes a text stub like any other message we can't render.
+export function parseHistoryThread(thread: HistoryThread): HistoryRow[] {
+    const rows: HistoryRow[] = [];
+    for (const m of thread.messages ?? []) {
+        const content =
+            m.type === 'media_placeholder'
+                ? { type: WhatsAppMessageType.TEXT, body: '[media message — open WhatsApp to view]' }
+                : parseIncoming(m);
+        if (!content || !m.id) continue;
+        const inbound = m.from === thread.id;
+        rows.push({
+            whatsappMsgId: m.id,
+            direction: inbound ? 'inbound' : 'outbound',
+            content,
+            at: new Date(Number(m.timestamp) * 1000),
+            status: inbound ? undefined : (HISTORY_STATUS[m.history_context?.status ?? ''] ?? 'sent'),
+        });
+    }
+    return rows;
+}

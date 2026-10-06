@@ -363,7 +363,7 @@ function ThreadMessages({
     const [editing, setEditing] = useState<WhatsAppMessage | null>(null);
     const [deleting, setDeleting] = useState<WhatsAppMessage | null>(null);
     const [editMessage, { isLoading: saving }] = useEditWhatsAppMessageMutation();
-    const [deleteMessage, { isLoading: removing }] = useDeleteWhatsAppMessageMutation();
+    const [deleteMessage, { isLoading: removing, originalArgs: deleteArgs }] = useDeleteWhatsAppMessageMutation();
 
     const viewport = () => contentRef.current?.closest<HTMLElement>('[data-slot=scroll-area-viewport]') ?? null;
 
@@ -526,7 +526,7 @@ function ThreadMessages({
             />
             <DeleteMessageDialog
                 message={deleting}
-                busy={removing}
+                busyScope={removing ? (deleteArgs?.scope ?? null) : null}
                 onClose={() => setDeleting(null)}
                 onDelete={(scope) =>
                     deleteMessage({ conversationId, messageId: deleting!.id, scope })
