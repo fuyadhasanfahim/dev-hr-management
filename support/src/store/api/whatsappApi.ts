@@ -73,6 +73,9 @@ export interface WhatsAppMessage {
     status: WhatsAppMessageStatus | null;
     error: string | null;
     clientId: string | null;
+    fromApp?: boolean; // Sent from the WhatsApp Business app on the phone.
+    edited?: boolean;
+    deleted?: boolean; // Deleted for everyone — shown as a tombstone.
     createdAt: string;
 }
 
@@ -262,6 +265,23 @@ export const whatsappApi = baseApi.injectEndpoints({
         endWhatsAppCall: builder.mutation<void, string>({
             query: (callId) => ({ url: `/support/whatsapp/calls/${callId}/end`, method: 'POST' }),
         }),
+        // ponytail: WhatsApp can't edit/revoke a sent message through the Cloud API, so
+        // both change the CRM copy only (the dialogs say so).
+        editWhatsAppMessage: builder.mutation<WhatsAppMessage, { conversationId: string; messageId: string; text: string }>({
+            query: ({ conversationId, messageId, text }) => ({
+                url: `/support/whatsapp/conversations/${conversationId}/messages/${messageId}`,
+                method: 'PATCH',
+                body: { text },
+            }),
+            invalidatesTags: (_r, _e, { conversationId }) => ['WhatsAppConversations', { type: 'WhatsAppMessages', id: conversationId }],
+        }),
+        deleteWhatsAppMessage: builder.mutation<void, { conversationId: string; messageId: string; scope: 'me' | 'everyone' }>({
+            query: ({ conversationId, messageId, scope }) => ({
+                url: `/support/whatsapp/conversations/${conversationId}/messages/${messageId}?scope=${scope}`,
+                method: 'DELETE',
+            }),
+            invalidatesTags: (_r, _e, { conversationId }) => ['WhatsAppConversations', { type: 'WhatsAppMessages', id: conversationId }],
+        }),
         retryWhatsAppMessage: builder.mutation<WhatsAppMessage, { conversationId: string; messageId: string }>({
             query: ({ conversationId, messageId }) => ({
                 url: `/support/whatsapp/conversations/${conversationId}/messages/${messageId}/retry`,
@@ -360,6 +380,8 @@ export const {
     useRejectWhatsAppCallMutation,
     useEndWhatsAppCallMutation,
     useRetryWhatsAppMessageMutation,
+    useEditWhatsAppMessageMutation,
+    useDeleteWhatsAppMessageMutation,
     useSetWhatsAppAiMutation,
     useMarkWhatsAppConversationReadMutation,
     useSetWhatsAppAssignmentMutation,

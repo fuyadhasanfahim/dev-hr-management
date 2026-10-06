@@ -126,6 +126,11 @@ export function useLiveCounts() {
         socket.on('ticket:created', onTicketActivity);
         socket.on('whatsapp:new_message', onWhatsAppMessage);
         socket.on('whatsapp:message_status', onWhatsAppStatus);
+        // A message was edited / deleted (here, or in the phone app) — refetch the thread.
+        const onWhatsAppMessageUpdated = ({ conversationId }: { conversationId: string }) => {
+            dispatch(baseApi.util.invalidateTags(['WhatsAppConversations', { type: 'WhatsAppMessages', id: conversationId }]));
+        };
+        socket.on('whatsapp:message_updated', onWhatsAppMessageUpdated);
 
         if (socket.connected) onConnect();
 
@@ -139,6 +144,7 @@ export function useLiveCounts() {
             socket.off('ticket:created', onTicketActivity);
             socket.off('whatsapp:new_message', onWhatsAppMessage);
             socket.off('whatsapp:message_status', onWhatsAppStatus);
+            socket.off('whatsapp:message_updated', onWhatsAppMessageUpdated);
             disconnectSocket();
         };
     }, [dispatch, playSound, router]);

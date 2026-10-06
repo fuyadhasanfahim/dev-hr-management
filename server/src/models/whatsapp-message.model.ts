@@ -52,6 +52,10 @@ export interface IWhatsAppMessage extends Document {
     status?: WhatsAppMessageStatus; // Outbound only.
     error?: string;
     clientId?: string; // Id the agent's browser gave its optimistic bubble, so the UI keeps one stable key.
+    fromApp?: boolean; // Sent from the WhatsApp Business app (coexistence echo), not from this inbox.
+    editedAt?: Date; // CRM copy was edited (by an agent here, or mirrored from an edit in the app).
+    deletedAt?: Date; // Deleted for everyone — body/media are wiped, the thread shows a tombstone.
+    hiddenFor?: string[]; // Agent ids who used "delete for me".
     createdAt: Date;
     updatedAt: Date;
 }
@@ -110,6 +114,10 @@ const whatsAppMessageSchema = new Schema<IWhatsAppMessage>(
         clientId: {
             type: String,
         },
+        fromApp: Boolean,
+        editedAt: Date,
+        deletedAt: Date,
+        hiddenFor: { type: [String], default: undefined },
     },
     {
         timestamps: true,

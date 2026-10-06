@@ -34,7 +34,7 @@ async function listConversations(_req: Request, res: Response) {
 
 async function getMessages(req: Request, res: Response) {
     try {
-        const messages = await whatsappSupportService.getMessages(req.params.id!);
+        const messages = await whatsappSupportService.getMessages(req.params.id!, agentOf(req).id);
         return res.status(200).json({ success: true, data: messages });
     } catch (err: any) {
         return res.status(500).json({ success: false, message: err.message });
@@ -49,6 +49,32 @@ async function sendMessage(req: Request, res: Response) {
         }
         const message = await whatsappSupportService.sendAgentMessage(req.params.id!, text.trim(), agentOf(req), safeClientIdOf(clientId));
         return res.status(201).json({ success: true, data: message });
+    } catch (err: any) {
+        return sendError(res, err);
+    }
+}
+
+async function editMessage(req: Request, res: Response) {
+    try {
+        const { text } = req.body;
+        if (!text || typeof text !== 'string' || !text.trim()) {
+            return res.status(400).json({ success: false, message: 'text is required' });
+        }
+        const message = await whatsappSupportService.editMessage(req.params.id!, req.params.messageId!, text.trim(), agentOf(req));
+        return res.status(200).json({ success: true, data: message });
+    } catch (err: any) {
+        return sendError(res, err);
+    }
+}
+
+async function deleteMessage(req: Request, res: Response) {
+    try {
+        const scope = req.query.scope;
+        if (scope !== 'me' && scope !== 'everyone') {
+            return res.status(400).json({ success: false, message: "scope must be 'me' or 'everyone'" });
+        }
+        await whatsappSupportService.deleteMessage(req.params.id!, req.params.messageId!, scope, agentOf(req));
+        return res.status(200).json({ success: true });
     } catch (err: any) {
         return sendError(res, err);
     }
@@ -241,6 +267,8 @@ export default {
     sendMedia,
     getMedia,
     retryMessage,
+    editMessage,
+    deleteMessage,
     setAiEnabled,
     markRead,
     startCall,

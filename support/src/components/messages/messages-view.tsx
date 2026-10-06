@@ -62,6 +62,7 @@ import { LiveWaveform, VoicePlayer, useVoiceRecorder } from '@/components/messag
 import { CustomerAvatar } from '@/components/messages/customer-avatar';
 import { ConversationInfoPanel } from '@/components/messages/conversation-info-panel';
 import { MediaLightbox } from '@/components/messages/media-lightbox';
+import { DeleteMessageDialog, EditMessageDialog, MessageMenu } from '@/components/messages/message-actions';
 import { useSupportAgent } from '@/hooks/use-support-agent';
 import { toast } from 'sonner';
 import type { AppDispatch } from '@/store';
@@ -69,6 +70,8 @@ import {
     isLocalMessageId,
     mediaUrl,
     messageKey,
+    useDeleteWhatsAppMessageMutation,
+    useEditWhatsAppMessageMutation,
     useGetWhatsAppConversationsQuery,
     useGetWhatsAppMessagesQuery,
     useMarkWhatsAppConversationReadMutation,
@@ -340,10 +343,12 @@ function CallLine({ message: m }: { message: WhatsAppMessage }) {
 // Keyed by conversation, so each thread snapshots the messages it opened with:
 // those render instantly, and only messages that arrive afterwards animate in.
 function ThreadMessages({
+    conversationId,
     messages,
     onRetry,
     onOpenMedia,
 }: {
+    conversationId: string;
     messages: WhatsAppMessage[];
     onRetry: (m: WhatsAppMessage) => void;
     onOpenMedia: (items: WhatsAppMessage[], index: number) => void;
@@ -355,6 +360,10 @@ function ThreadMessages({
     // Message count at the moment the agent scrolled up to read history; null while at the bottom.
     const [leftBottomAt, setLeftBottomAt] = useState<number | null>(null);
     const thread = useMemo(() => buildThread(messages), [messages]);
+    const [editing, setEditing] = useState<WhatsAppMessage | null>(null);
+    const [deleting, setDeleting] = useState<WhatsAppMessage | null>(null);
+    const [editMessage, { isLoading: saving }] = useEditWhatsAppMessageMutation();
+    const [deleteMessage, { isLoading: removing }] = useDeleteWhatsAppMessageMutation();
 
     const viewport = () => contentRef.current?.closest<HTMLElement>('[data-slot=scroll-area-viewport]') ?? null;
 
@@ -433,14 +442,24 @@ function ThreadMessages({
                                 )}
                                 <div
                                     className={cn(
-                                        'max-w-[70%] text-sm leading-relaxed break-words shadow-sm transition-opacity',
+                                        'group/bubble relative max-w-[70%] text-sm leading-relaxed break-words shadow-sm transition-opacity',
                                         hasMedia ? 'p-1' : 'px-3 py-1.5',
                                         bubbleCorners(isMe, isFirstInRun, isLastInRun),
                                         isMe ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground',
                                         status === 'pending' && 'opacity-80',
                                     )}
                                 >
-                                    {kind === 'album' ? (
+                                    {kind === 'single' && (
+                                        <MessageMenu
+                                            message={m}
+                                            onBubble={isMe}
+                                            onEdit={() => setEditing(m)}
+                                            onDelete={() => setDeleting(m)}
+                                        />
+                                    )}
+                                    {m.deleted ? (
+                                        <span className="italic opacity-70">🚫 This message was deleted</span>
+                                    ) : kind === 'album' ? (
                                         <AlbumGrid messages={group} onOpen={(i) => onOpenMedia(group, i)} />
                                     ) : kind === 'files' ? (
                                         <div className="flex w-72 max-w-full flex-col gap-1">
@@ -455,7 +474,7 @@ function ThreadMessages({
                                             <MessageMedia message={m} isMe={isMe} onOpen={() => onOpenMedia([m], 0)} />
                                         )
                                     )}
-                                    {caption && (
+                                    {!m.deleted && caption && (
                                         <span className={cn('whitespace-pre-wrap', hasMedia && 'block px-2 pt-1')}>{caption}</span>
                                     )}
                                     {/* WhatsApp-style meta: floats into the last line when it fits. */}
@@ -468,6 +487,8 @@ function ThreadMessages({
                                         title={failed.length ? (failed[0]!.error ?? 'Not delivered') : undefined}
                                     >
                                         {group.length > 1 && <span>{group.length} files ·</span>}
+                                        {m.fromApp && <span>via app ·</span>}
+                                        {m.edited && !m.deleted && <span>Edited ·</span>}
                                         {formatTime(last.createdAt)}
                                         {isMe && <MessageTicks status={status} onBubble />}
                                     </span>
@@ -492,6 +513,28 @@ function ThreadMessages({
                     })}
                 </div>
             ))}
+            <EditMessageDialog
+                message={editing}
+                saving={saving}
+                onClose={() => setEditing(null)}
+                onSave={(text) =>
+                    editMessage({ conversationId, messageId: editing!.id, text })
+                        .unwrap()
+                        .then(() => setEditing(null))
+                        .catch((e) => toast.error('Could not edit message', { description: e?.data?.message }))
+                }
+            />
+            <DeleteMessageDialog
+                message={deleting}
+                busy={removing}
+                onClose={() => setDeleting(null)}
+                onDelete={(scope) =>
+                    deleteMessage({ conversationId, messageId: deleting!.id, scope })
+                        .unwrap()
+                        .then(() => setDeleting(null))
+                        .catch((e) => toast.error('Could not delete message', { description: e?.data?.message }))
+                }
+            />
             {/* Zero-height sticky rail: the button floats over the viewport's bottom
                 edge while the agent is reading history, without adding scroll height. */}
             <div className="pointer-events-none sticky bottom-3 z-20 h-0">
@@ -986,6 +1029,7 @@ export function MessagesView({ conversationId }: { conversationId?: string }) {
                                     ) : (
                                         <ThreadMessages
                                             key={selected.id}
+                                            conversationId={selected.id}
                                             messages={messages}
                                             onRetry={handleRetry}
                                             onOpenMedia={(items, index) => setLightbox({ items, index, key: Date.now() })}

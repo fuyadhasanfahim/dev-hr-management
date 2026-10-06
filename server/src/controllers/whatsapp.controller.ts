@@ -11,7 +11,7 @@ import WhatsAppMessageModel, {
     WhatsAppMessageType,
 } from '../models/whatsapp-message.model.js';
 import { isValidMetaSignature } from '../lib/whatsapp-signature.js';
-import { parseIncoming, senderId, type IncomingMessage, type InboundContent } from '../lib/whatsapp-inbound.js';
+import { parseEcho, parseIncoming, senderId, type EchoMessage, type IncomingMessage, type InboundContent } from '../lib/whatsapp-inbound.js';
 import { findOrCreateConversation, previewText } from '../services/whatsapp-support.service.js';
 import { handleCallEvent, handleCallStatus, type CallEvent, type CallStatus } from '../services/whatsapp-call.service.js';
 import { notifyMessageStatus } from '../services/whatsapp-send.queue.js';
@@ -67,6 +67,9 @@ export function receiveWebhook(req: Request, res: Response) {
                 void handleIncomingMessage(sender, { ...content, whatsappMsgId: message.id }, contactName).catch(
                     (err) => logger.error(`Failed to handle WhatsApp message ${message.id}: ${err.message}`),
                 );
+            }
+            for (const echo of (value.message_echoes ?? []) as EchoMessage[]) {
+                void handleEcho(echo).catch((err) => logger.error(`Failed to handle WhatsApp echo ${echo.id}: ${err.message}`));
             }
             for (const call of (value.calls ?? []) as CallEvent[]) {
                 void handleCallEvent(call, contactName).catch(
@@ -124,6 +127,44 @@ async function handleStatusUpdate(update: StatusUpdate) {
     if (message) notifyMessageStatus(message);
 }
 
+
+// Something the business did in the WhatsApp Business app (coexistence): a new
+// reply, or an edit/delete of an earlier one. Mirror it so the CRM thread matches.
+async function handleEcho(echo: EchoMessage) {
+    const parsed = parseEcho(echo);
+    if (!parsed) {
+        logger.warn(`Unreadable WhatsApp echo (type ${echo.type}): ${JSON.stringify(echo).slice(0, 500)}`);
+        return;
+    }
+
+    if (parsed.kind === 'edit' || parsed.kind === 'revoke') {
+        const update =
+            parsed.kind === 'edit'
+                ? { $set: { body: parsed.body, editedAt: new Date() } }
+                : { $set: { deletedAt: new Date(), body: '' }, $unset: { media: 1 } };
+        const message = await WhatsAppMessageModel.findOneAndUpdate({ whatsappMsgId: parsed.originalId }, update);
+        if (message) notifyAgents('whatsapp:message_updated', { conversationId: message.conversationId.toString() });
+        return;
+    }
+
+    if (await WhatsAppMessageModel.exists({ whatsappMsgId: parsed.whatsappMsgId })) return;
+    const conversation = await findOrCreateConversation(parsed.customer);
+    await WhatsAppMessageModel.create({
+        conversationId: conversation._id,
+        direction: WhatsAppMessageDirection.OUTBOUND,
+        sender: WhatsAppMessageSender.AGENT,
+        status: WhatsAppMessageStatus.SENT,
+        fromApp: true,
+        whatsappMsgId: parsed.whatsappMsgId,
+        ...parsed.content,
+    });
+    // A human answered from the phone: the bot stays quiet from here on.
+    conversation.lastMessageAt = new Date();
+    conversation.lastReadAt = conversation.lastMessageAt;
+    conversation.aiEnabled = false;
+    await conversation.save();
+    notifyAgents('whatsapp:new_message', { conversationId: conversation._id.toString() });
+}
 
 async function handleIncomingMessage(fromPhone: string, content: InboundContent, contactName?: string) {
     const { whatsappMsgId, body } = content;

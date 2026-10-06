@@ -193,6 +193,8 @@ router.get('/whatsapp/conversations', requireUnifiedAuth, supportAccess, WhatsAp
 router.get('/whatsapp/conversations/:id/messages', requireUnifiedAuth, supportAccess, WhatsAppSupportController.getMessages);
 router.post('/whatsapp/conversations/:id/messages', requireUnifiedAuth, supportAccess, WhatsAppSupportController.sendMessage);
 router.post('/whatsapp/conversations/:id/messages/:messageId/retry', requireUnifiedAuth, supportAccess, WhatsAppSupportController.retryMessage);
+router.patch('/whatsapp/conversations/:id/messages/:messageId', requireUnifiedAuth, supportAccess, WhatsAppSupportController.editMessage);
+router.delete('/whatsapp/conversations/:id/messages/:messageId', requireUnifiedAuth, supportAccess, WhatsAppSupportController.deleteMessage);
 router.patch('/whatsapp/conversations/:id/ai', requireUnifiedAuth, supportAccess, WhatsAppSupportController.setAiEnabled);
 router.post('/whatsapp/conversations/:id/read', requireUnifiedAuth, supportAccess, WhatsAppSupportController.markRead);
 router.post('/whatsapp/conversations/:id/media', requireUnifiedAuth, supportAccess, whatsappUpload.single('file'), WhatsAppSupportController.sendMedia);

@@ -73,3 +73,34 @@ export function parseIncoming(message: IncomingMessage): Omit<InboundContent, 'w
     return null;
 }
 
+
+// A message the business sent from the WhatsApp Business app (coexistence
+// `smb_message_echoes`). Echoes also carry edits and deletes made in the app.
+export interface EchoMessage extends IncomingMessage {
+    to?: string; // the customer
+    edit?: { original_message_id?: string; message?: IncomingMessage & { text?: { body: string } } };
+    revoke?: { original_message_id?: string };
+}
+
+export type ParsedEcho =
+    | { kind: 'message'; customer: string; content: Omit<InboundContent, 'whatsappMsgId'>; whatsappMsgId: string }
+    | { kind: 'edit'; originalId: string; body: string }
+    | { kind: 'revoke'; originalId: string };
+
+// ponytail: edit/revoke field names follow Meta's standard edit/revoke webhooks
+// (original_message_id); Meta's echo docs don't spell the JSON out, so an echo
+// we can't read is dropped (and logged by the caller) rather than guessed at.
+export function parseEcho(echo: EchoMessage): ParsedEcho | null {
+    if (echo.type === 'revoke') {
+        const originalId = echo.revoke?.original_message_id;
+        return originalId ? { kind: 'revoke', originalId } : null;
+    }
+    if (echo.type === 'edit') {
+        const originalId = echo.edit?.original_message_id;
+        const body = echo.edit?.message?.text?.body ?? echo.edit?.message?.[(echo.edit.message.type as 'image')]?.caption;
+        return originalId && body !== undefined ? { kind: 'edit', originalId, body } : null;
+    }
+    const content = parseIncoming(echo);
+    const customer = echo.to;
+    return content && customer && echo.id ? { kind: 'message', customer, content, whatsappMsgId: echo.id } : null;
+}

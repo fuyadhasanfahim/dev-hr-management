@@ -130,6 +130,9 @@ export interface MessageSummary {
     status: WhatsAppMessageStatus | null;
     error: string | null;
     clientId: string | null;
+    fromApp: boolean;
+    edited: boolean;
+    deleted: boolean;
     createdAt: string;
 }
 
@@ -144,6 +147,9 @@ function toMessageSummary(m: IWhatsAppMessage): MessageSummary {
         status: m.status ?? null,
         error: m.error ?? null,
         clientId: m.clientId ?? null,
+        fromApp: !!m.fromApp,
+        edited: !!m.editedAt,
+        deleted: !!m.deletedAt,
         createdAt: m.createdAt.toISOString(),
     };
 }
@@ -160,7 +166,7 @@ async function listConversations(): Promise<ConversationSummary[]> {
         conversationId: { $in: conversations.map((c) => c._id) },
     })
         .sort({ createdAt: 1 })
-        .select('conversationId direction type body media status createdAt')
+        .select('conversationId direction type body media status createdAt deletedAt')
         .lean();
 
     const byConversation = new Map<string, typeof messages>();
@@ -184,7 +190,7 @@ async function listConversations(): Promise<ConversationSummary[]> {
             phone: c.customerPhone,
             status: c.status,
             aiEnabled: c.aiEnabled,
-            lastMessage: lastMessage ? previewText(lastMessage) : '',
+            lastMessage: lastMessage ? (lastMessage.deletedAt ? '🚫 This message was deleted' : previewText(lastMessage)) : '',
             lastMessageDirection: lastMessage?.direction ?? null,
             lastMessageStatus: lastMessage?.status ?? null,
             lastMessageAt: c.lastMessageAt.toISOString(),
@@ -194,9 +200,46 @@ async function listConversations(): Promise<ConversationSummary[]> {
     });
 }
 
-async function getMessages(conversationId: string): Promise<MessageSummary[]> {
-    const messages = await WhatsAppMessageModel.find({ conversationId }).sort({ createdAt: 1 });
+async function getMessages(conversationId: string, agentId: string): Promise<MessageSummary[]> {
+    // "Delete for me" hides a message from that agent's view only.
+    const messages = await WhatsAppMessageModel.find({ conversationId, hiddenFor: { $ne: agentId } }).sort({ createdAt: 1 });
     return messages.map(toMessageSummary);
+}
+
+// ponytail: WhatsApp's Cloud API cannot edit or revoke a message we already
+// sent, so edit / "delete for everyone" change the CRM copy only (the UI says
+// so). Edits and deletes made in the phone app are mirrored in by the echo webhook.
+async function ownMessage(conversationId: string, messageId: string, agent: Agent, needsOwnership: boolean) {
+    if (needsOwnership) await claimConversation(conversationId, agent);
+    const message = await WhatsAppMessageModel.findOne({ _id: messageId, conversationId });
+    if (!message) throw new InboxError('Message not found', 404);
+    return message;
+}
+
+async function editMessage(conversationId: string, messageId: string, body: string, agent: Agent): Promise<MessageSummary> {
+    const message = await ownMessage(conversationId, messageId, agent, true);
+    const editable =
+        message.direction === WhatsAppMessageDirection.OUTBOUND &&
+        message.type === WhatsAppMessageType.TEXT &&
+        !message.deletedAt &&
+        message.status !== WhatsAppMessageStatus.PENDING &&
+        message.status !== WhatsAppMessageStatus.FAILED;
+    if (!editable) throw new InboxError('This message cannot be edited', 400);
+    message.body = body;
+    message.editedAt = new Date();
+    await message.save();
+    notifyAgents('whatsapp:message_updated', { conversationId });
+    return toMessageSummary(message);
+}
+
+async function deleteMessage(conversationId: string, messageId: string, scope: 'me' | 'everyone', agent: Agent): Promise<void> {
+    const message = await ownMessage(conversationId, messageId, agent, scope === 'everyone');
+    if (scope === 'me') {
+        await WhatsAppMessageModel.updateOne({ _id: message._id }, { $addToSet: { hiddenFor: agent.id } });
+    } else {
+        await WhatsAppMessageModel.updateOne({ _id: message._id }, { $set: { deletedAt: new Date(), body: '' }, $unset: { media: 1 } });
+        notifyAgents('whatsapp:message_updated', { conversationId });
+    }
 }
 
 // Saves the reply as `pending` and hands the actual Cloud API call to the Redis
@@ -481,6 +524,8 @@ async function getCustomerDetails(conversationId: string) {
 export default {
     listConversations,
     getMessages,
+    editMessage,
+    deleteMessage,
     sendAgentMessage,
     sendAgentMedia,
     getMedia,
