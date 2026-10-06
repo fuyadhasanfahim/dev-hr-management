@@ -10,6 +10,7 @@ import WhatsAppMessageModel, {
     WhatsAppMessageStatus,
     WhatsAppMessageType,
 } from '../models/whatsapp-message.model.js';
+import { isValidMetaSignature } from '../lib/whatsapp-signature.js';
 import { parseIncoming, senderId, type IncomingMessage, type InboundContent } from '../lib/whatsapp-inbound.js';
 import { findOrCreateConversation, previewText } from '../services/whatsapp-support.service.js';
 import { handleCallEvent, handleCallStatus, type CallEvent, type CallStatus } from '../services/whatsapp-call.service.js';
@@ -36,12 +37,28 @@ export function verifyWebhook(req: Request, res: Response) {
 // Business app itself. Acknowledge immediately (Meta retries on
 // timeout/non-2xx); process after responding.
 export function receiveWebhook(req: Request, res: Response) {
+    // app.ts hands this route the raw bytes — the signature covers them exactly.
+    const raw = req.body;
+    if (!Buffer.isBuffer(raw) || !isValidMetaSignature(raw, req.get('x-hub-signature-256'), envConfig.meta_app_secret)) {
+        logger.warn('Rejected WhatsApp webhook with a missing or invalid signature');
+        res.sendStatus(401);
+        return;
+    }
     res.sendStatus(200);
 
-    const entries = req.body?.entry ?? [];
-    for (const entry of entries) {
+    let body: any;
+    try {
+        body = JSON.parse(raw.toString('utf8'));
+    } catch {
+        return;
+    }
+
+    for (const entry of body?.entry ?? []) {
         for (const change of entry.changes ?? []) {
             const value = change.value ?? {};
+            // One number only: the app's webhook also carries every other number
+            // subscribed to it (other WABAs), which must not reach this inbox.
+            if (value.metadata?.phone_number_id !== envConfig.whatsapp_phone_number_id) continue;
             const contactName = value.contacts?.[0]?.profile?.name || value.contacts?.[0]?.profile?.username;
             for (const message of (value.messages ?? []) as IncomingMessage[]) {
                 const content = parseIncoming(message);

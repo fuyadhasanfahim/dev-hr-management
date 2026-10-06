@@ -104,6 +104,9 @@ app.post(
     PaymentController.stripeWebhook,
 );
 
+// WhatsApp webhook — same reason: the HMAC is over Meta's exact bytes.
+app.post("/api/support/whatsapp/webhook", express.raw({ type: "application/json" }));
+
 app.use(express.json());
 
 app.use(
