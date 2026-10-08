@@ -216,7 +216,7 @@ async function handleIncomingMessage(fromPhone: string, content: InboundContent,
     // AI off (agent already handling it manually via the app) or already
     // escalated to a human ticket — the bot stays quiet either way.
     // The AI only reads text — media and call events wait for a human.
-    if (!conversation.aiEnabled || conversation.status !== WhatsAppConversationStatus.BOT) return;
+    if (process.env.WHATSAPP_AI_DISABLED === "1" || !conversation.aiEnabled || conversation.status !== WhatsAppConversationStatus.BOT) return;
     if (content.type !== WhatsAppMessageType.TEXT) return;
 
     const priorMessages = await WhatsAppMessageModel.find({ conversationId: conversation._id, body: { $ne: '' } })
