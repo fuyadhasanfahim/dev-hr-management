@@ -46,3 +46,8 @@ export { Prisma }
  * 
  */
 export type KnowledgeChunk = Prisma.KnowledgeChunkModel
+/**
+ * Model KnowledgeGap
+ * 
+ */
+export type KnowledgeGap = Prisma.KnowledgeGapModel

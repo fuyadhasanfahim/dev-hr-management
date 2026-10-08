@@ -51,7 +51,8 @@ export const AnyNull = runtime.AnyNull
 
 
 export const ModelName = {
-  KnowledgeChunk: 'KnowledgeChunk'
+  KnowledgeChunk: 'KnowledgeChunk',
+  KnowledgeGap: 'KnowledgeGap'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -80,6 +81,20 @@ export const KnowledgeChunkScalarFieldEnum = {
 } as const
 
 export type KnowledgeChunkScalarFieldEnum = (typeof KnowledgeChunkScalarFieldEnum)[keyof typeof KnowledgeChunkScalarFieldEnum]
+
+
+export const KnowledgeGapScalarFieldEnum = {
+  id: 'id',
+  question: 'question',
+  questionKey: 'questionKey',
+  reason: 'reason',
+  topScore: 'topScore',
+  count: 'count',
+  createdAt: 'createdAt',
+  lastAskedAt: 'lastAskedAt'
+} as const
+
+export type KnowledgeGapScalarFieldEnum = (typeof KnowledgeGapScalarFieldEnum)[keyof typeof KnowledgeGapScalarFieldEnum]
 
 
 export const SortOrder = {

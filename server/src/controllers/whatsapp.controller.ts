@@ -219,15 +219,23 @@ async function handleIncomingMessage(fromPhone: string, content: InboundContent,
     if (process.env.WHATSAPP_AI_DISABLED === "1" || !conversation.aiEnabled || conversation.status !== WhatsAppConversationStatus.BOT) return;
     if (content.type !== WhatsAppMessageType.TEXT) return;
 
-    const priorMessages = await WhatsAppMessageModel.find({ conversationId: conversation._id, body: { $ne: '' } })
-        .sort({ createdAt: 1 })
+    // The 20 most recent turns before this message (oldest-first), so a long chat
+    // keeps its latest context. The message being answered is passed separately.
+    const priorMessages = await WhatsAppMessageModel.find({
+        conversationId: conversation._id,
+        body: { $ne: '' },
+        whatsappMsgId: { $ne: whatsappMsgId },
+        type: WhatsAppMessageType.TEXT,
+        deletedAt: { $exists: false },
+    })
+        .sort({ createdAt: -1 })
         .limit(20);
-    const history = priorMessages.map((m) => ({
+    const history = priorMessages.reverse().map((m) => ({
         role: (m.sender === WhatsAppMessageSender.CUSTOMER ? 'user' : 'assistant') as 'user' | 'assistant',
         content: m.body,
     }));
 
-    const ai = await whatsappAiService.processWhatsAppMessage(body, history);
+    const ai = await whatsappAiService.processWhatsAppMessage(body, history, { customerName: conversation.customerName });
 
     const sentId = await whatsappService.sendTextMessage(fromPhone, ai.reply);
     await WhatsAppMessageModel.create({

@@ -9,4 +9,5 @@
  * 🟢 You can import this file directly.
  */
 export type * from './models/KnowledgeChunk.js'
+export type * from './models/KnowledgeGap.js'
 export type * from './commonInputTypes.js'

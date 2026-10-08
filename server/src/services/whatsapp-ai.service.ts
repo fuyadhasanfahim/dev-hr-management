@@ -1,5 +1,5 @@
 import envConfig from '../config/env.config.js';
-import { prisma } from '../lib/prisma.js';
+import knowledgeBaseService, { type KnowledgeMatch } from './knowledge-base.service.js';
 import { embed } from '../lib/openai-embeddings.js';
 import { logger } from '../lib/logger.js';
 
@@ -22,6 +22,14 @@ Conversation style: you are advising one specific customer, not reading out a br
 - Warm, human tone like a helpful sales consultant; no bullet-point dumps, no copying CONTEXT wording stiffly.
 - Never state any number, price, timeline or inclusion that is not in the CONTEXT. If the CONTEXT doesn't have it, say the team will confirm it after reviewing their requirements.
 
+Sound like a sharp, friendly person on the team, not a bot:
+- Write the way people text on WhatsApp: short, natural sentences, no markdown, no bullet lists, no headings. At most one emoji, and only when it fits the customer's own style.
+- Greet only once per chat. After that go straight to the answer; never open with "Sure!", "Certainly!" or "Great question".
+- Be direct and confident about what the CONTEXT confirms. Don't hedge, don't over-apologise, don't repeat the question back.
+- Use the customer's name when you know it, but not in every message.
+- If they are vague, ask the one question that unblocks you instead of guessing or listing everything.
+- If the CONTEXT lacks the answer, say plainly that you'll have the team confirm it, and escalate. Never invent facts, prices, timelines or policies.
+
 Answer questions only from the CONTEXT given to you. If the context doesn't cover the question, or the customer sounds upset, wants pricing negotiation, or asks for a human — escalate instead of guessing.
 
 Respond ONLY with valid JSON (no markdown, no code fences):
@@ -30,12 +38,6 @@ Respond ONLY with valid JSON (no markdown, no code fences):
 interface ChatTurn {
     role: 'user' | 'assistant';
     content: string;
-}
-
-interface WhatsAppAIResult {
-    reply: string;
-    escalate: boolean;
-    escalateReason?: string;
 }
 
 async function openaiFetch(path: string, body: unknown) {
@@ -84,50 +86,73 @@ async function toRetrievalQuery(message: string, history: ChatTurn[]): Promise<s
     }
 }
 
-// Top-k nearest chunks by cosine distance, via pgvector's `<=>` operator —
-// a real ANN-ready query instead of a brute-force scan in Node.
-async function retrieveContext(queryEmbedding: number[], topK = 4): Promise<string> {
-    const embeddingLiteral = `[${queryEmbedding.join(',')}]`;
-    const rows = await prisma.$queryRaw<{ text: string }[]>`
-        SELECT text FROM knowledge_chunks
-        WHERE embedding IS NOT NULL
-        ORDER BY embedding <=> ${embeddingLiteral}::vector
-        LIMIT ${topK}
-    `;
-    return rows.map((r) => r.text).join('\n---\n');
+
+export interface WhatsAppAIOptions {
+    customerName?: string;
+    // false for staff test runs, so a test question doesn't show up as a real unanswered question.
+    recordGaps?: boolean;
 }
 
-export async function processWhatsAppMessage(message: string, history: ChatTurn[]): Promise<WhatsAppAIResult> {
+export interface WhatsAppAIResult {
+    reply: string;
+    escalate: boolean;
+    escalateReason?: string;
+    matches: KnowledgeMatch[]; // what the AI read from the knowledge base
+}
+
+export async function processWhatsAppMessage(
+    message: string,
+    history: ChatTurn[],
+    options: WhatsAppAIOptions = {},
+): Promise<WhatsAppAIResult> {
     if (!envConfig.openai_api_key) {
         throw new Error('OPENAI_API_KEY environment variable is not set');
     }
 
-    let context = '';
+    let matches: KnowledgeMatch[] = [];
     try {
         const queryEmbedding = await embed(await toRetrievalQuery(message, history));
-        context = await retrieveContext(queryEmbedding);
+        matches = await knowledgeBaseService.retrieve(queryEmbedding);
     } catch (err: any) {
         logger.error(`WhatsApp AI retrieval failed, answering without context: ${err.message}`);
     }
 
-    const messages = [
-        { role: 'system', content: `${SYSTEM_PROMPT}\n\nCONTEXT:\n${context || '(no business knowledge indexed yet)'}` },
-        ...history.slice(-10),
-        { role: 'user', content: message },
-    ];
+    let rules = '';
+    try {
+        rules = await knowledgeBaseService.getInstructions();
+    } catch (err: any) {
+        logger.error(`WhatsApp AI could not load staff rules: ${err.message}`);
+    }
+
+    const context = knowledgeBaseService.formatContext(matches);
+    const system = [
+        SYSTEM_PROMPT,
+        rules && `STAFF RULES (always follow these; they override the style guidance above):\n${rules}`,
+        options.customerName && `The customer's WhatsApp profile name is "${options.customerName}".`,
+        `CONTEXT:\n${context || '(nothing in the knowledge base matches this message)'}`,
+    ]
+        .filter(Boolean)
+        .join('\n\n');
 
     const data = await openaiFetch('chat/completions', {
         model: envConfig.openai_chat_model,
-        messages,
+        messages: [{ role: 'system', content: system }, ...history.slice(-10), { role: 'user', content: message }],
         response_format: { type: 'json_object' },
     });
 
     const parsed = JSON.parse(data.choices[0].message.content);
-    return {
+    const result: WhatsAppAIResult = {
         reply: parsed.reply || "Sorry, I couldn't process that — let me get a team member to help.",
         escalate: Boolean(parsed.escalate),
         escalateReason: parsed.escalateReason,
+        matches,
     };
+
+    // Feed the "unanswered questions" list: the AI handed off, or the knowledge base had nothing close.
+    if (options.recordGaps !== false && (result.escalate || knowledgeBaseService.isLowConfidence(matches))) {
+        void knowledgeBaseService.logGap(message, result.escalate ? 'escalated' : 'low_confidence', matches[0]?.score);
+    }
+    return result;
 }
 
 export default { processWhatsAppMessage };

@@ -187,6 +187,9 @@ router.get('/knowledge-base', requireUnifiedAuth, restrictTo('admin', 'super_adm
 router.post('/knowledge-base', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), KnowledgeBaseController.createChunk);
 router.patch('/knowledge-base/:id', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), KnowledgeBaseController.updateChunk);
 router.delete('/knowledge-base/:id', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), KnowledgeBaseController.deleteChunk);
+router.post('/knowledge-base/test', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), KnowledgeBaseController.testAnswer);
+router.get('/knowledge-base/gaps', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), KnowledgeBaseController.listGaps);
+router.delete('/knowledge-base/gaps/:id', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), KnowledgeBaseController.deleteGap);
 
 // WhatsApp inbox — agent-facing view over the Cloud API webhook pipeline (see whatsapp.route.ts).
 router.get('/whatsapp/conversations', requireUnifiedAuth, supportAccess, WhatsAppSupportController.listConversations);

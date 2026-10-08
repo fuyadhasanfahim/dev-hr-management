@@ -397,7 +397,8 @@ type FieldRefInputType<Model, FieldType> = Model extends never ? never : FieldRe
 
 
 export const ModelName = {
-  KnowledgeChunk: 'KnowledgeChunk'
+  KnowledgeChunk: 'KnowledgeChunk',
+  KnowledgeGap: 'KnowledgeGap'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -413,7 +414,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "knowledgeChunk"
+    modelProps: "knowledgeChunk" | "knowledgeGap"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -491,6 +492,80 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         }
       }
     }
+    KnowledgeGap: {
+      payload: Prisma.$KnowledgeGapPayload<ExtArgs>
+      fields: Prisma.KnowledgeGapFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.KnowledgeGapFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$KnowledgeGapPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.KnowledgeGapFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$KnowledgeGapPayload>
+        }
+        findFirst: {
+          args: Prisma.KnowledgeGapFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$KnowledgeGapPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.KnowledgeGapFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$KnowledgeGapPayload>
+        }
+        findMany: {
+          args: Prisma.KnowledgeGapFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$KnowledgeGapPayload>[]
+        }
+        create: {
+          args: Prisma.KnowledgeGapCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$KnowledgeGapPayload>
+        }
+        createMany: {
+          args: Prisma.KnowledgeGapCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.KnowledgeGapCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$KnowledgeGapPayload>[]
+        }
+        delete: {
+          args: Prisma.KnowledgeGapDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$KnowledgeGapPayload>
+        }
+        update: {
+          args: Prisma.KnowledgeGapUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$KnowledgeGapPayload>
+        }
+        deleteMany: {
+          args: Prisma.KnowledgeGapDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.KnowledgeGapUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.KnowledgeGapUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$KnowledgeGapPayload>[]
+        }
+        upsert: {
+          args: Prisma.KnowledgeGapUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$KnowledgeGapPayload>
+        }
+        aggregate: {
+          args: Prisma.KnowledgeGapAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateKnowledgeGap>
+        }
+        groupBy: {
+          args: Prisma.KnowledgeGapGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.KnowledgeGapGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.KnowledgeGapCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.KnowledgeGapCountAggregateOutputType> | number
+        }
+      }
+    }
   }
 } & {
   other: {
@@ -540,6 +615,20 @@ export const KnowledgeChunkScalarFieldEnum = {
 } as const
 
 export type KnowledgeChunkScalarFieldEnum = (typeof KnowledgeChunkScalarFieldEnum)[keyof typeof KnowledgeChunkScalarFieldEnum]
+
+
+export const KnowledgeGapScalarFieldEnum = {
+  id: 'id',
+  question: 'question',
+  questionKey: 'questionKey',
+  reason: 'reason',
+  topScore: 'topScore',
+  count: 'count',
+  createdAt: 'createdAt',
+  lastAskedAt: 'lastAskedAt'
+} as const
+
+export type KnowledgeGapScalarFieldEnum = (typeof KnowledgeGapScalarFieldEnum)[keyof typeof KnowledgeGapScalarFieldEnum]
 
 
 export const SortOrder = {
@@ -597,6 +686,20 @@ export type DateTimeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel
  * Reference to a field of type 'DateTime[]'
  */
 export type ListDateTimeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'DateTime[]'>
+    
+
+
+/**
+ * Reference to a field of type 'Float'
+ */
+export type FloatFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Float'>
+    
+
+
+/**
+ * Reference to a field of type 'Float[]'
+ */
+export type ListFloatFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Float[]'>
     
 
 
@@ -765,6 +868,7 @@ export interface PrismaClientOptionsWithAdapter extends PrismaClientBaseOptions 
 export type PrismaClientOptions = PrismaClientOptionsWithAccelerateUrl | PrismaClientOptionsWithAdapter
 export type GlobalOmitConfig = {
   knowledgeChunk?: Prisma.KnowledgeChunkOmit
+  knowledgeGap?: Prisma.KnowledgeGapOmit
 }
 
 /* Types for Logging */

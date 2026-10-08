@@ -25,3 +25,19 @@ model KnowledgeChunk {
 
   @@map("knowledge_chunks")
 }
+
+// Customer questions the AI could not answer well (it escalated, or nothing in
+// the knowledge base matched). Staff turn these into new entries. One row per
+// distinct question; `count` is how often it was asked.
+model KnowledgeGap {
+  id          String   @id @default(uuid())
+  question    String
+  questionKey String   @unique
+  reason      String
+  topScore    Float?
+  count       Int      @default(1)
+  createdAt   DateTime @default(now())
+  lastAskedAt DateTime @default(now())
+
+  @@map("knowledge_gaps")
+}

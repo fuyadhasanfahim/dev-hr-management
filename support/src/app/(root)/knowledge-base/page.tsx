@@ -40,8 +40,22 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { CharCounter } from '@/components/knowledge-base/char-counter';
+import { GapsPanel } from '@/components/knowledge-base/gaps-panel';
+import { TestPanel } from '@/components/knowledge-base/test-panel';
+import {
+    isInstructions,
+    KB_INSTRUCTIONS_CATEGORY,
+    KB_MAX_CATEGORY_CHARS,
+    KB_MAX_CHARS,
+    KB_MAX_INSTRUCTIONS,
+    KB_RETRIEVE_K,
+    KB_SUGGESTED_CATEGORIES,
+} from '@/lib/knowledge-base';
 import {
     useGetKnowledgeChunksQuery,
+    useGetKnowledgeGapsQuery,
     useCreateKnowledgeChunkMutation,
     useUpdateKnowledgeChunkMutation,
     useDeleteKnowledgeChunkMutation,
@@ -68,10 +82,12 @@ function EntryFormDialog({
     open,
     onOpenChange,
     editing,
+    initialText,
 }: {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     editing: KnowledgeChunk | null;
+    initialText?: string; // Prefill for a new entry (e.g. an unanswered question).
 }) {
     const [text, setText] = useState(editing?.text ?? '');
     const [category, setCategory] = useState(editing?.source ?? '');
@@ -83,14 +99,14 @@ function EntryFormDialog({
     // Re-seed the form whenever a different entry is opened for editing (or
     // the dialog opens fresh for a new one).
     useEffect(() => {
-        setText(editing?.text ?? '');
+        setText(editing?.text ?? initialText ?? '');
         setCategory(editing?.source ?? '');
         setError(null);
-    }, [editing, open]);
+    }, [editing, open, initialText]);
 
     const handleSubmit = async (e: FormEvent) => {
         e.preventDefault();
-        if (!text.trim()) return;
+        if (!text.trim() || text.trim().length > KB_MAX_CHARS) return;
         setError(null);
         const result = editing
             ? await updateChunk({ id: editing.id, text: text.trim(), source: category.trim() || undefined })
@@ -109,7 +125,9 @@ function EntryFormDialog({
             <DialogContent className="sm:max-w-lg">
                 <DialogHeader>
                     <DialogTitle>{editing ? 'Edit entry' : 'Add an entry'}</DialogTitle>
-                    <DialogDescription>The AI answers only from what&apos;s written here.</DialogDescription>
+                    <DialogDescription>
+                        The AI answers only from what&apos;s written here. Keep each entry to one topic.
+                    </DialogDescription>
                 </DialogHeader>
                 <form onSubmit={handleSubmit} className="space-y-4 pt-1">
                     <div className="space-y-1.5">
@@ -124,6 +142,7 @@ function EntryFormDialog({
                             required
                             autoFocus
                         />
+                        <CharCounter length={text.length} />
                     </div>
                     <div className="space-y-1.5">
                         <Label htmlFor="kb-category">Category</Label>
@@ -131,15 +150,28 @@ function EntryFormDialog({
                             id="kb-category"
                             value={category}
                             onChange={(e) => setCategory(e.target.value)}
+                            maxLength={KB_MAX_CATEGORY_CHARS}
+                            list="kb-categories"
                             placeholder="Business Hours, Pricing, Services..."
                         />
+                        <datalist id="kb-categories">
+                            {KB_SUGGESTED_CATEGORIES.map((c) => (
+                                <option key={c} value={c} />
+                            ))}
+                        </datalist>
+                        {isInstructions(category) && (
+                            <p className="text-xs text-muted-foreground">
+                                A rule, not a fact: the AI follows every &quot;{KB_INSTRUCTIONS_CATEGORY}&quot; entry on every message
+                                (tone, do&apos;s and don&apos;ts, when to hand off). Up to {KB_MAX_INSTRUCTIONS}.
+                            </p>
+                        )}
                     </div>
                     {error && <p className="text-sm text-destructive">{error}</p>}
                     <DialogFooter>
                         <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                             Cancel
                         </Button>
-                        <Button type="submit" disabled={isSaving || !text.trim()} className="gap-2">
+                        <Button type="submit" disabled={isSaving || !text.trim() || text.trim().length > KB_MAX_CHARS} className="gap-2">
                             {isSaving && <Loader2 className="size-4 animate-spin" />}
                             {editing ? 'Save changes' : 'Add entry'}
                         </Button>
@@ -164,6 +196,7 @@ function ViewEntryDialog({ chunk, onOpenChange }: { chunk: KnowledgeChunk | null
                         <p className="text-sm text-foreground whitespace-pre-wrap">{chunk.text}</p>
                         <div className="flex items-center gap-2 text-xs text-muted-foreground">
                             {chunk.source && <Badge variant="outline">{chunk.source}</Badge>}
+                            <span>{chunk.text.length} characters</span>
                             <span>Created {relativeTime(chunk.createdAt)}</span>
                             {chunk.createdByName && <span>by {chunk.createdByName}</span>}
                         </div>
@@ -178,6 +211,7 @@ function ViewEntryDialog({ chunk, onOpenChange }: { chunk: KnowledgeChunk | null
 
 export default function KnowledgeBasePage() {
     const { data: chunks = [], isLoading } = useGetKnowledgeChunksQuery();
+    const { data: gaps = [] } = useGetKnowledgeGapsQuery();
     const [deleteChunk, { isLoading: isDeleting }] = useDeleteKnowledgeChunkMutation();
 
     const [search, setSearch] = useState('');
@@ -187,6 +221,18 @@ export default function KnowledgeBasePage() {
     const [editing, setEditing] = useState<KnowledgeChunk | null>(null);
     const [viewing, setViewing] = useState<KnowledgeChunk | null>(null);
     const [deleting, setDeleting] = useState<KnowledgeChunk | null>(null);
+    const [prefill, setPrefill] = useState<string | undefined>();
+    const [tab, setTab] = useState('entries');
+
+    const stats = useMemo(
+        () => ({
+            total: chunks.length,
+            chars: chunks.reduce((n, c) => n + c.text.length, 0),
+            over: chunks.filter((c) => c.text.length > KB_MAX_CHARS).length,
+            rules: chunks.filter((c) => isInstructions(c.source)).length,
+        }),
+        [chunks],
+    );
 
     const filtered = useMemo(() => {
         const q = search.trim().toLowerCase();
@@ -198,11 +244,13 @@ export default function KnowledgeBasePage() {
     const currentPage = Math.min(page, totalPages);
     const pageItems = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
-    const openAddDialog = () => {
+    const openAddDialog = (question?: string) => {
         setEditing(null);
+        setPrefill(question ? `Q: ${question}\nA: ` : undefined);
         setFormOpen(true);
     };
     const openEditDialog = (chunk: KnowledgeChunk) => {
+        setPrefill(undefined);
         setEditing(chunk);
         setFormOpen(true);
     };
@@ -222,12 +270,38 @@ export default function KnowledgeBasePage() {
                         Facts and FAQs the WhatsApp AI grounds its replies on.
                     </p>
                 </div>
-                <Button onClick={openAddDialog} className="gap-2 shrink-0">
+                <Button onClick={() => openAddDialog()} className="gap-2 shrink-0">
                     <Plus className="size-4" />
                     Add entry
                 </Button>
             </div>
 
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                {[
+                    { label: 'Entries', value: stats.total, hint: `${stats.rules}/${KB_MAX_INSTRUCTIONS} AI rules` },
+                    { label: 'Total characters', value: stats.chars.toLocaleString(), hint: `the AI reads the ${KB_RETRIEVE_K} best matches per message` },
+                    { label: 'Over the limit', value: stats.over, hint: `entries above ${KB_MAX_CHARS} characters`, warn: stats.over > 0 },
+                    { label: 'Unanswered questions', value: gaps.length, hint: 'waiting for an answer', warn: gaps.length > 0 },
+                ].map((c) => (
+                    <div key={c.label} className="rounded-lg border bg-sidebar p-3">
+                        <p className="text-xs text-muted-foreground">{c.label}</p>
+                        <p className={`text-xl font-semibold tabular-nums ${c.warn ? 'text-amber-600 dark:text-amber-400' : ''}`}>{c.value}</p>
+                        <p className="text-[11px] text-muted-foreground">{c.hint}</p>
+                    </div>
+                ))}
+            </div>
+
+            <Tabs value={tab} onValueChange={setTab} className="gap-4">
+                <TabsList>
+                    <TabsTrigger value="entries">Entries</TabsTrigger>
+                    <TabsTrigger value="gaps" className="gap-1.5">
+                        Unanswered questions
+                        {gaps.length > 0 && <Badge variant="secondary" className="h-4 px-1.5 text-[10px]">{gaps.length}</Badge>}
+                    </TabsTrigger>
+                    <TabsTrigger value="test">Test the AI</TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="entries" className="flex flex-col gap-6">
             <div className="relative w-full max-w-xs">
                 <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
                 <Input
@@ -255,6 +329,7 @@ export default function KnowledgeBasePage() {
                                 <TableRow>
                                     <TableHead>Text</TableHead>
                                     <TableHead>Category</TableHead>
+                                    <TableHead>Length</TableHead>
                                     <TableHead>Created At</TableHead>
                                     <TableHead>Created By</TableHead>
                                     <TableHead className="text-right">Actions</TableHead>
@@ -263,7 +338,7 @@ export default function KnowledgeBasePage() {
                             <TableBody>
                                 {pageItems.length === 0 ? (
                                     <TableRow>
-                                        <TableCell colSpan={5} className="h-32 text-center">
+                                        <TableCell colSpan={6} className="h-32 text-center">
                                             <div className="flex flex-col items-center justify-center text-center">
                                                 <div className="size-12 rounded-full bg-muted flex items-center justify-center mb-3">
                                                     <BookOpen className="size-5 text-muted-foreground" />
@@ -288,7 +363,23 @@ export default function KnowledgeBasePage() {
                                                 <span className="line-clamp-2 text-sm">{chunk.text}</span>
                                             </TableCell>
                                             <TableCell>
-                                                {chunk.source ? <Badge variant="outline">{chunk.source}</Badge> : '—'}
+                                                {chunk.source ? (
+                                                    <Badge variant={isInstructions(chunk.source) ? 'secondary' : 'outline'}>
+                                                        {chunk.source}
+                                                    </Badge>
+                                                ) : (
+                                                    '—'
+                                                )}
+                                            </TableCell>
+                                            <TableCell
+                                                className={
+                                                    chunk.text.length > KB_MAX_CHARS
+                                                        ? 'text-xs font-medium text-destructive'
+                                                        : 'text-xs text-muted-foreground tabular-nums'
+                                                }
+                                                title={chunk.text.length > KB_MAX_CHARS ? `Over the ${KB_MAX_CHARS}-character limit — shorten or split when you next edit it` : undefined}
+                                            >
+                                                {chunk.text.length} / {KB_MAX_CHARS}
                                             </TableCell>
                                             <TableCell className="text-xs text-muted-foreground">
                                                 {relativeTime(chunk.createdAt)}
@@ -408,7 +499,18 @@ export default function KnowledgeBasePage() {
                 </>
             )}
 
-            <EntryFormDialog open={formOpen} onOpenChange={setFormOpen} editing={editing} />
+                </TabsContent>
+
+                <TabsContent value="gaps">
+                    <GapsPanel onAnswer={(q) => openAddDialog(q)} />
+                </TabsContent>
+
+                <TabsContent value="test">
+                    <TestPanel />
+                </TabsContent>
+            </Tabs>
+
+            <EntryFormDialog open={formOpen} onOpenChange={setFormOpen} editing={editing} initialText={prefill} />
             <ViewEntryDialog chunk={viewing} onOpenChange={(open) => !open && setViewing(null)} />
 
             <AlertDialog open={!!deleting} onOpenChange={(open) => !open && setDeleting(null)}>
