@@ -1,0 +1,125 @@
+// Loads the Webbriks service/pricing catalogue into the AI knowledge base.
+//
+//   npx tsx scripts/kb-webbriks.ts --list            # print every current entry (read-only)
+//   npx tsx scripts/kb-webbriks.ts --dry             # show what would be deleted/added
+//   npx tsx scripts/kb-webbriks.ts --apply [--delete-ids=ab12cd34,ef56gh78]
+//
+// --apply first removes (1) every entry in the categories below, so re-running is safe,
+// and (2) any extra old entries you name by id prefix (conflicting/outdated ones found via --list),
+// then inserts the entries. Each one is embedded through knowledgeBaseService.createChunk.
+import knowledgeBaseService from '../src/services/knowledge-base.service.js';
+import { prisma } from '../src/lib/prisma.js';
+import { KB_INSTRUCTIONS_CATEGORY, KB_MAX_CHARS, KB_MAX_INSTRUCTIONS } from '../src/constants/knowledge-base.js';
+
+const WB = 'Webbriks Company';
+const CAT = {
+    custom: 'Custom E-Commerce Website',
+    template: 'Template E-Commerce Website',
+    shopify: 'Shopify Store',
+    marketing: 'Performance Marketing',
+    creative: 'Photo & Video Production',
+    enterprise: 'Custom Enterprise Solution',
+    policy: 'Policies & Process',
+};
+
+type Entry = [category: string, text: string];
+
+const ENTRIES: Entry[] = [
+    // ── Company ───────────────────────────────────────────────────────────────
+    [WB, 'Webbriks is a Bangladesh-based digital agency (Creative Production & Performance Marketing). We offer: (1) e-commerce websites (custom-built or template-based), (2) Shopify stores, (3) Performance Marketing (Meta & Google Ads + social media management), (4) product photography, reels and ad-creative videos, and (5) custom enterprise solutions (ERP, POS, AI automation). All prices are in BDT (Bangladeshi Taka, ৳) unless stated, and we can prepare a custom quotation for any need.'],
+
+    // ── Custom e-commerce (new & small businesses) ───────────────────────────
+    [CAT.custom, 'CUSTOM E-COMMERCE "STARTER" — ৳60,000. A complete online store for new e-commerce entrepreneurs, small fashion brands and Facebook sellers moving to their own website. Includes a fully custom homepage and essential pages, Custom UI/UX design, product/category/brand management, variants (color, size), cart & checkout, customer registration/login, wishlist & reviews, COD and manual payment, order management & status, basic inventory/stock tracking, coupons & discounts.'],
+    [CAT.custom, 'CUSTOM E-COMMERCE "STARTER" (৳60,000) — courier, fraud, tracking & extras. Courier: 1 courier API integration, courier booking and status view from the admin, basic shipping charge setup and district-based delivery charges. Basic fraud detection (order history and repeat-cancellation flags). Marketing & analytics: Meta Browser Pixel, Google Analytics 4 & GTM, standard e-commerce event tracking, basic sales & order dashboard. Also: 1-year hosting + domain, Facebook Page optimization, logo & cover photo, 12 months technical support.'],
+    [CAT.custom, 'CUSTOM E-COMMERCE "BUSINESS PRO" — ৳95,000 (most popular, recommended). Everything in Starter, plus: advanced fraud detection (order history, repeat-cancellation behavior, suspicious-order flags, rule-based risk scoring), 1-click courier integration (one-click & bulk booking, consignment ID, shipping label, courier status sync), Messenger & WhatsApp automation (order confirmation, status updates, welcome message, quick replies, predefined message flows — subject to approved APIs/integrations), and a Meta Ads report inside the admin panel (ad spend, campaign performance, purchases, reported ROAS).'],
+    [CAT.custom, 'CUSTOM E-COMMERCE "BUSINESS PRO" (৳95,000) — more features. Advanced sales & inventory (low-stock alerts, stock movement history, product sales reports, on-hand/reserved summary); advanced marketing tracking (Meta Conversion API, GA4 enhanced e-commerce events, TikTok Pixel, upsell & cross-sell, abandoned cart tracking); customer CRM & segmentation (purchase history, basic lifetime value, VIP/repeat segments, customer notes); premium custom UI/UX; advanced product filtering & search; advanced coupon rules; product bundles & cross-sell offers.'],
+    [CAT.custom, 'CUSTOM E-COMMERCE "BUSINESS PRO" (৳95,000) — integrations & extras. Online payment gateway integration, SMS gateway integration, up to 2 courier API integrations, courier shipping-label printing, basic automated abandoned-cart reminders, advanced sales & performance dashboard, staff access roles (limited RBAC), 1 custom marketing landing page, 1-year hosting + domain, 12 months technical support. Best for growing e-commerce brands and established online stores that process many orders and want automation.'],
+    [CAT.custom, 'Which custom e-commerce package should I choose? Starter (৳60,000): you are just starting or moving from Facebook selling to your own website — you get a complete store with 1 courier, basic fraud check and tracking. Business Pro (৳95,000): you already get many orders and want one-click/bulk courier booking, online payment gateway, SMS, WhatsApp/Messenger automation, advanced fraud detection, Meta Ads report, CRM and abandoned-cart tools. Difference in price: ৳35,000.'],
+
+    // ── Template-based e-commerce ────────────────────────────────────────────
+    [CAT.template, 'TEMPLATE-BASED E-COMMERCE "STARTER" — ৳30,000. A budget-friendly complete e-commerce website built on a Webbriks ready-made template that the client selects from our template collection; we then add the logo, colors, banner and content. There is no custom UI/UX or Figma design in this package. Built with Laravel + MySQL, responsive on mobile/tablet/desktop, with standard performance optimization.'],
+    [CAT.template, 'TEMPLATE-BASED "STARTER" (৳30,000) — features. Product/category/brand management, variations (color, size), cart & checkout, customer registration/login, wishlist & product reviews, COD and manual payment, secure admin dashboard, order & customer management, basic inventory, coupons & discounts, basic sales & order reports. Also 1 courier API integration, basic fraud detection, Meta Pixel + GA4 + GTM setup, 1 year of 50 GB Hostinger VPS international hosting + domain, and 12 months technical support.'],
+    [CAT.template, 'TEMPLATE-BASED E-COMMERCE "BUSINESS PRO" — ৳60,000. Everything in Template Starter plus a fully custom UI/UX design (Figma design, custom homepage, product page, category page, checkout experience). Also: advanced fraud detection, 1-click courier integration (one-click booking, bulk processing, label printing, delivery status tracking), Messenger & WhatsApp automation (order confirmation, status notifications, predefined replies), and a Meta Ads report in the admin panel.'],
+    [CAT.template, 'TEMPLATE-BASED "BUSINESS PRO" (৳60,000) — more features. Advanced inventory & product management (low-stock alerts, stock movement history, advanced filtering, bundles & upsell); advanced tracking (Meta Conversion API, GA4 enhanced e-commerce, TikTok Pixel, abandoned cart tracking); online payment gateway; SMS gateway; up to 2 courier APIs; advanced coupon rules; customer segmentation & purchase history; advanced sales dashboard; limited staff roles; 1 custom campaign landing page; 1 year hosting + domain; 12 months technical support.'],
+    [CAT.template, 'Template Starter vs Business Pro: Starter ৳30,000 = selected template, 1 courier, basic inventory/fraud, no payment gateway, no SMS, no WhatsApp automation. Business Pro ৳60,000 = fully custom UI/UX with Figma, up to 2 couriers with 1-click/bulk booking, online payment gateway, SMS gateway, basic WhatsApp/Messenger workflows, Meta Ads report, Conversion API, TikTok Pixel, advanced coupons, upsell & bundles, basic customer segmentation, 1 landing page. Both include 1 year hosting + domain and 12 months support.'],
+    [CAT.template, 'Template-based (৳30,000/৳60,000, Laravel + MySQL) vs Custom e-commerce (৳60,000/৳95,000): the template packages start from a ready-made design and are more budget-friendly. The custom packages are built around your brand with Custom UI/UX from the start, a modern stack, and deeper features such as courier booking from admin, CRM and abandoned-cart reminders. If the client is unsure, ask about budget, order volume and whether they need a unique design.'],
+
+    // ── Shopify ──────────────────────────────────────────────────────────────
+    [CAT.shopify, 'SHOPIFY STARTER — ৳30,000. Start selling online with a professional Shopify store; best for new entrepreneurs, Facebook sellers, small fashion brands and startups. Store creation & configuration, a Webbriks-approved free theme customized with your logo, colors, fonts and banner, responsive layout, Homepage/About/Contact/FAQ/Policy pages, navigation & footer, basic homepage sections and featured collections. No custom UI/UX or Figma design — the client picks from our selected Shopify themes.'],
+    [CAT.shopify, 'SHOPIFY STARTER (৳30,000) — e-commerce & tracking. Product & collection management, variants (size, color), search & filtering (theme-supported), cart & checkout, customer accounts, inventory, discount codes, COD & manual payment setup, delivery charge & shipping zones, order status & fulfillment. Basic fraud indicators / manual order review, Meta Pixel, GA4 + GTM, basic Shopify analytics, Facebook & Instagram sales channel (where eligible).'],
+    [CAT.shopify, 'SHOPIFY STARTER (৳30,000) — extras. Custom domain connection, Shopify-managed SSL & hosting, up to 30 initial product uploads, basic SEO configuration, store management training, and 12 months of technical support. Note: the Shopify subscription itself is paid to Shopify; the package covers our setup and service.'],
+    [CAT.shopify, 'SHOPIFY BUSINESS PRO — ৳60,000 (most popular, recommended). A custom-designed Shopify store with smarter operations and advanced marketing tools. Everything in Starter, plus: Custom UI/UX & Shopify theme development (Figma-based custom design, premium homepage, product & collection page design, conversion-focused layout, custom theme sections), and advanced fraud detection setup (supported fraud-prevention app/rules, suspicious order flags, repeat-customer history, risk review workflow).'],
+    [CAT.shopify, 'SHOPIFY BUSINESS PRO (৳60,000) — automation. 1-click courier integration through a Shopify-compatible courier app or supported integration (e.g. Steadfast, Pathao, RedX — whichever provider can be connected), with booking & tracking workflow; up to 2 courier integrations. Messenger & WhatsApp automation via supported apps/approved APIs (order confirmation, shipping updates, support replies, predefined messages). SMS gateway setup (compatible provider); abandoned checkout recovery configuration.'],
+    [CAT.shopify, 'SHOPIFY BUSINESS PRO (৳60,000) — marketing & extras. Advanced conversion tracking (Meta Pixel + supported Conversion API, GA4 enhanced e-commerce, TikTok Pixel, event testing); conversion features (product bundles, upsell/cross-sell, advanced discounts, reviews & wishlist via native features or compatible apps); advanced search & filtering; custom product page sections; advanced collection page design; up to 100 initial product uploads; customer segmentation & marketing lists; 1 custom campaign landing page; advanced analytics; basic technical SEO; performance & image optimization; 12 months support.'],
+
+    // ── Performance marketing ────────────────────────────────────────────────
+    [CAT.marketing, 'PERFORMANCE MARKETING PRO (monthly, Bangladesh pricing). Standard Management ৳15,000/month when ad spend is below ৳5 lakh; High-Budget Management ৳25,000/month when ad spend is ৳5 lakh or more. Both tiers include the same core services. The advertising budget itself (what is paid to Meta/Google) is NOT included — the client pays that separately.'],
+    [CAT.marketing, 'Performance Marketing — Research & strategy (included in both tiers). Before advertising begins for every new client we do product & business analysis, customer & audience analysis, competitor & market analysis, and prepare a strategic marketing plan.'],
+    [CAT.marketing, 'Performance Marketing — Meta Ads (Facebook & Instagram) management: sales & conversion campaign planning, campaign creation & configuration, audience research & targeting, remarketing/retargeting strategy, ad creative testing & A/B testing, budget allocation & optimization, and performance monitoring.'],
+    [CAT.marketing, 'Performance Marketing — Google Ads management: search campaign planning & setup, Shopping / Performance Max where applicable, keyword & search-intent research, search-terms and negative-keyword optimization, conversion tracking review, bid & budget optimization, campaign performance monitoring. We track and optimize Cost Per Sale, CPA, ROAS, conversion rate, CTR, CPC and campaign revenue regularly.'],
+    [CAT.marketing, 'Performance Marketing — creative strategy (included): we decide which creative types are needed and from which angle to present the product — product-specific angles, hooks & key messages, customer pain-point/solution angles, benefits & USP communication, offer & promotion ideas, recommended video/static/carousel formats, and creative testing recommendations.'],
+    [CAT.marketing, 'Ad creative production is NOT included in the monthly marketing fee. The client may produce ad creatives with their own team following our creative direction, or hire the Webbriks Creative Production Team separately. Professional ad scriptwriting, product photography, video shooting, editing, models and other production services carry separate charges (see our Photo & Video Production rates).'],
+    [CAT.marketing, 'Facebook & Instagram social media management is included in the monthly package: 8–12 posts per month (usually 2–3 per week; the mix depends on brand, product category, objectives and the monthly content calendar). Formats: static posts, product showcase/offer designs, carousels, product-benefit & storytelling posts, reels, product videos, informative/educational/awareness content.'],
+    [CAT.marketing, 'Social media management also includes: monthly Facebook & Instagram content strategy and content calendar, topic & post idea planning, full copywriting and captions, scriptwriting for planned reels, static post & carousel design, reels creation/editing from client-provided footage or available assets, product-focused/informative/promotional content, post scheduling, publishing on both platforms, and a monthly content performance review.'],
+
+    // ── Photo & video production ─────────────────────────────────────────────
+    [CAT.creative, 'Webbriks Photo & Video Production standard rates (indicative): Product Photography ৳300–600 per product (4 professionally edited photos from different angles per product). Short-Form Product Reel ৳600–1,000 per reel (1 edited reel, 15–30 seconds). Product Explainer / Ad Creative Video ৳3,000–6,000 per video (1 edited video, typically 30–60 seconds; about 70–80 seconds can be agreed). Final quotation depends on project requirements, complexity and confirmed scope.'],
+    [CAT.creative, 'How photo/video pricing is decided. Photography: a simpler, smaller product is around ৳300–400; a complex or time-intensive product ৳500–600 — depends on size, handling, setup, lighting and retouching. Reels: depends on number of products in the reel, filming needs, concept, script, shot direction, props and editing complexity (more elaborate = upper end). Explainer/ad videos: depends on duration, scripting, creative direction, product demonstrations, setup and overall complexity.'],
+    [CAT.creative, 'Photo & video production — volume and custom quotes: the client tells us the number of products and how many photos/videos per product, and we prepare a project-specific quotation. For larger quantities or recurring volumes we aim to offer more competitive per-unit rates where the scope allows. For a quote, ask for: product categories, number of products, images/videos needed per product, reference examples, location needs and special creative instructions.'],
+    [CAT.creative, 'Photo & video production — what is included: standard in-scope production, professional image editing, necessary retouching, video editing, color & visual polishing and delivery of final edited files — there is no separate editing charge. NOT included (priced separately): model/talent fees; outdoor shooting expenses, transportation and location costs; special or unusual props (client supplies them or they are charged); extra requirements, special locations or complex setups beyond the agreed scope.'],
+    [CAT.creative, 'Photo & video production workflow: (1) requirement discussion — products, quantity, angles, formats, creative brief; (2) product handover — the client sends or delivers the products; (3) planning & production — shots, lighting, concept and video direction; (4) post-production — editing, retouching, color adjustment, final polish; (5) final delivery of edited photo and video files in the agreed format. For outdoor, model-based or special-prop shoots, the client shares a brief and we give a tailored quotation before work begins.'],
+
+    // ── Custom enterprise solution ───────────────────────────────────────────
+    [CAT.enterprise, 'CUSTOM SOLUTION — built around your business, price on request after a requirement discussion. For larger businesses, retail chains, multi-branch operations or special workflows/integrations: enterprise e-commerce, ERP, POS, AI and business automation. Built with Next.js, Node.js, Express.js and MariaDB, with Custom UI/UX, responsive design, optimized performance, secure admin dashboard, security foundation, SSL/HTTPS, Meta Pixel/GA4/GTM, Facebook Page optimization, logo & cover photo, 1-year Hostinger hosting + domain, and basic admin training.'],
+    [CAT.enterprise, 'Custom Solution — inventory, warehouse & POS: multi-warehouse inventory, real-time stock sync, warehouse-to-warehouse transfer slips, automated low-stock/reorder alerts, on-hand/committed/on-hold stock tracking, multi-store management; barcode POS checkout, multi-terminal POS, split payment (cash, card, MFS), thermal receipt printing (58mm/80mm), online & offline stock synchronization.'],
+    [CAT.enterprise, 'Custom Solution — AI & automation: AI sales chatbot for Messenger/WhatsApp, Bangla AI order-verification calls, AI-powered abandoned-cart recovery, Vision AI product recognition, AI content generation, AI landing-page builder. Finance & CRM: balance sheet and profit/loss reporting, accounts receivable/payable, expense & petty-cash ledger, customer credit & due tracking, advanced customer segmentation, loyalty & reward points.'],
+    [CAT.enterprise, 'Custom Solution — integrations & security: Shopify/WooCommerce synchronization, ERP/accounting/POS integration, phone OTP verification, advanced COD rules, custom role-based access control, audit logs & advanced reports, open REST API & custom webhooks, HR/attendance/payroll modules, multi-language & multi-currency. The client owns the domain and has full access to it.'],
+
+    // ── Policies ─────────────────────────────────────────────────────────────
+    [CAT.policy, 'Technical support: every website/store package includes 12 months of technical support. During the first 3 months, free support covers: bug fixing in existing features, minor text corrections, small UI alignment fixes, troubleshooting existing functionality, tracking-configuration errors, existing responsive issues, and existing checkout/order bugs.'],
+    [CAT.policy, 'Charged separately (not covered by free support): new feature development, new page design, major UI/UX redesign, new API integration, additional tracking implementation, new custom modules, and major workflow modification. We quote these individually before starting.'],
+    [CAT.policy, 'Hosting & domain: the Template E-Commerce and Custom E-Commerce packages include 1 year of hosting + domain (Template packages: 50 GB Hostinger VPS international hosting). Shopify packages include a custom-domain connection with Shopify-managed hosting and SSL. The client owns the domain and has access to it. Advertising budgets (Meta/Google) are always paid separately by the client.'],
+    [CAT.policy, 'Services not listed in our packages (for example WordPress development or TikTok Ads management): never tell the client that we do not offer it, and never promise it. Say politely that the team will confirm whether and how we can help after understanding the requirement, then offer the closest matching package (e.g. a custom-built or template e-commerce website, Shopify, or Meta & Google Ads management).'],
+    [CAT.policy, 'Prices and quotations: package prices are the standard rates; requirements beyond a package (extra integrations, custom modules, special production needs) are quoted individually before work begins. Never promise a discount, a delivery date or a feature that is not written in the package details — say the team will confirm after understanding the requirement.'],
+];
+
+// Staff rules the AI always follows (category "AI Instructions", max KB_MAX_INSTRUCTIONS in total).
+const INSTRUCTIONS: string[] = [
+    'Always speak to clients politely and warmly, like a helpful senior consultant: greet them, thank them for their interest, address them respectfully (আপনি / "you"), and never sound pushy or robotic. Reply in the language the client used (Bangla or English).',
+    'When explaining packages or prices, first ask one or two short questions about the client\'s business (what they sell, budget, order volume) so you can recommend the right package. Present prices clearly in ৳ and mention what is included. If asked for something not listed, say the team will prepare a custom quotation — never invent prices, features or discounts.',
+    'Keep answers concise and easy to read on WhatsApp: short paragraphs or a short list, no more than ~8 lines unless asked for details. End with a friendly next step (e.g. offer to arrange a call or collect their requirements).',
+];
+
+const args = process.argv.slice(2);
+const flag = (n: string) => args.includes(n);
+const deleteIds = (args.find((a) => a.startsWith('--delete-ids='))?.split('=')[1] ?? '').split(',').filter(Boolean);
+
+async function main() {
+    const existing = await knowledgeBaseService.listChunks();
+    if (flag('--list')) {
+        for (const r of existing) console.log(`#${r.id.slice(0, 8)} [${r.source ?? '-'}] (${r.text.length}) ${r.text}\n`);
+        console.log('TOTAL', existing.length);
+        return;
+    }
+    for (const [, text] of ENTRIES) if (text.length > KB_MAX_CHARS) throw new Error(`Entry too long (${text.length}): ${text.slice(0, 60)}`);
+    for (const t of INSTRUCTIONS) if (t.length > KB_MAX_CHARS) throw new Error(`Instruction too long: ${t.slice(0, 60)}`);
+
+    const managed = new Set([WB, ...Object.values(CAT)].map((c) => c.toLowerCase()));
+    const stale = existing.filter(
+        (r) => managed.has((r.source ?? '').toLowerCase()) || deleteIds.some((p) => r.id.startsWith(p)),
+    );
+    const instrNow = existing.filter((r) => (r.source ?? '').toLowerCase() === KB_INSTRUCTIONS_CATEGORY.toLowerCase());
+    const room = KB_MAX_INSTRUCTIONS - instrNow.length;
+
+    console.log(`Will delete ${stale.length} old entries, add ${ENTRIES.length} entries + ${Math.min(INSTRUCTIONS.length, room)} AI instructions.`);
+    for (const r of stale) console.log(`  - delete #${r.id.slice(0, 8)} [${r.source ?? '-'}] ${r.text.slice(0, 70)}`);
+    if (INSTRUCTIONS.length > room) console.log(`  ! only ${room} instruction slot(s) free (max ${KB_MAX_INSTRUCTIONS}); merge/remove old ones, the rest are skipped.`);
+    if (!flag('--apply')) return console.log('Dry run — pass --apply to write.');
+
+    for (const r of stale) await knowledgeBaseService.deleteChunk(r.id);
+    for (const [cat, text] of ENTRIES) await knowledgeBaseService.createChunk(text, cat, 'Webbriks catalogue import');
+    for (const t of INSTRUCTIONS.slice(0, Math.max(room, 0))) await knowledgeBaseService.createChunk(t, KB_INSTRUCTIONS_CATEGORY, 'Webbriks catalogue import');
+    console.log('Done.');
+}
+
+main().catch((e) => { console.error(e); process.exitCode = 1; }).finally(() => prisma.$disconnect());
