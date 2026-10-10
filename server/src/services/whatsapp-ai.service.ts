@@ -152,8 +152,22 @@ export async function processWhatsAppMessage(
     for (let attempt = 0; attempt < 2 && !parsed.reply?.trim(); attempt++) {
         const data = await openaiFetch('chat/completions', {
             model: envConfig.openai_chat_model,
-            messages: [{ role: 'system', content: system }, ...history.slice(-10), { role: 'user', content: message }],
-            response_format: { type: 'json_object' },
+            // Our own fallback notices carry no information and can derail the model, so keep them out of its view.
+            messages: [{ role: 'system', content: system }, ...history.filter((t) => t.content !== FALLBACK_REPLY).slice(-10), { role: 'user', content: message }],
+            // Strict schema: the model can no longer return {} without a reply.
+            response_format: {
+                type: 'json_schema',
+                json_schema: {
+                    name: 'whatsapp_reply',
+                    strict: true,
+                    schema: {
+                        type: 'object',
+                        properties: { reply: { type: 'string' }, escalate: { type: 'boolean' }, escalateReason: { type: 'string' } },
+                        required: ['reply', 'escalate', 'escalateReason'],
+                        additionalProperties: false,
+                    },
+                },
+            },
         });
         parsed = JSON.parse(data.choices[0].message.content);
         if (!parsed.reply?.trim()) logger.warn(`WhatsApp AI returned an empty reply (attempt ${attempt + 1}): ${JSON.stringify(parsed)}`);
