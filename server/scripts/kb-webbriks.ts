@@ -92,7 +92,7 @@ const ENTRIES: Entry[] = [
 
 // Staff rules the AI always follows (category "AI Instructions", max KB_MAX_INSTRUCTIONS in total).
 const INSTRUCTIONS: string[] = [
-    'Always speak to clients politely and warmly, like a helpful senior consultant: greet them, thank them for their interest, address them respectfully (আপনি / "you"), and never sound pushy or robotic. Reply in the language the client used (Bangla or English).',
+    'Always speak to clients politely and warmly, like a helpful senior consultant: greet them, thank them for their interest, use the respectful "apni" form, and never sound pushy or robotic. Mirror the client\'s language AND script exactly: Banglish (Bengali in English letters) gets a Banglish reply, Bengali script gets Bengali script, English gets English.',
     'When explaining packages or prices, first ask one or two short questions about the client\'s business (what they sell, budget, order volume) so you can recommend the right package. Present prices clearly in ৳ and mention what is included. If asked for something not listed, say the team will prepare a custom quotation — never invent prices, features or discounts.',
     'Keep answers concise and easy to read on WhatsApp: short paragraphs or a short list, no more than ~8 lines unless asked for details. End with a friendly next step (e.g. offer to arrange a call or collect their requirements).',
 ];
@@ -111,7 +111,7 @@ async function main() {
     for (const [, text] of ENTRIES) if (text.length > KB_MAX_CHARS) throw new Error(`Entry too long (${text.length}): ${text.slice(0, 60)}`);
     for (const t of INSTRUCTIONS) if (t.length > KB_MAX_CHARS) throw new Error(`Instruction too long: ${t.slice(0, 60)}`);
 
-    const managed = new Set([WB, ...Object.values(CAT)].map((c) => c.toLowerCase()));
+    const managed = new Set([WB, KB_INSTRUCTIONS_CATEGORY, ...Object.values(CAT)].map((c) => c.toLowerCase()));
     const stale = existing.filter(
         (r) => managed.has((r.source ?? '').toLowerCase()) || deleteIds.some((p) => r.id.startsWith(p)),
     );

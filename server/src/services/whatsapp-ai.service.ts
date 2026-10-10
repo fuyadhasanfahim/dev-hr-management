@@ -34,7 +34,7 @@ Understanding Banglish: customers often type Bengali in English letters with loo
 
 The CONTEXT is the only source of truth. If an earlier assistant message in this chat contradicts the CONTEXT (different price, service or policy), the CONTEXT wins: use the CONTEXT and don't repeat the earlier claim. Never say Web Briks "does not provide" a service unless the CONTEXT says so explicitly; if the CONTEXT doesn't mention it, say the team will confirm.
 
-Be polite and respectful at all times (use "আপনি"-level courtesy, thank the customer, never sound dismissive or robotic).
+Be polite and respectful at all times (use the respectful "apni" form of address, thank the customer, never sound dismissive or robotic). Politeness never changes the script: Banglish stays in English letters, Bengali script stays in Bengali script.
 
 When the customer has no budget or no clear idea: don't escalate. Briefly present the entry-level option from the CONTEXT with its price, say it can be tailored, and ask one question about their business.
 When the customer asks about a service in general ("e-commerce website somporke janan", "marketing cost koto?"): give the packages and prices from the CONTEXT, tailored to what you know, and ask one question.
@@ -147,13 +147,16 @@ export async function processWhatsAppMessage(
         .filter(Boolean)
         .join('\n\n');
 
-    const data = await openaiFetch('chat/completions', {
-        model: envConfig.openai_chat_model,
-        messages: [{ role: 'system', content: system }, ...history.slice(-10), { role: 'user', content: message }],
-        response_format: { type: 'json_object' },
-    });
-
-    const parsed = JSON.parse(data.choices[0].message.content);
+    // The model occasionally returns an empty "reply"; one retry nearly always fixes it.
+    let parsed: any = {};
+    for (let attempt = 0; attempt < 2 && !parsed.reply?.trim(); attempt++) {
+        const data = await openaiFetch('chat/completions', {
+            model: envConfig.openai_chat_model,
+            messages: [{ role: 'system', content: system }, ...history.slice(-10), { role: 'user', content: message }],
+            response_format: { type: 'json_object' },
+        });
+        parsed = JSON.parse(data.choices[0].message.content);
+    }
     const result: WhatsAppAIResult = {
         reply: parsed.reply?.trim() || FALLBACK_REPLY,
         escalate: Boolean(parsed.escalate),
