@@ -156,6 +156,7 @@ export async function processWhatsAppMessage(
             response_format: { type: 'json_object' },
         });
         parsed = JSON.parse(data.choices[0].message.content);
+        if (!parsed.reply?.trim()) logger.warn(`WhatsApp AI returned an empty reply (attempt ${attempt + 1}): ${JSON.stringify(parsed)}`);
     }
     const result: WhatsAppAIResult = {
         reply: parsed.reply?.trim() || FALLBACK_REPLY,
