@@ -20,6 +20,8 @@ const CAT = {
     creative: 'Photo & Video Production',
     enterprise: 'Custom Enterprise Solution',
     policy: 'Policies & Process',
+    summary: 'Price List Summary',
+    rules: 'Sales Rules',
 };
 
 type Entry = [category: string, text: string];
@@ -27,6 +29,11 @@ type Entry = [category: string, text: string];
 const ENTRIES: Entry[] = [
     // ── Company ───────────────────────────────────────────────────────────────
     [WB, 'Webbriks is a Bangladesh-based digital agency (Creative Production & Performance Marketing). We offer: (1) e-commerce websites (custom-built or template-based), (2) Shopify stores, (3) Performance Marketing (Meta & Google Ads + social media management), (4) product photography, reels and ad-creative videos, and (5) custom enterprise solutions (ERP, POS, AI automation). All prices are in BDT (Bangladeshi Taka, ৳) unless stated, and we can prepare a custom quotation for any need.'],
+
+    // ── Price list + sales rules (replace the old "Pricing" summary and reply-rule entries) ─────
+    [CAT.summary, 'Webbriks price list summary (BDT, final quotation after requirement review). Custom e-commerce website: Starter ৳60,000, Business Pro ৳95,000. Template-based e-commerce (Laravel + MySQL): Starter ৳30,000, Business Pro ৳60,000. Shopify store: Starter ৳30,000, Business Pro ৳60,000. Performance Marketing (Meta & Google Ads + Facebook/Instagram management with 8–12 posts a month): ৳15,000/month when ad spend is below ৳5 lakh, ৳25,000/month for ৳5 lakh or more; ad spend is paid separately. Product photography ৳300–600 per product, short reel ৳600–1,000, explainer/ad video ৳3,000–6,000. Web apps and custom systems start from ৳50,000; ERP/POS/AI solutions are quoted after a requirement discussion. When asked for the price list, give this briefly and ask what they need.'],
+    [CAT.rules, 'Sales reply rules: reply in the customer\'s language in a simple, natural, polite way and give only the information the question needs — never the whole price list at once. Package prices are our standard rates; the final quotation is confirmed after the team reviews the requirement. Do not confirm a delivery date or a discount, and do not claim a feature is in every package — check the package. Always state ad spend and the agency fee separately (ad spend is paid to Meta/Google directly). Never guarantee sales, ranking, ROAS or profit. Collect requirements step by step (what they sell, goal, budget, number of products) and offer a custom quotation. If something is missing say: "Our team will confirm this after reviewing your requirements."'],
+    [CAT.marketing, 'TikTok Ads and fees beyond the packages: we can also run TikTok Ads, but the monthly Performance Marketing packages (৳15,000 / ৳25,000) are defined for Meta & Google Ads plus social media management. Do not quote a TikTok fee or guess one from the other fees — say the team will confirm the scope and fee. The agency fee is a flat monthly fee, never a percentage of ad spend.'],
 
     // ── Custom e-commerce (new & small businesses) ───────────────────────────
     [CAT.custom, 'CUSTOM E-COMMERCE "STARTER" — ৳60,000. A complete online store for new e-commerce entrepreneurs, small fashion brands and Facebook sellers moving to their own website. Includes a fully custom homepage and essential pages, Custom UI/UX design, product/category/brand management, variants (color, size), cart & checkout, customer registration/login, wishlist & reviews, COD and manual payment, order management & status, basic inventory/stock tracking, coupons & discounts.'],
