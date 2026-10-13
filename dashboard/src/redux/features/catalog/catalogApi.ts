@@ -1,5 +1,5 @@
 import { apiSlice } from '@/redux/api/apiSlice';
-import type { CatalogEntity, CatalogEntityMap, CatalogPagination, CatalogTreeService } from '@/types/catalog.type';
+import type { CatalogEntity, CatalogEntityMap, CatalogGraph, CatalogPagination, CatalogTreeService } from '@/types/catalog.type';
 
 type Doc = Record<string, unknown>;
 
@@ -23,12 +23,28 @@ export const catalogApi = apiSlice.injectEndpoints({
             }),
             providesTags: ['Catalog'],
         }),
-        createCatalogItem: builder.mutation<unknown, { entity: CatalogEntity; body: Doc }>({
-            query: ({ entity, body }) => ({ url: `/catalog/${entity}`, method: 'POST', body }),
+        /** Everything the canvas draws (inactive included) + saved node positions. */
+        getCatalogGraph: builder.query<CatalogGraph, void>({
+            query: () => '/catalog/graph',
+            transformResponse: (r: { data: CatalogGraph }) => r.data,
+            providesTags: ['Catalog'],
+        }),
+        /** Node positions are saved silently — no refetch, so dragging never re-renders the board. */
+        saveCatalogLayout: builder.mutation<unknown, { positions: Record<string, { x: number; y: number }> }>({
+            query: (body) => ({ url: '/catalog/layout', method: 'PUT', body }),
+        }),
+        duplicateCatalogItem: builder.mutation<unknown, { entity: 'packages' | 'sections'; id: string; body: Doc }>({
+            query: ({ entity, id, body }) => ({ url: `/catalog/${entity}/${id}/duplicate`, method: 'POST', body }),
             invalidatesTags: ['Catalog'],
         }),
-        updateCatalogItem: builder.mutation<unknown, { entity: CatalogEntity; id: string; body: Doc }>({
+        createCatalogItem: builder.mutation<{ _id: string } & Doc, { entity: CatalogEntity; body: Doc }>({
+            query: ({ entity, body }) => ({ url: `/catalog/${entity}`, method: 'POST', body }),
+            transformResponse: (r: { data: { _id: string } & Doc }) => r.data,
+            invalidatesTags: ['Catalog'],
+        }),
+        updateCatalogItem: builder.mutation<{ _id: string } & Doc, { entity: CatalogEntity; id: string; body: Doc }>({
             query: ({ entity, id, body }) => ({ url: `/catalog/${entity}/${id}`, method: 'PATCH', body }),
+            transformResponse: (r: { data: { _id: string } & Doc }) => r.data,
             invalidatesTags: ['Catalog'],
         }),
         toggleCatalogItem: builder.mutation<unknown, { entity: CatalogEntity; id: string }>({
@@ -44,6 +60,9 @@ export const catalogApi = apiSlice.injectEndpoints({
 
 export const {
     useGetCatalogTreeQuery,
+    useGetCatalogGraphQuery,
+    useSaveCatalogLayoutMutation,
+    useDuplicateCatalogItemMutation,
     useGetCatalogItemsQuery,
     useCreateCatalogItemMutation,
     useUpdateCatalogItemMutation,

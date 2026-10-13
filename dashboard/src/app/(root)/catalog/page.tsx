@@ -1,5 +1,5 @@
-import CatalogManager from '@/components/catalog/CatalogManager';
+import { redirect } from 'next/navigation';
 
-export default function CatalogPage() {
-    return <CatalogManager />;
+export default function OldCatalogRoute() {
+    redirect('/quotation-catalogs');
 }

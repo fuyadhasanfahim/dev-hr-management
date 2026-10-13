@@ -3,6 +3,9 @@ import CatalogService from '../models/catalog-service.model.js';
 import CatalogPlatform from '../models/catalog-platform.model.js';
 import CatalogPackage from '../models/catalog-package.model.js';
 import CatalogFeature from '../models/catalog-feature.model.js';
+import CatalogSection, { CATALOG_SECTION_KINDS, CATALOG_TEXT_KINDS, DURATION_UNITS } from '../models/catalog-section.model.js';
+import CatalogLayout from '../models/catalog-layout.model.js';
+import { randomUUID } from 'node:crypto';
 import { AppError } from '../utils/AppError.js';
 
 /**
@@ -12,7 +15,7 @@ import { AppError } from '../utils/AppError.js';
  * plus the reference-integrity rules that tie the four collections together.
  */
 
-export type CatalogEntity = 'services' | 'platforms' | 'packages' | 'features';
+export type CatalogEntity = 'services' | 'platforms' | 'packages' | 'features' | 'sections';
 
 type Doc = Record<string, any>;
 interface EntityDef {
@@ -24,6 +27,8 @@ interface EntityDef {
     prepare: (data: Doc, current?: Doc) => Promise<void>;
     /** Throws if other records still point at this one. */
     guardDelete: (id: string) => Promise<void>;
+    /** Runs after a successful delete (remove content that only made sense under it). */
+    cleanup?: (id: string) => Promise<void>;
 }
 
 const slugify = (s: string) =>
@@ -93,6 +98,7 @@ const defs: Record<CatalogEntity, EntityDef> = {
                 [CatalogPackage.countDocuments({ serviceId: id }), 'package(s)'],
                 [CatalogFeature.countDocuments({ serviceId: id }), 'feature(s)'],
             ]),
+        cleanup: async (id) => void (await CatalogSection.deleteMany({ serviceId: id })),
     },
 
     features: {
@@ -155,14 +161,53 @@ const defs: Record<CatalogEntity, EntityDef> = {
             }
         },
         guardDelete: async () => undefined,
+        cleanup: async (id) => void (await CatalogSection.deleteMany({ packageId: id })),
+    },
+
+    sections: {
+        model: CatalogSection,
+        fields: ['serviceId', 'packageId', 'kind', 'items', 'text', 'sortOrder', 'isActive'],
+        required: ['serviceId', 'kind'],
+        prepare: async (d, cur) => {
+            const serviceId = String(d.serviceId ?? cur?.serviceId);
+            if (!(await CatalogService.exists({ _id: asId(serviceId, 'service') }))) throw new AppError('Service not found', 400);
+            if (d.packageId === '') d.packageId = null;
+            const packageId = d.packageId !== undefined ? d.packageId : cur?.packageId ?? null;
+            if (packageId) {
+                const pkg = await CatalogPackage.findById(asId(packageId, 'package'), 'serviceId').lean();
+                if (!pkg || String(pkg.serviceId) !== serviceId) throw new AppError('Package does not belong to this service', 400);
+            }
+            if (d.kind !== undefined && !(CATALOG_SECTION_KINDS as readonly string[]).includes(d.kind)) throw new AppError('Unknown section kind', 400);
+            if (d.items !== undefined) d.items = normalizeItems(d.items);
+            if (d.text !== undefined) d.text = String(d.text);
+            const kind = d.kind ?? cur?.kind;
+            if ((CATALOG_TEXT_KINDS as readonly string[]).includes(kind)) delete d.items; // text kinds never carry items
+        },
+        guardDelete: async () => undefined,
     },
 };
+
+/** Cleans a client-supplied item list: stable keys, trimmed titles, valid durations. */
+function normalizeItems(raw: unknown): Doc[] {
+    if (!Array.isArray(raw)) throw new AppError('items must be an array', 400);
+    return raw
+        .map((i: Doc) => {
+            const title = String(i?.title ?? '').trim();
+            const dur = i?.duration;
+            const duration =
+                dur && Number(dur.value) >= 0 && (DURATION_UNITS as readonly string[]).includes(dur.unit) && dur.value !== ''
+                    ? { value: Number(dur.value), unit: dur.unit }
+                    : null;
+            return { key: String(i?.key || randomUUID()), title, description: i?.description ? String(i.description).trim() : undefined, duration };
+        })
+        .filter((i) => i.title);
+}
 
 const pick = (body: Doc, fields: string[]): Doc =>
     Object.fromEntries(fields.filter((f) => body[f] !== undefined).map((f) => [f, body[f]]));
 
 const dupeToConflict = (e: any): never => {
-    if (e?.code === 11000) throw new AppError('An item with this name already exists', 409);
+    if (e?.code === 11000) throw new AppError('Already exists (same name, or this section is already defined for that scope)', 409);
     throw e;
 };
 
@@ -202,6 +247,11 @@ export const CatalogCrud = {
         if (q.platformId === 'none') filter.platformId = null;
         else if (q.platformId && Types.ObjectId.isValid(String(q.platformId))) filter.platformId = q.platformId;
         if (q.kind === 'included' || q.kind === 'addon') filter.kind = q.kind;
+        if (entity === 'sections') {
+            if ((CATALOG_SECTION_KINDS as readonly string[]).includes(String(q.kind))) filter.kind = q.kind;
+            if (q.packageId === 'none') filter.packageId = null;
+            else if (q.packageId && Types.ObjectId.isValid(String(q.packageId))) filter.packageId = q.packageId;
+        }
         if (typeof q.search === 'string' && q.search.trim()) {
             const rx = new RegExp(q.search.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
             filter.$or = entity === 'features' ? [{ name: rx }, { group: rx }] : [{ name: rx }];
@@ -270,6 +320,7 @@ export const CatalogCrud = {
         if (!(await def.model.exists({ _id: id }))) throw new AppError('Not found', 404);
         await def.guardDelete(id);
         await def.model.deleteOne({ _id: id });
+        await def.cleanup?.(id);
     },
 };
 
@@ -296,4 +347,101 @@ export const getCatalogTree = async () => {
             .filter((p) => String(p.serviceId) === String(s._id))
             .map((p) => ({ ...p, features: resolve(p.featureIds), addons: resolve(p.addonIds) })),
     }));
+};
+
+// ───────────────────────────── canvas support ─────────────────────────────
+
+/** Everything the catalog canvas needs in one round-trip — inactive records included (it is the admin view). */
+export const getCatalogGraph = async () => {
+    const [services, platforms, packages, features, sections, layout] = await Promise.all([
+        CatalogService.find().sort({ sortOrder: 1, name: 1 }).select('-__v').lean(),
+        CatalogPlatform.find().sort({ sortOrder: 1, name: 1 }).select('-__v').lean(),
+        CatalogPackage.find().sort({ sortOrder: 1, name: 1 }).select('-__v').lean(),
+        CatalogFeature.find().sort({ sortOrder: 1, name: 1 }).select('-__v').lean(),
+        CatalogSection.find().sort({ sortOrder: 1 }).select('-__v').lean(),
+        CatalogLayout.findOne({ key: 'default' }).lean(),
+    ]);
+    return { services, platforms, packages, features, sections, positions: layout?.positions ?? {} };
+};
+
+export const saveCatalogLayout = async (positions: unknown) => {
+    if (!positions || typeof positions !== 'object') throw new AppError('positions must be an object', 400);
+    const clean: Record<string, { x: number; y: number }> = {};
+    for (const [k, v] of Object.entries(positions as Doc)) {
+        const x = Number(v?.x), y = Number(v?.y);
+        if (k.length <= 80 && Number.isFinite(x) && Number.isFinite(y)) clean[k] = { x: Math.round(x), y: Math.round(y) };
+    }
+    await CatalogLayout.findOneAndUpdate({ key: 'default' }, { $set: { positions: clean } }, { upsert: true });
+    return clean;
+};
+
+const freshKeys = (items: Doc[]) => items.map((i) => ({ ...i, key: randomUUID() }));
+
+/** Copy a section onto a scope. Existing section there → items are appended (text is replaced). */
+export const duplicateSection = async (id: string, target: { serviceId?: string; packageId?: string | null }) => {
+    const src = await CatalogSection.findById(asId(id, 'section')).lean();
+    if (!src) throw new AppError('Section not found', 404);
+    const serviceId = String(target.serviceId ?? src.serviceId);
+    const packageId = target.packageId === undefined ? src.packageId ?? null : target.packageId || null;
+    await defs.sections.prepare({ serviceId, packageId, kind: src.kind });
+    const existing = await CatalogSection.findOne({ serviceId, packageId, kind: src.kind });
+    const items = freshKeys(src.items as unknown as Doc[]);
+    if (existing) {
+        if (items.length) existing.set('items', [...existing.items, ...items]);
+        if (src.text) existing.set('text', src.text);
+        await existing.save();
+        return existing.toObject();
+    }
+    return (await CatalogSection.create({ serviceId, packageId, kind: src.kind, items, text: src.text, sortOrder: src.sortOrder, isActive: src.isActive })).toObject();
+};
+
+/**
+ * Copy a package (+ its package-level sections). Same service → the new package
+ * links the same features. Other service → features are cloned into that service.
+ */
+export const duplicatePackage = async (id: string, target: { serviceId?: string; platformId?: string | null }) => {
+    const src = await CatalogPackage.findById(asId(id, 'package')).lean();
+    if (!src) throw new AppError('Package not found', 404);
+    const serviceId = String(target.serviceId ?? src.serviceId);
+    const sameService = serviceId === String(src.serviceId);
+    const platformId = target.platformId === undefined ? (sameService ? src.platformId ?? null : null) : target.platformId || null;
+
+    const svc = await CatalogService.findById(asId(serviceId, 'service')).lean();
+    if (!svc) throw new AppError('Service not found', 400);
+    if (platformId && !svc.platformIds.map(String).includes(String(platformId))) throw new AppError('Platform is not enabled for this service', 400);
+
+    let featureIds = src.featureIds, addonIds = src.addonIds;
+    if (!sameService || String(platformId ?? '') !== String(src.platformId ?? '')) {
+        const clone = async (ids: Types.ObjectId[]) => {
+            const out: Types.ObjectId[] = [];
+            for (const f of await CatalogFeature.find({ _id: { $in: ids } }).lean()) {
+                // Fields in the upsert filter are inserted from it; only the remaining content goes in $setOnInsert.
+                const { _id, createdAt, updatedAt, __v, serviceId: _s, platformId: _p, kind, name, ...rest } = f as Doc;
+                void _id; void createdAt; void updatedAt; void __v; void _s; void _p;
+                const doc = await CatalogFeature.findOneAndUpdate(
+                    { serviceId, platformId, kind, name },
+                    { $setOnInsert: rest },
+                    { upsert: true, new: true },
+                ).lean();
+                out.push(doc!._id as Types.ObjectId);
+            }
+            return out;
+        };
+        featureIds = await clone(src.featureIds);
+        addonIds = await clone(src.addonIds);
+    }
+
+    // Unique name/slug inside the target scope.
+    const baseName = sameService && String(platformId ?? '') === String(src.platformId ?? '') ? `${src.name} (copy)` : src.name;
+    let name = baseName, n = 2;
+    while (await CatalogPackage.exists({ serviceId, platformId, slug: slugify(name) })) name = `${baseName} ${n++}`;
+
+    const { _id, createdAt, updatedAt, __v, ...rest } = src as Doc;
+    void _id; void createdAt; void updatedAt; void __v;
+    const created = (await CatalogPackage.create({ ...rest, name, slug: slugify(name), serviceId, platformId, featureIds, addonIds })).toObject();
+
+    for (const sec of await CatalogSection.find({ packageId: src._id }).lean()) {
+        await CatalogSection.create({ serviceId, packageId: created._id, kind: sec.kind, items: freshKeys(sec.items as unknown as Doc[]), text: sec.text, sortOrder: sec.sortOrder, isActive: sec.isActive });
+    }
+    return created;
 };

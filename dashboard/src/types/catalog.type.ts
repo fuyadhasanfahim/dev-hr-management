@@ -1,4 +1,6 @@
-export type CatalogEntity = 'services' | 'platforms' | 'packages' | 'features';
+export type CatalogEntity = 'services' | 'platforms' | 'packages' | 'features' | 'sections';
+/** Entities edited through the generic form dialog (sections have their own inline editors). */
+export type FormEntity = Exclude<CatalogEntity, 'sections'>;
 export type CatalogQuotationCategory = 'web-development' | 'photo-editing' | 'marketing' | 'video-editing';
 export type CatalogBillingCycle = 'one-time' | 'monthly' | 'yearly' | 'per-image' | 'per-video' | 'per-second' | 'per-10s';
 
@@ -70,6 +72,40 @@ export interface CatalogPackage extends Base {
     additionalCharges: string[];
 }
 
+export const TEXT_SECTION_KINDS = ['projectTitle', 'projectOverview', 'scopeOfWork', 'changeRequestNote', 'supportNote'] as const;
+export const LIST_SECTION_KINDS = ['deliverables', 'optionalDeliverables', 'milestones', 'clientResponsibilities', 'requiredAssets', 'exclusions'] as const;
+export const SECTION_KINDS = [...TEXT_SECTION_KINDS, ...LIST_SECTION_KINDS] as const;
+export type CatalogSectionKind = (typeof SECTION_KINDS)[number];
+
+export interface CatalogSectionItem {
+    key: string;
+    title: string;
+    description?: string;
+    /** Milestones: "3 weeks". */
+    duration?: { value: number; unit: 'day' | 'week' | 'month' } | null;
+}
+
+/** Quotation content block: service-wide default (packageId = null) or a package override. */
+export interface CatalogSection {
+    _id: string;
+    serviceId: string;
+    packageId?: string | null;
+    kind: CatalogSectionKind;
+    items: CatalogSectionItem[];
+    text?: string;
+    sortOrder: number;
+    isActive: boolean;
+}
+
+export interface CatalogGraph {
+    services: CatalogService[];
+    platforms: CatalogPlatform[];
+    packages: CatalogPackage[];
+    features: CatalogFeature[];
+    sections: CatalogSection[];
+    positions: Record<string, { x: number; y: number }>;
+}
+
 /** Shape returned by GET /catalog/tree — what the quotation wizard consumes. */
 export interface CatalogTreePackage extends CatalogPackage {
     features: CatalogFeature[];
@@ -85,4 +121,5 @@ export interface CatalogEntityMap {
     platforms: CatalogPlatform;
     packages: CatalogPackage;
     features: CatalogFeature;
+    sections: CatalogSection;
 }

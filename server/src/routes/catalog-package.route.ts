@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { requireAnyPermission, requirePermission } from '../middlewares/require-permission.js';
-import { catalogController } from '../controllers/catalog.controller.js';
+import { catalogController, copyPackage } from '../controllers/catalog.controller.js';
 
 const c = catalogController('packages');
 const router: Router = Router();
@@ -14,6 +14,7 @@ router.get('/:id', canRead, c.get);
 router.post('/', canManage, c.create);
 router.patch('/:id', canManage, c.update);
 router.patch('/:id/toggle-status', canManage, c.toggle);
+router.post('/:id/duplicate', canManage, copyPackage);
 router.delete('/:id', canManage, c.remove);
 
 export const catalogPackageRoute = router;

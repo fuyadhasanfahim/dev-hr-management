@@ -1,5 +1,13 @@
 import type { Request, Response } from 'express';
-import { CatalogCrud, getCatalogTree, type CatalogEntity } from '../services/catalog.service.js';
+import {
+    CatalogCrud,
+    duplicatePackage,
+    duplicateSection,
+    getCatalogGraph,
+    getCatalogTree,
+    saveCatalogLayout,
+    type CatalogEntity,
+} from '../services/catalog.service.js';
 
 const idOf = (req: Request) => String(req.params.id);
 
@@ -25,3 +33,15 @@ export const catalogController = (entity: CatalogEntity) => ({
 
 export const getTree = async (_req: Request, res: Response) =>
     res.json({ success: true, data: await getCatalogTree() });
+
+export const getGraph = async (_req: Request, res: Response) =>
+    res.json({ success: true, data: await getCatalogGraph() });
+
+export const putLayout = async (req: Request, res: Response) =>
+    res.json({ success: true, data: await saveCatalogLayout(req.body?.positions) });
+
+export const copyPackage = async (req: Request, res: Response) =>
+    res.status(201).json({ success: true, data: await duplicatePackage(idOf(req), req.body ?? {}) });
+
+export const copySection = async (req: Request, res: Response) =>
+    res.status(201).json({ success: true, data: await duplicateSection(idOf(req), req.body ?? {}) });

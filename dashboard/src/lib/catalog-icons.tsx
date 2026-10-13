@@ -1,3 +1,4 @@
+import { createElement } from 'react';
 import {
     IconCamera,
     IconChartBar,
@@ -23,3 +24,9 @@ export const CATALOG_ICONS = {
 
 export type CatalogIconKey = keyof typeof CATALOG_ICONS;
 export const catalogIcon = (key?: string) => CATALOG_ICONS[(key as CatalogIconKey) ?? 'website'] ?? IconDeviceDesktop;
+
+/** Renders a catalog service icon by its stored key. */
+export function CatalogIcon({ name, className }: { name?: string; className?: string }) {
+    const Icon = catalogIcon(name);
+    return createElement(Icon, { className });
+}

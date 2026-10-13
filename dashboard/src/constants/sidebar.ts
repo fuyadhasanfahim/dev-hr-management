@@ -155,8 +155,8 @@ export const sidebarGroups: SidebarGroup[] = [
                 access: [Role.SUPER_ADMIN, Role.ADMIN, Role.TEAM_LEADER],
             },
             {
-                title: "Service Catalog",
-                url: "/catalog",
+                title: "Quotation Catalogs",
+                url: "/quotation-catalogs",
                 permission: 'catalog.read',
                 icon: IconCategory,
                 access: [Role.SUPER_ADMIN, Role.ADMIN],
