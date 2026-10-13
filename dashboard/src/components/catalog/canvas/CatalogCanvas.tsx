@@ -4,6 +4,7 @@ import '@xyflow/react/dist/style.css';
 
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
+import { useTheme } from 'next-themes';
 import {
     applyNodeChanges,
     Background,
@@ -43,6 +44,22 @@ const EXPANDED_KEY = 'catalog-canvas-expanded';
 const newKey = () => crypto.randomUUID();
 const errMsg = (e: unknown) => (e as { data?: { message?: string } })?.data?.message || 'Something went wrong';
 const NO_POSITIONS: Record<string, { x: number; y: number }> = {};
+/** Map React Flow's chrome onto the app's design tokens so it matches light and dark exactly. */
+const FLOW_THEME = {
+    '--xy-background-color': 'transparent',
+    '--xy-background-pattern-dots-color-default': 'color-mix(in oklab, var(--foreground) 18%, transparent)',
+    '--xy-edge-stroke-default': 'color-mix(in oklab, var(--foreground) 35%, transparent)',
+    '--xy-edge-stroke-selected-default': 'var(--primary)',
+    '--xy-controls-button-background-color-default': 'var(--card)',
+    '--xy-controls-button-background-color-hover-default': 'var(--accent)',
+    '--xy-controls-button-color-default': 'var(--foreground)',
+    '--xy-controls-button-border-color-default': 'var(--border)',
+    '--xy-minimap-background-color-default': 'var(--card)',
+    '--xy-minimap-mask-background-color-default': 'color-mix(in oklab, var(--background) 70%, transparent)',
+    '--xy-node-color-default': 'var(--foreground)',
+    '--xy-handle-background-color-default': 'var(--background)',
+    '--xy-handle-border-color-default': 'var(--primary)',
+} as React.CSSProperties;
 const EMPTY = { nodes: [] as Node<CanvasNodeData>[], edges: [] };
 
 type FormState = { entity: FormEntity; id: string | null; initial?: Form; onSaved?: (doc: { _id: string } & Form) => void };
@@ -59,6 +76,7 @@ function Board() {
     const { can } = usePermissions();
     const canManage = can('catalog.manage');
     const rf = useReactFlow();
+    const { resolvedTheme } = useTheme(); // follow the app's light/dark toggle, not the OS
     const wrap = useRef<HTMLDivElement>(null);
 
     const { data: graph, isLoading } = useGetCatalogGraphQuery();
@@ -300,7 +318,7 @@ function Board() {
 
     return (
         <CanvasContext.Provider value={actions}>
-            <div ref={wrap} tabIndex={0} onKeyDown={onKeyDown} className="h-[calc(100vh-15rem)] min-h-[560px] overflow-hidden rounded-xl border bg-muted/20 outline-none">
+            <div ref={wrap} tabIndex={0} onKeyDown={onKeyDown} className="min-h-[520px] flex-1 overflow-hidden rounded-xl border bg-muted/30 outline-none">
                 <ReactFlow
                     nodes={nodes}
                     edges={derived.edges}
@@ -327,23 +345,24 @@ function Board() {
                     deleteKeyCode={null}
                     zoomOnDoubleClick={false}
                     proOptions={{ hideAttribution: true }}
-                    colorMode="system"
+                    colorMode={resolvedTheme === 'dark' ? 'dark' : 'light'}
+                    style={FLOW_THEME}
                 >
                     <Background gap={22} />
                     <Controls showInteractive={false} />
-                    <MiniMap pannable zoomable className="!hidden md:!block" />
+                    <MiniMap pannable zoomable nodeColor="var(--primary)" nodeStrokeWidth={0} className="!hidden md:!block" />
                     <Panel position="top-left" className="flex flex-wrap items-center gap-1.5">
                         {canManage && (
                             <Button size="sm" onClick={() => setForm({ entity: 'services', id: null })}><IconPlus className="size-4" /> Service</Button>
                         )}
-                        <Button size="sm" variant="outline" disabled={!history.canUndo} onClick={() => void doUndo()} title={history.nextUndo ? `Undo: ${history.nextUndo}` : 'Undo (Ctrl+Z)'}><IconArrowBackUp className="size-4" /></Button>
-                        <Button size="sm" variant="outline" disabled={!history.canRedo} onClick={() => void doRedo()} title={history.nextRedo ? `Redo: ${history.nextRedo}` : 'Redo (Ctrl+Shift+Z)'}><IconArrowForwardUp className="size-4" /></Button>
-                        <Button size="sm" variant="outline" onClick={() => fitOpen()} title="Fit to open items"><IconFocusCentered className="size-4" /></Button>
-                        <Button size="sm" variant="outline" onClick={() => setAllExpanded(true)} title="Expand all"><IconFoldDown className="size-4" /></Button>
-                        <Button size="sm" variant="outline" onClick={() => setAllExpanded(false)} title="Collapse all"><IconFoldUp className="size-4" /></Button>
-                        <Button size="sm" variant="outline" onClick={resetLayout} title="Reset layout"><IconLayoutDistributeHorizontal className="size-4" /></Button>
+                        <Button size="sm" variant="outline" className="bg-card" disabled={!history.canUndo} onClick={() => void doUndo()} title={history.nextUndo ? `Undo: ${history.nextUndo}` : 'Undo (Ctrl+Z)'}><IconArrowBackUp className="size-4" /></Button>
+                        <Button size="sm" variant="outline" className="bg-card" disabled={!history.canRedo} onClick={() => void doRedo()} title={history.nextRedo ? `Redo: ${history.nextRedo}` : 'Redo (Ctrl+Shift+Z)'}><IconArrowForwardUp className="size-4" /></Button>
+                        <Button size="sm" variant="outline" className="bg-card" onClick={() => fitOpen()} title="Fit to open items"><IconFocusCentered className="size-4" /></Button>
+                        <Button size="sm" variant="outline" className="bg-card" onClick={() => setAllExpanded(true)} title="Expand all"><IconFoldDown className="size-4" /></Button>
+                        <Button size="sm" variant="outline" className="bg-card" onClick={() => setAllExpanded(false)} title="Collapse all"><IconFoldUp className="size-4" /></Button>
+                        <Button size="sm" variant="outline" className="bg-card" onClick={resetLayout} title="Reset layout"><IconLayoutDistributeHorizontal className="size-4" /></Button>
                     </Panel>
-                    <Panel position="bottom-center" className="rounded-md bg-background/80 px-3 py-1 text-[11px] text-muted-foreground backdrop-blur">
+                    <Panel position="bottom-center" className="rounded-md border bg-card/90 px-3 py-1 text-[11px] text-muted-foreground backdrop-blur">
                         Right-click anything for actions · drag items by the ⋮⋮ handle (also between cards) · double-click an item to edit · Ctrl+Z / Ctrl+Shift+Z
                         {clip && <span className="ml-2 inline-flex items-center gap-1 text-primary"><IconRefresh className="size-3" /> clipboard: {clip.name}</span>}
                     </Panel>
