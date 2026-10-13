@@ -41,6 +41,7 @@ import { ConsultationRoutes } from "./consultation.route.js";
 import { outboxRoute } from "./outbox.route.js";
 import { quotationTimelineRoute } from "./quotation-timeline.route.js";
 import { departmentRoute } from "./department.route.js";
+import { catalogRoute } from "./catalog.route.js";
 import { designationRoute } from "./designation.route.js";
 
 const router: Router = Router();
@@ -118,6 +119,10 @@ const moduleRoutes = [
     {
         path: "/services",
         route: ServiceRoutes,
+    },
+    {
+        path: "/catalog",
+        route: catalogRoute,
     },
     {
         path: "/profit-share",

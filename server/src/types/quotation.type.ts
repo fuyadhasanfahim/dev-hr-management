@@ -52,6 +52,11 @@ export type QuotationCategory =
 
 export interface IQuotationService {
     category: QuotationCategory;
+    /** Catalog references chosen in the quotation builder (snapshot text fields remain authoritative). */
+    catalogServiceId?: Types.ObjectId | string | null;
+    catalogPlatformId?: Types.ObjectId | string | null;
+    catalogPackageId?: Types.ObjectId | string | null;
+    catalogFeatureIds?: (Types.ObjectId | string)[];
     scopeDescription?: string;
     scopeItems: string[];
     /** Only meaningful for the web-development category. */

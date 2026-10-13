@@ -53,6 +53,11 @@ export interface IQuotationTechStack {
 
 export interface IQuotationService {
   category: QuotationCategory;
+  /** References into the quotation catalog (/catalog); the text fields below remain the quotation snapshot. */
+  catalogServiceId?: string | null;
+  catalogPlatformId?: string | null;
+  catalogPackageId?: string | null;
+  catalogFeatureIds?: string[];
   scopeDescription?: string;
   scopeItems: string[];
   /** Only meaningful for the web-development category. */

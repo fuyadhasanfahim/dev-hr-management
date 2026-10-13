@@ -41,6 +41,7 @@ export const SYSTEM_ROLE_PERMISSIONS: Record<Role, readonly string[]> = {
         'task.*',
         'project.*',
         'service.*',
+        'catalog.*',
         'consultation.*',
         'career.*',
         'externalBusiness.*',

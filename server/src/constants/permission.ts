@@ -151,6 +151,11 @@ export const PERMISSION_GROUPS = {
         label: 'Services',
         actions: ['read', 'create', 'update', 'delete'],
     },
+    // Quotation catalog: services / platforms / packages / features that feed the quotation builder.
+    catalog: {
+        label: 'Quotation Catalog',
+        actions: ['read', 'manage'],
+    },
     consultation: {
         label: 'Consultations',
         actions: ['read', 'create', 'update', 'delete'],

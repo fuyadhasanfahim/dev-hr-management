@@ -21,6 +21,12 @@ const quotationServiceSchema = new Schema<IQuotationServiceModel>(
             enum: ['web-development', 'photo-editing', 'marketing', 'video-editing'],
             required: true,
         },
+        // References into the quotation catalog (null for hand-built / legacy quotations).
+        // The text fields below stay the immutable snapshot used by the PDF.
+        catalogServiceId: { type: Schema.Types.ObjectId, ref: 'CatalogService', default: null },
+        catalogPlatformId: { type: Schema.Types.ObjectId, ref: 'CatalogPlatform', default: null },
+        catalogPackageId: { type: Schema.Types.ObjectId, ref: 'CatalogPackage', default: null },
+        catalogFeatureIds: [{ type: Schema.Types.ObjectId, ref: 'CatalogFeature' }],
         scopeDescription: { type: String },
         scopeItems: [{ type: String }],
         techStack: techStackSchema,

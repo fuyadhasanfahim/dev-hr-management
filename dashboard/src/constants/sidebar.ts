@@ -24,6 +24,7 @@ import {
     IconFileInvoice,
     IconBuildingCommunity,
     IconHeadset,
+    IconCategory,
 } from "@tabler/icons-react";
 
 
@@ -152,6 +153,13 @@ export const sidebarGroups: SidebarGroup[] = [
                 permission: 'quotation.read',
                 icon: IconReceipt,
                 access: [Role.SUPER_ADMIN, Role.ADMIN, Role.TEAM_LEADER],
+            },
+            {
+                title: "Service Catalog",
+                url: "/catalog",
+                permission: 'catalog.read',
+                icon: IconCategory,
+                access: [Role.SUPER_ADMIN, Role.ADMIN],
             },
             {
                 title: "Receipts",
