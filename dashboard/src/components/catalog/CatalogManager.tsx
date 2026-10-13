@@ -15,7 +15,7 @@ import { Switch } from '@/components/ui/switch';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
-import { EarningPagination as Pagination } from '@/components/earning/EarningPagination';
+import { NumberedPagination } from '@/components/ui/shared/NumberedPagination';
 import { useDebounce } from '@/hooks/use-debounce';
 import { usePermissions } from '@/hooks/use-permissions';
 import { CATALOG_ICONS } from '@/lib/catalog-icons';
@@ -190,7 +190,7 @@ export default function CatalogManager() {
     const [limit, setLimit] = useState(20);
 
     // The table itself: paged + searched on the server.
-    const { data: pageData, isFetching: loading } = useGetCatalogItemsQuery({
+    const { currentData: pageData, isFetching: loading } = useGetCatalogItemsQuery({
         entity: tab,
         params: {
             page,
@@ -354,7 +354,7 @@ export default function CatalogManager() {
                                 cells = (<>
                                     <TableCell>{svcName(p.serviceId)}</TableCell>
                                     <TableCell>{platName(p.platformId)}</TableCell>
-                                    <TableCell className="whitespace-nowrap">{p.price === null ? 'Custom quote' : `৳${p.price.toLocaleString()}${p.priceMax ? `–${p.priceMax.toLocaleString()}` : ''}`}{p.billingCycle !== 'one-time' && <span className="text-xs text-muted-foreground"> / {p.billingCycle}</span>}</TableCell>
+                                    <TableCell className="whitespace-nowrap">{p.price == null ? 'Custom quote' : `৳${p.price.toLocaleString()}${p.priceMax ? `–${p.priceMax.toLocaleString()}` : ''}`}{p.billingCycle !== 'one-time' && <span className="text-xs text-muted-foreground"> / {p.billingCycle}</span>}</TableCell>
                                     <TableCell>{p.featureIds.length}{p.addonIds.length > 0 && ` + ${p.addonIds.length} add-ons`}</TableCell>
                                 </>);
                             } else {
@@ -385,15 +385,13 @@ export default function CatalogManager() {
                         })}
                     </TableBody>
                 </Table>
-                <div className="flex items-center justify-between gap-4 border-t px-5 py-3">
-                    <p className="hidden flex-1 text-sm text-muted-foreground lg:flex">
-                        Showing <span className="mx-1 font-medium text-foreground/80">{rows.length}</span> of{' '}
-                        <span className="mx-1 font-medium text-foreground/80">{total}</span> {TITLES[tab].toLowerCase()}
-                    </p>
-                    <Pagination
-                        currentPage={page}
+                <div className="border-t px-5 py-3">
+                    <NumberedPagination
+                        page={page}
                         totalPages={totalPages}
                         limit={limit}
+                        total={total}
+                        noun={TITLES[tab].toLowerCase()}
                         onPageChange={setPage}
                         onLimitChange={(l) => { setLimit(l); setPage(1); }}
                         isLoading={loading}
