@@ -48,7 +48,7 @@ import {
 import Link from 'next/link';
 import InvoicePdfButton from '@/components/shared/InvoicePdfButton';
 import { QuotationPdfButton } from '@/components/quotation/document/QuotationPdfButton';
-import { useQuotationPdf } from '@/components/quotation/document/use-quotation-pdf';
+import { isPdfCancelled, useQuotationPdf } from '@/components/quotation/document/use-quotation-pdf';
 import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
 import { IconReceipt } from '@tabler/icons-react';
@@ -348,7 +348,7 @@ export default function ViewQuotationPage() {
             }
             return recipients;
         } catch (err) {
-            toast.error((err as Error).message || 'Failed to send quotation');
+            if (!isPdfCancelled(err)) toast.error((err as Error).message || 'Failed to send quotation');
             return [];
         }
     };

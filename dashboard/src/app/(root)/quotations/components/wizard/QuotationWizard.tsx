@@ -72,7 +72,7 @@ import { useCreateClientMutation, useGetClientsQuery } from "@/redux/features/cl
 import { useCreateQuotationMutation, useSendQuotationMutation, useUpdateQuotationMutation } from "@/redux/features/quotation/quotationApi";
 import { QuotationEmailDialog } from "../QuotationEmailDialog";
 import { QuotationDocument } from "@/components/quotation/document/QuotationDocument";
-import { saveBlob, useQuotationPdf } from "@/components/quotation/document/use-quotation-pdf";
+import { isPdfCancelled, saveBlob, useQuotationPdf, useQuotationPrint } from "@/components/quotation/document/use-quotation-pdf";
 import type { QuotationDocInput } from "@/components/quotation/document/types";
 import { useGetCatalogTreeQuery } from "@/redux/features/catalog/catalogApi";
 import { catalogIcon } from "@/lib/catalog-icons";
@@ -430,6 +430,7 @@ export default function QuotationWizard() {
     const [zoom, setZoom] = useState(100);
     const [expanded, setExpanded] = useState(false);
     const { generate: generatePdf, stage: pdfStage, busy: pdfBusy } = useQuotationPdf();
+    const { print: printDoc, host: printHost } = useQuotationPrint();
     const numberRef = useRef("");
     const previewBox = useRef<HTMLDivElement>(null);
     const [autoFit, setAutoFit] = useState(true);
@@ -909,7 +910,7 @@ export default function QuotationWizard() {
             const blob = await generatePdf(docNow());
             saveBlob(blob, `${numberRef.current || title.trim() || "quotation"}.pdf`);
         } catch (err) {
-            toast.error((err as Error).message || "Could not create the PDF");
+            if (!isPdfCancelled(err)) toast.error((err as Error).message || "Could not create the PDF");
         }
     };
 
@@ -936,7 +937,7 @@ export default function QuotationWizard() {
             else toast.error(result.data.emailError || "Failed to send the quotation");
             return recipients;
         } catch (err) {
-            toast.error((err as { data?: { message?: string } })?.data?.message || "Failed to send the quotation");
+            if (!isPdfCancelled(err)) toast.error((err as { data?: { message?: string } })?.data?.message || (err as Error).message || "Failed to send the quotation");
             return [];
         }
     };
@@ -2267,12 +2268,13 @@ export default function QuotationWizard() {
                             <Button type="button" variant="ghost" size="icon" className="size-8" aria-label="Zoom in" disabled={zoom >= 150} onClick={() => { setAutoFit(false); setZoom(zoom + 10); }}><IconPlus className="size-4" /></Button>
                         </div>
                         <Button type="button" variant="ghost" size="sm" className="h-8" onClick={() => { setAutoFit(true); fitZoom(); }}>Fit</Button>
+                        <Button type="button" variant="ghost" size="sm" className="h-8" disabled={pdfBusy} onClick={() => printDoc(docNow())}>Print</Button>
                         <Button type="button" variant="outline" size="sm" className="h-8" disabled={pdfBusy || saving} onClick={downloadPdf}>
-                            <IconDownload className="size-4" /> {pdfBusy ? "Preparing…" : "Download PDF"}
+                            <IconDownload className="size-4" /> Download PDF
                         </Button>
                     </div>
                 </header>
-                <div ref={previewBox} className="rounded-lg bg-muted/60">
+                <div ref={previewBox} className="rounded-lg bg-[#e7e7eb] dark:bg-[#26262c]">
                     <ScrollArea className={cn(expanded ? "h-[calc(100vh-10rem)]" : "h-[68vh]")}>
                         <div className="mx-auto w-fit p-4">
                             <QuotationDocument data={docInput} zoom={zoom / 100} />
@@ -2454,6 +2456,7 @@ export default function QuotationWizard() {
             </div>
 
             {pdfStage}
+            {printHost}
             <QuotationEmailDialog
                 open={pickerOpen}
                 clientId={clientId}

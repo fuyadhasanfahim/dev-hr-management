@@ -5,7 +5,7 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import type { QuotationDocInput } from "./types";
-import { saveBlob, useQuotationPdf } from "./use-quotation-pdf";
+import { isPdfCancelled, saveBlob, useQuotationPdf } from "./use-quotation-pdf";
 
 /** `#QTN-…` when a quotation number exists, else the title. */
 export const pdfFileStem = (number?: string | null, title?: string | null) => {
@@ -20,7 +20,7 @@ export function QuotationPdfButton({ data }: { data: QuotationDocInput }) {
         try {
             saveBlob(await generate(data), `${pdfFileStem(data.quotationNumber, data.details?.title)}.pdf`);
         } catch (err) {
-            toast.error((err as Error).message || "Could not create the PDF");
+            if (!isPdfCancelled(err)) toast.error((err as Error).message || "Could not create the PDF");
         }
     };
     return (

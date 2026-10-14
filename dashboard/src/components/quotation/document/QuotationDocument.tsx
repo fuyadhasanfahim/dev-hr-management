@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { Poppins } from "next/font/google";
+import { Playfair_Display } from "next/font/google";
 
 import { buildBlocks, type Block } from "./blocks";
 import { LOGO_SRC, MARK_SRC } from "./brand";
@@ -11,20 +11,16 @@ import "./quotation-document.css";
 
 export { LOGO_SRC, MARK_SRC };
 
-// Heading face (UI/UX Pro Max pairing "Modern Professional": Poppins headings + a clean sans body).
-const poppins = Poppins({ subsets: ["latin"], weight: ["500", "600", "700"], variable: "--qd-font-head", display: "swap" });
+// Display face for titles and the headline figure (OFL licence, bundled by next/font — no runtime request). Body uses the app's Inter.
+const display = Playfair_Display({ subsets: ["latin"], weight: ["500", "600", "700"], variable: "--qd-font-head", display: "swap" });
 
 // A4 at 96dpi. Must match quotation-document.css.
 const PAGE_H = 1123;
-const CONTENT_W = 794 - 96;
-const CONTENT_BOTTOM = PAGE_H - 74; // above the footer
-const cap = (page: number) => CONTENT_BOTTOM - (page === 0 ? 34 : 82);
+const CONTENT_W = 794 - 112;
+const CONTENT_BOTTOM = PAGE_H - 76; // above the footer
+const cap = (page: number) => CONTENT_BOTTOM - (page === 0 ? 52 : 90);
 
-/** Wraps a block; blocks of one card get a shared border, rounded only at the card's first/last block on the page. */
-function Wrap({ b, first = false, last = false }: { b: Block; first?: boolean; last?: boolean }) {
-    if (!b.card) return <div className="qd-blk">{b.node}</div>;
-    return <div className={`qd-card tone-${b.card.tone}${first ? " is-first" : ""}${last ? " is-last" : ""}`}>{b.node}</div>;
-}
+const Wrap = ({ b }: { b: Block }) => <div className="qd-blk">{b.node}</div>;
 
 interface Props {
     data: QuotationDocInput;
@@ -44,7 +40,10 @@ export function QuotationDocument({ data, zoom = 1, onLayout }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     const blocks = useMemo(() => buildBlocks(data), [key]);
     const measureRef = useRef<HTMLDivElement>(null);
-    const [pages, setPages] = useState<number[][]>([]);
+    // Pages are stored together with the exact blocks they were measured for. Rendering from this
+    // snapshot (not from `blocks`) means a data change can never index into a different block list;
+    // the previous layout simply stays on screen until the new one has been measured.
+    const [layout, setLayout] = useState<{ blocks: Block[]; pages: number[][] } | null>(null);
 
     useLayoutEffect(() => {
         let cancelled = false;
@@ -52,7 +51,7 @@ export function QuotationDocument({ data, zoom = 1, onLayout }: Props) {
             const root = measureRef.current;
             if (!root || cancelled) return;
             const heights = Array.from(root.children).map((c) => Math.ceil(c.getBoundingClientRect().height));
-            setPages(paginate(blocks.map((b, i) => ({ h: heights[i] ?? 0, keepWithNext: b.keepWithNext, table: b.table, head: b.head })), cap));
+            setLayout({ blocks, pages: paginate(blocks.map((b, i) => ({ h: heights[i] ?? 0, keepWithNext: b.keepWithNext, table: b.table, head: b.head })), cap) });
         };
         measure();
         // fonts / images can change heights after the first paint
@@ -64,17 +63,21 @@ export function QuotationDocument({ data, zoom = 1, onLayout }: Props) {
         };
     }, [blocks]);
 
+    const pages = layout?.pages ?? [];
+    const shown = layout?.blocks ?? blocks;
     const total = pages.length;
     useEffect(() => {
         if (total) onLayout?.(total);
     }, [total, onLayout, key]);
 
     return (
-        <div className={`qdoc ${poppins.variable}`}>
+        <div className={`qdoc ${display.variable}`}>
             <div ref={measureRef} className="qd-measure" style={{ width: CONTENT_W }} aria-hidden>
                 {blocks.map((b) => <Wrap key={b.id} b={b} />)}
             </div>
             <div className="qd-pages" style={zoom !== 1 ? { zoom } : undefined}>
+                {/* reserve one page of space until pagination is done, so the preview never jumps */}
+                {total === 0 && <section className="qd-page qd-skeleton" aria-busy />}
                 {pages.map((idx, p) => (
                     <section key={p} className={`qd-page${p > 0 ? " qd-cont" : ""}`} data-page={p + 1}>
                         <div className="qd-watermark">
@@ -84,16 +87,12 @@ export function QuotationDocument({ data, zoom = 1, onLayout }: Props) {
                         {p > 0 && (
                             <div className="qd-runhead">
                                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                                <img src={LOGO_SRC} alt="" width={100} height={24} />
-                                <span>Quotation <b># {data.quotationNumber || "—"}</b></span>
+                                <img src={LOGO_SRC} alt="" width={92} height={22} />
+                                <span>Quotation <b># {data.quotationNumber || "Assigned on save"}</b></span>
                             </div>
                         )}
                         <div className="qd-content">
-                            {idx.map((bi, k) => {
-                                const b = blocks[bi]!;
-                                const same = (j: number) => !!b.card && blocks[idx[j] ?? -1]?.card?.id === b.card.id;
-                                return <Wrap key={`${bi}-${k}`} b={b} first={!same(k - 1)} last={!same(k + 1)} />;
-                            })}
+                            {idx.map((bi, k) => <Wrap key={`${bi}-${k}`} b={shown[bi]!} />)}
                         </div>
                         <div className="qd-footer">
                             <span>{data.company.name} | {data.details.title} | Confidential | Page {p + 1}</span>
