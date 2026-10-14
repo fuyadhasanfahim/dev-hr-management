@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { Playfair_Display } from "next/font/google";
+import { Hind_Siliguri, Plus_Jakarta_Sans } from "next/font/google";
 
 import { buildBlocks, type Block } from "./blocks";
 import { LOGO_SRC, MARK_SRC } from "./brand";
@@ -11,8 +11,10 @@ import "./quotation-document.css";
 
 export { LOGO_SRC, MARK_SRC };
 
-// Display face for titles and the headline figure (OFL licence, bundled by next/font — no runtime request). Body uses the app's Inter.
-const display = Playfair_Display({ subsets: ["latin"], weight: ["500", "600", "700"], variable: "--qd-font-head", display: "swap" });
+// One family for the whole document: Plus Jakarta Sans (headings and body, different weights), with Hind Siliguri
+// for Bengali text. Both are OFL and bundled by next/font, so they load from our own origin and are ready before export.
+const sans = Plus_Jakarta_Sans({ subsets: ["latin"], weight: ["400", "500", "600", "700", "800"], variable: "--qd-font-sans", display: "swap" });
+const bengali = Hind_Siliguri({ subsets: ["bengali", "latin"], weight: ["400", "500", "600", "700"], variable: "--qd-font-bn", display: "swap" });
 
 // A4 at 96dpi. Must match quotation-document.css.
 const PAGE_H = 1123;
@@ -71,7 +73,7 @@ export function QuotationDocument({ data, zoom = 1, onLayout }: Props) {
     }, [total, onLayout, key]);
 
     return (
-        <div className={`qdoc ${display.variable}`}>
+        <div className={`qdoc ${sans.variable} ${bengali.variable}`}>
             <div ref={measureRef} className="qd-measure" style={{ width: CONTENT_W }} aria-hidden>
                 {blocks.map((b) => <Wrap key={b.id} b={b} />)}
             </div>

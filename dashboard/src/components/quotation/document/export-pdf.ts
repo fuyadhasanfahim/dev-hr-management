@@ -28,7 +28,17 @@ const nextFrame = () =>
 /** Fonts and every image decoded, then two frames so React has committed the final layout. */
 export async function waitForReady(root: HTMLElement) {
     await document.fonts?.ready;
-    await Promise.all(Array.from(root.querySelectorAll("img")).map((img) => img.decode().catch(() => undefined)));
+    // Wait on the load event, not img.decode(): decode() needs the rendering pipeline, which a background tab pauses.
+    await Promise.all(
+        Array.from(root.querySelectorAll("img")).map(
+            (img) =>
+                new Promise<void>((resolve) => {
+                    if (img.complete) return resolve();
+                    img.addEventListener("load", () => resolve(), { once: true });
+                    img.addEventListener("error", () => resolve(), { once: true });
+                }),
+        ),
+    );
     await nextFrame();
     await nextFrame();
 }
