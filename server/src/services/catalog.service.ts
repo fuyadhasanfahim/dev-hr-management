@@ -327,14 +327,15 @@ export const CatalogCrud = {
 /**
  * One round-trip for the quotation wizard: active services with their
  * platforms, packages, and each package's resolved features / add-ons.
- * 4 indexed queries joined in memory — no N+1.
+ * 5 indexed queries joined in memory — no N+1. `sections` = quotation content blocks (service-wide + package overrides).
  */
 export const getCatalogTree = async () => {
-    const [services, platforms, packages, features] = await Promise.all([
+    const [services, platforms, packages, features, sections] = await Promise.all([
         CatalogService.find({ isActive: true }).sort({ sortOrder: 1, name: 1 }).select('-__v').lean(),
         CatalogPlatform.find({ isActive: true }).sort({ sortOrder: 1, name: 1 }).select('-__v').lean(),
         CatalogPackage.find({ isActive: true }).sort({ sortOrder: 1, name: 1 }).select('-__v').lean(),
         CatalogFeature.find({ isActive: true }).sort({ sortOrder: 1, name: 1 }).select('-__v').lean(),
+        CatalogSection.find({ isActive: true }).sort({ sortOrder: 1 }).select('-__v').lean(),
     ]);
     const platformById = new Map(platforms.map((p) => [String(p._id), p]));
     const featureById = new Map(features.map((f) => [String(f._id), f]));
@@ -343,6 +344,7 @@ export const getCatalogTree = async () => {
     return services.map((s) => ({
         ...s,
         platforms: s.platformIds.map((i) => platformById.get(String(i))).filter(Boolean),
+        sections: sections.filter((x) => String(x.serviceId) === String(s._id)),
         packages: packages
             .filter((p) => String(p.serviceId) === String(s._id))
             .map((p) => ({ ...p, features: resolve(p.featureIds), addons: resolve(p.addonIds) })),

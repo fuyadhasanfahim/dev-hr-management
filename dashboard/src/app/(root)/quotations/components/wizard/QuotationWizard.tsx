@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -8,6 +8,25 @@ import {
     IconArrowLeft,
     IconArrowRight,
     IconBuilding,
+    IconCalendar,
+    IconMinus,
+    IconArrowsMaximize,
+    IconArrowsMinimize,
+    IconDownload,
+    IconMapPin,
+    IconMail,
+    IconPhone,
+    IconWorld,
+    IconSend,
+    IconBulb,
+    IconCrown,
+    IconClock,
+    IconFolder,
+    IconAlertTriangle,
+    IconTools,
+    IconBox,
+    IconUsers,
+    IconUserPlus,
     IconCheck,
     IconCircleCheck,
     IconCode,
@@ -40,23 +59,33 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
+import { Calendar } from "@/components/ui/calendar";
+import { Combobox } from "@/components/ui/combobox";
+import { MultiSelect } from "@/components/ui/multi-select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
+import { useGetServicesQuery } from "@/redux/features/service/serviceApi";
+import { useGetStaffsQuery } from "@/redux/features/staff/staffApi";
 
-import { useGetClientsQuery } from "@/redux/features/client/clientApi";
-import { useCreateQuotationMutation } from "@/redux/features/quotation/quotationApi";
+import { useCreateClientMutation, useGetClientsQuery } from "@/redux/features/client/clientApi";
+import { useCreateQuotationMutation, useSendQuotationMutation, useUpdateQuotationMutation } from "@/redux/features/quotation/quotationApi";
+import { QuotationEmailDialog } from "../QuotationEmailDialog";
+import { publicApiUrl } from "@/lib/public-api";
 import { useGetCatalogTreeQuery } from "@/redux/features/catalog/catalogApi";
 import { catalogIcon } from "@/lib/catalog-icons";
 import { BrandLogo } from "@/components/catalog/BrandLogo";
-import type { CatalogTreePackage, CatalogTreeService } from "@/types/catalog.type";
+import type { CatalogSectionKind, CatalogTreePackage, CatalogTreeService } from "@/types/catalog.type";
 import { Client } from "@/types/client.type";
 import type { BillingCycle, IQuotationService, QuotationCategory } from "@/types/quotation.type";
+import { unitLabel } from "@/components/catalog/canvas/section-meta";
 import { computeQuotationTotals } from "@/lib/quotation-totals";
 
 // ───────────────────────────── types & constants ─────────────────────────────
 
 type CheckItem = { text: string; on: boolean; price?: number; id?: string; group?: string };
-type LineItem = { title: string; description: string; qty: number; price: number; billing: "one-time" | "monthly" | "yearly" };
-type Milestone = { label: string; percentage: number; note: string };
+type LineItem = { title: string; description: string; qty: number; price: number; discount: number; billing: "one-time" | "monthly" | "yearly" };
+type Charge = { name: string; description: string; amount: number; type: "one-time" | "monthly" | "yearly" };
+type Milestone = { label: string; percentage: number; note: string; due?: string };
 type UnitService = { qty: number; rate: number };
 
 const STEPS = [
@@ -117,6 +146,15 @@ const PAYMENT_PRESETS: Record<string, Milestone[]> = {
     "100": [{ label: "Full Payment", percentage: 100, note: "Upon quotation acceptance" }],
 };
 
+const withDue = (list: Milestone[]): Milestone[] => list.map((m, i) => ({ ...m, due: new Date(Date.now() + i * 30 * 86400000).toISOString().split("T")[0] }));
+const COMPANY = {
+    name: "WebBriks",
+    address: "115 Senpara Parbata, Mirpur, Dhaka 1216, Bangladesh.",
+    email: "info@webbriks.com",
+    phone: "+8801977201923",
+    website: "www.webbriks.com",
+    logo: "/assets/image/logo.svg",
+};
 const todayISO = () => new Date().toISOString().split("T")[0];
 const plusDaysISO = (d: number) => new Date(Date.now() + d * 86400000).toISOString().split("T")[0];
 const money = (n: number, cur: string) => `${cur === "USD" ? "$" : "৳"} ${Math.round(n).toLocaleString("en-US")}`;
@@ -130,6 +168,8 @@ function Panel({
     children,
     className,
     right,
+    plain,
+    id,
 }: {
     icon: typeof IconUser;
     title: string;
@@ -137,13 +177,18 @@ function Panel({
     children: React.ReactNode;
     className?: string;
     right?: React.ReactNode;
+    /** Heading without the icon tile. */
+    plain?: boolean;
+    id?: string;
 }) {
     return (
-        <section className={cn("rounded-xl border bg-card p-4 shadow-xs md:p-5", className)}>
+        <section id={id} className={cn("scroll-mt-4 rounded-xl border bg-card p-4 shadow-xs md:p-5", className)}>
             <header className="mb-4 flex items-start gap-3">
-                <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                    <Icon className="size-[18px]" />
-                </span>
+                {!plain && (
+                    <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                        <Icon className="size-[18px]" />
+                    </span>
+                )}
                 <div className="min-w-0 flex-1">
                     <h3 className="text-sm font-semibold leading-tight">{title}</h3>
                     {hint && <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p>}
@@ -172,11 +217,13 @@ function CheckList({
     onChange,
     addLabel,
     tone = "primary",
+    twoCol,
 }: {
     items: CheckItem[];
     onChange: (next: CheckItem[]) => void;
     addLabel: string;
     tone?: "primary" | "danger";
+    twoCol?: boolean;
 }) {
     const [draft, setDraft] = useState("");
     const add = () => {
@@ -187,6 +234,7 @@ function CheckList({
     };
     return (
         <div className="space-y-1.5">
+            <div className={cn(twoCol ? "grid gap-x-6 gap-y-1.5 sm:grid-cols-2" : "space-y-1.5")}>
             {items.map((it, i) => (
                 <div key={i} className="group flex items-center gap-2.5 rounded-md px-1 py-1 hover:bg-muted/50">
                     <Checkbox
@@ -205,6 +253,7 @@ function CheckList({
                     </button>
                 </div>
             ))}
+            </div>
             <div className="flex gap-2 pt-1">
                 <Input
                     value={draft}
@@ -240,6 +289,108 @@ function TextList({ items, onChange, addLabel }: { items: string[]; onChange: (n
                 <IconPlus className="size-4" /> {addLabel}
             </Button>
         </div>
+    );
+}
+
+type Milestone2 = { title: string; duration: string };
+
+/** Milestone rows: title + short duration chip ("1 week"). */
+function MilestoneList({ items, onChange }: { items: Milestone2[]; onChange: (n: Milestone2[]) => void }) {
+    return (
+        <div className="space-y-2">
+            {items.map((it, i) => (
+                <div key={i} className="flex items-center gap-2">
+                    <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-[11px] font-medium text-muted-foreground">{i + 1}</span>
+                    <Input value={it.title} placeholder="Milestone" onChange={(e) => onChange(items.map((x, j) => (j === i ? { ...x, title: e.target.value } : x)))} className="h-9 min-w-0 flex-1" />
+                    <Input value={it.duration} placeholder="1 week" onChange={(e) => onChange(items.map((x, j) => (j === i ? { ...x, duration: e.target.value } : x)))} className="h-9 w-24 shrink-0 text-center" />
+                    <button type="button" aria-label="Remove" onClick={() => onChange(items.filter((_, j) => j !== i))} className="text-destructive/80 hover:text-destructive"><IconTrash className="size-4" /></button>
+                </div>
+            ))}
+            <Button type="button" variant="outline" size="sm" className="w-full border-dashed bg-primary/5 text-primary" onClick={() => onChange([...items, { title: "", duration: "" }])}>
+                <IconPlus className="size-4" /> Add Milestone
+            </Button>
+        </div>
+    );
+}
+
+/** Numbered feature rows with an on/off switch and inline rename (the package's included features). */
+function FeatureToggles({ items, onChange }: { items: CheckItem[]; onChange: (n: CheckItem[]) => void }) {
+    const [editing, setEditing] = useState<number | null>(null);
+    return (
+        <div className="max-h-[22rem] space-y-1 overflow-y-auto pr-1">
+            {items.length === 0 && <p className="text-sm text-muted-foreground">Pick a package on the Services step to load its features.</p>}
+            {items.map((it, i) => (
+                <div key={i} className="flex items-center gap-2.5 rounded-md px-1 py-1.5 hover:bg-muted/50">
+                    <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-[11px] font-medium text-muted-foreground">{i + 1}</span>
+                    {editing === i ? (
+                        <Input autoFocus className="h-8 flex-1" value={it.text} onChange={(e) => onChange(items.map((x, j) => (j === i ? { ...x, text: e.target.value } : x)))} onBlur={() => setEditing(null)} onKeyDown={(e) => e.key === "Enter" && setEditing(null)} />
+                    ) : (
+                        <span className={cn("flex-1 text-sm", !it.on && "text-muted-foreground line-through")}>{it.text}</span>
+                    )}
+                    <Switch checked={it.on} onCheckedChange={(v) => onChange(items.map((x, j) => (j === i ? { ...x, on: v } : x)))} aria-label={`Include ${it.text}`} />
+                    <button type="button" aria-label="Edit feature" onClick={() => setEditing(i)} className="text-muted-foreground hover:text-primary"><IconPencil className="size-4" /></button>
+                </div>
+            ))}
+        </div>
+    );
+}
+
+/** "6 Weeks" from milestone durations like "1 week" / "3 days" / "1 month"; null if none parse. */
+function totalDuration(items: Milestone2[]): string | null {
+    let weeks = 0, found = false;
+    for (const m of items) {
+        const hit = m.duration.match(/(\d+(?:\.\d+)?)\s*(day|week|month)/i);
+        if (!hit) continue;
+        found = true;
+        const n = Number(hit[1]), u = hit[2].toLowerCase();
+        weeks += u === "day" ? n / 7 : u === "month" ? n * 4 : n;
+    }
+    if (!found) return null;
+    const w = Math.round(weeks * 10) / 10;
+    return `${w} ${w === 1 ? "Week" : "Weeks"}`;
+}
+
+const PROJECT_TYPES = ["E-commerce Website", "Corporate Website", "Web Application", "Mobile App", "UI/UX Design", "Digital Marketing", "SEO", "Other"];
+const TAX_OPTIONS = [
+    { value: "0", label: "No VAT", sub: "(Price excludes VAT)" },
+    { value: "5", label: "VAT 5%", sub: "(Added to total)" },
+    { value: "7.5", label: "VAT 7.5%", sub: "(Added to total)" },
+    { value: "15", label: "VAT 15%", sub: "(Added to total)" },
+];
+
+const parseISO = (v: string) => {
+    const [y, m, d] = v.split("-").map(Number);
+    return y ? new Date(y, m - 1, d) : undefined;
+};
+const toISO = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+/** shadcn date picker (Popover + Calendar) bound to a `yyyy-mm-dd` string. */
+function DatePicker({ value, onChange, min, className }: { value: string; onChange: (v: string) => void; min?: string; className?: string }) {
+    const [open, setOpen] = useState(false);
+    const sel = parseISO(value);
+    return (
+        <Popover open={open} onOpenChange={setOpen}>
+            <PopoverTrigger asChild>
+                <Button type="button" variant="outline" className={cn("h-10 w-full justify-start px-3 font-normal", !sel && "text-muted-foreground", className)}>
+                    <IconCalendar className="mr-2 size-4" />
+                    {sel ? sel.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "Pick a date"}
+                </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                    mode="single"
+                    selected={sel}
+                    defaultMonth={sel}
+                    disabled={min ? { before: parseISO(min) as Date } : undefined}
+                    onSelect={(d) => {
+                        if (d) {
+                            onChange(toISO(d));
+                            setOpen(false);
+                        }
+                    }}
+                />
+            </PopoverContent>
+        </Popover>
     );
 }
 
@@ -283,7 +434,17 @@ function Stepper({ step, maxStep, onGo }: { step: number; maxStep: number; onGo:
 export default function QuotationWizard() {
     const router = useRouter();
     const { data: clientsData, isLoading: clientsLoading } = useGetClientsQuery({});
-    const [createQuotation, { isLoading: saving }] = useCreateQuotationMutation();
+    const [createQuotation, { isLoading: creating }] = useCreateQuotationMutation();
+    const [updateQuotation, { isLoading: updating }] = useUpdateQuotationMutation();
+    const [sendQuotation, { isLoading: sending }] = useSendQuotationMutation();
+    const [savedId, setSavedId] = useState<string | null>(null);
+    const [savedNo, setSavedNo] = useState("");
+    const [pickerOpen, setPickerOpen] = useState(false);
+    const [sentOnce, setSentOnce] = useState(false);
+    const [zoom, setZoom] = useState(100);
+    const [expanded, setExpanded] = useState(false);
+    const [pdfBusy, setPdfBusy] = useState(false);
+    const saving = creating || updating;
 
     const [step, setStep] = useState(0);
     const [maxStep, setMaxStep] = useState(0);
@@ -291,7 +452,38 @@ export default function QuotationWizard() {
     // step 1
     const [clientId, setClientId] = useState("");
     const [snap, setSnap] = useState({ contactName: "", companyName: "", email: "", phone: "", address: "" });
-    const [title, setTitle] = useState("");
+    const [clientMode, setClientMode] = useState<"new" | "existing">("new");
+    const [clientName, setClientName] = useState("");
+    const [emails, setEmails] = useState<string[]>([""]);
+    const [officeAddress, setOfficeAddress] = useState("");
+    const [description, setDescription] = useState("");
+    const [clientStatus, setClientStatus] = useState<"active" | "inactive">("active");
+    const [telemarketer, setTelemarketer] = useState("");
+    const [assignedServices, setAssignedServices] = useState<string[]>([]);
+    const [teamMembers, setTeamMembers] = useState<{ name: string; email: string; phone: string; designation: string }[]>([]);
+    const [projectType, setProjectType] = useState("E-commerce Website");
+    const [notes, setNotes] = useState("");
+    const [creatingClient, setCreatingClient] = useState(false);
+    const [createClient] = useCreateClientMutation();
+    const { data: servicesData } = useGetServicesQuery({ isActive: true });
+    const { data: staffsData } = useGetStaffsQuery({ limit: 100 });
+    const serviceOptions = (servicesData?.data ?? []).map((x: { _id: string; name: string }) => ({ value: x._id, label: x.name }));
+    const clientOptions = (clientsData?.clients ?? []).map((c: Client) => ({ value: c._id, label: c.name, description: c.emails?.[0] }));
+    const telemarketerOptions = useMemo(() => {
+        /* eslint-disable @typescript-eslint/no-explicit-any */
+        const staffs: any[] = staffsData?.staffs || staffsData?.data || [];
+        const tele = staffs.filter((t) => /telemarketer/i.test(t.designation || t.user?.designation || t.userId?.designation || ""));
+        const list = (tele.length ? tele : staffs).map((t) => {
+            const u = typeof t.userId === "object" ? t.userId : null;
+            return {
+                value: t.user?._id || u?._id || t.userId || t._id,
+                label: t.user?.name || t.name || u?.name || "Unnamed",
+                description: t.user?.email || t.email || u?.email || "",
+            };
+        });
+        /* eslint-enable @typescript-eslint/no-explicit-any */
+        return [{ value: "", label: "Unassigned / None", description: "No telemarketer assigned" }, ...list];
+    }, [staffsData]);
     const [currency, setCurrency] = useState<"BDT" | "USD">("BDT");
     const [date, setDate] = useState(todayISO());
     const [validUntil, setValidUntil] = useState(plusDaysISO(30));
@@ -314,7 +506,11 @@ export default function QuotationWizard() {
     const [overview, setOverview] = useState("");
     const [scopeText, setScopeText] = useState("");
     const [deliverables, setDeliverables] = useState<string[]>([]);
-    const [timeline, setTimeline] = useState<string[]>([]);
+    const [title, setTitle] = useState("");
+    const [timeline, setTimeline] = useState<Milestone2[]>([]);
+    const [assets, setAssets] = useState<CheckItem[]>([]);
+    const [changeNote, setChangeNote] = useState("");
+    const [supportNote, setSupportNote] = useState("");
     const [clientResp, setClientResp] = useState<CheckItem[]>([
         { text: "Provide all required content (text, images, product details)", on: true },
         { text: "Timely feedback on design and development deliverables", on: true },
@@ -323,10 +519,15 @@ export default function QuotationWizard() {
     const [exclusions, setExclusions] = useState<string[]>([]);
 
     // step 4
-    const [lines, setLines] = useState<LineItem[]>([{ title: "", description: "", qty: 1, price: 0, billing: "one-time" }]);
-    const [discountPct, setDiscountPct] = useState(0);
+    const [lines, setLines] = useState<LineItem[]>([{ title: "", description: "", qty: 1, price: 0, discount: 0, billing: "one-time" }]);
+    const [charges, setCharges] = useState<Charge[]>([]);
+    const [editing, setEditing] = useState<string | null>("l0");
+    const [methods, setMethods] = useState<string[]>(["Bank Transfer", "bKash", "Nagad"]);
+    const [recFee, setRecFee] = useState<{ on: boolean; amount: number; freq: "monthly" | "yearly"; start: string }>({ on: false, amount: 0, freq: "monthly", start: plusDaysISO(30) });
+    const [reminders, setReminders] = useState(true);
+    const discountPct = 0; // discounts are per line item now
     const [presetKey, setPresetKey] = useState("50-50");
-    const [milestones, setMilestones] = useState<Milestone[]>(PAYMENT_PRESETS["50-50"]);
+    const [milestones, setMilestones] = useState<Milestone[]>(withDue(PAYMENT_PRESETS["50-50"]));
 
     // step 5
     const [supportDuration, setSupportDuration] = useState("12 Months");
@@ -334,19 +535,23 @@ export default function QuotationWizard() {
     const [supportExcl, setSupportExcl] = useState<CheckItem[]>(SUPPORT_EXCLUSIONS.map((text) => ({ text, on: true })));
     const [uiRev, setUiRev] = useState("3");
     const [devRev, setDevRev] = useState("5");
-    const [extraRevFee, setExtraRevFee] = useState("");
+    const [extraRevFee, setExtraRevFee] = useState("5000");
+    const [devRevFee, setDevRevFee] = useState("3000");
     const [handover, setHandover] = useState<CheckItem[]>(HANDOVER.map((text) => ({ text, on: true })));
     const [recurring, setRecurring] = useState({ billing: true, invoice: true, report: false, upgrade: false });
     const [grace, setGrace] = useState("7");
     const [suspend, setSuspend] = useState("15");
     const [cancelNotice, setCancelNotice] = useState("30");
     const [extraCharge, setExtraCharge] = useState<"feature" | "hourly" | "custom">("feature");
-    const [extraRate, setExtraRate] = useState("");
+    const [extraRate, setExtraRate] = useState("5000");
+    const [hourlyRate, setHourlyRate] = useState("2000");
+    const [customExtra, setCustomExtra] = useState("");
+    const [ownershipCustom, setOwnershipCustom] = useState("");
     const [ownership, setOwnership] = useState<"client" | "portfolio" | "custom">("client");
     const [generalTerms, setGeneralTerms] = useState<string[]>(GENERAL_TERMS);
 
     const cur = currency;
-    const hasRecurringLine = lines.some((l) => l.billing !== "one-time");
+    const hasRecurringLine = lines.some((l) => l.billing !== "one-time") || charges.some((c) => c.type !== "one-time") || recFee.on;
 
     // ── selected service → platform → package → add-ons (all from the catalog, by id) ──
     const service = tree.find((x) => x._id === serviceId);
@@ -366,9 +571,17 @@ export default function QuotationWizard() {
         const item = (title: string, price: number, description?: string, qty = 1, billingCycle: BillingCycle = "one-time") => ({
             title, price, quantity: Math.max(1, qty), billingCycle, description,
         });
-        const manual = lines
-            .filter((l) => l.title.trim())
-            .map((l) => item(l.title.trim(), Number(l.price) || 0, l.description.trim() || undefined, Number(l.qty) || 1, l.billing as BillingCycle));
+        const manual = [
+            ...lines
+                .filter((l) => l.title.trim())
+                .map((l) => {
+                    const d = Math.min(100, Math.max(0, Number(l.discount) || 0));
+                    const note = [l.description.trim(), d ? `${d}% discount applied` : ""].filter(Boolean).join(" · ");
+                    return item(l.title.trim(), (Number(l.price) || 0) * (1 - d / 100), note || undefined, Number(l.qty) || 1, l.billing as BillingCycle);
+                }),
+            ...charges.filter((c) => c.name.trim()).map((c) => item(c.name.trim(), Number(c.amount) || 0, c.description.trim() || undefined, 1, c.type as BillingCycle)),
+            ...(recFee.on && Number(recFee.amount) > 0 ? [item("Recurring Fee", Number(recFee.amount), recFee.start ? `Starts ${recFee.start}` : undefined, 1, recFee.freq as BillingCycle)] : []),
+        ];
         const base: IQuotationService = {
             category,
             catalogServiceId: service._id,
@@ -401,8 +614,15 @@ export default function QuotationWizard() {
     // ── validation per step ──
     const problem = (s: number): string | null => {
         if (s === 0) {
-            if (!clientId) return "Please select a client";
-            if (!title.trim()) return "Project title is required";
+            if (clientMode === "existing" && !clientId) return "Please select a client";
+            if (!clientName.trim()) return "Client name is required";
+            if (!snap.companyName.trim()) return "Company name is required";
+            if (!snap.contactName.trim()) return "Contact person is required";
+            if (!emails.some((e) => /^\S+@\S+\.\S+$/.test(e.trim()))) return "A valid email address is required";
+            if (emails.some((e) => e.trim() && !/^\S+@\S+\.\S+$/.test(e.trim()))) return "One of the email addresses is invalid";
+            if (!snap.phone.trim()) return "Phone number is required";
+            if (!snap.address.trim()) return "Billing address is required";
+            if (teamMembers.some((m) => !m.name.trim() || !/^\S+@\S+\.\S+$/.test(m.email.trim()))) return "Each team member needs a name and a valid email";
             if (new Date(validUntil) < new Date(date)) return "Valid-until date cannot be earlier than the quotation date";
         }
         if (s === 1) {
@@ -417,10 +637,33 @@ export default function QuotationWizard() {
         return null;
     };
 
-    const go = (to: number) => {
+    const go = async (to: number) => {
         if (to > step) {
             const p = problem(step);
             if (p) return toast.error(p);
+            if (step === 0 && !clientId) {
+                setCreatingClient(true);
+                try {
+                    const c = await createClient({
+                        name: clientName.trim(),
+                        emails: emails.map((e) => e.trim()).filter(Boolean),
+                        phone: snap.phone.trim(),
+                        address: snap.address.trim(),
+                        officeAddress: officeAddress.trim() || undefined,
+                        description: description.trim() || undefined,
+                        currency,
+                        status: clientStatus,
+                        teamMembers: teamMembers.map((m) => ({ name: m.name.trim(), email: m.email.trim(), phone: m.phone.trim() || undefined, designation: m.designation.trim() || undefined })),
+                        assignedServices,
+                        assignedTelemarketer: telemarketer || undefined,
+                    } as never).unwrap();
+                    setClientId(c._id);
+                } catch (err) {
+                    return toast.error((err as { data?: { message?: string } })?.data?.message || "Failed to create client.");
+                } finally {
+                    setCreatingClient(false);
+                }
+            }
         }
         setStep(to);
         setMaxStep((m) => Math.max(m, to));
@@ -439,6 +682,27 @@ export default function QuotationWizard() {
         if (p.supportInclusions.length) setInclusions(p.supportInclusions.map((text) => ({ text, on: true })));
         if (p.additionalCharges.length) setSupportExcl(p.additionalCharges.map((text) => ({ text, on: true })));
         setGeneralTerms([...GENERAL_TERMS, ...p.notes]);
+
+        // Scope content from the catalog: package-level section overrides the service-wide one.
+        const svc = tree.find((x) => x._id === p.serviceId);
+        const sec = (kind: CatalogSectionKind) => {
+            const all = (svc?.sections ?? []).filter((x) => x.kind === kind);
+            return all.find((x) => String(x.packageId ?? "") === p._id) ?? all.find((x) => !x.packageId);
+        };
+        const titles = (kind: CatalogSectionKind) => (sec(kind)?.items ?? []).map((i) => i.title);
+        const company = snap.companyName.trim();
+        const t = sec("projectTitle")?.text?.trim();
+        setTitle(t ? (company ? `${t} — ${company}` : t) : "");
+        setOverview(sec("projectOverview")?.text ?? "");
+        setScopeText(sec("scopeOfWork")?.text ?? "");
+        setDeliverables(titles("deliverables"));
+        setTimeline((sec("milestones")?.items ?? []).map((i) => ({ title: i.title, duration: unitLabel(i.duration) })));
+        const resp = titles("clientResponsibilities");
+        if (resp.length) setClientResp(resp.map((text) => ({ text, on: true })));
+        setAssets(titles("requiredAssets").map((text) => ({ text, on: false })));
+        setExclusions(titles("exclusions"));
+        setChangeNote(sec("changeRequestNote")?.text ?? "");
+        setSupportNote(sec("supportNote")?.text ?? "");
     };
 
     const pickPlatform = (id: string) => {
@@ -461,14 +725,25 @@ export default function QuotationWizard() {
         const c = clientsData?.clients?.find((x: Client) => x._id === id);
         if (!c) return;
         setClientId(id);
+        setClientName(c.name || "");
         setSnap({
-            contactName: c.name || "Valued Client",
+            contactName: c.teamMembers?.[0]?.name || c.name || "Valued Client",
             companyName: c.name || "",
-            email: c.emails?.[0] || "",
+            email: "",
             phone: c.phone || "",
             address: c.address || c.officeAddress || "",
         });
+        setEmails(c.emails?.length ? c.emails : [""]);
         if (c.currency === "USD") setCurrency("USD");
+    };
+
+    const switchMode = (m: "new" | "existing") => {
+        if (m === clientMode) return;
+        setClientMode(m);
+        setClientId("");
+        setClientName("");
+        setSnap({ contactName: "", companyName: "", email: "", phone: "", address: "" });
+        setEmails([""]);
     };
 
     // ── save ──
@@ -479,19 +754,20 @@ export default function QuotationWizard() {
             ...(duration ? [`Estimated delivery: ${duration}`] : []),
             ...(supportPeriod ? [`Support period: ${supportPeriod}`] : []),
             ...inclusions.filter((i) => i.on).map((i) => i.text),
+            ...(supportNote.trim() ? [supportNote.trim()] : []),
         ];
         const keyTerms = [
-            `UI/UX revisions included: ${uiRev}; development revisions included: ${devRev}.${extraRevFee ? ` Additional revisions are charged at ${extraRevFee} per round.` : ""}`,
+            `UI/UX revisions included: ${uiRev}${extraRevFee ? ` (additional rounds ${extraRevFee} per round)` : ""}; development revisions included: ${devRev}${devRevFee ? ` (additional rounds ${devRevFee} per round)` : ""}.`,
             extraCharge === "feature"
-                ? `Extra features / change requests are charged per feature${extraRate ? ` at ${extraRate}` : ""}.`
+                ? `Extra features / change requests are charged per feature/module${extraRate ? ` at ${extraRate}` : ""}.`
                 : extraCharge === "hourly"
-                  ? `Extra work is charged hourly${extraRate ? ` at ${extraRate} per hour` : ""}.`
-                  : msg("Extra work", extraRate),
+                  ? `Extra work is charged hourly${hourlyRate ? ` at ${hourlyRate} per hour` : ""}.`
+                  : msg("Extra work", customExtra),
             ownership === "client"
                 ? "Full ownership is transferred to the client after final payment."
                 : ownership === "portfolio"
                   ? "WebBriks retains the right to showcase the project in its portfolio."
-                  : "",
+                  : msg("Ownership", ownershipCustom),
             hasRecurringLine
                 ? `Recurring services: ${[
                       recurring.billing && "billing resumes after project completion",
@@ -503,127 +779,331 @@ export default function QuotationWizard() {
                       .join("; ")}. Grace period ${grace} days, services suspended after ${suspend} days of non-payment. Cancellation requires ${cancelNotice} days' written notice.`
                 : "",
             ...handover.filter((h) => h.on).map((h) => `Handover condition: ${h.text}`),
+            ...(methods.length ? [`Accepted payment methods: ${methods.join(", ")}.`] : []),
+            ...(milestones[0] ? [`Advance payment: ${milestones[0].percentage}% to start the project.`] : []),
+            ...(reminders ? ["Automatic payment reminders are sent before each due date."] : []),
+            ...(changeNote.trim() ? [`Change requests: ${changeNote.trim()}`] : []),
             ...generalTerms.filter((t) => t.trim()),
         ].filter(Boolean);
 
-        const overviewFull = [overview.trim()].filter(Boolean).join("\n\n");
+        const overviewFull = [overview.trim(), notes.trim()].filter(Boolean).join("\n\n");
 
         return {
             serviceType: (category ?? "web-development") as QuotationCategory,
             clientId,
             currency,
-            company: {
-                name: "WebBriks",
-                address: "115 Senpara Parbata, Mirpur, Dhaka 1216, Bangladesh.",
-                email: "info@webbriks.com",
-                phone: "+8801977201923",
-                website: "www.webbriks.com",
-                logo: "/assets/image/logo.svg",
-            },
-            client: snap,
-            details: { title: title.trim() || "Untitled Project", date: new Date(date).toISOString(), validUntil: new Date(validUntil).toISOString() },
+            company: COMPANY,
+            client: { ...snap, email: emails.find((e) => e.trim())?.trim() ?? "" },
+            details: { title: title.trim() || `${projectType} — ${snap.companyName.trim() || clientName.trim()}`, date: new Date(date).toISOString(), validUntil: new Date(validUntil).toISOString() },
             overview: overviewFull,
             services: builtServices,
             notIncluded: [...exclusions.filter((e) => e.trim()), ...supportExcl.filter((s) => s.on).map((s) => s.text)],
-            clientRequirements: clientResp.filter((c) => c.on).map((c) => c.text),
+            clientRequirements: [...clientResp.filter((c) => c.on).map((c) => c.text), ...assets.filter((a) => a.on).map((a) => `Required from client: ${a.text}`)],
             includedSupport: supportLines,
             keyTerms,
-            workflow: [...deliverables.filter((d) => d.trim()).map((d) => `Deliverable: ${d}`), ...timeline.filter((t) => t.trim())],
-            paymentMilestones: milestones.map((m) => ({ label: m.label, percentage: Number(m.percentage) || 0, note: m.note || undefined })),
+            workflow: [...deliverables.filter((d) => d.trim()).map((d) => `Deliverable: ${d}`), ...timeline.filter((t) => t.title.trim()).map((t) => (t.duration.trim() ? `${t.title.trim()} — ${t.duration.trim()}` : t.title.trim()))],
+            paymentMilestones: milestones.map((m) => ({ label: m.label, percentage: Number(m.percentage) || 0, note: [m.note, m.due ? `Due ${m.due}` : ""].filter(Boolean).join(" · ") || undefined })),
             status: "draft",
         };
     };
 
-    const save = async () => {
-        for (let s = 0; s <= 3; s++) {
-            const p = problem(s);
-            if (p) {
-                setStep(s);
-                return toast.error(p);
+    /** Creates the quotation on first call, updates it afterwards. Returns its id, or null on failure. */
+    const persist = async (): Promise<string | null> => {
+        for (let st = 0; st <= 3; st++) {
+            const pr = problem(st);
+            if (pr) {
+                setStep(st);
+                toast.error(pr);
+                return null;
             }
         }
         try {
-            const res = await createQuotation(buildPayload() as never).unwrap();
-            toast.success("Quotation saved as draft");
-            router.push(`/quotations/${res._id}`);
+            const payload = buildPayload();
+            if (savedId) {
+                await updateQuotation({ id: savedId, ...payload } as never).unwrap();
+                return savedId;
+            }
+            const res = await createQuotation(payload as never).unwrap();
+            setSavedId(res._id ?? null);
+            setSavedNo(res.quotationNumber ?? "");
+            return res._id ?? null;
         } catch (err) {
             toast.error((err as { data?: { message?: string } })?.data?.message || "Failed to save quotation.");
+            return null;
+        }
+    };
+
+    const save = async () => {
+        const id = await persist();
+        if (!id) return;
+        toast.success("Quotation saved as draft");
+        router.push(`/quotations/${id}`);
+    };
+
+    const downloadPdf = async () => {
+        const id = await persist();
+        if (!id) return;
+        setPdfBusy(true);
+        try {
+            const res = await fetch(publicApiUrl(`/api/quotations/${id}/pdf/puppeteer`), { credentials: "include", mode: "cors" });
+            if (!res.ok) throw new Error((await res.json().catch(() => ({})))?.message || res.statusText || "Download failed");
+            const blob = await res.blob();
+            if (!blob.size) throw new Error("Empty PDF response");
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `${savedNo || title.trim() || "quotation"}.pdf`.replace(/[/\\?%*:|"<>]/g, "-");
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 2500);
+        } catch (err) {
+            toast.error((err as Error).message || "Could not download the PDF");
+        } finally {
+            setPdfBusy(false);
+        }
+    };
+
+    const openSend = async () => {
+        if (await persist()) setPickerOpen(true);
+    };
+
+    const confirmSend = async (selected: string[]) => {
+        if (!savedId || sending) return [];
+        if (!selected.length) {
+            toast.warning("Please select at least one recipient");
+            return [];
+        }
+        try {
+            const result = await sendQuotation({ id: savedId, emails: selected, includePaymentLink: false }).unwrap();
+            const recipients = result.data.recipients ?? [];
+            const sent = recipients.filter((r) => r.status === "sent").length;
+            const failed = recipients.length - sent;
+            if (sent) setSentOnce(true);
+            if (result.data.clientLink) navigator.clipboard?.writeText(result.data.clientLink).then(() => toast.success("Client link copied to clipboard!")).catch(() => {});
+            if (sent && !failed) toast.success(`Quotation sent to ${sent} recipient${sent === 1 ? "" : "s"}`);
+            else if (sent) toast.warning(`Sent to ${sent}, failed for ${failed}. See dialog for details.`);
+            else toast.error(result.data.emailError || "Failed to send the quotation");
+            return recipients;
+        } catch (err) {
+            toast.error((err as { data?: { message?: string } })?.data?.message || "Failed to send the quotation");
+            return [];
         }
     };
 
     // ───────────── step bodies ─────────────
 
+    const typeCard = (m: "new" | "existing", Icon: typeof IconUser, label: string, sub: string) => (
+        <button
+            type="button"
+            role="radio"
+            aria-checked={clientMode === m}
+            onClick={() => switchMode(m)}
+            className={cn(
+                "flex flex-1 items-center gap-3 rounded-lg border px-4 py-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50",
+                clientMode === m ? "border-primary bg-primary/5 ring-1 ring-primary/30" : "bg-card hover:bg-muted/50",
+            )}
+        >
+            <span className={cn("flex size-4 shrink-0 items-center justify-center rounded-full border", clientMode === m ? "border-primary" : "border-muted-foreground/50")}>
+                {clientMode === m && <span className="size-2 rounded-full bg-primary" />}
+            </span>
+            <Icon className={cn("size-5 shrink-0", clientMode === m ? "text-primary" : "text-muted-foreground")} />
+            <span className="min-w-0">
+                <span className={cn("block text-sm font-semibold leading-tight", clientMode === m && "text-primary")}>{label}</span>
+                <span className="block text-[11px] text-muted-foreground">{sub}</span>
+            </span>
+        </button>
+    );
+
     const clientStep = (
-        <Panel icon={IconBuilding} title="Client Details" hint="Pick the client this quotation is for, then name the project.">
-            <div className="grid gap-4 md:grid-cols-3">
-                <Field label="Client" required className="md:col-span-2">
-                    <Select value={clientId} onValueChange={pickClient}>
-                        <SelectTrigger className="h-10 w-full">
-                            <SelectValue placeholder={clientsLoading ? "Loading clients…" : "Select a client"} />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {clientsData?.clients?.map((c: Client) => (
-                                <SelectItem key={c._id} value={c._id}>
-                                    {c.name}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
+        <section className="rounded-xl border bg-card p-4 shadow-xs md:p-6">
+            <header className="mb-6 flex flex-wrap items-start justify-between gap-4">
+                <div className="flex items-start gap-4">
+                    <span className="flex size-14 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                        <IconBuilding className="size-7" />
+                    </span>
+                    <div>
+                        <h2 className="text-xl font-bold leading-tight">Client Details</h2>
+                        <p className="mt-1 text-sm text-muted-foreground">Add client information for this quotation. You can select an existing client or create a new one.</p>
+                    </div>
+                </div>
+                <div className="w-full sm:w-auto">
+                    <p className="mb-1.5 text-xs font-semibold">Client Type</p>
+                    <div role="radiogroup" aria-label="Client type" className="flex gap-3">
+                        {typeCard("new", IconUserPlus, "New Client", "Create a new client")}
+                        {typeCard("existing", IconUsers, "Existing Client", "Select from your client list")}
+                    </div>
+                </div>
+            </header>
+
+            {clientMode === "existing" && (
+                <Field label="Select Client" required className="mb-5">
+                    <Combobox
+                        options={clientOptions}
+                        value={clientId}
+                        onChange={pickClient}
+                        isLoading={clientsLoading}
+                        placeholder="Choose a client from your list"
+                        searchPlaceholder="Search client by name or email…"
+                        emptyText="No client found"
+                        className="h-10"
+                    />
                 </Field>
-                <Field label="Currency" required>
+            )}
+
+            <div className="grid gap-x-5 gap-y-4 md:grid-cols-2 xl:grid-cols-3">
+                <Field label="Client Name" required>
+                    <Input className="h-10" placeholder="e.g. ABC Fashion Ltd." value={clientName} onChange={(e) => setClientName(e.target.value)} />
+                </Field>
+                <Field label="Company Name" required>
+                    <Input className="h-10" placeholder="Company name" value={snap.companyName} onChange={(e) => setSnap({ ...snap, companyName: e.target.value })} />
+                </Field>
+                <Field label="Contact Person" required>
+                    <Input className="h-10" placeholder="e.g. John Doe" value={snap.contactName} onChange={(e) => setSnap({ ...snap, contactName: e.target.value })} />
+                </Field>
+
+                <div className="space-y-2">
+                    <Label className="text-xs font-medium">Email Address <span className="text-destructive">*</span></Label>
+                    {emails.map((em, i) => (
+                        <div key={i} className="flex gap-2">
+                            <Input type="email" className="h-10" placeholder="name@company.com" value={em} onChange={(e) => setEmails(emails.map((x, j) => (j === i ? e.target.value : x)))} />
+                            {emails.length > 1 && (
+                                <Button type="button" variant="outline" size="icon" className="size-10 shrink-0" aria-label="Remove email" onClick={() => setEmails(emails.filter((_, j) => j !== i))}>
+                                    <IconTrash className="size-4" />
+                                </Button>
+                            )}
+                        </div>
+                    ))}
+                    <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-primary" onClick={() => setEmails([...emails, ""])}>
+                        <IconPlus className="size-3.5" /> Add email
+                    </Button>
+                </div>
+                <Field label="Phone Number" required>
+                    <Input type="tel" className="h-10" placeholder="+880 1XXX XXXXXX" value={snap.phone} onChange={(e) => setSnap({ ...snap, phone: e.target.value })} />
+                </Field>
+                <Field label="Preferred Currency" required>
                     <Select value={currency} onValueChange={(v) => setCurrency(v as "BDT" | "USD")}>
-                        <SelectTrigger className="h-10 w-full">
-                            <SelectValue />
-                        </SelectTrigger>
+                        <SelectTrigger className="h-10 w-full"><SelectValue /></SelectTrigger>
                         <SelectContent>
                             <SelectItem value="BDT">BDT (৳) — Bangladeshi Taka</SelectItem>
                             <SelectItem value="USD">USD ($) — US Dollar</SelectItem>
                         </SelectContent>
                     </Select>
                 </Field>
-                <Field label="Contact Person">
-                    <Input value={snap.contactName} onChange={(e) => setSnap({ ...snap, contactName: e.target.value })} />
+
+                <Field label="Billing Address" required>
+                    <Textarea rows={3} className="resize-none" placeholder="House, road, area, city, postal code" value={snap.address} onChange={(e) => setSnap({ ...snap, address: e.target.value })} />
                 </Field>
-                <Field label="Company Name">
-                    <Input value={snap.companyName} onChange={(e) => setSnap({ ...snap, companyName: e.target.value })} />
+                {clientMode === "new" && (
+                    <Field label="Office Address">
+                        <Textarea rows={3} className="resize-none" placeholder="Suite, building, business park" value={officeAddress} onChange={(e) => setOfficeAddress(e.target.value)} />
+                    </Field>
+                )}
+                {clientMode === "new" && (
+                    <Field label="Status">
+                        <Select value={clientStatus} onValueChange={(v) => setClientStatus(v as "active" | "inactive")}>
+                            <SelectTrigger className="h-10 w-full"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="active">Active</SelectItem>
+                                <SelectItem value="inactive">Inactive</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </Field>
+                )}
+
+                {clientMode === "new" && (
+                    <>
+                        <Field label="Assigned Services" className="md:col-span-2">
+                            <MultiSelect options={serviceOptions} selected={assignedServices} onChange={setAssignedServices} placeholder="Select services…" />
+                        </Field>
+                        <Field label="Telemarketer">
+                            <Combobox
+                                options={telemarketerOptions}
+                                value={telemarketer}
+                                onChange={setTelemarketer}
+                                placeholder="Hand over to a telemarketer…"
+                                searchPlaceholder="Search by name or email…"
+                                emptyText="No telemarketer found"
+                                className="h-10"
+                            />
+                        </Field>
+                        <Field label="Client Description" className="md:col-span-2 xl:col-span-3">
+                            <Textarea rows={2} className="resize-none" placeholder="Notes about this client" value={description} onChange={(e) => setDescription(e.target.value)} />
+                        </Field>
+                    </>
+                )}
+
+                <Field label="Project Type" required>
+                    <Select value={projectType} onValueChange={setProjectType}>
+                        <SelectTrigger className="h-10 w-full"><SelectValue /></SelectTrigger>
+                        <SelectContent>{PROJECT_TYPES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+                    </Select>
                 </Field>
-                <Field label="Email Address">
-                    <Input type="email" value={snap.email} onChange={(e) => setSnap({ ...snap, email: e.target.value })} />
+                <Field label="Tax / VAT Option">
+                    <Select value={String(taxPct)} onValueChange={(v) => setTaxPct(Number(v))}>
+                        <SelectTrigger className="h-10 w-full"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                            {TAX_OPTIONS.map((t) => (
+                                <SelectItem key={t.value} value={t.value}>{t.label} <span className="text-muted-foreground">{t.sub}</span></SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
                 </Field>
-                <Field label="Phone Number">
-                    <Input value={snap.phone} onChange={(e) => setSnap({ ...snap, phone: e.target.value })} />
-                </Field>
-                <Field label="Billing Address" className="md:col-span-2">
-                    <Input value={snap.address} onChange={(e) => setSnap({ ...snap, address: e.target.value })} />
-                </Field>
-                <Field label="Project Title" required className="md:col-span-3">
-                    <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. E-Commerce Website Development — ABC Fashion Ltd." />
-                </Field>
+                <div className="hidden xl:block" />
                 <Field label="Quotation Date" required>
-                    <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+                    <DatePicker value={date} onChange={setDate} />
                 </Field>
                 <Field label="Valid Until" required>
-                    <Input type="date" value={validUntil} onChange={(e) => setValidUntil(e.target.value)} />
+                    <DatePicker value={validUntil} onChange={setValidUntil} min={date} />
                 </Field>
-                <Field label="VAT / Tax (%)">
-                    <Input type="number" min={0} max={100} value={taxPct} onChange={(e) => setTaxPct(Number(e.target.value) || 0)} />
+
+                {clientMode === "new" && (
+                    <div className="space-y-3 md:col-span-2 xl:col-span-3">
+                        <div className="flex items-center justify-between">
+                            <Label className="text-xs font-medium">Team Members</Label>
+                            <Button type="button" variant="outline" size="sm" onClick={() => setTeamMembers([...teamMembers, { name: "", email: "", phone: "", designation: "" }])}>
+                                <IconPlus className="size-3.5" /> Add member
+                            </Button>
+                        </div>
+                        {teamMembers.map((m, i) => (
+                            <div key={i} className="grid gap-2 rounded-lg border p-3 md:grid-cols-[1fr_1fr_1fr_1fr_auto]">
+                                {(["name", "email", "phone", "designation"] as const).map((k) => (
+                                    <Input
+                                        key={k}
+                                        className="h-10"
+                                        type={k === "email" ? "email" : "text"}
+                                        placeholder={k === "name" ? "Name *" : k === "email" ? "Email *" : k === "phone" ? "Phone" : "Designation"}
+                                        value={m[k]}
+                                        onChange={(e) => setTeamMembers(teamMembers.map((x, j) => (j === i ? { ...x, [k]: e.target.value } : x)))}
+                                    />
+                                ))}
+                                <Button type="button" variant="outline" size="icon" className="size-10" aria-label="Remove member" onClick={() => setTeamMembers(teamMembers.filter((_, j) => j !== i))}>
+                                    <IconTrash className="size-4" />
+                                </Button>
+                            </div>
+                        ))}
+                    </div>
+                )}
+
+                <Field label="Additional Notes (Optional)" className="md:col-span-2 xl:col-span-3">
+                    <Textarea rows={2} maxLength={500} className="resize-none" placeholder="Add any additional information about the client, project or special requirements…" value={notes} onChange={(e) => setNotes(e.target.value)} />
+                    <p className="text-right text-[11px] text-muted-foreground">{notes.length}/500</p>
                 </Field>
             </div>
-        </Panel>
+        </section>
     );
 
     const servicesStep = (
-        <div className="space-y-4">
-            <div className="grid items-start gap-4 2xl:grid-cols-2">
-                <div className="space-y-4">
-                    <Panel icon={IconListCheck} title="1. Select Service Category" hint="Choose the service you want to include in this quotation.">
+        <>
+                <div className={cn("min-w-0 space-y-4 xl:col-start-1", !pkg && "xl:col-span-2")}>
+                    <Panel plain icon={IconListCheck} title="1. Select Service Category" hint="Choose the service you want to include in this quotation.">
                         {catalogLoading && <p className="text-sm text-muted-foreground">Loading services…</p>}
                         {!catalogLoading && tree.length === 0 && (
                             <p className="text-sm text-muted-foreground">
                                 No services in the catalog yet. Add them from <Link href="/catalog" className="text-primary underline">Service Catalog</Link>.
                             </p>
                         )}
-                        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                        <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-4">
                             {tree.map((s) => {
                                 const Icon = catalogIcon(s.icon);
                                 const on = serviceId === s._id;
@@ -652,8 +1132,8 @@ export default function QuotationWizard() {
                     </Panel>
 
                     {service && service.platforms.length > 0 && (
-                        <Panel icon={IconCode} title="2. Select Platform / Technology" hint="Choose the technology stack for your project.">
-                            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                        <Panel plain icon={IconCode} title="2. Select Platform / Technology" hint="Choose the technology stack for your project.">
+                            <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-4">
                                 {service.platforms.map((p) => {
                                     const on = platformId === p._id;
                                     return (
@@ -689,8 +1169,8 @@ export default function QuotationWizard() {
                     )}
 
                     {service && pkgs.length > 0 && (
-                        <Panel icon={IconListCheck} title={`${service.platforms.length > 0 ? "3" : "2"}. Select Package`} hint={isUnit ? "Choose what you are quoting, then set quantity and rate." : "Choose a package or go with custom build."}>
-                            <div className={cn("grid gap-3", pkgs.length > 2 ? "md:grid-cols-3" : "md:grid-cols-2")}>
+                        <Panel plain icon={IconListCheck} title={`${service.platforms.length > 0 ? "3" : "2"}. Select Package`} hint={isUnit ? "Choose what you are quoting, then set quantity and rate." : "Choose a package or go with custom build."}>
+                            <div className={cn("grid gap-3", pkgs.length > 2 ? "sm:grid-cols-2 2xl:grid-cols-3" : "sm:grid-cols-2")}>
                                 {pkgs.map((p) => {
                                     const on = pkgId === p._id;
                                     return (
@@ -750,7 +1230,7 @@ export default function QuotationWizard() {
                         </Panel>
                     )}
                     {service && pkgs.length === 0 && (
-                        <Panel icon={IconInfoCircle} title="Packages" hint="No packages defined for this selection.">
+                        <Panel plain icon={IconInfoCircle} title="Packages" hint="No packages defined for this selection.">
                             <p className="text-sm text-muted-foreground">
                                 Add packages in <Link href="/catalog" className="text-primary underline">Service Catalog</Link>, or price this service with line items on the Pricing step.
                             </p>
@@ -759,8 +1239,10 @@ export default function QuotationWizard() {
                 </div>
 
                 {service && pkg && (
-                    <div className="space-y-4">
+                    <div className="min-w-0 space-y-4 xl:col-start-2">
                         <Panel
+                            plain
+                            id="sec-features"
                             icon={IconSettings}
                             title={`${service.platforms.length > 0 ? "4" : "3"}. Included Features`}
                             hint="Edit, add or remove features for this quotation."
@@ -773,8 +1255,8 @@ export default function QuotationWizard() {
                             <FeatureEditor items={features} onChange={setFeatures} />
                         </Panel>
                         {addonList.length > 0 && (
-                            <Panel icon={IconPlus} title={`${service.platforms.length > 0 ? "5" : "4"}. Optional Add-on Features`} hint="Add features to enhance the package.">
-                                <ul className="divide-y">
+                            <Panel plain id="sec-addons" icon={IconPlus} title={`${service.platforms.length > 0 ? "5" : "4"}. Optional Add-on Features`} hint="Add features to enhance the package.">
+                                <ul className="max-h-80 divide-y overflow-y-auto pr-1">
                                     {addonList.map((a) => (
                                         <li key={a._id}>
                                             <label className="flex cursor-pointer items-center gap-3 py-2 text-sm">
@@ -793,119 +1275,281 @@ export default function QuotationWizard() {
                         )}
                     </div>
                 )}
-            </div>
-        </div>
+        </>
     );
 
+    const durTotal = totalDuration(timeline);
     const scopeStep = (
         <div className="space-y-4">
-            <div className="grid gap-4 lg:grid-cols-2">
-                <Panel icon={IconFileText} title="Project Overview" hint="A brief overview of the project and its objectives.">
-                    <Textarea rows={7} value={overview} onChange={(e) => setOverview(e.target.value)} placeholder="Design and develop a modern, scalable…" />
-                    <p className="mt-1 text-right text-[11px] text-muted-foreground">{overview.length}/1000</p>
-                </Panel>
-                <Panel icon={IconFileText} title="Scope of Work" hint="Define the overall scope of work for this project.">
-                    <Textarea rows={7} value={scopeText} onChange={(e) => setScopeText(e.target.value)} placeholder="The scope includes UI/UX design, frontend & backend development…" />
-                    <p className="mt-1 text-right text-[11px] text-muted-foreground">{scopeText.length}/1000</p>
+            <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
+                <div className="grid gap-4 lg:grid-cols-2">
+                    <Panel icon={IconFileText} title="Project Overview" hint="Provide a brief overview of the project and its objectives.">
+                        <div className="space-y-3">
+                            <Field label="Project Title" required>
+                                <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={`${projectType} — ${snap.companyName || clientName || "Client"}`} />
+                            </Field>
+                            <Field label="Project Overview" required>
+                                <Textarea rows={6} maxLength={1000} className="resize-none" value={overview} onChange={(e) => setOverview(e.target.value)} placeholder="Design and develop a modern, scalable…" />
+                                <p className="text-right text-[11px] text-muted-foreground">{overview.length}/1000</p>
+                            </Field>
+                        </div>
+                    </Panel>
+                    <Panel icon={IconFileText} title="Scope of Work" hint="Define the overall scope of work for this project.">
+                        <Textarea rows={9} maxLength={1000} className="resize-none" value={scopeText} onChange={(e) => setScopeText(e.target.value)} placeholder="The scope includes UI/UX design, frontend & backend development…" />
+                        <p className="mt-1 text-right text-[11px] text-muted-foreground">{scopeText.length}/1000</p>
+                    </Panel>
+                </div>
+                <Panel plain icon={IconFileText} title="Quotation Summary" right={<button type="button" onClick={() => go(0)} className="text-xs font-medium text-primary hover:underline">Edit client</button>}>
+                    <div className="mb-4 flex items-center gap-3">
+                        <span className="flex size-14 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-lg font-bold text-primary">
+                            {(snap.companyName || clientName || "?").trim().slice(0, 3).toUpperCase()}
+                        </span>
+                        <div className="min-w-0">
+                            <p className="truncate font-semibold leading-tight">{snap.companyName || clientName || "—"}</p>
+                            <p className="line-clamp-2 text-xs text-muted-foreground">{snap.address || "—"}</p>
+                        </div>
+                    </div>
+                    <dl className="space-y-2 text-xs">
+                        <Row k="Quotation No" v="Auto-generated on save" />
+                        <Row k="Date" v={date} />
+                        <Row k="Valid Until" v={validUntil} />
+                        <Row k="Client Contact" v={snap.contactName || "—"} />
+                        <Row k="Email" v={emails.find((e) => e.trim()) || "—"} />
+                        <Row k="Phone" v={snap.phone || "—"} />
+                    </dl>
                 </Panel>
             </div>
-            <div className="grid gap-4 lg:grid-cols-2">
-                <Panel icon={IconListCheck} title="Deliverables" hint="List the key deliverables for this project.">
-                    <TextList items={deliverables} onChange={setDeliverables} addLabel="Add deliverable" />
+
+            <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
+                <Panel icon={IconBox} title="Deliverables" hint="List the key deliverables for this project.">
+                    <TextList items={deliverables} onChange={setDeliverables} addLabel="Add Deliverable" />
                 </Panel>
-                <Panel icon={IconReceipt} title="Project Milestones & Timeline" hint="Major milestones and estimated time, e.g. “UI/UX Design & Approval — 1 week”.">
-                    <TextList items={timeline} onChange={setTimeline} addLabel="Add milestone" />
+                <Panel icon={IconCalendar} title="Project Milestones & Timeline" hint="Define major milestones and estimated timeline.">
+                    <MilestoneList items={timeline} onChange={setTimeline} />
+                    {durTotal && (
+                        <div className="mt-3 flex items-start gap-2 rounded-lg bg-primary/5 p-3">
+                            <IconClock className="mt-0.5 size-5 shrink-0 text-primary" />
+                            <div>
+                                <p className="text-xs font-semibold text-primary">Estimated Project Duration: {durTotal}</p>
+                                <p className="text-[11px] text-muted-foreground">Timeline may vary based on client feedback and content availability.</p>
+                            </div>
+                        </div>
+                    )}
                 </Panel>
-            </div>
-            <div className="grid gap-4 lg:grid-cols-2">
+                <Panel
+                    icon={IconListCheck}
+                    title="Included Features"
+                    hint="Core features included in this package."
+                    right={pkg ? <Button type="button" variant="outline" size="sm" className="h-7 text-primary" onClick={() => selectPackage(pkg)}>Reset to Default</Button> : undefined}
+                >
+                    <FeatureToggles items={features} onChange={setFeatures} />
+                </Panel>
+
                 <Panel icon={IconUser} title="Client Responsibilities" hint="What we expect from the client during the project.">
                     <CheckList items={clientResp} onChange={setClientResp} addLabel="Add responsibility…" />
                 </Panel>
+                <Panel icon={IconFolder} title="Required Assets from Client" hint="List the assets, access and information required from client.">
+                    <CheckList items={assets} onChange={setAssets} addLabel="Add required asset…" />
+                </Panel>
+                <Panel icon={IconPlus} title="Add-on Deliverables (Optional)" hint="Additional features or services that can be added.">
+                    {addonList.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">No add-ons for this package.</p>
+                    ) : (
+                        <ul className="max-h-72 divide-y overflow-y-auto pr-1">
+                            {addonList.map((a) => (
+                                <li key={a._id}>
+                                    <label className="flex cursor-pointer items-center gap-3 py-2 text-sm">
+                                        <Checkbox checked={addonsOn.includes(a._id)} onCheckedChange={(v) => setAddonsOn(v ? [...addonsOn, a._id] : addonsOn.filter((n) => n !== a._id))} />
+                                        <span className="flex-1">{a.name}</span>
+                                        <span className="w-20 text-right font-medium">{money(a.price, cur)}</span>
+                                    </label>
+                                </li>
+                            ))}
+                        </ul>
+                    )}
+                </Panel>
+
                 <Panel icon={IconX} title="Exclusions" hint="Clearly mention what is not included in this quotation.">
-                    <TextList items={exclusions} onChange={setExclusions} addLabel="Add exclusion" />
+                    <Textarea rows={6} maxLength={1000} className="resize-none" value={exclusions.join("\n")} onChange={(e) => setExclusions(e.target.value.split("\n"))} placeholder="One exclusion per line" />
+                    <p className="mt-1 text-right text-[11px] text-muted-foreground">{exclusions.join("\n").length}/1000</p>
+                </Panel>
+                <Panel icon={IconAlertTriangle} title="Change Request Notes" hint="Define how change requests will be handled.">
+                    <Textarea rows={6} maxLength={1000} className="resize-none" value={changeNote} onChange={(e) => setChangeNote(e.target.value)} placeholder="Any changes to the agreed scope after project initiation will be considered as change requests…" />
+                    <p className="mt-1 text-right text-[11px] text-muted-foreground">{changeNote.length}/1000</p>
+                </Panel>
+                <Panel icon={IconTools} title="Support & Maintenance Notes" hint="Include support and post-launch details.">
+                    <Textarea rows={6} maxLength={1000} className="resize-none" value={supportNote} onChange={(e) => setSupportNote(e.target.value)} placeholder="This package includes technical support for bug fixes and minor issues…" />
+                    <p className="mt-1 text-right text-[11px] text-muted-foreground">{supportNote.length}/1000</p>
                 </Panel>
             </div>
         </div>
     );
 
     const setLine = (i: number, patch: Partial<LineItem>) => setLines(lines.map((l, j) => (j === i ? { ...l, ...patch } : l)));
+    const setCharge = (i: number, patch: Partial<Charge>) => setCharges(charges.map((c, j) => (j === i ? { ...c, ...patch } : c)));
+    const fmtDate = (v?: string) => (v ? (parseISO(v) as Date).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "—");
+    const DISCOUNTS = [0, 5, 10, 15, 20, 25, 30, 40, 50];
+    const pkgRows = [
+        ...(pkg ? [isUnit ? { title: pkg.name, desc: pkg.description ?? "", price: Number(unit.rate) || 0, qty: unit.qty } : { title: `${svcLabel} (${pkg.name})`, desc: pkg.description ?? "", price: pkgPrice, qty: 1 }] : []),
+        ...chosenAddons.map((a) => ({ title: a.name, desc: "Optional add-on", price: a.price, qty: 1 })),
+    ];
+    const lineAmt = (l: LineItem) => (Number(l.price) || 0) * (Number(l.qty) || 1) * (1 - Math.min(100, Math.max(0, Number(l.discount) || 0)) / 100);
+    const itemsSubtotal = pkgRows.reduce((a, r) => a + r.price * r.qty, 0) + lines.reduce((a, l) => a + (l.billing === "one-time" ? lineAmt(l) : 0), 0);
+    const chargesTotal = charges.filter((c) => c.type === "one-time").reduce((a, c) => a + (Number(c.amount) || 0), 0);
+    const validDays = Math.max(0, Math.round(((parseISO(validUntil)?.getTime() ?? 0) - (parseISO(date)?.getTime() ?? 0)) / 86400000));
+    const recYearEq = recurringMonthly * 12 + recurringYearly;
+    const thCls = "border-b bg-muted/50 px-2 py-2 text-left text-xs font-semibold";
+
     const pricingStep = (
         <div className="space-y-4">
-            <Panel icon={IconReceipt} title="Pricing & Line Items" hint="Configure your service pricing, quantities and recurring charges.">
-                <div className="overflow-x-auto">
-                    <table className="w-full min-w-[720px] text-sm">
+            <Panel
+                icon={IconReceipt}
+                title="Pricing & Line Items"
+                hint="Configure your service pricing, quantities, discounts and additional charges."
+                right={
+                    <div className="grid grid-cols-2 gap-3">
+                        <Field label="Currency">
+                            <Select value={currency} onValueChange={(v) => setCurrency(v as "BDT" | "USD")}>
+                                <SelectTrigger className="h-9 w-full"><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="BDT">BDT (৳)</SelectItem>
+                                    <SelectItem value="USD">USD ($)</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </Field>
+                        <Field label="Validity Period">
+                            <DatePicker value={validUntil} onChange={setValidUntil} min={date} className="h-9" />
+                            <p className="text-[11px] text-muted-foreground">Valid for {validDays} days.</p>
+                        </Field>
+                    </div>
+                }
+            >
+                <div className="overflow-x-auto rounded-lg border">
+                    <table className="w-full min-w-[780px] text-sm">
                         <thead>
-                            <tr className="border-b text-left text-xs text-muted-foreground">
-                                <th className="w-8 pb-2">#</th>
-                                <th className="pb-2">Item / Service</th>
-                                <th className="pb-2">Description</th>
-                                <th className="w-20 pb-2">Qty</th>
-                                <th className="w-32 pb-2">Unit Price ({cur})</th>
-                                <th className="w-32 pb-2">Billing</th>
-                                <th className="w-28 pb-2 text-right">Amount</th>
-                                <th className="w-8" />
+                            <tr>
+                                <th className={cn(thCls, "w-10")}>#</th>
+                                <th className={thCls}>Item / Service</th>
+                                <th className={thCls}>Description</th>
+                                <th className={cn(thCls, "w-20")}>Qty</th>
+                                <th className={cn(thCls, "w-32")}>Unit Price ({cur})</th>
+                                <th className={cn(thCls, "w-24")}>Discount</th>
+                                <th className={cn(thCls, "w-28 text-right")}>Amount ({cur})</th>
+                                <th className={cn(thCls, "w-20 text-center")}>Actions</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {[...(pkg ? [isUnit ? { title: pkg.name, price: Number(unit.rate) || 0, qty: unit.qty, billing: pkg.billingCycle } : { title: `${svcLabel} (${pkg.name})`, price: pkgPrice, qty: 1, billing: pkg.billingCycle }] : []), ...chosenAddons.map((a) => ({ title: a.name, price: a.price, qty: 1, billing: "one-time" }))].map((r, i) => (
-                                <tr key={`pkg-${i}`} className="border-b align-top bg-muted/30">
-                                    <td className="py-2 pr-2 pt-3 text-muted-foreground">{i + 1}</td>
-                                    <td className="py-2 pr-2 pt-3 font-medium" colSpan={2}>{r.title} <span className="ml-1 rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">From Services step</span></td>
-                                    <td className="py-2 pr-2 pt-3">{r.qty}</td>
-                                    <td className="py-2 pr-2 pt-3">{money(r.price, cur)}</td>
-                                    <td className="py-2 pr-2 pt-3 text-muted-foreground">{r.billing === "one-time" ? "One-time" : r.billing}</td>
-                                    <td className="py-2 pr-2 pt-3 text-right font-medium">{money(r.price * r.qty, cur)}</td>
-                                    <td />
-                                </tr>
-                            ))}
-                            {lines.map((l, i) => (
-                                <tr key={i} className="border-b last:border-0 align-top">
-                                    <td className="py-2 pr-2 text-muted-foreground">{i + 1}</td>
-                                    <td className="py-2 pr-2"><Input className="h-9" value={l.title} onChange={(e) => setLine(i, { title: e.target.value })} placeholder="Website Development" /></td>
-                                    <td className="py-2 pr-2"><Input className="h-9" value={l.description} onChange={(e) => setLine(i, { description: e.target.value })} placeholder="Optional" /></td>
-                                    <td className="py-2 pr-2"><Input className="h-9" type="number" min={1} value={l.qty} onChange={(e) => setLine(i, { qty: Number(e.target.value) || 1 })} /></td>
-                                    <td className="py-2 pr-2"><Input className="h-9" type="number" min={0} value={l.price} onChange={(e) => setLine(i, { price: Number(e.target.value) || 0 })} /></td>
-                                    <td className="py-2 pr-2">
-                                        <Select value={l.billing} onValueChange={(v) => setLine(i, { billing: v as LineItem["billing"] })}>
-                                            <SelectTrigger className="h-9 w-full"><SelectValue /></SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="one-time">One-time</SelectItem>
-                                                <SelectItem value="monthly">Monthly</SelectItem>
-                                                <SelectItem value="yearly">Yearly</SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                    </td>
-                                    <td className="py-2 pr-2 pt-3 text-right font-medium">{money(l.price * l.qty, cur)}</td>
-                                    <td className="py-2 pt-2.5">
-                                        <button type="button" aria-label="Remove line" onClick={() => setLines(lines.filter((_, j) => j !== i))} className="text-muted-foreground hover:text-destructive">
-                                            <IconTrash className="size-4" />
-                                        </button>
+                            {pkgRows.map((r, i) => (
+                                <tr key={`pkg-${i}`} className="border-b align-middle bg-muted/20">
+                                    <td className="px-2 py-2 text-muted-foreground">{i + 1}</td>
+                                    <td className="px-2 py-2 font-medium">{r.title}</td>
+                                    <td className="px-2 py-2 text-xs text-muted-foreground">{r.desc}</td>
+                                    <td className="px-2 py-2">{r.qty}</td>
+                                    <td className="px-2 py-2">{r.price.toLocaleString("en-US")}</td>
+                                    <td className="px-2 py-2 text-muted-foreground">—</td>
+                                    <td className="px-2 py-2 text-right font-medium">{(r.price * r.qty).toLocaleString("en-US")}</td>
+                                    <td className="px-2 py-2 text-center">
+                                        <button type="button" aria-label="Edit on Services step" onClick={() => go(1)} className="text-muted-foreground hover:text-primary"><IconPencil className="size-4" /></button>
                                     </td>
                                 </tr>
                             ))}
+                            {lines.map((l, i) => {
+                                const key = `l${i}`;
+                                const ed = editing === key;
+                                return (
+                                    <tr key={key} className="border-b align-middle last:border-0">
+                                        <td className="px-2 py-2 text-muted-foreground">{pkgRows.length + i + 1}</td>
+                                        <td className="px-2 py-2">{ed ? <Input className="h-9" value={l.title} onChange={(e) => setLine(i, { title: e.target.value })} placeholder="Item / service" /> : <span className="font-medium">{l.title || "—"}</span>}</td>
+                                        <td className="px-2 py-2">{ed ? <Input className="h-9" value={l.description} onChange={(e) => setLine(i, { description: e.target.value })} placeholder="Description" /> : <span className="text-xs text-muted-foreground">{l.description}</span>}</td>
+                                        <td className="px-2 py-2"><Input className="h-9 w-16 text-center" type="number" min={1} value={l.qty} onChange={(e) => setLine(i, { qty: Number(e.target.value) || 1 })} /></td>
+                                        <td className="px-2 py-2"><Input className="h-9 w-28" type="number" min={0} value={l.price} onChange={(e) => setLine(i, { price: Number(e.target.value) || 0 })} /></td>
+                                        <td className="px-2 py-2">
+                                            <Select value={String(l.discount)} onValueChange={(v) => setLine(i, { discount: Number(v) })}>
+                                                <SelectTrigger className="h-9 w-20"><SelectValue /></SelectTrigger>
+                                                <SelectContent>{DISCOUNTS.map((d) => <SelectItem key={d} value={String(d)}>{d}%</SelectItem>)}</SelectContent>
+                                            </Select>
+                                        </td>
+                                        <td className="px-2 py-2 text-right font-medium">{Math.round(lineAmt(l)).toLocaleString("en-US")}</td>
+                                        <td className="px-2 py-2">
+                                            <div className="flex items-center justify-center gap-2">
+                                                <button type="button" aria-label="Edit line" onClick={() => setEditing(ed ? null : key)} className="text-muted-foreground hover:text-primary"><IconPencil className="size-4" /></button>
+                                                <button type="button" aria-label="Remove line" onClick={() => setLines(lines.filter((_, j) => j !== i))} className="text-destructive/80 hover:text-destructive"><IconTrash className="size-4" /></button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                );
+                            })}
                         </tbody>
                     </table>
                 </div>
-                <Button type="button" variant="outline" size="sm" className="mt-3 w-full border-dashed text-primary" onClick={() => setLines([...lines, { title: "", description: "", qty: 1, price: 0, billing: "one-time" }])}>
-                    <IconPlus className="size-4" /> Add another item
+                <Button type="button" variant="outline" size="sm" className="mt-3 w-full border-dashed bg-primary/5 text-primary" onClick={() => { setLines([...lines, { title: "", description: "", qty: 1, price: 0, discount: 0, billing: "one-time" }]); setEditing(`l${lines.length}`); }}>
+                    <IconPlus className="size-4" /> Add Another Item
                 </Button>
-                <div className="mt-4 max-w-[200px]">
-                    <Field label="Discount (%)">
-                        <Input type="number" min={0} max={100} value={discountPct} onChange={(e) => setDiscountPct(Number(e.target.value) || 0)} />
-                    </Field>
+            </Panel>
+
+            <Panel
+                icon={IconSettings}
+                title="Additional Charges (Optional)"
+                hint="Add any additional charges such as domain, hosting, or third-party services."
+                right={<Button type="button" variant="outline" size="sm" className="text-primary" onClick={() => { setCharges([...charges, { name: "", description: "", amount: 0, type: "one-time" }]); setEditing(`c${charges.length}`); }}><IconPlus className="size-4" /> Add Charge</Button>}
+            >
+                <div className="overflow-x-auto rounded-lg border">
+                    <table className="w-full min-w-[640px] text-sm">
+                        <thead>
+                            <tr>
+                                <th className={cn(thCls, "w-10")}>#</th>
+                                <th className={thCls}>Charge Name</th>
+                                <th className={thCls}>Description</th>
+                                <th className={cn(thCls, "w-36")}>Amount ({cur})</th>
+                                <th className={cn(thCls, "w-32")}>Type</th>
+                                <th className={cn(thCls, "w-20 text-center")}>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {charges.length === 0 && <tr><td colSpan={6} className="px-3 py-4 text-center text-xs text-muted-foreground">No additional charges.</td></tr>}
+                            {charges.map((c, i) => {
+                                const key = `c${i}`;
+                                const ed = editing === key;
+                                return (
+                                    <tr key={key} className="border-b align-middle last:border-0">
+                                        <td className="px-2 py-2 text-muted-foreground">{i + 1}</td>
+                                        <td className="px-2 py-2">{ed ? <Input className="h-9" value={c.name} onChange={(e) => setCharge(i, { name: e.target.value })} placeholder="Charge name" /> : <span className="font-medium">{c.name || "—"}</span>}</td>
+                                        <td className="px-2 py-2">{ed ? <Input className="h-9" value={c.description} onChange={(e) => setCharge(i, { description: e.target.value })} placeholder="Description" /> : <span className="text-xs text-muted-foreground">{c.description}</span>}</td>
+                                        <td className="px-2 py-2"><Input className="h-9 w-32" type="number" min={0} value={c.amount} onChange={(e) => setCharge(i, { amount: Number(e.target.value) || 0 })} /></td>
+                                        <td className="px-2 py-2">
+                                            <Select value={c.type} onValueChange={(v) => setCharge(i, { type: v as Charge["type"] })}>
+                                                <SelectTrigger className="h-9 w-28"><SelectValue /></SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="one-time">One-time</SelectItem>
+                                                    <SelectItem value="monthly">Monthly</SelectItem>
+                                                    <SelectItem value="yearly">Yearly</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </td>
+                                        <td className="px-2 py-2">
+                                            <div className="flex items-center justify-center gap-2">
+                                                <button type="button" aria-label="Edit charge" onClick={() => setEditing(ed ? null : key)} className="text-muted-foreground hover:text-primary"><IconPencil className="size-4" /></button>
+                                                <button type="button" aria-label="Remove charge" onClick={() => setCharges(charges.filter((_, j) => j !== i))} className="text-destructive/80 hover:text-destructive"><IconTrash className="size-4" /></button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                );
+                            })}
+                        </tbody>
+                    </table>
                 </div>
             </Panel>
 
             <Panel
                 icon={IconDeviceFloppy}
                 title="Payment Terms & Schedule"
-                hint="Define how and when the client makes payments."
+                hint="Define how and when the client will make payments."
                 right={
                     <Select
                         value={presetKey}
                         onValueChange={(v) => {
                             setPresetKey(v);
-                            if (PAYMENT_PRESETS[v]) setMilestones(PAYMENT_PRESETS[v]);
+                            if (PAYMENT_PRESETS[v]) setMilestones(withDue(PAYMENT_PRESETS[v]));
                         }}
                     >
                         <SelectTrigger className="h-9 w-[150px]"><SelectValue /></SelectTrigger>
@@ -918,30 +1562,163 @@ export default function QuotationWizard() {
                     </Select>
                 }
             >
-                <div className="space-y-2">
-                    {milestones.map((m, i) => (
-                        <div key={i} className="grid grid-cols-[1fr_1.4fr_90px_110px_28px] items-center gap-2 max-md:grid-cols-2">
-                            <Input className="h-9" value={m.label} onChange={(e) => { setPresetKey("custom"); setMilestones(milestones.map((x, j) => (j === i ? { ...x, label: e.target.value } : x))); }} />
-                            <Input className="h-9" value={m.note} placeholder="When is it due?" onChange={(e) => setMilestones(milestones.map((x, j) => (j === i ? { ...x, note: e.target.value } : x)))} />
-                            <div className="relative">
-                                <Input className="h-9 pr-6" type="number" min={0} max={100} value={m.percentage} onChange={(e) => { setPresetKey("custom"); setMilestones(milestones.map((x, j) => (j === i ? { ...x, percentage: Number(e.target.value) || 0 } : x))); }} />
-                                <span className="absolute right-2 top-2 text-xs text-muted-foreground">%</span>
-                            </div>
-                            <span className="text-right text-sm font-medium">{money((grand * m.percentage) / 100, cur)}</span>
-                            <button type="button" aria-label="Remove milestone" onClick={() => { setPresetKey("custom"); setMilestones(milestones.filter((_, j) => j !== i)); }} className="text-muted-foreground hover:text-destructive">
-                                <IconTrash className="size-4" />
-                            </button>
+                <div className="grid gap-5 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
+                    <div>
+                        <p className="mb-2 text-sm font-semibold">Payment Milestones</p>
+                        <div className="overflow-x-auto rounded-lg border">
+                            <table className="w-full min-w-[560px] text-sm">
+                                <thead>
+                                    <tr>
+                                        <th className={cn(thCls, "w-8")}>#</th>
+                                        <th className={thCls}>Milestone</th>
+                                        <th className={thCls}>Description</th>
+                                        <th className={cn(thCls, "w-24")}>Payment %</th>
+                                        <th className={cn(thCls, "w-24 text-right")}>Amount ({cur})</th>
+                                        <th className={cn(thCls, "w-40")}>Due Date</th>
+                                        <th className="w-8 border-b bg-muted/50" />
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {milestones.map((m, i) => (
+                                        <tr key={i} className="border-b align-middle last:border-0">
+                                            <td className="px-2 py-2 text-muted-foreground">{i + 1}</td>
+                                            <td className="px-2 py-2"><Input className="h-9" value={m.label} onChange={(e) => { setPresetKey("custom"); setMilestones(milestones.map((x, j) => (j === i ? { ...x, label: e.target.value } : x))); }} /></td>
+                                            <td className="px-2 py-2"><Input className="h-9" value={m.note} placeholder="When is it due?" onChange={(e) => setMilestones(milestones.map((x, j) => (j === i ? { ...x, note: e.target.value } : x)))} /></td>
+                                            <td className="px-2 py-2">
+                                                <div className="relative">
+                                                    <Input className="h-9 pr-6" type="number" min={0} max={100} value={m.percentage} onChange={(e) => { setPresetKey("custom"); setMilestones(milestones.map((x, j) => (j === i ? { ...x, percentage: Number(e.target.value) || 0 } : x))); }} />
+                                                    <span className="absolute right-2 top-2 text-xs text-muted-foreground">%</span>
+                                                </div>
+                                            </td>
+                                            <td className="px-2 py-2 text-right font-medium">{Math.round((grand * m.percentage) / 100).toLocaleString("en-US")}</td>
+                                            <td className="px-2 py-2"><DatePicker className="h-9 text-xs" value={m.due ?? ""} onChange={(v) => setMilestones(milestones.map((x, j) => (j === i ? { ...x, due: v } : x)))} /></td>
+                                            <td className="px-1">
+                                                <button type="button" aria-label="Remove milestone" onClick={() => { setPresetKey("custom"); setMilestones(milestones.filter((_, j) => j !== i)); }} className="text-destructive/80 hover:text-destructive"><IconTrash className="size-4" /></button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
                         </div>
-                    ))}
-                </div>
-                <div className="mt-3 flex items-center justify-between">
-                    <Button type="button" variant="outline" size="sm" className="text-primary" onClick={() => { setPresetKey("custom"); setMilestones([...milestones, { label: "Milestone", percentage: 0, note: "" }]); }}>
-                        <IconPlus className="size-4" /> Add milestone
-                    </Button>
-                    <span className={cn("text-sm font-semibold", msTotal === 100 ? "text-emerald-600" : "text-destructive")}>Total {msTotal}%</span>
+                        <div className="mt-3 flex items-center justify-between">
+                            <Button type="button" variant="outline" size="sm" className="text-primary" onClick={() => { setPresetKey("custom"); setMilestones([...milestones, { label: "Milestone", percentage: 0, note: "", due: plusDaysISO(30 * milestones.length) }]); }}>
+                                <IconPlus className="size-4" /> Add Milestone
+                            </Button>
+                            <span className="text-sm">
+                                Total <span className={cn("ml-3 font-semibold", msTotal === 100 ? "text-emerald-600" : "text-destructive")}>{msTotal}%</span>
+                                <span className="ml-4 font-semibold">{Math.round((grand * msTotal) / 100).toLocaleString("en-US")}</span>
+                            </span>
+                        </div>
+                    </div>
+
+                    <div className="space-y-3 rounded-lg border p-4 text-sm">
+                        <p className="font-semibold">Payment Settings</p>
+                        <div>
+                            <Label className="text-xs">Payment Method(s)</Label>
+                            <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-2">
+                                {["Bank Transfer", "bKash", "Nagad", "Stripe (Card)"].map((mt) => (
+                                    <label key={mt} className="flex items-center gap-2 text-xs">
+                                        <Checkbox checked={methods.includes(mt)} onCheckedChange={(v) => setMethods(v ? [...methods, mt] : methods.filter((x) => x !== mt))} />
+                                        {mt}
+                                    </label>
+                                ))}
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-[1fr_auto] items-center gap-3">
+                            <Label className="text-xs">Advance Payment</Label>
+                            <div className="flex items-center gap-2">
+                                <div className="relative w-20">
+                                    <Input className="h-9 pr-6" type="number" min={0} max={100} value={milestones[0]?.percentage ?? 0} disabled={!milestones[0]} onChange={(e) => { setPresetKey("custom"); setMilestones(milestones.map((x, j) => (j === 0 ? { ...x, percentage: Number(e.target.value) || 0 } : x))); }} />
+                                    <span className="absolute right-2 top-2 text-xs text-muted-foreground">%</span>
+                                </div>
+                                <Input className="h-9 w-28 bg-muted/50" readOnly value={Math.round((grand * (milestones[0]?.percentage ?? 0)) / 100).toLocaleString("en-US")} />
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-[1fr_auto] items-center gap-3">
+                            <Label className="text-xs">Recurring Fee (Optional)</Label>
+                            <Switch checked={recFee.on} onCheckedChange={(v) => setRecFee({ ...recFee, on: v })} />
+                        </div>
+                        {recFee.on && (
+                            <div className="grid grid-cols-2 gap-2">
+                                <Input className="h-9" type="number" min={0} placeholder="Amount" value={recFee.amount} onChange={(e) => setRecFee({ ...recFee, amount: Number(e.target.value) || 0 })} />
+                                <Select value={recFee.freq} onValueChange={(v) => setRecFee({ ...recFee, freq: v as "monthly" | "yearly" })}>
+                                    <SelectTrigger className="h-9 w-full"><SelectValue /></SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="monthly">Monthly</SelectItem>
+                                        <SelectItem value="yearly">Yearly</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                                <div className="col-span-2"><DatePicker className="h-9" value={recFee.start} onChange={(v) => setRecFee({ ...recFee, start: v })} /></div>
+                            </div>
+                        )}
+                        <div className="grid grid-cols-[1fr_auto] items-center gap-3">
+                            <Label className="text-xs">Grace Period</Label>
+                            <div className="flex items-center gap-2">
+                                <Input className="h-9 w-20" type="number" min={0} value={grace} onChange={(e) => setGrace(e.target.value)} />
+                                <span className="text-xs text-muted-foreground">days</span>
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-[1fr_auto] items-center gap-3">
+                            <div>
+                                <Label className="text-xs">Automatic Reminders</Label>
+                                <p className="text-[11px] text-muted-foreground">Send payment reminders automatically.</p>
+                            </div>
+                            <Switch checked={reminders} onCheckedChange={setReminders} />
+                        </div>
+                    </div>
                 </div>
             </Panel>
         </div>
+    );
+
+    const pricingAside = (
+        <aside className="min-w-0 space-y-4 xl:sticky xl:top-4">
+            <Panel icon={IconFileText} title="Quotation Summary" hint="A detailed breakdown of costs and payment information.">
+                <dl className="space-y-2 text-sm">
+                    <Row k="Subtotal (Items)" v={money(itemsSubtotal, cur)} />
+                    <Row k="Additional Charges" v={money(chargesTotal, cur)} />
+                    <div className="flex justify-between border-t pt-2 font-semibold"><dt>Subtotal</dt><dd>{money(calc.totals.subtotal, cur)}</dd></div>
+                    <Row k={`VAT / Tax (${taxPct}%)`} v={money(calc.totals.taxAmount, cur)} />
+                </dl>
+                <div className="mt-3 flex items-center justify-between rounded-lg bg-primary/10 px-3 py-3">
+                    <span className="text-sm font-bold">Grand Total</span>
+                    <span className="text-2xl font-bold text-primary">{money(grand, cur)}</span>
+                </div>
+            </Panel>
+            {(recurringMonthly > 0 || recurringYearly > 0) && (
+                <Panel icon={IconReceipt} title="Recurring Charges (Monthly)">
+                    <dl className="space-y-2 text-sm">
+                        <Row k="Monthly Recurring Fee" v={money(recurringMonthly, cur)} />
+                        <Row k="Yearly Equivalent" v={money(recYearEq, cur)} />
+                    </dl>
+                    <p className="mt-3 flex items-start gap-1.5 text-[11px] text-muted-foreground"><IconInfoCircle className="mt-0.5 size-3.5 shrink-0" />Recurring charges will continue as per the selected payment terms.</p>
+                </Panel>
+            )}
+            <Panel icon={IconDeviceFloppy} title="Payment Schedule Summary">
+                <ol className="space-y-3">
+                    {milestones.map((m, i) => (
+                        <li key={i} className="flex items-center gap-3 text-sm">
+                            <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">{i + 1}</span>
+                            <div className="min-w-0 flex-1">
+                                <p className="truncate font-medium leading-tight">{m.label} ({m.percentage}%)</p>
+                                <p className="text-[11px] text-muted-foreground">Due: {fmtDate(m.due)}</p>
+                            </div>
+                            <span className="font-medium">{money((grand * m.percentage) / 100, cur)}</span>
+                        </li>
+                    ))}
+                </ol>
+            </Panel>
+            <section className="rounded-xl border bg-primary/5 p-4">
+                <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold text-primary"><IconInfoCircle className="size-4" /> Important Notes</h3>
+                <ul className="list-disc space-y-1 pl-4 text-[11px] text-muted-foreground">
+                    <li>This quotation is valid for {validDays} days from the date of issue.</li>
+                    <li>Prices are in {cur} and {taxPct > 0 ? `include ${taxPct}% VAT` : "exclusive of VAT"} as mentioned.</li>
+                    {hasRecurringLine && <li>Recurring charges will be billed automatically.</li>}
+                    <li>Payment is required as per the milestone schedule.</li>
+                    <li>Project will commence after receiving the advance payment.</li>
+                </ul>
+            </section>
+        </aside>
     );
 
     const sel = (value: string, onChange: (v: string) => void, options: string[], suffix = "") => (
@@ -961,83 +1738,165 @@ export default function QuotationWizard() {
         </label>
     );
 
+    const optsWith = (cur0: string, list: string[]) => (list.includes(cur0) ? list : [...list, cur0].sort((x, y) => Number(x) - Number(y)));
+    const rev = (label: string, hint: string, value: string, onChange: (v: string) => void, opts: string[], fee: string, onFee: (v: string) => void, icon: typeof IconUser) => (
+        <Panel icon={icon} title={label} hint={hint}>
+            <div className="space-y-3">
+                {sel(value, onChange, opts, " Revisions")}
+                <div className="flex items-start gap-2 rounded-lg bg-primary/5 p-3 text-[11px] text-muted-foreground">
+                    <IconInfoCircle className="mt-1 size-4 shrink-0 text-primary" />
+                    <div className="space-y-1.5">
+                        <p>Additional revisions will be charged at ({cur}) per round.</p>
+                        <Input className="h-8 w-28 bg-background" type="number" min={0} value={fee} onChange={(e) => onFee(e.target.value)} aria-label={`${label} extra round fee`} />
+                    </div>
+                </div>
+            </div>
+        </Panel>
+    );
+    const info = (text: string) => (
+        <div className="mt-3 flex items-start gap-2 rounded-lg bg-primary/5 p-3 text-[11px] text-muted-foreground">
+            <IconInfoCircle className="mt-0.5 size-4 shrink-0 text-primary" />
+            <p>{text}</p>
+        </div>
+    );
+    const radio = (name: string, checked: boolean, onSelect: () => void, children: React.ReactNode) => (
+        <label className="flex cursor-pointer items-center gap-2.5 text-sm">
+            <input type="radio" name={name} checked={checked} onChange={onSelect} className="size-4 accent-primary" />
+            {children}
+        </label>
+    );
+
     const termsStep = (
         <div className="space-y-4">
             <div className="grid gap-4 lg:grid-cols-2">
-                <Panel icon={IconSettings} title="Technical Support Duration" hint="How long the client receives technical support after delivery.">
-                    <Field label="Support Duration">{sel(supportDuration, setSupportDuration, ["1 Month", "3 Months", "6 Months", "12 Months", "24 Months"])}</Field>
-                </Panel>
-                <Panel icon={IconCircleCheck} title="Support Inclusions" hint="What is included in the technical support.">
-                    <CheckList items={inclusions} onChange={setInclusions} addLabel="Add custom support inclusion…" />
-                </Panel>
-            </div>
-            <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-4">
-                <Panel icon={IconX} title="Support Exclusions" hint="What is not included in the technical support." className="xl:col-span-2">
-                    <CheckList items={supportExcl} onChange={setSupportExcl} addLabel="Add custom exclusion…" tone="danger" />
-                </Panel>
-                <Panel icon={IconFileText} title="Revisions" hint="Included revision rounds.">
-                    <div className="space-y-3">
-                        <Field label="UI/UX revisions">{sel(uiRev, setUiRev, ["1", "2", "3", "5", "10"])}</Field>
-                        <Field label="Development revisions">{sel(devRev, setDevRev, ["1", "3", "5", "10"])}</Field>
-                        <Field label={`Extra round fee (${cur})`}><Input type="number" min={0} value={extraRevFee} onChange={(e) => setExtraRevFee(e.target.value)} /></Field>
+                <Panel icon={IconSettings} title="Technical Support Duration" hint="Define how long the client will receive technical support after project delivery.">
+                    <div className="grid items-end gap-3 sm:grid-cols-[1fr_auto]">
+                        <Field label="Support Duration">
+                            <Select value={supportDuration} onValueChange={setSupportDuration}>
+                                <SelectTrigger className="h-10 w-full"><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                    {["1 Month", "3 Months", "6 Months", "12 Months", "24 Months"].map((o) => (
+                                        <SelectItem key={o} value={o}>{o}{o === "12 Months" ? " (Recommended)" : ""}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </Field>
+                        <div className="flex items-center gap-3 rounded-lg bg-primary/10 px-4 py-2.5">
+                            <IconCrown className="size-6 shrink-0 text-primary" />
+                            <div>
+                                <p className="text-sm font-semibold text-primary">{supportDuration}</p>
+                                <p className="text-[11px] text-muted-foreground">{supportDuration === "12 Months" ? "Industry standard for most projects" : "Free technical support after delivery"}</p>
+                            </div>
+                        </div>
                     </div>
                 </Panel>
-                <Panel icon={IconListCheck} title="Project Handover Conditions" hint="Project is complete once these are met.">
+                <Panel icon={IconCircleCheck} title="Support Inclusions" hint="Select what will be included in the technical support.">
+                    <CheckList twoCol items={inclusions} onChange={setInclusions} addLabel="Add custom support inclusion…" />
+                </Panel>
+            </div>
+
+            <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-[1.35fr_1fr_1fr_1.1fr]">
+                <Panel icon={IconX} title="Support Exclusions" hint="Define what is not included in the technical support.">
+                    <CheckList items={supportExcl} onChange={setSupportExcl} addLabel="Add custom exclusion…" tone="danger" />
+                </Panel>
+                {rev("UI/UX Revisions", "Number of design revisions included in this package.", uiRev, setUiRev, optsWith(uiRev, ["1", "2", "3", "5", "10"]), extraRevFee, setExtraRevFee, IconPencil)}
+                {rev("Development Revisions", "Number of development revisions included after delivery.", devRev, setDevRev, optsWith(devRev, ["1", "3", "5", "10"]), devRevFee, setDevRevFee, IconCode)}
+                <Panel icon={IconFolder} title="Project Handover Conditions" hint="The project will be considered complete and handed over once the following conditions are met.">
                     <CheckList items={handover} onChange={setHandover} addLabel="Add condition…" />
                 </Panel>
             </div>
-            {hasRecurringLine && (
-                <div className="grid gap-4 lg:grid-cols-3">
-                    <Panel icon={IconReceipt} title="Recurring Service Rules" hint="For maintenance, SEO, hosting etc.">
-                        <div className="space-y-3">
-                            {toggle("Enable recurring billing after project completion", "billing")}
-                            {toggle("Send invoice before each billing cycle", "invoice")}
-                            {toggle("Include monthly performance report", "report")}
-                            {toggle("Allow plan upgrade/downgrade anytime", "upgrade")}
-                        </div>
-                    </Panel>
-                    <Panel icon={IconShieldCheck} title="Suspension & Grace Policy" hint="Policy for non-payment of recurring invoices.">
-                        <div className="grid grid-cols-2 gap-3">
-                            <Field label="Grace period (days)">{sel(grace, setGrace, ["3", "7", "10", "15"])}</Field>
-                            <Field label="Suspend after (days)">{sel(suspend, setSuspend, ["7", "15", "30"])}</Field>
-                        </div>
-                    </Panel>
-                    <Panel icon={IconX} title="Cancellation Policy" hint="Notice required for recurring services.">
-                        <Field label="Notice period (days)">{sel(cancelNotice, setCancelNotice, ["7", "15", "30", "60"])}</Field>
-                    </Panel>
-                </div>
-            )}
-            <div className="grid gap-4 lg:grid-cols-3">
-                <Panel icon={IconReceipt} title="Extra Feature Charges" hint="How additional features or change requests are charged.">
+
+            <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
+                <Panel icon={IconReceipt} title="Recurring Service Rules" hint="Applicable for recurring services (e.g., maintenance, SEO, hosting).">
                     <div className="space-y-3">
-                        <div className="flex flex-wrap gap-2">
-                            {([["feature", "Per feature"], ["hourly", "Hourly"], ["custom", "Custom"]] as const).map(([k, l]) => (
-                                <Button key={k} type="button" size="sm" variant={extraCharge === k ? "default" : "outline"} onClick={() => setExtraCharge(k)}>{l}</Button>
-                            ))}
-                        </div>
-                        <Input value={extraRate} onChange={(e) => setExtraRate(e.target.value)} placeholder={extraCharge === "custom" ? "Describe terms" : `Rate (${cur})`} />
+                        {toggle("Enable recurring billing after project completion", "billing")}
+                        {toggle("Send automated invoice before each billing cycle", "invoice")}
+                        {toggle("Include monthly performance report", "report")}
+                        {toggle("Allow service plan upgrade/downgrade anytime", "upgrade")}
                     </div>
                 </Panel>
-                <Panel icon={IconShieldCheck} title="Ownership & Intellectual Property" hint="Rights after project completion.">
-                    <div className="space-y-2">
-                        {([["client", "Full ownership transferred to client after final payment"], ["portfolio", "WebBriks retains right to showcase in portfolio"]] as const).map(([k, l]) => (
-                            <label key={k} className="flex cursor-pointer items-start gap-2 text-sm">
-                                <input type="radio" name="ownership" checked={ownership === k} onChange={() => setOwnership(k)} className="mt-1 accent-primary" />
-                                {l}
-                            </label>
+                <Panel icon={IconClock} title="Suspension & Grace Policy" hint="Define policy for non-payment of recurring invoices.">
+                    <div className="grid grid-cols-2 gap-3">
+                        <Field label="Grace Period">{sel(grace, setGrace, optsWith(grace, ["3", "7", "10", "15"]), " Days")}</Field>
+                        <Field label="Suspension After">{sel(suspend, setSuspend, optsWith(suspend, ["7", "15", "30"]), " Days")}</Field>
+                    </div>
+                    {info("If payment is not received within the grace period, services will be temporarily suspended after the specified period.")}
+                </Panel>
+                <Panel icon={IconX} title="Cancellation Policy" hint="Define cancellation terms for this quotation.">
+                    {sel(cancelNotice, setCancelNotice, optsWith(cancelNotice, ["7", "15", "30", "60"]), " Days' Notice")}
+                    {info(`Client must provide at least ${cancelNotice} days' written notice for cancellation of recurring services. No refund for partial months.`)}
+                </Panel>
+            </div>
+
+            <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
+                <Panel icon={IconReceipt} title="Extra Feature Charges" hint="Define how additional features or change requests will be charged.">
+                    <div className="space-y-3">
+                        {radio("extra", extraCharge === "feature", () => setExtraCharge("feature"), (
+                            <>
+                                <span className="w-36">Charge per feature/module</span>
+                                <Input className="h-8 w-24" type="number" min={0} value={extraRate} onChange={(e) => setExtraRate(e.target.value)} aria-label="Rate per feature" />
+                                <span className="text-xs text-muted-foreground">per feature</span>
+                            </>
+                        ))}
+                        {radio("extra", extraCharge === "hourly", () => setExtraCharge("hourly"), (
+                            <>
+                                <span className="w-36">Hourly rate</span>
+                                <Input className="h-8 w-24" type="number" min={0} value={hourlyRate} onChange={(e) => setHourlyRate(e.target.value)} aria-label="Hourly rate" />
+                                <span className="text-xs text-muted-foreground">per hour</span>
+                            </>
+                        ))}
+                        {radio("extra", extraCharge === "custom", () => setExtraCharge("custom"), (
+                            <>
+                                <span className="w-36">Custom (Specify in terms)</span>
+                                <Input className="h-8 flex-1" value={customExtra} onChange={(e) => setCustomExtra(e.target.value)} placeholder="Enter custom rate" aria-label="Custom extra charge terms" />
+                            </>
                         ))}
                     </div>
                 </Panel>
-                <Panel icon={IconFileText} title="General Terms & Conditions" hint="Additional terms for this quotation.">
-                    <TextList items={generalTerms} onChange={setGeneralTerms} addLabel="Add term" />
+                <Panel icon={IconShieldCheck} title="Ownership & Intellectual Property" hint="Define the ownership rights after project completion.">
+                    <div className="space-y-3">
+                        {radio("owner", ownership === "client", () => setOwnership("client"), "Full ownership transferred to client after final payment")}
+                        {radio("owner", ownership === "portfolio", () => setOwnership("portfolio"), "Webbriks retains right to showcase in portfolio")}
+                        {radio("owner", ownership === "custom", () => setOwnership("custom"), "Custom terms (Specify below)")}
+                        {ownership === "custom" && <Textarea rows={2} className="resize-none" value={ownershipCustom} onChange={(e) => setOwnershipCustom(e.target.value)} placeholder="Describe the ownership terms" />}
+                    </div>
+                </Panel>
+                <Panel icon={IconFileText} title="General Terms & Conditions" hint="Additional terms and conditions for this quotation.">
+                    <div className="max-h-60 overflow-y-auto pr-1">
+                        <TextList items={generalTerms} onChange={setGeneralTerms} addLabel="Add term" />
+                    </div>
                 </Panel>
             </div>
         </div>
     );
 
+    const termsAside = (
+        <aside className="min-w-0 space-y-4 xl:sticky xl:top-4">
+            <Panel icon={IconFileText} title="Quotation Summary">
+                <dl className="space-y-2 text-sm">
+                    <Row k="Quotation No" v="Auto-generated on save" />
+                    <Row k="Client" v={snap.companyName || clientName || "—"} />
+                    <Row k="Package" v={pkg?.name ?? "—"} />
+                    <Row k="Total Amount" v={money(grand, cur)} />
+                    <Row k="Validity" v={fmtDate(validUntil)} />
+                </dl>
+            </Panel>
+            <div className="rounded-xl border bg-card p-4 shadow-xs">
+                <div className="flex items-center justify-between text-sm font-semibold"><span>Step 5 of 6</span><span className="text-xs text-muted-foreground">83%</span></div>
+                <div className="mt-2 h-2 rounded-full bg-muted"><div className="h-full w-[83%] rounded-full bg-primary" /></div>
+                <p className="mt-3 text-sm font-semibold">Terms, Support & Revision Policy</p>
+                <p className="mt-1 text-xs text-muted-foreground">Define the support duration, revision limits, policies and general terms for this quotation.</p>
+            </div>
+            <section className="rounded-xl border bg-primary/5 p-4">
+                <h3 className="mb-1.5 flex items-center gap-2 text-sm font-semibold text-primary"><IconBulb className="size-4" /> Pro Tip</h3>
+                <p className="text-xs text-muted-foreground">Clear terms and support policies help avoid misunderstandings and ensure a smooth project delivery.</p>
+            </section>
+        </aside>
+    );
+
     // ── step 6: summary + document preview ──
     const checklist: [string, boolean][] = [
-        ["Client", !!clientId && !!title.trim()],
+        ["Client", !!clientId],
         ["Services", !!service && (pkgs.length === 0 || !!pkg)],
         ["Scope", !!overview.trim() || deliverables.some((d) => d.trim()) || features.some((f) => f.on)],
         ["Pricing", !problem(3)],
@@ -1045,178 +1904,322 @@ export default function QuotationWizard() {
         ["Preview", true],
     ];
     const ready = checklist.every(([, ok]) => ok);
+    const baseTotal = isUnit ? (Number(unit.rate) || 0) * unit.qty : pkgPrice;
+    const addonTotal = chosenAddons.reduce((a, x) => a + x.price, 0);
+    const otherTotal = Math.max(0, itemsSubtotal + chargesTotal - baseTotal - addonTotal);
+    const docTitle = title.trim() || `${projectType} — ${snap.companyName || clientName}`;
+    const docDeliverables = [...features.filter((f) => f.on).map((f) => f.text), ...chosenAddons.map((a) => a.name), ...deliverables.filter((d) => d.trim())];
+    const docLines = builtServices.flatMap((sv) => sv.lineItems);
+    const primaryEmail = emails.find((e) => e.trim()) ?? "";
+    const cardCls = "rounded-xl border p-4";
 
-    const previewStep = (
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,420px)_minmax(0,1fr)]">
-            <div className="space-y-4">
-                <Panel
-                    icon={IconFileText}
-                    title="Quotation Summary"
-                    hint="Final details before saving."
-                    right={
-                        <span className={cn("rounded-md px-2 py-1 text-[11px] font-semibold", ready ? "bg-emerald-500/10 text-emerald-600" : "bg-amber-500/10 text-amber-600")}>
-                            {ready ? "Ready to save" : "Incomplete"}
-                        </span>
-                    }
-                >
-                    <dl className="space-y-3 text-sm">
-                        <SummaryRow label="Client" value={snap.companyName || snap.contactName || "—"} sub={snap.email} onEdit={() => go(0)} />
-                        <SummaryRow label="Services" value={svcLabel ? `${svcLabel}${pkg ? ` · ${pkg.name}` : ""}` : "—"} onEdit={() => go(1)} />
-                        <SummaryRow label="Validity" value={new Date(validUntil).toDateString()} onEdit={() => go(0)} />
-                    </dl>
-                    <div className="mt-4 rounded-lg bg-primary/10 px-3 py-2.5">
-                        <div className="flex items-center justify-between text-sm font-semibold">
-                            <span>Total Amount ({cur})</span>
-                            <span className="text-lg text-primary">{money(grand, cur)}</span>
-                        </div>
+    const previewDoc = (
+        <div className="overflow-auto rounded-lg bg-muted/60 p-4" style={{ maxHeight: expanded ? "calc(100vh - 8rem)" : "62vh" }}>
+            <div className="mx-auto max-w-[820px] space-y-5 rounded-md bg-white p-8 text-[13px] text-slate-800 shadow-md" style={{ zoom: zoom / 100 }}>
+                <div className="flex items-start justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={COMPANY.logo} alt="WebBriks" className="h-12 w-auto" />
+                        <p className="text-xs text-slate-500">Design | Development | Growth</p>
                     </div>
-                </Panel>
-                <Panel icon={IconCircleCheck} title="Completion Checklist">
-                    <ul className="grid grid-cols-2 gap-2">
-                        {checklist.map(([l, ok]) => (
-                            <li key={l} className="flex items-center gap-2 rounded-lg border px-3 py-2 text-sm">
-                                <IconCircleCheck className={cn("size-4", ok ? "text-emerald-600" : "text-muted-foreground")} />
-                                {l}
-                            </li>
+                    <div className="text-right">
+                        <span className="rounded bg-slate-100 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-slate-500">CONFIDENTIAL</span>
+                        <p className="mt-2 text-3xl font-bold leading-none">Quotation</p>
+                        <p className="mt-1 text-sm font-semibold"># {savedNo || "Assigned on save"}</p>
+                        <p className="mt-2 text-xs text-slate-500">Date: {fmtDate(date)}</p>
+                        <p className="text-xs text-slate-500">Valid Until: {fmtDate(validUntil)}</p>
+                    </div>
+                </div>
+
+                <div className="grid gap-4 border-b pb-4 sm:grid-cols-2">
+                    <div>
+                        <p className="mb-1 text-[11px] text-slate-400">Prepared For</p>
+                        <p className="font-semibold">{snap.companyName || clientName}</p>
+                        <p className="mt-1 flex gap-1.5 text-xs"><IconMapPin className="size-3.5 shrink-0 text-primary" />{snap.address}</p>
+                        <p className="mt-1 flex gap-1.5 text-xs"><IconUser className="size-3.5 shrink-0 text-primary" />{snap.contactName}</p>
+                        <p className="mt-1 flex gap-1.5 text-xs"><IconMail className="size-3.5 shrink-0 text-primary" />{primaryEmail}</p>
+                        <p className="mt-1 flex gap-1.5 text-xs"><IconPhone className="size-3.5 shrink-0 text-primary" />{snap.phone}</p>
+                    </div>
+                    <div className="sm:border-l sm:pl-4">
+                        <p className="mb-1 text-[11px] text-slate-400">Prepared By</p>
+                        <p className="font-semibold">{COMPANY.name}</p>
+                        <p className="mt-1 flex gap-1.5 text-xs"><IconMapPin className="size-3.5 shrink-0 text-primary" />{COMPANY.address}</p>
+                        <p className="mt-1 flex gap-1.5 text-xs"><IconMail className="size-3.5 shrink-0 text-primary" />{COMPANY.email}</p>
+                        <p className="mt-1 flex gap-1.5 text-xs"><IconPhone className="size-3.5 shrink-0 text-primary" />{COMPANY.phone}</p>
+                        <p className="mt-1 flex gap-1.5 text-xs"><IconWorld className="size-3.5 shrink-0 text-primary" />{COMPANY.website}</p>
+                    </div>
+                </div>
+
+                <section>
+                    <h4 className="mb-1.5 flex items-center gap-2 font-semibold"><span className="flex size-6 items-center justify-center rounded bg-primary text-primary-foreground"><IconFileText className="size-3.5" /></span>Project Overview</h4>
+                    <p className="font-medium">{docTitle}</p>
+                    {overview && <p className="mt-1 whitespace-pre-line text-xs text-slate-600">{overview}</p>}
+                </section>
+
+                {(docDeliverables.length > 0 || scopeText.trim()) && (
+                    <section>
+                        <h4 className="mb-1.5 flex items-center gap-2 font-semibold"><span className="flex size-6 items-center justify-center rounded bg-primary text-primary-foreground"><IconSettings className="size-3.5" /></span>Scope of Work & Key Deliverables</h4>
+                        {scopeText.trim() && <p className="mb-2 whitespace-pre-line text-xs text-slate-600">{scopeText}</p>}
+                        <ul className="grid gap-x-6 gap-y-1 text-xs sm:grid-cols-2">
+                            {docDeliverables.map((f, i) => (
+                                <li key={i} className="flex gap-1.5"><IconCircleCheck className="mt-0.5 size-3.5 shrink-0 fill-primary text-white" />{f}</li>
+                            ))}
+                        </ul>
+                    </section>
+                )}
+
+                <section>
+                    <h4 className="mb-1.5 flex items-center gap-2 font-semibold"><span className="flex size-6 items-center justify-center rounded bg-primary text-primary-foreground"><IconReceipt className="size-3.5" /></span>Investment Summary</h4>
+                    <table className="w-full overflow-hidden rounded border text-xs">
+                        <thead>
+                            <tr className="bg-slate-100 text-left"><th className="p-2">#</th><th className="p-2">Item Description</th><th className="p-2">Quantity</th><th className="p-2">Unit Price ({cur})</th><th className="p-2 text-right">Total ({cur})</th></tr>
+                        </thead>
+                        <tbody>
+                            {docLines.map((l, i) => (
+                                <tr key={i} className="border-t">
+                                    <td className="p-2">{i + 1}</td>
+                                    <td className="p-2">{l.title}</td>
+                                    <td className="p-2">{l.quantity ?? 1}</td>
+                                    <td className="p-2">{Math.round(l.price).toLocaleString("en-US")}{l.billingCycle === "monthly" || l.billingCycle === "yearly" ? ` / ${l.billingCycle}` : ""}</td>
+                                    <td className="p-2 text-right">{Math.round(l.price * (l.quantity ?? 1)).toLocaleString("en-US")}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                        <tfoot>
+                            {calc.totals.taxAmount > 0 && <tr className="border-t"><td colSpan={4} className="p-2 text-right">VAT / Tax ({taxPct}%)</td><td className="p-2 text-right">{Math.round(calc.totals.taxAmount).toLocaleString("en-US")}</td></tr>}
+                            <tr className="border-t bg-primary/5 text-sm font-bold text-primary"><td colSpan={4} className="p-2">Total Investment ({cur})</td><td className="p-2 text-right text-lg">{money(grand, cur)}</td></tr>
+                        </tfoot>
+                    </table>
+                    {(recurringMonthly > 0 || recurringYearly > 0) && (
+                        <p className="mt-1 text-xs text-slate-500">Recurring: {recurringMonthly > 0 && `${money(recurringMonthly, cur)} / month`} {recurringYearly > 0 && `${money(recurringYearly, cur)} / year`} (billed separately)</p>
+                    )}
+                </section>
+
+                <section>
+                    <h4 className="mb-1.5 flex items-center gap-2 font-semibold"><span className="flex size-6 items-center justify-center rounded bg-primary text-primary-foreground"><IconCalendar className="size-3.5" /></span>Payment Schedule</h4>
+                    <ul className="text-xs">
+                        {milestones.map((m, i) => (
+                            <li key={i} className="flex justify-between border-b py-1.5"><span>{m.label} ({m.percentage}%){m.note && ` — ${m.note}`}{m.due && ` · Due ${fmtDate(m.due)}`}</span><span className="font-medium">{money((grand * m.percentage) / 100, cur)}</span></li>
                         ))}
                     </ul>
-                </Panel>
+                </section>
             </div>
+        </div>
+    );
 
-            <Panel icon={IconFileText} title="Quotation Preview" hint="This is roughly how the quotation will read. The final PDF is available after saving.">
-                <div className="space-y-4 rounded-lg border bg-white p-5 text-[13px] text-slate-800">
-                    <div className="flex items-start justify-between">
-                        <div>
-                            <p className="text-lg font-bold text-primary">WebBriks</p>
-                            <p className="text-xs text-slate-500">Design | Development | Growth</p>
-                        </div>
-                        <div className="text-right">
-                            <p className="text-xl font-bold">Quotation</p>
-                            <p className="text-xs text-slate-500">Date: {new Date(date).toDateString()}</p>
-                            <p className="text-xs text-slate-500">Valid until: {new Date(validUntil).toDateString()}</p>
-                        </div>
+    const previewStep = (
+        <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,460px)_minmax(0,1fr)]">
+            <Panel
+                plain
+                icon={IconFileText}
+                title="Quotation Summary"
+                hint="Final details for developer handoff and client review."
+                right={
+                    <div className={cn("rounded-lg px-3 py-1.5 text-right", ready ? "bg-emerald-500/10 text-emerald-600" : "bg-amber-500/10 text-amber-600")}>
+                        <p className="text-xs font-semibold">{ready ? "Ready to Send" : "Incomplete"}</p>
+                        <p className="text-[10px]">{ready ? "All sections completed" : "Some sections need attention"}</p>
                     </div>
-                    <div className="grid gap-3 border-y py-3 sm:grid-cols-2">
-                        <div>
-                            <p className="text-[11px] uppercase text-slate-400">Prepared for</p>
-                            <p className="font-semibold">{snap.companyName || snap.contactName}</p>
-                            <p className="text-xs">{snap.contactName}</p>
-                            <p className="text-xs">{snap.email} {snap.phone && `· ${snap.phone}`}</p>
-                            <p className="text-xs">{snap.address}</p>
+                }
+            >
+                <div className="space-y-3">
+                    <div className={cardCls}>
+                        <div className="flex items-start justify-between gap-3">
+                            <div className="flex gap-3">
+                                <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary"><IconBuilding className="size-5" /></span>
+                                <div className="min-w-0">
+                                    <p className="text-sm font-semibold">Client</p>
+                                    <p className="font-bold">{snap.companyName || clientName}</p>
+                                </div>
+                            </div>
+                            <Button type="button" variant="outline" size="sm" className="h-7 text-primary" onClick={() => go(0)}><IconPencil className="size-3.5" /> Edit</Button>
                         </div>
-                        <div>
-                            <p className="text-[11px] uppercase text-slate-400">Prepared by</p>
-                            <p className="font-semibold">WebBriks</p>
-                            <p className="text-xs">info@webbriks.com · www.webbriks.com</p>
-                        </div>
-                    </div>
-                    <div>
-                        <p className="font-semibold">{title || "Untitled Project"}</p>
-                        {overview && <p className="mt-1 whitespace-pre-line text-xs text-slate-600">{overview}</p>}
-                    </div>
-                    {features.some((f) => f.on) && (
-                        <div>
-                            <p className="mb-1 font-semibold">Scope — {svcLabel}{platform && ` (${platform})`}</p>
-                            <ul className="grid gap-x-4 gap-y-0.5 text-xs sm:grid-cols-2">
-                                {features.filter((f) => f.on).map((f) => (
-                                    <li key={f.text} className="flex gap-1.5"><IconCheck className="mt-0.5 size-3.5 shrink-0 text-primary" />{f.text}</li>
-                                ))}
-                            </ul>
-                        </div>
-                    )}
-                    <div>
-                        <p className="mb-1 font-semibold">Investment Summary</p>
-                        <table className="w-full text-xs">
-                            <thead>
-                                <tr className="bg-slate-100 text-left"><th className="p-1.5">Item</th><th className="p-1.5">Qty</th><th className="p-1.5">Unit</th><th className="p-1.5 text-right">Total</th></tr>
-                            </thead>
-                            <tbody>
-                                {builtServices.flatMap((sv) => sv.lineItems).map((l) => ({ title: l.title, qty: l.quantity ?? 1, price: l.price, billing: l.billingCycle === "monthly" || l.billingCycle === "yearly" ? ` / ${l.billingCycle}` : "" })).map((l, i) => (
-                                    <tr key={i} className="border-b">
-                                        <td className="p-1.5">{l.title}</td>
-                                        <td className="p-1.5">{l.qty}</td>
-                                        <td className="p-1.5">{money(l.price, cur)}{l.billing}</td>
-                                        <td className="p-1.5 text-right">{money(l.price * l.qty, cur)}</td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                            <tfoot>
-                                {calc.totals.discountAmount > 0 && <tr><td colSpan={3} className="p-1.5 text-right">Discount</td><td className="p-1.5 text-right">− {money(calc.totals.discountAmount, cur)}</td></tr>}
-                                {calc.totals.taxAmount > 0 && <tr><td colSpan={3} className="p-1.5 text-right">VAT / Tax ({taxPct}%)</td><td className="p-1.5 text-right">{money(calc.totals.taxAmount, cur)}</td></tr>}
-                                <tr className="font-bold text-primary"><td colSpan={3} className="p-1.5 text-right">Total Investment</td><td className="p-1.5 text-right">{money(grand, cur)}</td></tr>
-                            </tfoot>
-                        </table>
-                        {(recurringMonthly > 0 || recurringYearly > 0) && (
-                            <p className="mt-1 text-xs text-slate-500">
-                                Recurring: {recurringMonthly > 0 && `${money(recurringMonthly, cur)} / month`} {recurringYearly > 0 && `${money(recurringYearly, cur)} / year`} (billed separately)
+                        <div className="mt-2 space-y-1 text-xs text-muted-foreground">
+                            <p className="flex gap-1.5"><IconMapPin className="size-3.5 shrink-0 text-primary" />{snap.address}</p>
+                            <p className="flex flex-wrap gap-x-4 gap-y-1">
+                                <span className="flex gap-1.5"><IconUser className="size-3.5 text-primary" />{snap.contactName}</span>
+                                <span className="flex gap-1.5"><IconMail className="size-3.5 text-primary" />{primaryEmail}</span>
+                                <span className="flex gap-1.5"><IconPhone className="size-3.5 text-primary" />{snap.phone}</span>
                             </p>
-                        )}
+                        </div>
                     </div>
-                    <div>
-                        <p className="mb-1 font-semibold">Payment Schedule</p>
-                        <ul className="text-xs">
-                            {milestones.map((m, i) => (
-                                <li key={i} className="flex justify-between border-b py-1"><span>{m.label} ({m.percentage}%){m.note && ` — ${m.note}`}</span><span>{money((grand * m.percentage) / 100, cur)}</span></li>
+
+                    <div className={cardCls}>
+                        <div className="flex items-start justify-between gap-3">
+                            <div className="flex gap-3">
+                                <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                                    {(() => { const SIcon = catalogIcon(service?.icon); return <SIcon className="size-5" />; })()}
+                                </span>
+                                <p className="text-sm font-semibold">Service & Package</p>
+                            </div>
+                            <Button type="button" variant="outline" size="sm" className="h-7 text-primary" onClick={() => go(1)}><IconPencil className="size-3.5" /> Edit</Button>
+                        </div>
+                        <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
+                            <span className="font-semibold">{svcLabel || "—"}</span>
+                            {platform && <span className="rounded border px-2 py-0.5 text-xs">{platform}</span>}
+                            {pkg && <span className="rounded bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">{pkg.name}</span>}
+                        </div>
+                        {service?.description && <p className="mt-1.5 text-xs text-muted-foreground">{service.description}</p>}
+                    </div>
+
+                    <div className={cardCls}>
+                        <div className="flex items-start justify-between gap-3">
+                            <div className="flex gap-3">
+                                <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-lg font-bold text-primary">{cur === "USD" ? "$" : "৳"}</span>
+                                <p className="text-sm font-semibold">Pricing</p>
+                            </div>
+                            <Button type="button" variant="outline" size="sm" className="h-7 text-primary" onClick={() => go(3)}><IconPencil className="size-3.5" /> Edit</Button>
+                        </div>
+                        <dl className="mt-3 space-y-1.5 text-sm">
+                            <Row k="Base Package Price" v={money(baseTotal, cur)} />
+                            <Row k="Additional Features" v={money(addonTotal, cur)} />
+                            {otherTotal > 0 && <Row k="Additional Items & Charges" v={money(otherTotal, cur)} />}
+                            {calc.totals.taxAmount > 0 && <Row k={`VAT / Tax (${taxPct}%)`} v={money(calc.totals.taxAmount, cur)} />}
+                            <Row k="Discount" v={money(calc.totals.discountAmount, cur)} />
+                        </dl>
+                        <div className="mt-3 flex items-center justify-between rounded-lg bg-primary/10 px-3 py-2.5">
+                            <span className="text-sm font-semibold">Total Amount ({cur})</span>
+                            <span className="text-xl font-bold text-primary">{money(grand, cur)}</span>
+                        </div>
+                    </div>
+
+                    <div className="grid gap-3 sm:grid-cols-2">
+                        <div className={cardCls}>
+                            <p className="text-sm font-semibold">Validity Period</p>
+                            <p className="mt-1 flex items-center gap-1.5 text-sm"><IconCalendar className="size-4 text-primary" />{fmtDate(validUntil)}</p>
+                            <p className="mt-1 text-[11px] text-muted-foreground">This quotation will be valid for {validDays} days.</p>
+                        </div>
+                        <div className={cardCls}>
+                            <p className="text-sm font-semibold">Prepared By</p>
+                            <p className="mt-1 text-sm font-medium">{COMPANY.name}</p>
+                            <p className="text-[11px] text-muted-foreground">{COMPANY.email}</p>
+                        </div>
+                    </div>
+
+                    <div className={cardCls}>
+                        <p className="flex items-center gap-2 text-sm font-semibold"><IconCircleCheck className="size-5 fill-primary text-primary-foreground" /> Completion Checklist</p>
+                        <p className="mb-3 text-[11px] text-muted-foreground">{ready ? "All sections completed. This quotation is ready to be sent." : "Complete the highlighted sections before sending."}</p>
+                        <ul className="grid grid-cols-3 gap-2">
+                            {checklist.map(([l, ok]) => (
+                                <li key={l} className="flex flex-col items-center gap-0.5 rounded-lg border px-2 py-2 text-center">
+                                    <IconCircleCheck className={cn("size-5", ok ? "fill-emerald-500 text-white" : "text-muted-foreground")} />
+                                    <span className="text-xs font-medium">{l}</span>
+                                    <span className="text-[10px] text-muted-foreground">{ok ? "Completed" : "Incomplete"}</span>
+                                </li>
                             ))}
                         </ul>
                     </div>
                 </div>
             </Panel>
+
+            <section className={cn("rounded-xl border bg-card p-4 shadow-xs md:p-5", expanded && "fixed inset-4 z-50 overflow-hidden shadow-2xl")}>
+                <header className="mb-3 flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                        <h3 className="text-sm font-semibold">Quotation Preview</h3>
+                        <p className="text-xs text-muted-foreground">This is how the quotation will appear to your client.</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <Button type="button" variant="outline" size="icon" className="size-8" aria-label={expanded ? "Exit full screen" : "Full screen"} onClick={() => setExpanded(!expanded)}>
+                            {expanded ? <IconArrowsMinimize className="size-4" /> : <IconArrowsMaximize className="size-4" />}
+                        </Button>
+                        <div className="flex items-center rounded-md border">
+                            <Button type="button" variant="ghost" size="icon" className="size-8" aria-label="Zoom out" disabled={zoom <= 60} onClick={() => setZoom(zoom - 10)}><IconMinus className="size-4" /></Button>
+                            <span className="w-12 text-center text-xs">{zoom}%</span>
+                            <Button type="button" variant="ghost" size="icon" className="size-8" aria-label="Zoom in" disabled={zoom >= 140} onClick={() => setZoom(zoom + 10)}><IconPlus className="size-4" /></Button>
+                        </div>
+                        <Button type="button" variant="outline" size="sm" className="h-8" disabled={pdfBusy || saving} onClick={downloadPdf}>
+                            <IconDownload className="size-4" /> {pdfBusy ? "Preparing…" : "Download PDF"}
+                        </Button>
+                    </div>
+                </header>
+                {previewDoc}
+            </section>
         </div>
     );
 
     const bodies = [clientStep, servicesStep, scopeStep, pricingStep, termsStep, previewStep];
 
     return (
-        <div className="space-y-5 pb-24">
+        <div className={"space-y-5 pb-24"}>
             <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                     <h1 className="text-2xl font-bold tracking-tight">Create New Quotation</h1>
-                    <p className="text-sm text-muted-foreground">Select client, service and pricing, then customise the terms for this quotation.</p>
+                    <p className="text-sm text-muted-foreground">{step === 5 ? "Review the complete quotation details and send it to the client." : "Select client, service, package and customise the details for this quotation."}</p>
                 </div>
                 <div className="flex items-center gap-2">
+                    {step === 5 && <span className="flex items-center gap-1.5 rounded-full bg-muted px-3 py-1 text-xs font-medium text-muted-foreground"><span className="size-2 rounded-full bg-muted-foreground" />Draft</span>}
                     <Button type="button" variant="outline" disabled={saving} onClick={save}>
                         <IconDeviceFloppy className="size-4" /> {saving ? "Saving…" : "Save Draft"}
                     </Button>
+                    {step < 5 ? (
+                        <Button type="button" disabled={creatingClient} onClick={() => go(step + 1)}>
+                            {creatingClient ? "Creating client…" : `Continue to ${STEPS[step + 1].title}`} <IconArrowRight className="size-4" />
+                        </Button>
+                    ) : (
+                        <>
+                            <Button type="button" variant="outline" disabled={pdfBusy || saving} onClick={downloadPdf}>Preview PDF</Button>
+                            <Button type="button" disabled={saving || sending || !ready} onClick={openSend}>
+                                <IconSend className="size-4" /> Send to Client
+                            </Button>
+                        </>
+                    )}
                 </div>
             </div>
 
             <Stepper step={step} maxStep={maxStep} onGo={go} />
 
-            <div className={cn("grid items-start gap-5", step !== 5 && (step === 1 ? "xl:grid-cols-[minmax(0,1fr)_340px]" : "xl:grid-cols-[minmax(0,1fr)_300px]"))}>
-                <div className="min-w-0">{bodies[step]}</div>
+            <div className={cn("grid items-start gap-5", step !== 5 && step !== 0 && step !== 2 && (step === 1 ? "xl:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_330px]" : "xl:grid-cols-[minmax(0,1fr)_300px]"))}>
+                <div className={cn("min-w-0", step === 1 && "contents")}>{bodies[step]}</div>
 
                 {step === 1 && (
-                    <aside className="space-y-4 xl:sticky xl:top-4">
-                        <Panel icon={IconFileText} title="Package Summary" right={pkg ? <span className="rounded bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">{pkg.name}</span> : undefined}>
+                    <aside className="min-w-0 space-y-4 xl:sticky xl:top-4 xl:col-start-3 xl:row-start-1">
+                        <Panel plain icon={IconFileText} title="Package Summary" right={pkg ? <span className="rounded bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">{pkg.name}</span> : undefined}>
                             {service ? (
-                                <div className="space-y-3 text-sm">
-                                    <div className="rounded-lg border bg-muted/30 p-3">
-                                        <p className="font-semibold">{svcLabel}</p>
-                                        <p className="text-xs text-muted-foreground">{service?.description}</p>
+                                <div className="space-y-4 text-sm">
+                                    <div className="flex items-center gap-3">
+                                        <span className="flex size-12 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                                            {(() => { const SIcon = catalogIcon(service.icon); return <SIcon className="size-6" />; })()}
+                                        </span>
+                                        <div className="min-w-0">
+                                            <p className="font-semibold leading-tight">{svcLabel}</p>
+                                            <p className="text-xs text-muted-foreground">{service.description}</p>
+                                        </div>
                                     </div>
-                                    <dl className="space-y-1.5">
-                                        {platform && <Row k="Platform / Technology" v={platform} />}
+                                    <dl className="space-y-2 border-t pt-3">
+                                        {platform && (
+                                            <div className="flex items-center justify-between gap-3 text-xs">
+                                                <dt className="text-muted-foreground">Platform / Technology</dt>
+                                                <dd className="flex items-center gap-1.5 font-medium">
+                                                    {(() => { const pf = service.platforms.find((x) => x._id === platformId); return pf?.logo ? <BrandLogo name={pf.logo} color={pf.color} className="size-4" /> : null; })()}
+                                                    {platform}
+                                                </dd>
+                                            </div>
+                                        )}
                                         {pkg && <Row k="Selected Package" v={pkg.name} />}
-                                        {pkg && <Row k="Base Package Price" v={money(pkgPrice, cur)} />}
+                                        {pkg && <Row k="Base Package Price" v={money(isUnit ? (Number(unit.rate) || 0) * unit.qty : pkgPrice, cur)} />}
                                     </dl>
                                     {features.length > 0 && (
-                                        <div>
-                                            <p className="mb-1 text-xs font-semibold">Included Features ({features.filter((f) => f.on).length})</p>
-                                            <ul className="space-y-1 text-xs">
+                                        <div className="border-t pt-3">
+                                            <div className="mb-2 flex items-center justify-between">
+                                                <p className="text-xs font-semibold">Included Features ({features.filter((f) => f.on).length})</p>
+                                                <Button type="button" variant="outline" size="sm" className="h-6 px-2 text-[11px] text-primary" onClick={() => document.getElementById("sec-features")?.scrollIntoView({ behavior: "smooth" })}>Edit</Button>
+                                            </div>
+                                            <ul className="space-y-1.5 text-xs">
                                                 {features.filter((f) => f.on).slice(0, 5).map((f) => (
-                                                    <li key={f.text} className="flex items-start gap-1.5"><IconCircleCheck className="mt-0.5 size-3.5 shrink-0 text-primary" />{f.text}</li>
+                                                    <li key={f.text} className="flex items-start gap-2"><IconCircleCheck className="mt-0.5 size-4 shrink-0 fill-primary text-primary-foreground" />{f.text}</li>
                                                 ))}
                                             </ul>
-                                            {features.filter((f) => f.on).length > 5 && <p className="mt-1 text-xs text-primary">+ {features.filter((f) => f.on).length - 5} more features…</p>}
+                                            {features.filter((f) => f.on).length > 5 && <p className="mt-1.5 text-xs text-primary">+ {features.filter((f) => f.on).length - 5} more features…</p>}
                                         </div>
                                     )}
                                     {chosenAddons.length > 0 && (
-                                        <div>
-                                            <p className="mb-1 text-xs font-semibold">Add-on Features ({chosenAddons.length})</p>
-                                            <ul className="space-y-1 text-xs">
+                                        <div className="border-t pt-3">
+                                            <div className="mb-2 flex items-center justify-between">
+                                                <p className="text-xs font-semibold">Add-on Features ({chosenAddons.length})</p>
+                                                <Button type="button" variant="outline" size="sm" className="h-6 px-2 text-[11px] text-primary" onClick={() => document.getElementById("sec-addons")?.scrollIntoView({ behavior: "smooth" })}>Edit</Button>
+                                            </div>
+                                            <ul className="space-y-1.5 text-xs">
                                                 {chosenAddons.map((a) => (
-                                                    <li key={a._id} className="flex items-start justify-between gap-2"><span className="flex gap-1.5"><IconCircleCheck className="mt-0.5 size-3.5 shrink-0 text-primary" />{a.name}</span><span>{money(a.price, cur)}</span></li>
+                                                    <li key={a._id} className="flex items-start justify-between gap-2"><span className="flex gap-2"><IconCircleCheck className="mt-0.5 size-4 shrink-0 fill-primary text-primary-foreground" />{a.name}</span><span className="shrink-0">{money(a.price, cur)}</span></li>
                                                 ))}
                                             </ul>
                                         </div>
@@ -1226,13 +2229,19 @@ export default function QuotationWizard() {
                                         <Row k={`Add-on Features (${chosenAddons.length})`} v={money(chosenAddons.reduce((a, x) => a + x.price, 0), cur)} />
                                         <Row k="Discount" v={money(calc.totals.discountAmount, cur)} />
                                     </dl>
-                                    <div className="flex items-center justify-between rounded-lg bg-primary/10 px-3 py-2.5">
-                                        <span className="text-xs font-semibold">Total Amount ({cur})</span>
-                                        <span className="text-lg font-bold text-primary">{money(grand, cur)}</span>
+                                    <div className="flex items-center justify-between rounded-lg bg-primary/10 px-3 py-3">
+                                        <span className="text-xs font-semibold text-primary">Total Amount ({cur})</span>
+                                        <span className="text-xl font-bold text-primary">{money(grand, cur)}</span>
                                     </div>
-                                    <div className="space-y-2">
-                                        <Field label="Package Duration"><Input className="h-9" value={duration} onChange={(e) => setDuration(e.target.value)} /></Field>
-                                        <Field label="Support Period"><Input className="h-9" value={supportPeriod} onChange={(e) => setSupportPeriod(e.target.value)} /></Field>
+                                    <div className="space-y-2 border-t pt-3">
+                                        <div className="flex items-center justify-between gap-3">
+                                            <Label className="text-xs font-semibold">Package Duration</Label>
+                                            <Input className="h-8 w-40 text-xs" value={duration} onChange={(e) => setDuration(e.target.value)} />
+                                        </div>
+                                        <div className="flex items-center justify-between gap-3">
+                                            <Label className="text-xs font-semibold">Support Period</Label>
+                                            <Input className="h-8 w-40 text-xs" value={supportPeriod} onChange={(e) => setSupportPeriod(e.target.value)} />
+                                        </div>
                                     </div>
                                 </div>
                             ) : (
@@ -1241,7 +2250,9 @@ export default function QuotationWizard() {
                         </Panel>
                     </aside>
                 )}
-                {step !== 5 && step !== 1 && (
+                {step === 3 && pricingAside}
+                {step === 4 && termsAside}
+                {step !== 5 && step !== 1 && step !== 0 && step !== 2 && step !== 3 && step !== 4 && (
                     <aside className="space-y-4 xl:sticky xl:top-4">
                         <Panel icon={IconFileText} title="Quotation Summary">
                             <dl className="space-y-2 text-sm">
@@ -1277,16 +2288,35 @@ export default function QuotationWizard() {
                         <IconArrowLeft className="size-4" /> {step === 0 ? "Back to Quotations" : `Previous: ${STEPS[step - 1].title}`}
                     </Button>
                     {step < 5 ? (
-                        <Button type="button" onClick={() => go(step + 1)}>
-                            Continue to {STEPS[step + 1].title} <IconArrowRight className="size-4" />
+                        <Button type="button" disabled={creatingClient} onClick={() => go(step + 1)}>
+                            {creatingClient ? "Creating client…" : `Continue to ${STEPS[step + 1].title}`} <IconArrowRight className="size-4" />
                         </Button>
                     ) : (
-                        <Button type="button" disabled={saving || !ready} onClick={save}>
-                            <IconDeviceFloppy className="size-4" /> {saving ? "Saving…" : "Save & Open Quotation"}
-                        </Button>
+                        <div className="flex flex-wrap items-center gap-2">
+                            <Button type="button" variant="outline" disabled={pdfBusy || saving} onClick={downloadPdf}>
+                                <IconDownload className="size-4" /> {pdfBusy ? "Preparing…" : "Download PDF"}
+                            </Button>
+                            <Button type="button" disabled={saving || sending || !ready} onClick={openSend}>
+                                <IconSend className="size-4" /> Send to Client
+                            </Button>
+                        </div>
                     )}
                 </div>
             </div>
+
+            <QuotationEmailDialog
+                open={pickerOpen}
+                clientId={clientId}
+                quotationLabel={`${savedNo || "Quotation"} • ${title.trim() || projectType}`}
+                extraEmails={emails.filter((e) => e.trim())}
+                onClose={() => {
+                    if (sending) return;
+                    setPickerOpen(false);
+                    if (sentOnce && savedId) router.push(`/quotations/${savedId}`);
+                }}
+                onSend={confirmSend}
+                isSending={sending}
+            />
         </div>
     );
 }
@@ -1296,19 +2326,6 @@ function Row({ k, v }: { k: string; v: string }) {
         <div className="flex justify-between gap-3">
             <dt className="text-muted-foreground">{k}</dt>
             <dd className="truncate text-right font-medium">{v}</dd>
-        </div>
-    );
-}
-
-function SummaryRow({ label, value, sub, onEdit }: { label: string; value: string; sub?: string; onEdit: () => void }) {
-    return (
-        <div className="flex items-start justify-between gap-3 rounded-lg border p-3">
-            <div className="min-w-0">
-                <dt className="text-xs text-muted-foreground">{label}</dt>
-                <dd className="font-semibold">{value}</dd>
-                {sub && <dd className="truncate text-xs text-muted-foreground">{sub}</dd>}
-            </div>
-            <Button type="button" variant="outline" size="sm" className="h-7 shrink-0" onClick={onEdit}>Edit</Button>
         </div>
     );
 }

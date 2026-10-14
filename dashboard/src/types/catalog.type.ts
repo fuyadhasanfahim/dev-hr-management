@@ -113,6 +113,7 @@ export interface CatalogTreePackage extends CatalogPackage {
 }
 export interface CatalogTreeService extends CatalogService {
     platforms: CatalogPlatform[];
+    sections: CatalogSection[];
     packages: CatalogTreePackage[];
 }
 
