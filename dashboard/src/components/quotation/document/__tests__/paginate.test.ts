@@ -19,6 +19,11 @@ describe('paginate', () => {
         assert.deepEqual(paginate(blocks, cap), [[0], [1, 2]]);
     });
 
+    test('a chain of keepWithNext blocks (chapter + card head + first row) moves together', () => {
+        const blocks: PBlock[] = [{ h: 60 }, { h: 15, keepWithNext: true }, { h: 15, keepWithNext: true }, { h: 20 }];
+        assert.deepEqual(paginate(blocks, cap), [[0], [1, 2, 3]]);
+    });
+
     test('a table header row is repeated when the table continues on the next page', () => {
         const blocks: PBlock[] = [
             { h: 20, table: 't', head: true, keepWithNext: true },

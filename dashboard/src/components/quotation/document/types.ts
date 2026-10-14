@@ -6,7 +6,7 @@ import type { IPaymentMilestone, IQuotationService } from "@/types/quotation.typ
  */
 export interface QuotationDocInput {
     quotationNumber?: string;
-    company: { name: string; address?: string; email?: string; phone?: string; website?: string; logo?: string };
+    company: { name: string; address?: string; email?: string; phone?: string; website?: string; logo?: string; country?: string; ein?: string; vat?: string };
     client: { contactName: string; companyName?: string; address?: string; email?: string; phone?: string };
     details: { title: string; date: string; validUntil: string };
     currency?: string;

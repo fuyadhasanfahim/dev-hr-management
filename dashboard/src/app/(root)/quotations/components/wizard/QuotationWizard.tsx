@@ -432,6 +432,9 @@ export default function QuotationWizard() {
     const { generate: generatePdf, stage: pdfStage, busy: pdfBusy } = useQuotationPdf();
     const numberRef = useRef("");
     const previewBox = useRef<HTMLDivElement>(null);
+    const [autoFit, setAutoFit] = useState(true);
+    const autoFitRef = useRef(true);
+    autoFitRef.current = autoFit;
     const saving = creating || updating;
 
     const [step, setStep] = useState(0);
@@ -2131,10 +2134,17 @@ export default function QuotationWizard() {
     /** Zoom so a whole A4 page fits the preview column. */
     const fitZoom = () => {
         const w = previewBox.current?.clientWidth ?? 0;
-        if (w) setZoom(Math.max(40, Math.min(100, Math.floor(((w - 32) / 794) * 20) * 5)));
+        if (w) setZoom(Math.max(30, Math.min(100, Math.floor(((w - 32) / 794) * 20) * 5)));
     };
+    // Keep the page fitted to the column (also on resize / phones) until the user picks a zoom by hand.
     useEffect(() => {
-        if (step === 5) requestAnimationFrame(fitZoom);
+        const el = previewBox.current;
+        if (step !== 5 || !el) return;
+        setAutoFit(true);
+        const ro = new ResizeObserver(() => autoFitRef.current && fitZoom());
+        ro.observe(el);
+        requestAnimationFrame(fitZoom);
+        return () => ro.disconnect();
     }, [step, expanded]);
 
     const previewStep = (
@@ -2252,11 +2262,11 @@ export default function QuotationWizard() {
                             {expanded ? <IconArrowsMinimize className="size-4" /> : <IconArrowsMaximize className="size-4" />}
                         </Button>
                         <div className="flex items-center rounded-md border">
-                            <Button type="button" variant="ghost" size="icon" className="size-8" aria-label="Zoom out" disabled={zoom <= 40} onClick={() => setZoom(zoom - 10)}><IconMinus className="size-4" /></Button>
+                            <Button type="button" variant="ghost" size="icon" className="size-8" aria-label="Zoom out" disabled={zoom <= 30} onClick={() => { setAutoFit(false); setZoom(zoom - 10); }}><IconMinus className="size-4" /></Button>
                             <span className="w-12 text-center text-xs">{zoom}%</span>
-                            <Button type="button" variant="ghost" size="icon" className="size-8" aria-label="Zoom in" disabled={zoom >= 150} onClick={() => setZoom(zoom + 10)}><IconPlus className="size-4" /></Button>
+                            <Button type="button" variant="ghost" size="icon" className="size-8" aria-label="Zoom in" disabled={zoom >= 150} onClick={() => { setAutoFit(false); setZoom(zoom + 10); }}><IconPlus className="size-4" /></Button>
                         </div>
-                        <Button type="button" variant="ghost" size="sm" className="h-8" onClick={fitZoom}>Fit</Button>
+                        <Button type="button" variant="ghost" size="sm" className="h-8" onClick={() => { setAutoFit(true); fitZoom(); }}>Fit</Button>
                         <Button type="button" variant="outline" size="sm" className="h-8" disabled={pdfBusy || saving} onClick={downloadPdf}>
                             <IconDownload className="size-4" /> {pdfBusy ? "Preparing…" : "Download PDF"}
                         </Button>

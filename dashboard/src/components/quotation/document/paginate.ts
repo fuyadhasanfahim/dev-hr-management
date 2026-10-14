@@ -1,6 +1,6 @@
 /**
  * Greedy A4 pagination. Each block is measured once (height in px) and packed top to bottom.
- * - keepWithNext: a heading is never left alone at the bottom of a page.
+ * - keepWithNext: a heading is never left alone at the bottom of a page (a run of them stays together).
  * - table / head: when a table continues onto a new page its header row is repeated.
  * Oversized blocks are placed on a page of their own rather than dropped.
  */
@@ -24,8 +24,9 @@ export function paginate(blocks: PBlock[], cap: (page: number) => number): numbe
     let used = 0;
     blocks.forEach((b, i) => {
         const p = pages.length - 1;
-        const next = blocks[i + 1];
-        const need = b.keepWithNext && next ? b.h + next.h : b.h;
+        // a run of keepWithNext blocks (chapter → card head → first row) must stay together
+        let need = b.h;
+        for (let j = i; blocks[j]?.keepWithNext && blocks[j + 1]; j++) need += blocks[j + 1]!.h;
         if (pages[p]!.length > 0 && used + need > cap(p)) {
             pages.push([]);
             used = 0;
