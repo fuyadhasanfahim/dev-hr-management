@@ -13,6 +13,7 @@ import { randomUUID } from 'node:crypto';
 import envConfig from '../config/env.config.js';
 import CatalogService from '../models/catalog-service.model.js';
 import CatalogPackage from '../models/catalog-package.model.js';
+import CatalogPlatform from '../models/catalog-platform.model.js';
 import CatalogSection from '../models/catalog-section.model.js';
 
 const force = process.argv.includes('--force');
@@ -159,16 +160,14 @@ const run = async () => {
         for (const [slug, { _platform, ...bp }] of Object.entries(pkgs as Record<string, any>)) {
             const filter: Record<string, unknown> = { serviceId: svcId[service], slug };
             if (_platform) {
-                const platforms = (await CatalogService.findById(svcId[service])!.populate('platformIds').lean())?.platformIds as any[] | undefined;
-                const pl = platforms?.find((x) => x.slug === _platform);
+                const pl = await CatalogPlatform.findOne({ slug: _platform }, '_id').lean();
                 if (pl) filter.platformId = pl._id;
             }
             await setPkg(filter, bp, `${service}/${slug}`);
         }
     }
     {
-        const platforms = (await CatalogService.findById(svcId['website-development'])!.populate('platformIds').lean())?.platformIds as any[] | undefined;
-        const next = platforms?.find((x) => x.slug === 'next-js-node-js');
+        const next = await CatalogPlatform.findOne({ slug: 'next-js-node-js' }, '_id').lean();
         for (const slug of NEXT_PACKAGES) {
             if (next) await setPkg({ serviceId: svcId['website-development'], platformId: next._id, slug }, { designMode: 'custom', inclusions: NEXT_INCL }, `website-development/next-js/${slug}`);
         }
