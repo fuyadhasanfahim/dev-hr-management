@@ -29,6 +29,8 @@ export interface ICatalogPackage extends Document {
     /** Pre-fill for the Terms step. */
     supportInclusions: string[];
     additionalCharges: string[];
+    /** Per-package overrides of the service blueprint (inclusions, revisions, payment milestones, policies). */
+    blueprint?: Record<string, unknown> | null;
     sortOrder: number;
     isActive: boolean;
 }
@@ -54,6 +56,7 @@ const catalogPackageSchema = new Schema<ICatalogPackage>(
         notes: [{ type: String, trim: true }],
         supportInclusions: [{ type: String, trim: true }],
         additionalCharges: [{ type: String, trim: true }],
+        blueprint: { type: Schema.Types.Mixed },
         sortOrder: { type: Number, default: 0 },
         isActive: { type: Boolean, default: true, index: true },
     },

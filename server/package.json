@@ -12,6 +12,7 @@
         "build": "npx tsc",
         "sync:org": "tsx src/scripts/sync-organization-staff.ts",
         "seed:roles": "tsx src/scripts/seed-roles.ts",
+        "seed:blueprints": "tsx src/scripts/seed-blueprints.ts",
         "normalize:staff-scope": "tsx src/scripts/normalize-staff-scope.ts",
         "postinstall": "puppeteer browsers install chrome"
     },

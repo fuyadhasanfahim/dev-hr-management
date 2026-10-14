@@ -42,6 +42,22 @@ const quotationSchema = new Schema<IQuotation>(
         includedSupport: [{ type: String }],
         keyTerms: [{ type: String }],
 
+        // Domain / hosting / support terms picked on the wizard. Drives the renewal timers
+        // that start when this quotation becomes an order.
+        inclusions: [
+            {
+                _id: false,
+                key: String,
+                label: String,
+                kind: { type: String, enum: ['domain', 'hosting', 'support', 'other'], default: 'other' },
+                included: { type: Boolean, default: true },
+                termMonths: { type: Number, min: 0 },
+                owner: String,
+                renews: { type: Boolean, default: false },
+                note: String,
+            },
+        ],
+
         workflow: [{ type: String }],
 
         // ── Currency snapshot (used in PDF/UI/events) ────────────────────────────

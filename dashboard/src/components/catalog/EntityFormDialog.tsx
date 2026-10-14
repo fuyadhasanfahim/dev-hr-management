@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { CATALOG_ICONS } from '@/lib/catalog-icons';
+import { BlueprintEditor } from './BlueprintEditor';
 import {
     useCreateCatalogItemMutation,
     useGetCatalogItemsQuery,
@@ -29,7 +30,7 @@ type Ctx = { services: CatalogService[]; platforms: CatalogPlatform[]; features:
 interface Field {
     key: string;
     label: string;
-    type: 'text' | 'textarea' | 'number' | 'select' | 'switch' | 'lines' | 'ids';
+    type: 'text' | 'textarea' | 'number' | 'select' | 'switch' | 'lines' | 'ids' | 'blueprint';
     options?: (c: Ctx) => Opt[];
     hint?: string;
     required?: boolean;
@@ -62,8 +63,10 @@ const FIELDS: Record<FormEntity, Field[]> = {
         { key: 'icon', label: 'Icon', type: 'select', options: () => Object.keys(CATALOG_ICONS).map((k) => ({ value: k, label: k })) },
         { key: 'quotationCategory', label: 'Quotation category', type: 'select', required: true, options: () => CATEGORIES, hint: 'Which quotation/PDF category this maps to.' },
         { key: 'pricingMode', label: 'Pricing mode', type: 'select', options: () => [{ value: 'package', label: 'Package' }, { value: 'unit', label: 'Per unit (rate × quantity)' }] },
+        { key: 'flowType', label: 'Quotation flow', type: 'select', options: () => [{ value: '', label: 'Auto (from pricing mode / category)' }, { value: 'project', label: 'Project — milestones, revisions, support, hosting' }, { value: 'retainer', label: 'Retainer — monthly recurring (e.g. marketing)' }, { value: 'production', label: 'Production — per unit (photo / video)' }], hint: 'Decides which cards the quotation wizard shows for this service.' },
         { key: 'description', label: 'Short description', type: 'textarea', full: true },
         { key: 'platformIds', label: 'Platforms offered for this service', type: 'ids', full: true, options: (c) => c.platforms.map((p) => ({ value: p._id, label: p.name })) },
+        { key: 'blueprint', label: 'Quotation blueprint (service defaults)', type: 'blueprint', full: true },
         { key: 'sortOrder', label: 'Sort order', type: 'number' },
         { key: 'isActive', label: 'Active', type: 'switch' },
     ],
@@ -106,18 +109,19 @@ const FIELDS: Record<FormEntity, Field[]> = {
         { key: 'notes', label: 'Notes / policies (one per line)', type: 'lines', full: true },
         { key: 'supportInclusions', label: 'Free support includes (one per line)', type: 'lines', full: true },
         { key: 'additionalCharges', label: 'Additional charges apply to (one per line)', type: 'lines', full: true },
+        { key: 'blueprint', label: 'Quotation blueprint (package overrides)', type: 'blueprint', full: true },
         { key: 'sortOrder', label: 'Sort order', type: 'number' },
         { key: 'isActive', label: 'Active', type: 'switch' },
     ],
 };
 
 const DEFAULTS: Record<FormEntity, Form> = {
-    services: { name: '', icon: 'website', quotationCategory: 'web-development', pricingMode: 'package', description: '', platformIds: [], sortOrder: 0, isActive: true },
+    services: { name: '', icon: 'website', quotationCategory: 'web-development', pricingMode: 'package', description: '', flowType: '', blueprint: null, platformIds: [], sortOrder: 0, isActive: true },
     platforms: { name: '', color: 'currentColor', logo: '', logoSecondary: '', description: '', sortOrder: 0, isActive: true },
     features: { serviceId: '', platformId: '', name: '', group: '', kind: 'included', price: 0, description: '', sortOrder: 0, isActive: true },
     packages: {
         serviceId: '', platformId: '', name: '', badge: '', price: '', priceMax: '', billingCycle: 'one-time', unitLabel: '', duration: '', supportPeriod: '', description: '', bestFor: '',
-        bullets: [], featureIds: [], addonIds: [], notes: [], supportInclusions: [], additionalCharges: [], sortOrder: 0, isActive: true,
+        bullets: [], featureIds: [], addonIds: [], notes: [], supportInclusions: [], additionalCharges: [], blueprint: null, sortOrder: 0, isActive: true,
     },
 };
 
@@ -232,7 +236,7 @@ export function EntityFormDialog({ entity, id = null, initial, onClose, onSaved 
                 </DialogHeader>
                 <div className="grid gap-4 sm:grid-cols-2">
                     {FIELDS[entity].filter((f) => !f.show || f.show(form)).map((f) => (
-                        <div key={f.key} className={f.full || f.type === 'ids' || f.type === 'lines' ? 'space-y-1.5 sm:col-span-2' : 'space-y-1.5'}>
+                        <div key={f.key} className={f.full || f.type === 'ids' || f.type === 'lines' || f.type === 'blueprint' ? 'space-y-1.5 sm:col-span-2' : 'space-y-1.5'}>
                             {f.type !== 'switch' && <Label className="text-xs">{f.label}{f.required && <span className="text-destructive"> *</span>}</Label>}
                             {f.type === 'text' && <Input value={form[f.key] ?? ''} onChange={(e) => setField(f.key, e.target.value)} />}
                             {f.type === 'number' && <Input type="number" min={0} value={form[f.key] ?? ''} onChange={(e) => setField(f.key, e.target.value)} />}
@@ -246,6 +250,7 @@ export function EntityFormDialog({ entity, id = null, initial, onClose, onSaved 
                                     </SelectContent>
                                 </Select>
                             )}
+                            {f.type === 'blueprint' && <BlueprintEditor scope={entity === 'services' ? 'service' : 'package'} value={form[f.key]} onChange={(v) => setField(f.key, v)} />}
                             {f.type === 'ids' && <IdChecklist options={f.options!(ctx)} value={form[f.key] ?? []} onChange={(v) => setField(f.key, v)} />}
                             {f.type === 'switch' && (
                                 <label className="flex items-center gap-3 pt-6 text-sm"><Switch checked={!!form[f.key]} onCheckedChange={(v) => setField(f.key, v)} /> {f.label}</label>

@@ -5,6 +5,8 @@ import CatalogPackage from '../models/catalog-package.model.js';
 import CatalogFeature from '../models/catalog-feature.model.js';
 import CatalogSection, { CATALOG_SECTION_KINDS, CATALOG_TEXT_KINDS, DURATION_UNITS } from '../models/catalog-section.model.js';
 import CatalogLayout from '../models/catalog-layout.model.js';
+import { CATALOG_FLOW_TYPES } from '../models/catalog-service.model.js';
+import { sanitizeBlueprint } from './catalog-blueprint.js';
 import { randomUUID } from 'node:crypto';
 import { AppError } from '../utils/AppError.js';
 
@@ -74,10 +76,13 @@ const defs: Record<CatalogEntity, EntityDef> = {
 
     services: {
         model: CatalogService,
-        fields: ['name', 'description', 'icon', 'quotationCategory', 'pricingMode', 'platformIds', 'sortOrder', 'isActive'],
+        fields: ['name', 'description', 'icon', 'quotationCategory', 'pricingMode', 'flowType', 'blueprint', 'platformIds', 'sortOrder', 'isActive'],
         required: ['name', 'quotationCategory'],
         prepare: async (d, cur) => {
             if (d.name !== undefined && !cur) d.slug = slugify(d.name);
+            if (d.flowType === '') d.flowType = undefined;
+            if (d.flowType !== undefined && !(CATALOG_FLOW_TYPES as readonly string[]).includes(d.flowType)) throw new AppError('Unknown flow type', 400);
+            if (d.blueprint !== undefined) d.blueprint = sanitizeBlueprint(d.blueprint);
             if (d.platformIds) {
                 d.platformIds = uniq(d.platformIds);
                 await requireExisting(CatalogPlatform, d.platformIds, 'platform');
@@ -127,7 +132,7 @@ const defs: Record<CatalogEntity, EntityDef> = {
         fields: [
             'serviceId', 'platformId', 'name', 'badge', 'description', 'price', 'priceMax', 'billingCycle', 'unitLabel',
             'bullets', 'featureIds', 'addonIds', 'duration', 'supportPeriod', 'bestFor', 'notes', 'supportInclusions',
-            'additionalCharges', 'sortOrder', 'isActive',
+            'additionalCharges', 'blueprint', 'sortOrder', 'isActive',
         ],
         required: ['serviceId', 'name'],
         prepare: async (d, cur) => {
@@ -142,6 +147,7 @@ const defs: Record<CatalogEntity, EntityDef> = {
             if (d.name !== undefined && !cur) d.slug = slugify(d.name);
             if (d.price === '') d.price = null;
             if (d.priceMax === '') d.priceMax = null;
+            if (d.blueprint !== undefined) d.blueprint = sanitizeBlueprint(d.blueprint);
 
             // Linked features must belong to the same service and be either platform-agnostic or on the package's platform.
             for (const [key, kind] of [['featureIds', 'included'], ['addonIds', 'addon']] as const) {

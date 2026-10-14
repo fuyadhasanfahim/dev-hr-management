@@ -2,6 +2,7 @@ export type CatalogEntity = 'services' | 'platforms' | 'packages' | 'features' |
 /** Entities edited through the generic form dialog (sections have their own inline editors). */
 export type FormEntity = Exclude<CatalogEntity, 'sections'>;
 export type CatalogQuotationCategory = 'web-development' | 'photo-editing' | 'marketing' | 'video-editing';
+export type CatalogFlowType = 'project' | 'retainer' | 'production';
 export type CatalogBillingCycle = 'one-time' | 'monthly' | 'yearly' | 'per-image' | 'per-video' | 'per-second' | 'per-10s';
 
 interface Base {
@@ -37,6 +38,9 @@ export interface CatalogService extends Base {
     icon: string;
     quotationCategory: CatalogQuotationCategory;
     pricingMode: 'package' | 'unit';
+    /** Wizard layout; missing on old records (see flowOf in lib/quotation-blueprint). */
+    flowType?: CatalogFlowType;
+    blueprint?: import('@/lib/quotation-blueprint').Blueprint | null;
     platformIds: string[];
 }
 
@@ -70,6 +74,7 @@ export interface CatalogPackage extends Base {
     notes: string[];
     supportInclusions: string[];
     additionalCharges: string[];
+    blueprint?: import('@/lib/quotation-blueprint').Blueprint | null;
 }
 
 export const TEXT_SECTION_KINDS = ['projectTitle', 'projectOverview', 'scopeOfWork', 'changeRequestNote', 'supportNote'] as const;

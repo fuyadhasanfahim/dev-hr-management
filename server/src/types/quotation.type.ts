@@ -114,6 +114,18 @@ export interface IQuotation extends Document {
     includedSupport?: string[];
     keyTerms?: string[];
 
+    /** Domain / hosting / support terms. Renewal timers start from the order date. */
+    inclusions?: {
+        key?: string;
+        label: string;
+        kind: 'domain' | 'hosting' | 'support' | 'other';
+        included: boolean;
+        termMonths?: number;
+        owner?: string;
+        renews?: boolean;
+        note?: string;
+    }[];
+
     /** Monthly/yearly line items flattened out of services[].lineItems, billed separately from totals.grandTotal. */
     recurringCharges?: IQuotationLineItem[];
 

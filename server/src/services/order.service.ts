@@ -344,6 +344,32 @@ async function createOrderFromQuotation(
             note: 'Order created from accepted quotation',
         }], { session });
 
+        // Renewal timers (domain / hosting …) start today — the day the quotation becomes an order.
+        const renewals = (quotation.inclusions ?? [])
+            .filter((i) => i.included && i.renews && Number(i.termMonths) > 0 && i.key)
+            .map((i) => {
+                const start = new Date();
+                const end = new Date(start);
+                end.setMonth(end.getMonth() + Number(i.termMonths));
+                return {
+                    orderId: order._id,
+                    quotationId: quotation._id,
+                    quotationGroupId,
+                    clientId: quotation.clientId,
+                    key: i.key,
+                    label: i.label,
+                    kind: i.kind,
+                    owner: i.owner,
+                    termMonths: Number(i.termMonths),
+                    startDate: start,
+                    renewalDate: end,
+                };
+            });
+        if (renewals.length) {
+            const { default: ServiceRenewalModel } = await import('../models/service-renewal.model.js');
+            await ServiceRenewalModel.create(renewals, { session, ordered: true });
+        }
+
         // Back-reference: write orderId onto the quotation
         await QuotationModel.findByIdAndUpdate(
             quotation._id,

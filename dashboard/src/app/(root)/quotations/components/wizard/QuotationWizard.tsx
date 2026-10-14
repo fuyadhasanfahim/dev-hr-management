@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -60,6 +60,7 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { Calendar } from "@/components/ui/calendar";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Combobox } from "@/components/ui/combobox";
 import { MultiSelect } from "@/components/ui/multi-select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -78,6 +79,7 @@ import type { CatalogSectionKind, CatalogTreePackage, CatalogTreeService } from 
 import { Client } from "@/types/client.type";
 import type { BillingCycle, IQuotationService, QuotationCategory } from "@/types/quotation.type";
 import { unitLabel } from "@/components/catalog/canvas/section-meta";
+import { DEFAULT_BLUEPRINT, flowOf, resolveBlueprint, type BlueprintInclusion, type FlowType } from "@/lib/quotation-blueprint";
 import { computeQuotationTotals } from "@/lib/quotation-totals";
 
 // ───────────────────────────── types & constants ─────────────────────────────
@@ -107,31 +109,6 @@ const priceText = (p: CatalogTreePackage, cur: string) => {
 /** The package a service/platform opens with: the badged one (e.g. "Most Popular"), else the first. */
 const defaultPkg = (list: CatalogTreePackage[]) => list.find((p) => p.badge) ?? list[0];
 
-const SUPPORT_INCLUSIONS = [
-    "Bug fixes and error resolution",
-    "Minor content updates (text, images)",
-    "Server and deployment support",
-    "Performance monitoring assistance",
-    "CMS usage guidance and basic training",
-];
-const SUPPORT_EXCLUSIONS = [
-    "Major feature additions or new modules",
-    "Design changes or layout modifications",
-    "Third-party plugin or software license costs",
-    "Content creation (text, images, videos)",
-    "Server, hosting or domain renewal fees",
-];
-const HANDOVER = [
-    "All approved features are developed",
-    "Client review and final approval received",
-    "Full payment has been completed",
-    "Source code, assets and documentation delivered",
-];
-const GENERAL_TERMS = [
-    "This quotation is valid for 30 days from the date of issue.",
-    "The project timeline may vary based on client responsiveness.",
-    "All third-party costs (plugins, licenses, hosting, domain etc.) will be borne by the client.",
-];
 
 const PAYMENT_PRESETS: Record<string, Milestone[]> = {
     "50-50": [
@@ -170,6 +147,7 @@ function Panel({
     right,
     plain,
     id,
+    fixed,
 }: {
     icon: typeof IconUser;
     title: string;
@@ -180,10 +158,12 @@ function Panel({
     /** Heading without the icon tile. */
     plain?: boolean;
     id?: string;
+    /** Fixed card height (a Tailwind `h-*` class). Content past it scrolls in a shadcn ScrollArea. */
+    fixed?: string;
 }) {
     return (
-        <section id={id} className={cn("scroll-mt-4 rounded-xl border bg-card p-4 shadow-xs md:p-5", className)}>
-            <header className="mb-4 flex items-start gap-3">
+        <section id={id} className={cn("scroll-mt-4 rounded-xl border bg-card p-4 shadow-xs md:p-5", fixed && "flex flex-col overflow-hidden", fixed, className)}>
+            <header className={cn("mb-4 flex items-start gap-3", fixed && "shrink-0")}>
                 {!plain && (
                     <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
                         <Icon className="size-[18px]" />
@@ -195,7 +175,11 @@ function Panel({
                 </div>
                 {right}
             </header>
-            {children}
+            {fixed ? (
+                <ScrollArea className="-mr-3 min-h-0 flex-1 pr-3">{children}</ScrollArea>
+            ) : (
+                children
+            )}
         </section>
     );
 }
@@ -317,7 +301,7 @@ function MilestoneList({ items, onChange }: { items: Milestone2[]; onChange: (n:
 function FeatureToggles({ items, onChange }: { items: CheckItem[]; onChange: (n: CheckItem[]) => void }) {
     const [editing, setEditing] = useState<number | null>(null);
     return (
-        <div className="max-h-[22rem] space-y-1 overflow-y-auto pr-1">
+        <div className="space-y-1">
             {items.length === 0 && <p className="text-sm text-muted-foreground">Pick a package on the Services step to load its features.</p>}
             {items.map((it, i) => (
                 <div key={i} className="flex items-center gap-2.5 rounded-md px-1 py-1.5 hover:bg-muted/50">
@@ -498,8 +482,8 @@ export default function QuotationWizard() {
     const [customPrice, setCustomPrice] = useState(0);
     const [features, setFeatures] = useState<CheckItem[]>([]);
     const [addonsOn, setAddonsOn] = useState<string[]>([]);
-    const [duration, setDuration] = useState("3 – 4 Weeks");
-    const [supportPeriod, setSupportPeriod] = useState("6 Months (Free Support)");
+    const [duration, setDuration] = useState("");
+    const [supportPeriod, setSupportPeriod] = useState("");
     const [unit, setUnit] = useState<UnitService>({ qty: 1, rate: 0 });
 
     // step 3
@@ -511,11 +495,7 @@ export default function QuotationWizard() {
     const [assets, setAssets] = useState<CheckItem[]>([]);
     const [changeNote, setChangeNote] = useState("");
     const [supportNote, setSupportNote] = useState("");
-    const [clientResp, setClientResp] = useState<CheckItem[]>([
-        { text: "Provide all required content (text, images, product details)", on: true },
-        { text: "Timely feedback on design and development deliverables", on: true },
-        { text: "Provide access to domain, hosting and third-party accounts", on: true },
-    ]);
+    const [clientResp, setClientResp] = useState<CheckItem[]>([]);
     const [exclusions, setExclusions] = useState<string[]>([]);
 
     // step 4
@@ -527,34 +507,50 @@ export default function QuotationWizard() {
     const [reminders, setReminders] = useState(true);
     const discountPct = 0; // discounts are per line item now
     const [presetKey, setPresetKey] = useState("50-50");
-    const [milestones, setMilestones] = useState<Milestone[]>(withDue(PAYMENT_PRESETS["50-50"]));
+    const [milestones, setMilestones] = useState<Milestone[]>(withDue(DEFAULT_BLUEPRINT.paymentMilestones));
 
     // step 5
-    const [supportDuration, setSupportDuration] = useState("12 Months");
-    const [inclusions, setInclusions] = useState<CheckItem[]>(SUPPORT_INCLUSIONS.map((text) => ({ text, on: true })));
-    const [supportExcl, setSupportExcl] = useState<CheckItem[]>(SUPPORT_EXCLUSIONS.map((text) => ({ text, on: true })));
-    const [uiRev, setUiRev] = useState("3");
-    const [devRev, setDevRev] = useState("5");
-    const [extraRevFee, setExtraRevFee] = useState("5000");
-    const [devRevFee, setDevRevFee] = useState("3000");
-    const [handover, setHandover] = useState<CheckItem[]>(HANDOVER.map((text) => ({ text, on: true })));
-    const [recurring, setRecurring] = useState({ billing: true, invoice: true, report: false, upgrade: false });
-    const [grace, setGrace] = useState("7");
-    const [suspend, setSuspend] = useState("15");
-    const [cancelNotice, setCancelNotice] = useState("30");
+    const [supportDuration, setSupportDuration] = useState("");
+    const [incl, setIncl] = useState<BlueprintInclusion[]>([]);
+    const [designMode, setDesignMode] = useState<"" | "template" | "custom">("");
+    const [inclusions, setInclusions] = useState<CheckItem[]>([]);
+    const [supportExcl, setSupportExcl] = useState<CheckItem[]>([]);
+    const [uiRev, setUiRev] = useState(String(DEFAULT_BLUEPRINT.revisions.ui));
+    const [devRev, setDevRev] = useState(String(DEFAULT_BLUEPRINT.revisions.dev));
+    const [extraRevFee, setExtraRevFee] = useState("0");
+    const [devRevFee, setDevRevFee] = useState("0");
+    const [handover, setHandover] = useState<CheckItem[]>([]);
+    const [recurring, setRecurring] = useState({ billing: false, invoice: false, report: false, upgrade: false });
+    const [grace, setGrace] = useState("");
+    const [suspend, setSuspend] = useState("");
+    const [cancelNotice, setCancelNotice] = useState("");
     const [extraCharge, setExtraCharge] = useState<"feature" | "hourly" | "custom">("feature");
-    const [extraRate, setExtraRate] = useState("5000");
-    const [hourlyRate, setHourlyRate] = useState("2000");
+    const [extraRate, setExtraRate] = useState("0");
+    const [hourlyRate, setHourlyRate] = useState("0");
     const [customExtra, setCustomExtra] = useState("");
     const [ownershipCustom, setOwnershipCustom] = useState("");
-    const [ownership, setOwnership] = useState<"client" | "portfolio" | "custom">("client");
-    const [generalTerms, setGeneralTerms] = useState<string[]>(GENERAL_TERMS);
+    const [ownership, setOwnership] = useState<"" | "client" | "portfolio" | "custom">("");
+    const [generalTerms, setGeneralTerms] = useState<string[]>([]);
 
     const cur = currency;
+
+    // Sections the user has edited by hand. Choosing another package re-applies the catalog
+    // blueprint everywhere EXCEPT these, so typed-in work is never overwritten.
+    const dirty = useRef(new Set<string>());
+    const touch = (k: string) => void dirty.current.add(k);
+    const edit = <T,>(k: string, set: (v: T) => void) => (v: T) => {
+        touch(k);
+        set(v);
+    };
+    const editMs = (v: Milestone[]) => {
+        touch("milestones");
+        setMilestones(v);
+    };
     const hasRecurringLine = lines.some((l) => l.billing !== "one-time") || charges.some((c) => c.type !== "one-time") || recFee.on;
 
     // ── selected service → platform → package → add-ons (all from the catalog, by id) ──
     const service = tree.find((x) => x._id === serviceId);
+    const flow: FlowType = flowOf(service);
     const category = service?.quotationCategory ?? null;
     const svcLabel = service?.name ?? "";
     const platform = service?.platforms.find((x) => x._id === platformId)?.name ?? "";
@@ -580,6 +576,9 @@ export default function QuotationWizard() {
                     return item(l.title.trim(), (Number(l.price) || 0) * (1 - d / 100), note || undefined, Number(l.qty) || 1, l.billing as BillingCycle);
                 }),
             ...charges.filter((c) => c.name.trim()).map((c) => item(c.name.trim(), Number(c.amount) || 0, c.description.trim() || undefined, 1, c.type as BillingCycle)),
+            ...incl
+                .filter((i) => !i.included && Number(i.charge) > 0)
+                .map((i) => item(`${i.label}${i.termMonths ? ` — ${i.termMonths} month${i.termMonths === 1 ? "" : "s"}` : ""}`, Number(i.charge), "Not included in the package", 1, "one-time")),
             ...(recFee.on && Number(recFee.amount) > 0 ? [item("Recurring Fee", Number(recFee.amount), recFee.start ? `Starts ${recFee.start}` : undefined, 1, recFee.freq as BillingCycle)] : []),
         ];
         const base: IQuotationService = {
@@ -670,21 +669,34 @@ export default function QuotationWizard() {
         window.scrollTo({ top: 0, behavior: "smooth" });
     };
 
-    /** Choosing a package loads its features and pre-fills the package-specific Terms content. */
-    const selectPackage = (p: CatalogTreePackage) => {
+    /**
+     * Choosing a package loads everything the catalog knows about it: features, scope content
+     * (sections) and its blueprint (inclusions, revisions, payment milestones, policies).
+     * Sections the user already edited (`dirty`) are kept; `reset` re-applies everything.
+     */
+    const selectPackage = (p: CatalogTreePackage, reset = false) => {
+        if (reset) dirty.current.clear();
+        const put = (key: string, fn: () => void) => {
+            if (!dirty.current.has(key)) fn();
+        };
+        const svc = tree.find((x) => x._id === p.serviceId);
+        const bp = resolveBlueprint(svc, p);
+
         setPkgId(p._id);
         setAddonsOn([]);
         setCustomPrice(0);
         setUnit({ qty: 1, rate: p.price ?? 0 });
         setFeatures(p.features.map((f) => ({ text: f.name, on: true, id: f._id, group: f.group })));
-        if (p.duration) setDuration(p.duration);
-        if (p.supportPeriod) setSupportPeriod(`${p.supportPeriod} (Free Support)`);
-        if (p.supportInclusions.length) setInclusions(p.supportInclusions.map((text) => ({ text, on: true })));
-        if (p.additionalCharges.length) setSupportExcl(p.additionalCharges.map((text) => ({ text, on: true })));
-        setGeneralTerms([...GENERAL_TERMS, ...p.notes]);
+        dirty.current.delete("features");
 
-        // Scope content from the catalog: package-level section overrides the service-wide one.
-        const svc = tree.find((x) => x._id === p.serviceId);
+        // package facts (blank when the catalog does not state them)
+        put("duration", () => setDuration(p.duration ?? ""));
+        put("supportPeriod", () => setSupportPeriod(p.supportPeriod ? `${p.supportPeriod} (Free Support)` : ""));
+        put("inclusions", () => setInclusions(p.supportInclusions.map((text) => ({ text, on: true }))));
+        put("supportExcl", () => setSupportExcl(p.additionalCharges.map((text) => ({ text, on: true }))));
+        put("generalTerms", () => setGeneralTerms([...p.notes]));
+
+        // scope content: a package-level section overrides the service-wide one
         const sec = (kind: CatalogSectionKind) => {
             const all = (svc?.sections ?? []).filter((x) => x.kind === kind);
             return all.find((x) => String(x.packageId ?? "") === p._id) ?? all.find((x) => !x.packageId);
@@ -692,17 +704,41 @@ export default function QuotationWizard() {
         const titles = (kind: CatalogSectionKind) => (sec(kind)?.items ?? []).map((i) => i.title);
         const company = snap.companyName.trim();
         const t = sec("projectTitle")?.text?.trim();
-        setTitle(t ? (company ? `${t} — ${company}` : t) : "");
-        setOverview(sec("projectOverview")?.text ?? "");
-        setScopeText(sec("scopeOfWork")?.text ?? "");
-        setDeliverables(titles("deliverables"));
-        setTimeline((sec("milestones")?.items ?? []).map((i) => ({ title: i.title, duration: unitLabel(i.duration) })));
-        const resp = titles("clientResponsibilities");
-        if (resp.length) setClientResp(resp.map((text) => ({ text, on: true })));
-        setAssets(titles("requiredAssets").map((text) => ({ text, on: false })));
-        setExclusions(titles("exclusions"));
-        setChangeNote(sec("changeRequestNote")?.text ?? "");
-        setSupportNote(sec("supportNote")?.text ?? "");
+        put("title", () => setTitle(t ? (company ? `${t} — ${company}` : t) : ""));
+        put("overview", () => setOverview(sec("projectOverview")?.text ?? ""));
+        put("scopeText", () => setScopeText(sec("scopeOfWork")?.text ?? ""));
+        put("deliverables", () => setDeliverables(titles("deliverables")));
+        put("timeline", () => setTimeline((sec("milestones")?.items ?? []).map((i) => ({ title: i.title, duration: unitLabel(i.duration) }))));
+        put("clientResp", () => setClientResp(titles("clientResponsibilities").map((text) => ({ text, on: true }))));
+        put("assets", () => setAssets(titles("requiredAssets").map((text) => ({ text, on: false }))));
+        put("exclusions", () => setExclusions(titles("exclusions")));
+        put("changeNote", () => setChangeNote(sec("changeRequestNote")?.text ?? ""));
+        put("supportNote", () => setSupportNote(sec("supportNote")?.text ?? ""));
+
+        // blueprint
+        const rev = bp.revisions ?? DEFAULT_BLUEPRINT.revisions;
+        const pol = bp.policies;
+        setUiRev(String(rev.ui ?? ""));
+        setDevRev(String(rev.dev ?? ""));
+        setExtraRevFee(String(rev.uiExtraFee ?? 0));
+        setDevRevFee(String(rev.devExtraFee ?? 0));
+        setGrace(pol?.graceDays != null ? String(pol.graceDays) : "");
+        setSuspend(pol?.suspendDays != null ? String(pol.suspendDays) : "");
+        setCancelNotice(pol?.cancelNoticeDays != null ? String(pol.cancelNoticeDays) : "");
+        setExtraRate(String(pol?.extraFeatureRate ?? 0));
+        setHourlyRate(String(pol?.hourlyRate ?? 0));
+        setOwnership(pol?.ownership ?? "");
+        setDesignMode(bp.designMode ?? "");
+        put("validUntil", () => pol?.validityDays && setValidUntil(plusDaysISO(pol.validityDays)));
+        put("incl", () => setIncl((bp.inclusions ?? []).filter((i) => i.kind !== "support").map((i) => ({ ...i }))));
+        const support = (bp.inclusions ?? []).find((i) => i.kind === "support" && i.included && i.termMonths);
+        const fromPkg = /^\d+ Months?$/.test(p.supportPeriod ?? "") ? (p.supportPeriod as string) : "";
+        setSupportDuration(support?.termMonths ? `${support.termMonths} Month${support.termMonths === 1 ? "" : "s"}` : fromPkg);
+        put("milestones", () => {
+            const list = (bp.paymentMilestones ?? DEFAULT_BLUEPRINT.paymentMilestones).map((m) => ({ ...m }));
+            setMilestones(withDue(list));
+            setPresetKey(list.length === 2 && list.every((m) => m.percentage === 50) ? "50-50" : "custom");
+        });
     };
 
     const pickPlatform = (id: string) => {
@@ -749,35 +785,46 @@ export default function QuotationWizard() {
     // ── save ──
     const buildPayload = () => {
         const msg = (n: string, v: string) => (v.trim() ? `${n}: ${v.trim()}` : "");
+        const pos = (v: string) => Number(v) > 0;
+        const inclLines = incl
+            .filter((i) => i.included && i.label.trim())
+            .map((i) => `${i.label.trim()}${i.termMonths ? ` — ${i.termMonths} month${i.termMonths === 1 ? "" : "s"}` : ""}${i.owner === "client" ? " (client owns & controls access)" : ""}${i.note.trim() && i.owner !== "client" ? ` — ${i.note.trim()}` : ""}`);
         const supportLines = [
-            `Technical support duration: ${supportDuration}`,
+            ...(supportDuration ? [`Technical support duration: ${supportDuration}`] : []),
             ...(duration ? [`Estimated delivery: ${duration}`] : []),
             ...(supportPeriod ? [`Support period: ${supportPeriod}`] : []),
+            ...inclLines,
             ...inclusions.filter((i) => i.on).map((i) => i.text),
             ...(supportNote.trim() ? [supportNote.trim()] : []),
         ];
+        const recurringBits = [
+            recurring.billing && "billing resumes after project completion",
+            recurring.invoice && "invoice is sent before each billing cycle",
+            recurring.report && "monthly performance report included",
+            recurring.upgrade && "plan upgrade/downgrade allowed anytime",
+            grace && `grace period ${grace} days`,
+            suspend && `services suspended after ${suspend} days of non-payment`,
+            cancelNotice && `cancellation requires ${cancelNotice} days' written notice`,
+        ].filter(Boolean);
         const keyTerms = [
-            `UI/UX revisions included: ${uiRev}${extraRevFee ? ` (additional rounds ${extraRevFee} per round)` : ""}; development revisions included: ${devRev}${devRevFee ? ` (additional rounds ${devRevFee} per round)` : ""}.`,
+            ...(uiRev || devRev
+                ? [
+                      `${uiRev ? `UI/UX revisions included: ${uiRev}${pos(extraRevFee) ? ` (additional rounds ${extraRevFee} per round)` : ""}` : ""}${uiRev && devRev ? "; " : ""}${devRev ? `development revisions included: ${devRev}${pos(devRevFee) ? ` (additional rounds ${devRevFee} per round)` : ""}` : ""}.`,
+                  ]
+                : []),
             extraCharge === "feature"
-                ? `Extra features / change requests are charged per feature/module${extraRate ? ` at ${extraRate}` : ""}.`
+                ? pos(extraRate) ? `Extra features / change requests are charged per feature/module at ${extraRate}.` : ""
                 : extraCharge === "hourly"
-                  ? `Extra work is charged hourly${hourlyRate ? ` at ${hourlyRate} per hour` : ""}.`
+                  ? pos(hourlyRate) ? `Extra work is charged hourly at ${hourlyRate} per hour.` : ""
                   : msg("Extra work", customExtra),
             ownership === "client"
                 ? "Full ownership is transferred to the client after final payment."
                 : ownership === "portfolio"
                   ? "WebBriks retains the right to showcase the project in its portfolio."
-                  : msg("Ownership", ownershipCustom),
-            hasRecurringLine
-                ? `Recurring services: ${[
-                      recurring.billing && "billing resumes after project completion",
-                      recurring.invoice && "invoice is sent before each billing cycle",
-                      recurring.report && "monthly performance report included",
-                      recurring.upgrade && "plan upgrade/downgrade allowed anytime",
-                  ]
-                      .filter(Boolean)
-                      .join("; ")}. Grace period ${grace} days, services suspended after ${suspend} days of non-payment. Cancellation requires ${cancelNotice} days' written notice.`
-                : "",
+                  : ownership === "custom"
+                    ? msg("Ownership", ownershipCustom)
+                    : "",
+            hasRecurringLine && recurringBits.length ? `Recurring services: ${recurringBits.join("; ")}.` : "",
             ...handover.filter((h) => h.on).map((h) => `Handover condition: ${h.text}`),
             ...(methods.length ? [`Accepted payment methods: ${methods.join(", ")}.`] : []),
             ...(milestones[0] ? [`Advance payment: ${milestones[0].percentage}% to start the project.`] : []),
@@ -800,6 +847,10 @@ export default function QuotationWizard() {
             notIncluded: [...exclusions.filter((e) => e.trim()), ...supportExcl.filter((s) => s.on).map((s) => s.text)],
             clientRequirements: [...clientResp.filter((c) => c.on).map((c) => c.text), ...assets.filter((a) => a.on).map((a) => `Required from client: ${a.text}`)],
             includedSupport: supportLines,
+            // domain / hosting terms — renewal timers start from the order date
+            inclusions: incl
+                .filter((i) => i.label.trim())
+                .map((i) => ({ key: i.key, label: i.label.trim(), kind: i.kind, included: i.included, termMonths: i.termMonths ?? undefined, owner: i.owner || undefined, renews: i.renews, note: i.note || undefined })),
             keyTerms,
             workflow: [...deliverables.filter((d) => d.trim()).map((d) => `Deliverable: ${d}`), ...timeline.filter((t) => t.title.trim()).map((t) => (t.duration.trim() ? `${t.title.trim()} — ${t.duration.trim()}` : t.title.trim()))],
             paymentMilestones: milestones.map((m) => ({ label: m.label, percentage: Number(m.percentage) || 0, note: [m.note, m.due ? `Due ${m.due}` : ""].filter(Boolean).join(" · ") || undefined })),
@@ -1054,7 +1105,7 @@ export default function QuotationWizard() {
                     <DatePicker value={date} onChange={setDate} />
                 </Field>
                 <Field label="Valid Until" required>
-                    <DatePicker value={validUntil} onChange={setValidUntil} min={date} />
+                    <DatePicker value={validUntil} onChange={edit("validUntil", setValidUntil)} min={date} />
                 </Field>
 
                 {clientMode === "new" && (
@@ -1247,16 +1298,16 @@ export default function QuotationWizard() {
                             title={`${service.platforms.length > 0 ? "4" : "3"}. Included Features`}
                             hint="Edit, add or remove features for this quotation."
                             right={
-                                <Button type="button" variant="outline" size="sm" className="h-7 text-primary" onClick={() => selectPackage(pkg)}>
+                                <Button type="button" variant="outline" size="sm" className="h-7 text-primary" onClick={() => selectPackage(pkg, true)}>
                                     Reset to Package
                                 </Button>
                             }
                         >
-                            <FeatureEditor items={features} onChange={setFeatures} />
+                            <FeatureEditor items={features} onChange={edit("features", setFeatures)} />
                         </Panel>
                         {addonList.length > 0 && (
-                            <Panel plain id="sec-addons" icon={IconPlus} title={`${service.platforms.length > 0 ? "5" : "4"}. Optional Add-on Features`} hint="Add features to enhance the package.">
-                                <ul className="max-h-80 divide-y overflow-y-auto pr-1">
+                            <Panel plain fixed="h-[22rem]" id="sec-addons" icon={IconPlus} title={`${service.platforms.length > 0 ? "5" : "4"}. Optional Add-on Features`} hint="Add features to enhance the package.">
+                                <ul className="divide-y">
                                     {addonList.map((a) => (
                                         <li key={a._id}>
                                             <label className="flex cursor-pointer items-center gap-3 py-2 text-sm">
@@ -1279,24 +1330,142 @@ export default function QuotationWizard() {
     );
 
     const durTotal = totalDuration(timeline);
+    const SCOPE_H = "h-[22rem]";
+    const scopeText3 = {
+        deliverables: flow === "retainer" ? ["Monthly Deliverables", "What is delivered every month."] : flow === "production" ? ["Deliverables per Item", "What the client receives for each product / video."] : ["Deliverables", "List the key deliverables for this project."],
+        milestones: flow === "production" ? ["Production Workflow", "How the work moves from brief to delivery."] : ["Project Milestones & Timeline", "Define major milestones and estimated timeline."],
+        assets: flow === "production" ? ["Client Brief & Inputs", "What we need from the client to quote and produce."] : ["Required Assets from Client", "List the assets, access and information required from client."],
+        exclusions: flow === "retainer" ? ["Not Included", "Clearly mention what is not included."] : ["Exclusions", "Clearly mention what is not included in this quotation."],
+    };
+    const scopeHidden: string[] = flow === "retainer" ? ["milestones", "supportNote"] : flow === "production" ? ["supportNote"] : [];
+    const noteBox = (value: string, set: (v: string) => void, k: string, ph: string) => (
+        <>
+            <Textarea rows={8} maxLength={1000} className="resize-none" value={value} onChange={(e) => { touch(k); set(e.target.value); }} placeholder={ph} />
+            <p className="mt-1 text-right text-[11px] text-muted-foreground">{value.length}/1000</p>
+        </>
+    );
+    const scopeBlocks: { key: string; node: React.ReactNode }[] = [
+        {
+            key: "deliverables",
+            node: (
+                <Panel fixed={SCOPE_H} icon={IconBox} title={scopeText3.deliverables[0]} hint={scopeText3.deliverables[1]}>
+                    <TextList items={deliverables} onChange={edit("deliverables", setDeliverables)} addLabel="Add Deliverable" />
+                </Panel>
+            ),
+        },
+        {
+            key: "milestones",
+            node: (
+                <Panel fixed={SCOPE_H} icon={IconCalendar} title={scopeText3.milestones[0]} hint={scopeText3.milestones[1]}>
+                    <MilestoneList items={timeline} onChange={edit("timeline", setTimeline)} />
+                    {durTotal && (
+                        <div className="mt-3 flex items-start gap-2 rounded-lg bg-primary/5 p-3">
+                            <IconClock className="mt-0.5 size-5 shrink-0 text-primary" />
+                            <div>
+                                <p className="text-xs font-semibold text-primary">Estimated Project Duration: {durTotal}</p>
+                                <p className="text-[11px] text-muted-foreground">Timeline may vary based on client feedback and content availability.</p>
+                            </div>
+                        </div>
+                    )}
+                </Panel>
+            ),
+        },
+        {
+            key: "features",
+            node: (
+                <Panel
+                    fixed={SCOPE_H}
+                    icon={IconListCheck}
+                    title="Included Features"
+                    hint="Core features included in this package."
+                    right={pkg ? <Button type="button" variant="outline" size="sm" className="h-7 text-primary" onClick={() => selectPackage(pkg, true)}>Reset to Default</Button> : undefined}
+                >
+                    <FeatureToggles items={features} onChange={edit("features", setFeatures)} />
+                </Panel>
+            ),
+        },
+        {
+            key: "clientResp",
+            node: (
+                <Panel fixed={SCOPE_H} icon={IconUser} title="Client Responsibilities" hint="What we expect from the client during the project.">
+                    <CheckList items={clientResp} onChange={edit("clientResp", setClientResp)} addLabel="Add responsibility…" />
+                </Panel>
+            ),
+        },
+        {
+            key: "assets",
+            node: (
+                <Panel fixed={SCOPE_H} icon={IconFolder} title={scopeText3.assets[0]} hint={scopeText3.assets[1]}>
+                    <CheckList items={assets} onChange={edit("assets", setAssets)} addLabel="Add required asset…" />
+                </Panel>
+            ),
+        },
+        {
+            key: "addons",
+            node: (
+                <Panel fixed={SCOPE_H} icon={IconPlus} title="Add-on Deliverables (Optional)" hint="Additional features or services that can be added.">
+                    {addonList.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">No add-ons for this package yet. Add them in the catalog.</p>
+                    ) : (
+                        <ul className="divide-y">
+                            {addonList.map((a) => (
+                                <li key={a._id}>
+                                    <label className="flex cursor-pointer items-center gap-3 py-2 text-sm">
+                                        <Checkbox checked={addonsOn.includes(a._id)} onCheckedChange={(v) => setAddonsOn(v ? [...addonsOn, a._id] : addonsOn.filter((n) => n !== a._id))} />
+                                        <span className="flex-1">{a.name}</span>
+                                        <span className="w-20 text-right font-medium">{money(a.price, cur)}</span>
+                                    </label>
+                                </li>
+                            ))}
+                        </ul>
+                    )}
+                </Panel>
+            ),
+        },
+        {
+            key: "exclusions",
+            node: (
+                <Panel fixed={SCOPE_H} icon={IconX} title={scopeText3.exclusions[0]} hint={scopeText3.exclusions[1]}>
+                    <Textarea rows={8} maxLength={1000} className="resize-none" value={exclusions.join("\n")} onChange={(e) => { touch("exclusions"); setExclusions(e.target.value.split("\n")); }} placeholder="One item per line" />
+                    <p className="mt-1 text-right text-[11px] text-muted-foreground">{exclusions.join("\n").length}/1000</p>
+                </Panel>
+            ),
+        },
+        {
+            key: "changeNote",
+            node: (
+                <Panel fixed={SCOPE_H} icon={IconAlertTriangle} title="Change Request Notes" hint="Define how change requests will be handled.">
+                    {noteBox(changeNote, setChangeNote, "changeNote", "Any changes to the agreed scope after project initiation…")}
+                </Panel>
+            ),
+        },
+        {
+            key: "supportNote",
+            node: (
+                <Panel fixed={SCOPE_H} icon={IconTools} title="Support & Maintenance Notes" hint="Include support and post-launch details.">
+                    {noteBox(supportNote, setSupportNote, "supportNote", "What post-launch support and maintenance covers…")}
+                </Panel>
+            ),
+        },
+    ].filter((b) => !scopeHidden.includes(b.key));
+
     const scopeStep = (
         <div className="space-y-4">
             <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
                 <div className="grid gap-4 lg:grid-cols-2">
-                    <Panel icon={IconFileText} title="Project Overview" hint="Provide a brief overview of the project and its objectives.">
+                    <Panel fixed={SCOPE_H} icon={IconFileText} title="Project Overview" hint="Provide a brief overview of the project and its objectives.">
                         <div className="space-y-3">
                             <Field label="Project Title" required>
-                                <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={`${projectType} — ${snap.companyName || clientName || "Client"}`} />
+                                <Input value={title} onChange={(e) => { touch("title"); setTitle(e.target.value); }} placeholder={`${projectType} — ${snap.companyName || clientName || "Client"}`} />
                             </Field>
                             <Field label="Project Overview" required>
-                                <Textarea rows={6} maxLength={1000} className="resize-none" value={overview} onChange={(e) => setOverview(e.target.value)} placeholder="Design and develop a modern, scalable…" />
+                                <Textarea rows={6} maxLength={1000} className="resize-none" value={overview} onChange={(e) => { touch("overview"); setOverview(e.target.value); }} placeholder="Describe the project…" />
                                 <p className="text-right text-[11px] text-muted-foreground">{overview.length}/1000</p>
                             </Field>
                         </div>
                     </Panel>
-                    <Panel icon={IconFileText} title="Scope of Work" hint="Define the overall scope of work for this project.">
-                        <Textarea rows={9} maxLength={1000} className="resize-none" value={scopeText} onChange={(e) => setScopeText(e.target.value)} placeholder="The scope includes UI/UX design, frontend & backend development…" />
-                        <p className="mt-1 text-right text-[11px] text-muted-foreground">{scopeText.length}/1000</p>
+                    <Panel fixed={SCOPE_H} icon={IconFileText} title="Scope of Work" hint="Define the overall scope of work for this project.">
+                        {noteBox(scopeText, setScopeText, "scopeText", "The scope includes…")}
                     </Panel>
                 </div>
                 <Panel plain icon={IconFileText} title="Quotation Summary" right={<button type="button" onClick={() => go(0)} className="text-xs font-medium text-primary hover:underline">Edit client</button>}>
@@ -1321,66 +1490,9 @@ export default function QuotationWizard() {
             </div>
 
             <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
-                <Panel icon={IconBox} title="Deliverables" hint="List the key deliverables for this project.">
-                    <TextList items={deliverables} onChange={setDeliverables} addLabel="Add Deliverable" />
-                </Panel>
-                <Panel icon={IconCalendar} title="Project Milestones & Timeline" hint="Define major milestones and estimated timeline.">
-                    <MilestoneList items={timeline} onChange={setTimeline} />
-                    {durTotal && (
-                        <div className="mt-3 flex items-start gap-2 rounded-lg bg-primary/5 p-3">
-                            <IconClock className="mt-0.5 size-5 shrink-0 text-primary" />
-                            <div>
-                                <p className="text-xs font-semibold text-primary">Estimated Project Duration: {durTotal}</p>
-                                <p className="text-[11px] text-muted-foreground">Timeline may vary based on client feedback and content availability.</p>
-                            </div>
-                        </div>
-                    )}
-                </Panel>
-                <Panel
-                    icon={IconListCheck}
-                    title="Included Features"
-                    hint="Core features included in this package."
-                    right={pkg ? <Button type="button" variant="outline" size="sm" className="h-7 text-primary" onClick={() => selectPackage(pkg)}>Reset to Default</Button> : undefined}
-                >
-                    <FeatureToggles items={features} onChange={setFeatures} />
-                </Panel>
-
-                <Panel icon={IconUser} title="Client Responsibilities" hint="What we expect from the client during the project.">
-                    <CheckList items={clientResp} onChange={setClientResp} addLabel="Add responsibility…" />
-                </Panel>
-                <Panel icon={IconFolder} title="Required Assets from Client" hint="List the assets, access and information required from client.">
-                    <CheckList items={assets} onChange={setAssets} addLabel="Add required asset…" />
-                </Panel>
-                <Panel icon={IconPlus} title="Add-on Deliverables (Optional)" hint="Additional features or services that can be added.">
-                    {addonList.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">No add-ons for this package.</p>
-                    ) : (
-                        <ul className="max-h-72 divide-y overflow-y-auto pr-1">
-                            {addonList.map((a) => (
-                                <li key={a._id}>
-                                    <label className="flex cursor-pointer items-center gap-3 py-2 text-sm">
-                                        <Checkbox checked={addonsOn.includes(a._id)} onCheckedChange={(v) => setAddonsOn(v ? [...addonsOn, a._id] : addonsOn.filter((n) => n !== a._id))} />
-                                        <span className="flex-1">{a.name}</span>
-                                        <span className="w-20 text-right font-medium">{money(a.price, cur)}</span>
-                                    </label>
-                                </li>
-                            ))}
-                        </ul>
-                    )}
-                </Panel>
-
-                <Panel icon={IconX} title="Exclusions" hint="Clearly mention what is not included in this quotation.">
-                    <Textarea rows={6} maxLength={1000} className="resize-none" value={exclusions.join("\n")} onChange={(e) => setExclusions(e.target.value.split("\n"))} placeholder="One exclusion per line" />
-                    <p className="mt-1 text-right text-[11px] text-muted-foreground">{exclusions.join("\n").length}/1000</p>
-                </Panel>
-                <Panel icon={IconAlertTriangle} title="Change Request Notes" hint="Define how change requests will be handled.">
-                    <Textarea rows={6} maxLength={1000} className="resize-none" value={changeNote} onChange={(e) => setChangeNote(e.target.value)} placeholder="Any changes to the agreed scope after project initiation will be considered as change requests…" />
-                    <p className="mt-1 text-right text-[11px] text-muted-foreground">{changeNote.length}/1000</p>
-                </Panel>
-                <Panel icon={IconTools} title="Support & Maintenance Notes" hint="Include support and post-launch details.">
-                    <Textarea rows={6} maxLength={1000} className="resize-none" value={supportNote} onChange={(e) => setSupportNote(e.target.value)} placeholder="This package includes technical support for bug fixes and minor issues…" />
-                    <p className="mt-1 text-right text-[11px] text-muted-foreground">{supportNote.length}/1000</p>
-                </Panel>
+                {scopeBlocks.map((b) => (
+                    <div key={b.key} className="min-w-0">{b.node}</div>
+                ))}
             </div>
         </div>
     );
@@ -1402,6 +1514,12 @@ export default function QuotationWizard() {
 
     const pricingStep = (
         <div className="space-y-4">
+            {flow !== "project" && (pkg?.notes?.length ?? 0) > 0 && (
+                <div className="flex items-start gap-2 rounded-xl border bg-primary/5 p-3 text-xs text-muted-foreground">
+                    <IconInfoCircle className="mt-0.5 size-4 shrink-0 text-primary" />
+                    <ul className="space-y-1">{pkg?.notes.map((n, i) => <li key={i}>{n}</li>)}</ul>
+                </div>
+            )}
             <Panel
                 icon={IconReceipt}
                 title="Pricing & Line Items"
@@ -1418,7 +1536,7 @@ export default function QuotationWizard() {
                             </Select>
                         </Field>
                         <Field label="Validity Period">
-                            <DatePicker value={validUntil} onChange={setValidUntil} min={date} className="h-9" />
+                            <DatePicker value={validUntil} onChange={edit("validUntil", setValidUntil)} min={date} className="h-9" />
                             <p className="text-[11px] text-muted-foreground">Valid for {validDays} days.</p>
                         </Field>
                     </div>
@@ -1549,7 +1667,7 @@ export default function QuotationWizard() {
                         value={presetKey}
                         onValueChange={(v) => {
                             setPresetKey(v);
-                            if (PAYMENT_PRESETS[v]) setMilestones(withDue(PAYMENT_PRESETS[v]));
+                            if (PAYMENT_PRESETS[v]) editMs(withDue(PAYMENT_PRESETS[v]));
                         }}
                     >
                         <SelectTrigger className="h-9 w-[150px]"><SelectValue /></SelectTrigger>
@@ -1582,18 +1700,18 @@ export default function QuotationWizard() {
                                     {milestones.map((m, i) => (
                                         <tr key={i} className="border-b align-middle last:border-0">
                                             <td className="px-2 py-2 text-muted-foreground">{i + 1}</td>
-                                            <td className="px-2 py-2"><Input className="h-9" value={m.label} onChange={(e) => { setPresetKey("custom"); setMilestones(milestones.map((x, j) => (j === i ? { ...x, label: e.target.value } : x))); }} /></td>
-                                            <td className="px-2 py-2"><Input className="h-9" value={m.note} placeholder="When is it due?" onChange={(e) => setMilestones(milestones.map((x, j) => (j === i ? { ...x, note: e.target.value } : x)))} /></td>
+                                            <td className="px-2 py-2"><Input className="h-9" value={m.label} onChange={(e) => { setPresetKey("custom"); editMs(milestones.map((x, j) => (j === i ? { ...x, label: e.target.value } : x))); }} /></td>
+                                            <td className="px-2 py-2"><Input className="h-9" value={m.note} placeholder="When is it due?" onChange={(e) => editMs(milestones.map((x, j) => (j === i ? { ...x, note: e.target.value } : x)))} /></td>
                                             <td className="px-2 py-2">
                                                 <div className="relative">
-                                                    <Input className="h-9 pr-6" type="number" min={0} max={100} value={m.percentage} onChange={(e) => { setPresetKey("custom"); setMilestones(milestones.map((x, j) => (j === i ? { ...x, percentage: Number(e.target.value) || 0 } : x))); }} />
+                                                    <Input className="h-9 pr-6" type="number" min={0} max={100} value={m.percentage} onChange={(e) => { setPresetKey("custom"); editMs(milestones.map((x, j) => (j === i ? { ...x, percentage: Number(e.target.value) || 0 } : x))); }} />
                                                     <span className="absolute right-2 top-2 text-xs text-muted-foreground">%</span>
                                                 </div>
                                             </td>
                                             <td className="px-2 py-2 text-right font-medium">{Math.round((grand * m.percentage) / 100).toLocaleString("en-US")}</td>
-                                            <td className="px-2 py-2"><DatePicker className="h-9 text-xs" value={m.due ?? ""} onChange={(v) => setMilestones(milestones.map((x, j) => (j === i ? { ...x, due: v } : x)))} /></td>
+                                            <td className="px-2 py-2"><DatePicker className="h-9 text-xs" value={m.due ?? ""} onChange={(v) => editMs(milestones.map((x, j) => (j === i ? { ...x, due: v } : x)))} /></td>
                                             <td className="px-1">
-                                                <button type="button" aria-label="Remove milestone" onClick={() => { setPresetKey("custom"); setMilestones(milestones.filter((_, j) => j !== i)); }} className="text-destructive/80 hover:text-destructive"><IconTrash className="size-4" /></button>
+                                                <button type="button" aria-label="Remove milestone" onClick={() => { setPresetKey("custom"); editMs(milestones.filter((_, j) => j !== i)); }} className="text-destructive/80 hover:text-destructive"><IconTrash className="size-4" /></button>
                                             </td>
                                         </tr>
                                     ))}
@@ -1601,7 +1719,7 @@ export default function QuotationWizard() {
                             </table>
                         </div>
                         <div className="mt-3 flex items-center justify-between">
-                            <Button type="button" variant="outline" size="sm" className="text-primary" onClick={() => { setPresetKey("custom"); setMilestones([...milestones, { label: "Milestone", percentage: 0, note: "", due: plusDaysISO(30 * milestones.length) }]); }}>
+                            <Button type="button" variant="outline" size="sm" className="text-primary" onClick={() => { setPresetKey("custom"); editMs([...milestones, { label: "Milestone", percentage: 0, note: "", due: plusDaysISO(30 * milestones.length) }]); }}>
                                 <IconPlus className="size-4" /> Add Milestone
                             </Button>
                             <span className="text-sm">
@@ -1628,7 +1746,7 @@ export default function QuotationWizard() {
                             <Label className="text-xs">Advance Payment</Label>
                             <div className="flex items-center gap-2">
                                 <div className="relative w-20">
-                                    <Input className="h-9 pr-6" type="number" min={0} max={100} value={milestones[0]?.percentage ?? 0} disabled={!milestones[0]} onChange={(e) => { setPresetKey("custom"); setMilestones(milestones.map((x, j) => (j === 0 ? { ...x, percentage: Number(e.target.value) || 0 } : x))); }} />
+                                    <Input className="h-9 pr-6" type="number" min={0} max={100} value={milestones[0]?.percentage ?? 0} disabled={!milestones[0]} onChange={(e) => { setPresetKey("custom"); editMs(milestones.map((x, j) => (j === 0 ? { ...x, percentage: Number(e.target.value) || 0 } : x))); }} />
                                     <span className="absolute right-2 top-2 text-xs text-muted-foreground">%</span>
                                 </div>
                                 <Input className="h-9 w-28 bg-muted/50" readOnly value={Math.round((grand * (milestones[0]?.percentage ?? 0)) / 100).toLocaleString("en-US")} />
@@ -1721,9 +1839,10 @@ export default function QuotationWizard() {
         </aside>
     );
 
+    const TERMS_H = "h-[20rem]";
     const sel = (value: string, onChange: (v: string) => void, options: string[], suffix = "") => (
         <Select value={value} onValueChange={onChange}>
-            <SelectTrigger className="h-9 w-full"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="h-9 w-full"><SelectValue placeholder="Not set" /></SelectTrigger>
             <SelectContent>
                 {options.map((o) => (
                     <SelectItem key={o} value={o}>{o}{suffix}</SelectItem>
@@ -1738,15 +1857,15 @@ export default function QuotationWizard() {
         </label>
     );
 
-    const optsWith = (cur0: string, list: string[]) => (list.includes(cur0) ? list : [...list, cur0].sort((x, y) => Number(x) - Number(y)));
+    const optsWith = (cur0: string, list: string[]) => (!cur0 || list.includes(cur0) ? list : [...list, cur0].sort((x, y) => Number(x) - Number(y)));
     const rev = (label: string, hint: string, value: string, onChange: (v: string) => void, opts: string[], fee: string, onFee: (v: string) => void, icon: typeof IconUser) => (
-        <Panel icon={icon} title={label} hint={hint}>
+        <Panel fixed={TERMS_H} icon={icon} title={label} hint={hint}>
             <div className="space-y-3">
                 {sel(value, onChange, opts, " Revisions")}
                 <div className="flex items-start gap-2 rounded-lg bg-primary/5 p-3 text-[11px] text-muted-foreground">
                     <IconInfoCircle className="mt-1 size-4 shrink-0 text-primary" />
                     <div className="space-y-1.5">
-                        <p>Additional revisions will be charged at ({cur}) per round.</p>
+                        <p>Fee per additional revision round ({cur}). Leave 0 for no extra charge.</p>
                         <Input className="h-8 w-28 bg-background" type="number" min={0} value={fee} onChange={(e) => onFee(e.target.value)} aria-label={`${label} extra round fee`} />
                     </div>
                 </div>
@@ -1765,49 +1884,115 @@ export default function QuotationWizard() {
             {children}
         </label>
     );
+    const setInclItem = (i: number, patch: Partial<BlueprintInclusion>) => edit("incl", setIncl)(incl.map((x, j) => (j === i ? { ...x, ...patch } : x)));
 
-    const termsStep = (
-        <div className="space-y-4">
-            <div className="grid gap-4 lg:grid-cols-2">
-                <Panel icon={IconSettings} title="Technical Support Duration" hint="Define how long the client will receive technical support after project delivery.">
-                    <div className="grid items-end gap-3 sm:grid-cols-[1fr_auto]">
+    const showRecurring = flow === "retainer" || (flow === "project" && hasRecurringLine);
+    const supportOpts = ["1 Month", "3 Months", "6 Months", "12 Months", "24 Months"];
+    const termsBlocks: { key: string; span?: boolean; node: React.ReactNode }[] = [
+        {
+            key: "supportDuration",
+            node: (
+                <Panel fixed={TERMS_H} icon={IconSettings} title="Technical Support Duration" hint="How long the client receives technical support after delivery.">
+                    <div className="space-y-3">
                         <Field label="Support Duration">
                             <Select value={supportDuration} onValueChange={setSupportDuration}>
-                                <SelectTrigger className="h-10 w-full"><SelectValue /></SelectTrigger>
+                                <SelectTrigger className="h-10 w-full"><SelectValue placeholder="Not set" /></SelectTrigger>
                                 <SelectContent>
-                                    {["1 Month", "3 Months", "6 Months", "12 Months", "24 Months"].map((o) => (
-                                        <SelectItem key={o} value={o}>{o}{o === "12 Months" ? " (Recommended)" : ""}</SelectItem>
+                                    {(supportDuration && !supportOpts.includes(supportDuration) ? [...supportOpts, supportDuration] : supportOpts).map((o) => (
+                                        <SelectItem key={o} value={o}>{o}</SelectItem>
                                     ))}
                                 </SelectContent>
                             </Select>
                         </Field>
-                        <div className="flex items-center gap-3 rounded-lg bg-primary/10 px-4 py-2.5">
-                            <IconCrown className="size-6 shrink-0 text-primary" />
-                            <div>
-                                <p className="text-sm font-semibold text-primary">{supportDuration}</p>
-                                <p className="text-[11px] text-muted-foreground">{supportDuration === "12 Months" ? "Industry standard for most projects" : "Free technical support after delivery"}</p>
+                        {supportDuration && (
+                            <div className="flex items-center gap-3 rounded-lg bg-primary/10 px-4 py-2.5">
+                                <IconCrown className="size-6 shrink-0 text-primary" />
+                                <div>
+                                    <p className="text-sm font-semibold text-primary">{supportDuration}</p>
+                                    <p className="text-[11px] text-muted-foreground">Free technical support after delivery</p>
+                                </div>
                             </div>
-                        </div>
+                        )}
                     </div>
                 </Panel>
-                <Panel icon={IconCircleCheck} title="Support Inclusions" hint="Select what will be included in the technical support.">
-                    <CheckList twoCol items={inclusions} onChange={setInclusions} addLabel="Add custom support inclusion…" />
+            ),
+        },
+        {
+            key: "inclusions",
+            span: true,
+            node: (
+                <Panel fixed={TERMS_H} icon={IconCircleCheck} title="Support Inclusions" hint="What is included in the technical support.">
+                    <CheckList twoCol items={inclusions} onChange={edit("inclusions", setInclusions)} addLabel="Add custom support inclusion…" />
                 </Panel>
-            </div>
-
-            <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-[1.35fr_1fr_1fr_1.1fr]">
-                <Panel icon={IconX} title="Support Exclusions" hint="Define what is not included in the technical support.">
-                    <CheckList items={supportExcl} onChange={setSupportExcl} addLabel="Add custom exclusion…" tone="danger" />
+            ),
+        },
+        {
+            key: "domainHosting",
+            node: (
+                <Panel
+                    fixed={TERMS_H}
+                    icon={IconWorld}
+                    title="Domain, Hosting & Inclusions"
+                    hint="Renewal timers start from the order date."
+                    right={
+                        <Button type="button" variant="outline" size="sm" className="h-7 text-primary" onClick={() => edit("incl", setIncl)([...incl, { key: crypto.randomUUID(), label: "", kind: "other", included: true, termMonths: null, owner: "", renews: false, charge: 0, note: "" }])}>
+                            <IconPlus className="size-3.5" /> Add
+                        </Button>
+                    }
+                >
+                    {incl.length === 0 && <p className="text-sm text-muted-foreground">Nothing defined for this package. Add domain, hosting or other inclusions if the package covers them.</p>}
+                    <div className="space-y-3">
+                        {incl.map((it, i) => (
+                            <div key={it.key} className="space-y-2 rounded-lg border p-3">
+                                <div className="flex items-center gap-2">
+                                    <Input className="h-8 flex-1" value={it.label} placeholder="e.g. Domain" onChange={(e) => setInclItem(i, { label: e.target.value })} aria-label="Inclusion name" />
+                                    <Switch checked={it.included} onCheckedChange={(v) => setInclItem(i, { included: v })} aria-label={`${it.label || "Inclusion"} included`} />
+                                    <button type="button" aria-label="Remove inclusion" onClick={() => edit("incl", setIncl)(incl.filter((_, j) => j !== i))} className="text-destructive/80 hover:text-destructive"><IconTrash className="size-4" /></button>
+                                </div>
+                                {it.included ? (
+                                    <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-xs text-muted-foreground">
+                                        <span className="flex items-center gap-1.5">
+                                            <Input className="h-8 w-16" type="number" min={0} value={it.termMonths ?? ""} onChange={(e) => setInclItem(i, { termMonths: e.target.value === "" ? null : Number(e.target.value) })} aria-label="Term in months" /> months
+                                        </span>
+                                        <label className="flex items-center gap-1.5">
+                                            <Checkbox checked={it.renews} onCheckedChange={(v) => setInclItem(i, { renews: !!v })} /> Renewal timer
+                                        </label>
+                                        {it.owner === "client" && <span className="rounded bg-muted px-1.5 py-0.5">Client owns</span>}
+                                    </div>
+                                ) : (
+                                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                        Charge if not included ({cur})
+                                        <Input className="h-8 w-24" type="number" min={0} value={it.charge} onChange={(e) => setInclItem(i, { charge: Number(e.target.value) || 0 })} aria-label="Charge when not included" />
+                                    </div>
+                                )}
+                            </div>
+                        ))}
+                    </div>
                 </Panel>
-                {rev("UI/UX Revisions", "Number of design revisions included in this package.", uiRev, setUiRev, optsWith(uiRev, ["1", "2", "3", "5", "10"]), extraRevFee, setExtraRevFee, IconPencil)}
-                {rev("Development Revisions", "Number of development revisions included after delivery.", devRev, setDevRev, optsWith(devRev, ["1", "3", "5", "10"]), devRevFee, setDevRevFee, IconCode)}
-                <Panel icon={IconFolder} title="Project Handover Conditions" hint="The project will be considered complete and handed over once the following conditions are met.">
-                    <CheckList items={handover} onChange={setHandover} addLabel="Add condition…" />
+            ),
+        },
+        {
+            key: "exclusions",
+            node: (
+                <Panel fixed={TERMS_H} icon={IconX} title={flow === "production" ? "Exclusions & Additional Charges" : "Support Exclusions"} hint={flow === "production" ? "Not covered by the quoted rate." : "What is not included in the technical support."}>
+                    <CheckList items={supportExcl} onChange={edit("supportExcl", setSupportExcl)} addLabel="Add custom exclusion…" tone="danger" />
                 </Panel>
-            </div>
-
-            <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
-                <Panel icon={IconReceipt} title="Recurring Service Rules" hint="Applicable for recurring services (e.g., maintenance, SEO, hosting).">
+            ),
+        },
+        { key: "uiRev", node: rev("UI/UX Revisions", "Number of design revisions included in this package.", uiRev, setUiRev, optsWith(uiRev, ["1", "2", "3", "5", "10"]), extraRevFee, setExtraRevFee, IconPencil) },
+        { key: "devRev", node: rev("Development Revisions", "Number of development revisions included after delivery.", devRev, setDevRev, optsWith(devRev, ["1", "3", "5", "10"]), devRevFee, setDevRevFee, IconCode) },
+        {
+            key: "handover",
+            node: (
+                <Panel fixed={TERMS_H} icon={IconFolder} title="Project Handover Conditions" hint="The project is complete and handed over once these are met.">
+                    <CheckList items={handover} onChange={edit("handover", setHandover)} addLabel="Add condition…" />
+                </Panel>
+            ),
+        },
+        {
+            key: "recurring",
+            node: (
+                <Panel fixed={TERMS_H} icon={IconReceipt} title="Recurring Service Rules" hint="Applicable for recurring services (e.g., maintenance, SEO, hosting).">
                     <div className="space-y-3">
                         {toggle("Enable recurring billing after project completion", "billing")}
                         {toggle("Send automated invoice before each billing cycle", "invoice")}
@@ -1815,45 +2000,60 @@ export default function QuotationWizard() {
                         {toggle("Allow service plan upgrade/downgrade anytime", "upgrade")}
                     </div>
                 </Panel>
-                <Panel icon={IconClock} title="Suspension & Grace Policy" hint="Define policy for non-payment of recurring invoices.">
+            ),
+        },
+        {
+            key: "suspension",
+            node: (
+                <Panel fixed={TERMS_H} icon={IconClock} title="Suspension & Grace Policy" hint="Define policy for non-payment of recurring invoices.">
                     <div className="grid grid-cols-2 gap-3">
                         <Field label="Grace Period">{sel(grace, setGrace, optsWith(grace, ["3", "7", "10", "15"]), " Days")}</Field>
                         <Field label="Suspension After">{sel(suspend, setSuspend, optsWith(suspend, ["7", "15", "30"]), " Days")}</Field>
                     </div>
                     {info("If payment is not received within the grace period, services will be temporarily suspended after the specified period.")}
                 </Panel>
-                <Panel icon={IconX} title="Cancellation Policy" hint="Define cancellation terms for this quotation.">
+            ),
+        },
+        {
+            key: "cancellation",
+            node: (
+                <Panel fixed={TERMS_H} icon={IconX} title="Cancellation Policy" hint="Notice required to cancel recurring services.">
                     {sel(cancelNotice, setCancelNotice, optsWith(cancelNotice, ["7", "15", "30", "60"]), " Days' Notice")}
-                    {info(`Client must provide at least ${cancelNotice} days' written notice for cancellation of recurring services. No refund for partial months.`)}
+                    {cancelNotice && info(`Client must provide at least ${cancelNotice} days' written notice for cancellation of recurring services.`)}
                 </Panel>
-            </div>
-
-            <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
-                <Panel icon={IconReceipt} title="Extra Feature Charges" hint="Define how additional features or change requests will be charged.">
+            ),
+        },
+        {
+            key: "extra",
+            node: (
+                <Panel fixed={TERMS_H} icon={IconReceipt} title="Extra Feature Charges" hint="How additional features or change requests are charged.">
                     <div className="space-y-3">
                         {radio("extra", extraCharge === "feature", () => setExtraCharge("feature"), (
                             <>
                                 <span className="w-36">Charge per feature/module</span>
                                 <Input className="h-8 w-24" type="number" min={0} value={extraRate} onChange={(e) => setExtraRate(e.target.value)} aria-label="Rate per feature" />
-                                <span className="text-xs text-muted-foreground">per feature</span>
                             </>
                         ))}
                         {radio("extra", extraCharge === "hourly", () => setExtraCharge("hourly"), (
                             <>
                                 <span className="w-36">Hourly rate</span>
                                 <Input className="h-8 w-24" type="number" min={0} value={hourlyRate} onChange={(e) => setHourlyRate(e.target.value)} aria-label="Hourly rate" />
-                                <span className="text-xs text-muted-foreground">per hour</span>
                             </>
                         ))}
                         {radio("extra", extraCharge === "custom", () => setExtraCharge("custom"), (
                             <>
                                 <span className="w-36">Custom (Specify in terms)</span>
-                                <Input className="h-8 flex-1" value={customExtra} onChange={(e) => setCustomExtra(e.target.value)} placeholder="Enter custom rate" aria-label="Custom extra charge terms" />
+                                <Input className="h-8 flex-1" value={customExtra} onChange={(e) => setCustomExtra(e.target.value)} placeholder="Describe the terms" aria-label="Custom extra charge terms" />
                             </>
                         ))}
                     </div>
                 </Panel>
-                <Panel icon={IconShieldCheck} title="Ownership & Intellectual Property" hint="Define the ownership rights after project completion.">
+            ),
+        },
+        {
+            key: "ownership",
+            node: (
+                <Panel fixed={TERMS_H} icon={IconShieldCheck} title="Ownership & Intellectual Property" hint="Define the ownership rights after project completion.">
                     <div className="space-y-3">
                         {radio("owner", ownership === "client", () => setOwnership("client"), "Full ownership transferred to client after final payment")}
                         {radio("owner", ownership === "portfolio", () => setOwnership("portfolio"), "Webbriks retains right to showcase in portfolio")}
@@ -1861,12 +2061,33 @@ export default function QuotationWizard() {
                         {ownership === "custom" && <Textarea rows={2} className="resize-none" value={ownershipCustom} onChange={(e) => setOwnershipCustom(e.target.value)} placeholder="Describe the ownership terms" />}
                     </div>
                 </Panel>
-                <Panel icon={IconFileText} title="General Terms & Conditions" hint="Additional terms and conditions for this quotation.">
-                    <div className="max-h-60 overflow-y-auto pr-1">
-                        <TextList items={generalTerms} onChange={setGeneralTerms} addLabel="Add term" />
-                    </div>
+            ),
+        },
+        {
+            key: "general",
+            node: (
+                <Panel fixed={TERMS_H} icon={IconFileText} title="General Terms & Conditions" hint="Additional terms and conditions for this quotation.">
+                    <TextList items={generalTerms} onChange={edit("generalTerms", setGeneralTerms)} addLabel="Add term" />
                 </Panel>
-            </div>
+            ),
+        },
+    ].filter((b) => {
+        const hide: string[] =
+            flow === "retainer"
+                ? ["supportDuration", "inclusions", "domainHosting", "exclusions", "handover"]
+                : flow === "production"
+                  ? ["supportDuration", "inclusions", "domainHosting", "handover", "recurring", "suspension", "cancellation"]
+                  : [];
+        if (hide.includes(b.key)) return false;
+        if (["recurring", "suspension", "cancellation"].includes(b.key)) return showRecurring;
+        return true;
+    });
+
+    const termsStep = (
+        <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
+            {termsBlocks.map((b) => (
+                <div key={b.key} className={cn("min-w-0", b.span && "xl:col-span-2")}>{b.node}</div>
+            ))}
         </div>
     );
 
@@ -1914,7 +2135,8 @@ export default function QuotationWizard() {
     const cardCls = "rounded-xl border p-4";
 
     const previewDoc = (
-        <div className="overflow-auto rounded-lg bg-muted/60 p-4" style={{ maxHeight: expanded ? "calc(100vh - 8rem)" : "62vh" }}>
+        <ScrollArea className={cn("rounded-lg bg-muted/60", expanded ? "h-[calc(100vh-10rem)]" : "h-[62vh]")}>
+          <div className="p-4">
             <div className="mx-auto max-w-[820px] space-y-5 rounded-md bg-white p-8 text-[13px] text-slate-800 shadow-md" style={{ zoom: zoom / 100 }}>
                 <div className="flex items-start justify-between gap-4">
                     <div className="flex items-center gap-3">
@@ -2004,7 +2226,8 @@ export default function QuotationWizard() {
                     </ul>
                 </section>
             </div>
-        </div>
+          </div>
+        </ScrollArea>
     );
 
     const previewStep = (
@@ -2195,6 +2418,7 @@ export default function QuotationWizard() {
                                             </div>
                                         )}
                                         {pkg && <Row k="Selected Package" v={pkg.name} />}
+                                        {designMode && <Row k="Design" v={designMode === "template" ? "Template-based" : "Custom UI/UX"} />}
                                         {pkg && <Row k="Base Package Price" v={money(isUnit ? (Number(unit.rate) || 0) * unit.qty : pkgPrice, cur)} />}
                                     </dl>
                                     {features.length > 0 && (
@@ -2342,7 +2566,8 @@ function FeatureEditor({ items, onChange }: { items: CheckItem[]; onChange: (n: 
         setAdding(false);
     };
     return (
-        <div className="max-h-[32rem] space-y-1 overflow-y-auto pr-1">
+        <ScrollArea className="h-[26rem] pr-3">
+        <div className="space-y-1">
             {items.map((it, i) => (
                 <div key={i}>
                 {it.group && it.group !== items[i - 1]?.group && (
@@ -2379,5 +2604,6 @@ function FeatureEditor({ items, onChange }: { items: CheckItem[]; onChange: (n: 
                 </Button>
             )}
         </div>
+        </ScrollArea>
     );
 }
