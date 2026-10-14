@@ -47,9 +47,8 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import InvoicePdfButton from '@/components/shared/InvoicePdfButton';
-import QuotationPuppeteerPdfBtn, {
-    quotationPdfFileStem,
-} from '@/components/quotation/pdf/QuotationPuppeteerPdfBtn';
+import { QuotationPdfButton } from '@/components/quotation/document/QuotationPdfButton';
+import { useQuotationPdf } from '@/components/quotation/document/use-quotation-pdf';
 import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
 import { IconReceipt } from '@tabler/icons-react';
@@ -249,6 +248,7 @@ export default function ViewQuotationPage() {
 
     const [sendQuotation, { isLoading: isSending }] =
         useSendQuotationMutation();
+    const { generate: generatePdf, stage: pdfStage } = useQuotationPdf();
     const [createNewVersion, { isLoading: isVersionCreating }] =
         useCreateNewVersionMutation();
     const [deleteQuotation, { isLoading: isDeleting }] =
@@ -306,10 +306,13 @@ export default function ViewQuotationPage() {
         }
         if (isSending) return [];
         try {
+            // the PDF is built from the quotation HTML in the browser and attached by the server
+            const pdf = data ? await generatePdf(data) : undefined;
             const result = await sendQuotation({
                 id: id as string,
                 emails: selected,
                 includePaymentLink: false,
+                pdf,
             }).unwrap();
             if (result.data.clientLink) {
                 try {
@@ -544,13 +547,7 @@ export default function ViewQuotationPage() {
                 </div>
 
                 <div className="flex flex-wrap gap-2">
-                    <QuotationPuppeteerPdfBtn
-                        quotationId={id as string}
-                        fileNameBase={quotationPdfFileStem(
-                            data.quotationNumber,
-                            data.details?.title,
-                        )}
-                    />
+                    <QuotationPdfButton data={data} />
 
                     <InvoicePdfButton
                         source="quotation"
@@ -1276,6 +1273,7 @@ export default function ViewQuotationPage() {
                 </div>
             </div>
 
+            {pdfStage}
             <QuotationEmailDialog
                 open={pickerOpen}
                 clientId={dialogClientId}

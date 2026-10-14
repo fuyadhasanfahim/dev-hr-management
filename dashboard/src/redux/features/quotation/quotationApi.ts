@@ -108,13 +108,18 @@ export const quotationApi = apiSlice.injectEndpoints({
           recipients: RecipientSendStatus[];
         };
       },
-      { id: string; emails?: string[]; includePaymentLink?: boolean }
+      { id: string; emails?: string[]; includePaymentLink?: boolean; /** PDF generated in the browser from the quotation HTML. */ pdf?: Blob }
     >({
-      query: ({ id, emails, includePaymentLink }) => ({
-        url: `/quotations/${id}/send`,
-        method: 'POST',
-        body: { emails, includePaymentLink },
-      }),
+      query: ({ id, emails, includePaymentLink, pdf }) => {
+        const url = `/quotations/${id}/send`;
+        if (!pdf) return { url, method: 'POST', body: { emails, includePaymentLink } };
+        // multipart: the browser sets the boundary header itself
+        const body = new FormData();
+        body.append('pdf', pdf, 'quotation.pdf');
+        body.append('emails', JSON.stringify(emails ?? []));
+        body.append('includePaymentLink', String(Boolean(includePaymentLink)));
+        return { url, method: 'POST', body };
+      },
       invalidatesTags: ['Quotation'],
     }),
 

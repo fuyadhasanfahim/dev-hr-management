@@ -15,7 +15,6 @@ import ClientModel from '../models/client.model.js';
 import emailService from './email.service.js';
 import { sendClientSmsIfBDT } from './sms-notification.service.js';
 import { ReceiptService } from './receipt.service.js';
-import { QuotationPuppeteerPdfService } from './quotation-puppeteer-pdf.service.js';
 import { TOKEN_EXPIRY_DAYS, DUPLICATE_QUOTATION_WINDOW_MS } from '../constants/timing.js';
 
 import type { QuotationMilestoneEmailInfo } from '../templates/QuotationEmail.js';
@@ -418,6 +417,8 @@ export class QuotationService {
         _userId: string,
         recipientEmails?: string[],
         _includePaymentLink = false,
+        /** Quotation PDF built in the browser from the quotation HTML. Without it the email carries the client link only. */
+        pdfBuffer?: Buffer,
     ): Promise<SendQuotationResult> {
         const quotation = await QuotationModel.findById(id);
         if (!quotation) throw new AppError('Quotation not found', 404);
@@ -476,25 +477,6 @@ export class QuotationService {
             if (toList.length === 0) {
                 emailError = 'Client has no emails on record';
             } else {
-                let pdfBuffer: Buffer | undefined;
-                try {
-                    // Reuse the exact same Puppeteer-rendered PDF used for the download
-                    // button, so the emailed attachment is byte-identical to what the
-                    // client sees when they download it themselves.
-                    const { buffer } = await QuotationPuppeteerPdfService.generatePdf(
-                        saved._id.toString(),
-                    );
-                    pdfBuffer = buffer;
-                } catch (e: any) {
-                    logger.warn(
-                        {
-                            quotationId: saved._id.toString(),
-                            error: e?.message || String(e),
-                        },
-                        'quotation.pdf_generation_failed',
-                    );
-                }
-
                 const clientName = saved.client?.contactName || client?.name || 'Client';
 
                 // Format the grand total in the quotation's currency for the email

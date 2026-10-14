@@ -1,3 +1,4 @@
+import { AppError } from '../utils/AppError.js';
 import type { Request, Response, NextFunction } from 'express';
 import { QuotationService } from '../services/quotation.service.js';
 import { QuotationPuppeteerPdfService } from '../services/quotation-puppeteer-pdf.service.js';
@@ -42,15 +43,27 @@ const sendQuotation = async (req: Request, res: Response, next: NextFunction) =>
     try {
         const userId = req.user?.id;
         if (!userId) return next(new Error('Unauthorized'));
-        const emails =
-            Array.isArray((req as any)?.body?.emails) && (req as any).body.emails.length
-                ? (req as any).body.emails
-                : undefined;
-        const includePaymentLink = Boolean((req as any)?.body?.includePaymentLink);
+        // JSON requests send arrays/booleans; the multipart request (with the PDF) sends strings.
+        const rawEmails = (req as any)?.body?.emails;
+        let emailList: unknown = rawEmails;
+        if (typeof rawEmails === 'string') {
+            try {
+                emailList = JSON.parse(rawEmails);
+            } catch {
+                emailList = rawEmails.split(',');
+            }
+        }
+        const emails = Array.isArray(emailList) && emailList.length ? emailList.map(String) : undefined;
+        const rawFlag = (req as any)?.body?.includePaymentLink;
+        const includePaymentLink = rawFlag === true || rawFlag === 'true';
+        const pdfBuffer: Buffer | undefined = (req as any).file?.buffer;
+        if (pdfBuffer && pdfBuffer.subarray(0, 4).toString('latin1') !== '%PDF') {
+            return next(new AppError('The attachment is not a valid PDF', 400));
+        }
         const { id } = req.params;
         if (!id) return next(new Error('Quotation ID is required'));
         logger.info({ quotationId: id, includePaymentLink }, 'quotation.send.requested');
-        const result = await QuotationService.sendQuotation(id, userId, emails, includePaymentLink);
+        const result = await QuotationService.sendQuotation(id, userId, emails, includePaymentLink, pdfBuffer);
 
         const q = result.quotation;
         logger.info(

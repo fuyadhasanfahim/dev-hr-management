@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -60,7 +60,7 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { Calendar } from "@/components/ui/calendar";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { Combobox } from "@/components/ui/combobox";
 import { MultiSelect } from "@/components/ui/multi-select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -71,7 +71,9 @@ import { useGetStaffsQuery } from "@/redux/features/staff/staffApi";
 import { useCreateClientMutation, useGetClientsQuery } from "@/redux/features/client/clientApi";
 import { useCreateQuotationMutation, useSendQuotationMutation, useUpdateQuotationMutation } from "@/redux/features/quotation/quotationApi";
 import { QuotationEmailDialog } from "../QuotationEmailDialog";
-import { publicApiUrl } from "@/lib/public-api";
+import { QuotationDocument } from "@/components/quotation/document/QuotationDocument";
+import { saveBlob, useQuotationPdf } from "@/components/quotation/document/use-quotation-pdf";
+import type { QuotationDocInput } from "@/components/quotation/document/types";
 import { useGetCatalogTreeQuery } from "@/redux/features/catalog/catalogApi";
 import { catalogIcon } from "@/lib/catalog-icons";
 import { BrandLogo } from "@/components/catalog/BrandLogo";
@@ -125,12 +127,12 @@ const PAYMENT_PRESETS: Record<string, Milestone[]> = {
 
 const withDue = (list: Milestone[]): Milestone[] => list.map((m, i) => ({ ...m, due: new Date(Date.now() + i * 30 * 86400000).toISOString().split("T")[0] }));
 const COMPANY = {
-    name: "WebBriks",
-    address: "115 Senpara Parbata, Mirpur, Dhaka 1216, Bangladesh.",
+    name: "Web Briks LLC",
+    address: "House #35 (2nd Floor), Road# 04, Nikunjo 2, Khilkhet, Dhaka-1229",
     email: "info@webbriks.com",
-    phone: "+8801977201923",
+    phone: "09617-008822, +88 01767201923, +88 01977201923",
     website: "www.webbriks.com",
-    logo: "/assets/image/logo.svg",
+    logo: "/assets/brand/logo.png",
 };
 const todayISO = () => new Date().toISOString().split("T")[0];
 const plusDaysISO = (d: number) => new Date(Date.now() + d * 86400000).toISOString().split("T")[0];
@@ -427,7 +429,9 @@ export default function QuotationWizard() {
     const [sentOnce, setSentOnce] = useState(false);
     const [zoom, setZoom] = useState(100);
     const [expanded, setExpanded] = useState(false);
-    const [pdfBusy, setPdfBusy] = useState(false);
+    const { generate: generatePdf, stage: pdfStage, busy: pdfBusy } = useQuotationPdf();
+    const numberRef = useRef("");
+    const previewBox = useRef<HTMLDivElement>(null);
     const saving = creating || updating;
 
     const [step, setStep] = useState(0);
@@ -877,6 +881,7 @@ export default function QuotationWizard() {
             const res = await createQuotation(payload as never).unwrap();
             setSavedId(res._id ?? null);
             setSavedNo(res.quotationNumber ?? "");
+            numberRef.current = res.quotationNumber ?? "";
             return res._id ?? null;
         } catch (err) {
             toast.error((err as { data?: { message?: string } })?.data?.message || "Failed to save quotation.");
@@ -891,27 +896,17 @@ export default function QuotationWizard() {
         router.push(`/quotations/${id}`);
     };
 
+    /** The document exactly as it will be saved — the preview, the PDF and the email attachment all use it. */
+    const docNow = (): QuotationDocInput => ({ ...buildPayload(), quotationNumber: numberRef.current });
+
     const downloadPdf = async () => {
         const id = await persist();
         if (!id) return;
-        setPdfBusy(true);
         try {
-            const res = await fetch(publicApiUrl(`/api/quotations/${id}/pdf/puppeteer`), { credentials: "include", mode: "cors" });
-            if (!res.ok) throw new Error((await res.json().catch(() => ({})))?.message || res.statusText || "Download failed");
-            const blob = await res.blob();
-            if (!blob.size) throw new Error("Empty PDF response");
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = `${savedNo || title.trim() || "quotation"}.pdf`.replace(/[/\\?%*:|"<>]/g, "-");
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-            setTimeout(() => URL.revokeObjectURL(url), 2500);
+            const blob = await generatePdf(docNow());
+            saveBlob(blob, `${numberRef.current || title.trim() || "quotation"}.pdf`);
         } catch (err) {
-            toast.error((err as Error).message || "Could not download the PDF");
-        } finally {
-            setPdfBusy(false);
+            toast.error((err as Error).message || "Could not create the PDF");
         }
     };
 
@@ -926,7 +921,8 @@ export default function QuotationWizard() {
             return [];
         }
         try {
-            const result = await sendQuotation({ id: savedId, emails: selected, includePaymentLink: false }).unwrap();
+            const pdf = await generatePdf(docNow());
+            const result = await sendQuotation({ id: savedId, emails: selected, includePaymentLink: false, pdf }).unwrap();
             const recipients = result.data.recipients ?? [];
             const sent = recipients.filter((r) => r.status === "sent").length;
             const failed = recipients.length - sent;
@@ -2128,107 +2124,18 @@ export default function QuotationWizard() {
     const baseTotal = isUnit ? (Number(unit.rate) || 0) * unit.qty : pkgPrice;
     const addonTotal = chosenAddons.reduce((a, x) => a + x.price, 0);
     const otherTotal = Math.max(0, itemsSubtotal + chargesTotal - baseTotal - addonTotal);
-    const docTitle = title.trim() || `${projectType} — ${snap.companyName || clientName}`;
-    const docDeliverables = [...features.filter((f) => f.on).map((f) => f.text), ...chosenAddons.map((a) => a.name), ...deliverables.filter((d) => d.trim())];
-    const docLines = builtServices.flatMap((sv) => sv.lineItems);
     const primaryEmail = emails.find((e) => e.trim()) ?? "";
     const cardCls = "rounded-xl border p-4";
+    const docInput = docNow();
 
-    const previewDoc = (
-        <ScrollArea className={cn("rounded-lg bg-muted/60", expanded ? "h-[calc(100vh-10rem)]" : "h-[62vh]")}>
-          <div className="p-4">
-            <div className="mx-auto max-w-[820px] space-y-5 rounded-md bg-white p-8 text-[13px] text-slate-800 shadow-md" style={{ zoom: zoom / 100 }}>
-                <div className="flex items-start justify-between gap-4">
-                    <div className="flex items-center gap-3">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={COMPANY.logo} alt="WebBriks" className="h-12 w-auto" />
-                        <p className="text-xs text-slate-500">Design | Development | Growth</p>
-                    </div>
-                    <div className="text-right">
-                        <span className="rounded bg-slate-100 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-slate-500">CONFIDENTIAL</span>
-                        <p className="mt-2 text-3xl font-bold leading-none">Quotation</p>
-                        <p className="mt-1 text-sm font-semibold"># {savedNo || "Assigned on save"}</p>
-                        <p className="mt-2 text-xs text-slate-500">Date: {fmtDate(date)}</p>
-                        <p className="text-xs text-slate-500">Valid Until: {fmtDate(validUntil)}</p>
-                    </div>
-                </div>
-
-                <div className="grid gap-4 border-b pb-4 sm:grid-cols-2">
-                    <div>
-                        <p className="mb-1 text-[11px] text-slate-400">Prepared For</p>
-                        <p className="font-semibold">{snap.companyName || clientName}</p>
-                        <p className="mt-1 flex gap-1.5 text-xs"><IconMapPin className="size-3.5 shrink-0 text-primary" />{snap.address}</p>
-                        <p className="mt-1 flex gap-1.5 text-xs"><IconUser className="size-3.5 shrink-0 text-primary" />{snap.contactName}</p>
-                        <p className="mt-1 flex gap-1.5 text-xs"><IconMail className="size-3.5 shrink-0 text-primary" />{primaryEmail}</p>
-                        <p className="mt-1 flex gap-1.5 text-xs"><IconPhone className="size-3.5 shrink-0 text-primary" />{snap.phone}</p>
-                    </div>
-                    <div className="sm:border-l sm:pl-4">
-                        <p className="mb-1 text-[11px] text-slate-400">Prepared By</p>
-                        <p className="font-semibold">{COMPANY.name}</p>
-                        <p className="mt-1 flex gap-1.5 text-xs"><IconMapPin className="size-3.5 shrink-0 text-primary" />{COMPANY.address}</p>
-                        <p className="mt-1 flex gap-1.5 text-xs"><IconMail className="size-3.5 shrink-0 text-primary" />{COMPANY.email}</p>
-                        <p className="mt-1 flex gap-1.5 text-xs"><IconPhone className="size-3.5 shrink-0 text-primary" />{COMPANY.phone}</p>
-                        <p className="mt-1 flex gap-1.5 text-xs"><IconWorld className="size-3.5 shrink-0 text-primary" />{COMPANY.website}</p>
-                    </div>
-                </div>
-
-                <section>
-                    <h4 className="mb-1.5 flex items-center gap-2 font-semibold"><span className="flex size-6 items-center justify-center rounded bg-primary text-primary-foreground"><IconFileText className="size-3.5" /></span>Project Overview</h4>
-                    <p className="font-medium">{docTitle}</p>
-                    {overview && <p className="mt-1 whitespace-pre-line text-xs text-slate-600">{overview}</p>}
-                </section>
-
-                {(docDeliverables.length > 0 || scopeText.trim()) && (
-                    <section>
-                        <h4 className="mb-1.5 flex items-center gap-2 font-semibold"><span className="flex size-6 items-center justify-center rounded bg-primary text-primary-foreground"><IconSettings className="size-3.5" /></span>Scope of Work & Key Deliverables</h4>
-                        {scopeText.trim() && <p className="mb-2 whitespace-pre-line text-xs text-slate-600">{scopeText}</p>}
-                        <ul className="grid gap-x-6 gap-y-1 text-xs sm:grid-cols-2">
-                            {docDeliverables.map((f, i) => (
-                                <li key={i} className="flex gap-1.5"><IconCircleCheck className="mt-0.5 size-3.5 shrink-0 fill-primary text-white" />{f}</li>
-                            ))}
-                        </ul>
-                    </section>
-                )}
-
-                <section>
-                    <h4 className="mb-1.5 flex items-center gap-2 font-semibold"><span className="flex size-6 items-center justify-center rounded bg-primary text-primary-foreground"><IconReceipt className="size-3.5" /></span>Investment Summary</h4>
-                    <table className="w-full overflow-hidden rounded border text-xs">
-                        <thead>
-                            <tr className="bg-slate-100 text-left"><th className="p-2">#</th><th className="p-2">Item Description</th><th className="p-2">Quantity</th><th className="p-2">Unit Price ({cur})</th><th className="p-2 text-right">Total ({cur})</th></tr>
-                        </thead>
-                        <tbody>
-                            {docLines.map((l, i) => (
-                                <tr key={i} className="border-t">
-                                    <td className="p-2">{i + 1}</td>
-                                    <td className="p-2">{l.title}</td>
-                                    <td className="p-2">{l.quantity ?? 1}</td>
-                                    <td className="p-2">{Math.round(l.price).toLocaleString("en-US")}{l.billingCycle === "monthly" || l.billingCycle === "yearly" ? ` / ${l.billingCycle}` : ""}</td>
-                                    <td className="p-2 text-right">{Math.round(l.price * (l.quantity ?? 1)).toLocaleString("en-US")}</td>
-                                </tr>
-                            ))}
-                        </tbody>
-                        <tfoot>
-                            {calc.totals.taxAmount > 0 && <tr className="border-t"><td colSpan={4} className="p-2 text-right">VAT / Tax ({taxPct}%)</td><td className="p-2 text-right">{Math.round(calc.totals.taxAmount).toLocaleString("en-US")}</td></tr>}
-                            <tr className="border-t bg-primary/5 text-sm font-bold text-primary"><td colSpan={4} className="p-2">Total Investment ({cur})</td><td className="p-2 text-right text-lg">{money(grand, cur)}</td></tr>
-                        </tfoot>
-                    </table>
-                    {(recurringMonthly > 0 || recurringYearly > 0) && (
-                        <p className="mt-1 text-xs text-slate-500">Recurring: {recurringMonthly > 0 && `${money(recurringMonthly, cur)} / month`} {recurringYearly > 0 && `${money(recurringYearly, cur)} / year`} (billed separately)</p>
-                    )}
-                </section>
-
-                <section>
-                    <h4 className="mb-1.5 flex items-center gap-2 font-semibold"><span className="flex size-6 items-center justify-center rounded bg-primary text-primary-foreground"><IconCalendar className="size-3.5" /></span>Payment Schedule</h4>
-                    <ul className="text-xs">
-                        {milestones.map((m, i) => (
-                            <li key={i} className="flex justify-between border-b py-1.5"><span>{m.label} ({m.percentage}%){m.note && ` — ${m.note}`}{m.due && ` · Due ${fmtDate(m.due)}`}</span><span className="font-medium">{money((grand * m.percentage) / 100, cur)}</span></li>
-                        ))}
-                    </ul>
-                </section>
-            </div>
-          </div>
-        </ScrollArea>
-    );
+    /** Zoom so a whole A4 page fits the preview column. */
+    const fitZoom = () => {
+        const w = previewBox.current?.clientWidth ?? 0;
+        if (w) setZoom(Math.max(40, Math.min(100, Math.floor(((w - 32) / 794) * 20) * 5)));
+    };
+    useEffect(() => {
+        if (step === 5) requestAnimationFrame(fitZoom);
+    }, [step, expanded]);
 
     const previewStep = (
         <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,460px)_minmax(0,1fr)]">
@@ -2345,16 +2252,24 @@ export default function QuotationWizard() {
                             {expanded ? <IconArrowsMinimize className="size-4" /> : <IconArrowsMaximize className="size-4" />}
                         </Button>
                         <div className="flex items-center rounded-md border">
-                            <Button type="button" variant="ghost" size="icon" className="size-8" aria-label="Zoom out" disabled={zoom <= 60} onClick={() => setZoom(zoom - 10)}><IconMinus className="size-4" /></Button>
+                            <Button type="button" variant="ghost" size="icon" className="size-8" aria-label="Zoom out" disabled={zoom <= 40} onClick={() => setZoom(zoom - 10)}><IconMinus className="size-4" /></Button>
                             <span className="w-12 text-center text-xs">{zoom}%</span>
-                            <Button type="button" variant="ghost" size="icon" className="size-8" aria-label="Zoom in" disabled={zoom >= 140} onClick={() => setZoom(zoom + 10)}><IconPlus className="size-4" /></Button>
+                            <Button type="button" variant="ghost" size="icon" className="size-8" aria-label="Zoom in" disabled={zoom >= 150} onClick={() => setZoom(zoom + 10)}><IconPlus className="size-4" /></Button>
                         </div>
+                        <Button type="button" variant="ghost" size="sm" className="h-8" onClick={fitZoom}>Fit</Button>
                         <Button type="button" variant="outline" size="sm" className="h-8" disabled={pdfBusy || saving} onClick={downloadPdf}>
                             <IconDownload className="size-4" /> {pdfBusy ? "Preparing…" : "Download PDF"}
                         </Button>
                     </div>
                 </header>
-                {previewDoc}
+                <div ref={previewBox} className="rounded-lg bg-muted/60">
+                    <ScrollArea className={cn(expanded ? "h-[calc(100vh-10rem)]" : "h-[68vh]")}>
+                        <div className="mx-auto w-fit p-4">
+                            <QuotationDocument data={docInput} zoom={zoom / 100} />
+                        </div>
+                        <ScrollBar orientation="horizontal" />
+                    </ScrollArea>
+                </div>
             </section>
         </div>
     );
@@ -2528,6 +2443,7 @@ export default function QuotationWizard() {
                 </div>
             </div>
 
+            {pdfStage}
             <QuotationEmailDialog
                 open={pickerOpen}
                 clientId={clientId}

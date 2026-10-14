@@ -1,8 +1,12 @@
 import { Router } from 'express';
+import multer from 'multer';
 import { requirePermission } from '../middlewares/require-permission.js';
 import QuotationController from '../controllers/quotation.controller.js';
 
 const router: Router = Router();
+
+// The quotation PDF is built in the browser from the quotation HTML and uploaded with the send request.
+const pdfUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024, files: 1 } });
 
 // ─── Public client routes (no session / no staff authorize) ─────────────────
 router.get('/client/:token', QuotationController.viewQuotationByToken);
@@ -43,6 +47,7 @@ router.post(
 router.post(
     '/:id/send',
     requirePermission('quotation.create'),
+    pdfUpload.single('pdf'),
     QuotationController.sendQuotation,
 );
 router.post(

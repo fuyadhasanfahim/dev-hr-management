@@ -43,6 +43,7 @@
     "dompurify": "^3.4.1",
     "file-saver": "^2.0.5",
     "framer-motion": "^12.38.0",
+    "html2canvas-pro": "^2.5.2",
     "jspdf": "^4.1.0",
     "jspdf-autotable": "^5.0.7",
     "lucide-react": "^0.555.0",
