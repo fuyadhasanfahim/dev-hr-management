@@ -24,16 +24,14 @@ const BILLING: Record<BillingCycle, string> = {
 };
 const money = (n: number, c?: string) => fmtMoney(n, c);
 
-/** Section opener: number + rule, title, one-line purpose. Always kept with the first row after it. */
-const section = (n: number, title: string, desc: string): Block => ({
-    id: `sec-${n}`,
+/** Section opener: title only. Always kept with the first row after it. */
+const section = (id: string, title: string): Block => ({
+    id: `sec-${id}`,
     h: 0,
     keepWithNext: true,
     node: (
         <header className="qd-sec">
-            <div className="qd-sec-k"><b>{pad2(n)}</b><i /></div>
             <h2>{title}</h2>
-            <p>{desc}</p>
         </header>
     ),
 });
@@ -127,8 +125,6 @@ export function buildBlocks(d: QuotationDocInput): Block[] {
     const calc = computeQuotationTotals(services);
     const taxRate = services.find((s) => s.taxRate)?.taxRate ?? 0;
     const blocks: Block[] = [];
-    let chap = 0;
-    const next = () => ++chap;
     const clientName = d.client.companyName || d.client.contactName;
 
     // ── cover ──
@@ -191,7 +187,7 @@ export function buildBlocks(d: QuotationDocInput): Block[] {
     // ── overview ──
     const overview = (d.overview ?? "").split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
     if (overview.length) {
-        blocks.push(section(next(), "Project Overview", "A summary of the project and what we aim to achieve."));
+        blocks.push(section("project-overview", "Project Overview"));
         overview.forEach((p, i) => blocks.push({ id: `ov-${i}`, h: 0, node: <p className="qd-p">{p}</p> }));
     }
 
@@ -199,13 +195,9 @@ export function buildBlocks(d: QuotationDocInput): Block[] {
     const wf = d.workflow ?? [];
     const deliverables = wf.filter((w) => w.startsWith("Deliverable: ")).map((w) => w.slice("Deliverable: ".length));
     const timeline = wf.filter((w) => !w.startsWith("Deliverable: "));
-    if (services.some((s) => (s.scopeItems ?? []).length || s.scopeDescription) || deliverables.length) {
-        blocks.push(section(next(), "Scope & Deliverables", "Everything that is part of this engagement."));
+    if (services.some((s) => (s.scopeItems ?? []).length) || deliverables.length) {
+        blocks.push(section("scope-deliverables", "Scope & Deliverables"));
         services.forEach((s, si) => {
-            if (s.scopeDescription) {
-                blocks.push(subhead(`sd-${si}-t`, "Scope of work"));
-                blocks.push({ id: `sd-${si}`, h: 0, node: <p className="qd-p lead">{s.scopeDescription}</p> });
-            }
             const items = (s.scopeItems ?? []).filter(Boolean);
             if (items.length) {
                 blocks.push(subhead(`ft-${si}-t`, services.length > 1 ? `Features & capabilities — ${s.category.replace("-", " ")}` : "Features & capabilities", `${items.length} items`));
@@ -220,7 +212,7 @@ export function buildBlocks(d: QuotationDocInput): Block[] {
 
     // ── timeline ──
     if (timeline.length) {
-        blocks.push(section(next(), "Milestones & Timeline", "How the work progresses from kick-off to delivery."));
+        blocks.push(section("milestones-timeline", "Milestones & Timeline"));
         timeline.forEach((t, i) => {
             const at = t.lastIndexOf(" — ");
             const [title, dur] = at > 0 ? [t.slice(0, at), t.slice(at + 3)] : [t, ""];
@@ -236,7 +228,7 @@ export function buildBlocks(d: QuotationDocInput): Block[] {
     ]);
     const recurring: Row[] = services.flatMap((s) => s.lineItems.filter((l) => !isUpfrontBillingCycle(l.billingCycle)).map(toRow));
     if (oneTime.length || recurring.length) {
-        blocks.push(section(next(), "Investment", "Itemised pricing for this quotation."));
+        blocks.push(section("investment", "Investment"));
         if (oneTime.length) {
             blocks.push(subhead("inv-t", "Project investment", "one-time"));
             blocks.push(...priceTable("inv", oneTime, cur, "Amount"));
@@ -275,7 +267,7 @@ export function buildBlocks(d: QuotationDocInput): Block[] {
     // ── payment schedule ──
     const ms = d.paymentMilestones ?? [];
     if (ms.length) {
-        blocks.push(section(next(), "Payment Schedule", "When each payment is due and how much it is."));
+        blocks.push(section("payment-schedule", "Payment Schedule"));
         const cols = (
             <colgroup>
                 <col style={{ width: 34 }} />
@@ -320,28 +312,28 @@ export function buildBlocks(d: QuotationDocInput): Block[] {
     const cross = () => <i className="qd-x">×</i>;
     const included = d.includedSupport ?? [];
     if (included.length) {
-        blocks.push(section(next(), "Support & Inclusions", "What is covered in your package beyond the build itself."));
+        blocks.push(section("support-inclusions", "Support & Inclusions"));
         blocks.push(...listRows("inc", included, dot));
     }
     const needs = d.clientRequirements ?? [];
     if (needs.length) {
-        blocks.push(section(next(), "What We Need From You", "Items from your side that keep the project on schedule."));
+        blocks.push(section("what-we-need-from-you", "What We Need From You"));
         blocks.push(...listRows("need", needs, dot));
     }
     const excluded = d.notIncluded ?? [];
     if (excluded.length) {
-        blocks.push(section(next(), "Not Included", "Outside the scope of this quotation; can be quoted separately."));
+        blocks.push(section("not-included", "Not Included"));
         blocks.push(...listRows("exc", excluded, cross));
     }
     const terms = d.keyTerms ?? [];
     if (terms.length) {
-        blocks.push(section(next(), "Terms & Conditions", "The terms that govern this quotation."));
+        blocks.push(section("terms-conditions", "Terms & Conditions"));
         blocks.push(...listRows("terms", terms, (i) => pad2(i + 1)));
     }
 
     // ── next steps, signature (identical to the previous quotation PDF), closing ──
     const advance = ms[0]?.percentage ? `${ms[0].percentage}%` : "agreed";
-    blocks.push(section(next(), "Next Steps", "What happens once you approve this quotation."));
+    blocks.push(section("next-steps", "Next Steps"));
     blocks.push({
         id: "next",
         h: 0,

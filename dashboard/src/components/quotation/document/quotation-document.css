@@ -19,9 +19,8 @@
 .qd-page { position: relative; width: 794px; height: 1123px; flex: none; overflow: hidden; background: #fffefc; box-shadow: 0 1px 6px rgba(23, 23, 28, 0.14); }
 .qd-page::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 4px; background: var(--qd-brand); }
 .qd-skeleton { box-shadow: 0 1px 6px rgba(23, 23, 28, 0.1); }
-.qd-watermark { position: absolute; right: -28px; bottom: 100px; width: 190px; height: 190px; opacity: 0.04; pointer-events: none; }
-/* cover page only: centred on the sheet; content pages keep the quieter edge mark */
-.qd-page:not(.qd-cont) .qd-watermark { left: 50%; top: 50%; right: auto; bottom: auto; width: 300px; height: 300px; margin: -150px 0 0 -150px; opacity: 0.035; }
+/* centred on the sheet, every page */
+.qd-watermark { position: absolute; left: 50%; top: 50%; width: 300px; height: 300px; margin: -150px 0 0 -150px; opacity: 0.035; pointer-events: none; }
 .qd-watermark img { width: 100%; height: 100%; display: block; }
 .qd-runhead { position: absolute; left: 56px; right: 56px; top: 28px; height: 32px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--qd-rule); padding-bottom: 10px; font-size: 11.5px; color: var(--qd-muted); letter-spacing: 0.02em; }
 .qd-runhead img { height: 22px; width: auto; display: block; }
@@ -64,11 +63,7 @@
 
 /* ── sections ────────────────────────────────────────────────────────── */
 .qd-sec { padding-top: 22px; padding-bottom: 12px; }
-.qd-sec-k { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
-.qd-sec-k b { font-size: 12px; font-weight: 700; letter-spacing: 0.14em; color: var(--qd-brand); }
-.qd-sec-k i { flex: 1; height: 1px; background: var(--qd-rule); }
 .qd-sec h2 { font-family: var(--qd-head); font-size: 20px; line-height: 1.25; font-weight: 600; color: var(--qd-ink); letter-spacing: -0.015em; }
-.qd-sec p { margin-top: 3px; font-size: 12.5px; color: var(--qd-muted); }
 .qd-sub { display: flex; align-items: baseline; gap: 10px; padding: 12px 0 7px; }
 .qd-sub span { font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; font-weight: 700; color: var(--qd-ink); }
 .qd-sub em { font-style: normal; font-size: 11.5px; color: var(--qd-faint); }
