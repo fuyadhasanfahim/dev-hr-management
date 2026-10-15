@@ -59,7 +59,7 @@ function MetaSection<T extends { _id: string; name: string; isActive: boolean }>
         setBusy(true);
         try {
             await fn();
-            toast.success(ok);
+            toast.success(ok.charAt(0).toUpperCase() + ok.slice(1));
             return true;
         } catch (e) {
             toast.error(apiError(e, fail));

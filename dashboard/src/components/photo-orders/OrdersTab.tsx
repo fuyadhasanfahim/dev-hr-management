@@ -110,13 +110,13 @@ export function OrdersTab() {
                 {[
                     ["Total orders", stats?.total],
                     ["Total images", stats?.totalImages],
-                    ["In progress", stats?.byStatus.in_progress],
-                    ["Delivered", stats?.byStatus.delivered],
+                    ["In progress", stats && (stats.byStatus.in_progress ?? 0)],
+                    ["Delivered", stats && (stats.byStatus.delivered ?? 0)],
                 ].map(([label, v]) => (
                     <Card key={label as string} className="py-4">
                         <CardContent className="px-4">
                             <p className="text-xs text-muted-foreground">{label}</p>
-                            <p className="mt-1 text-2xl font-bold tabular-nums">{v === undefined ? <Skeleton className="h-8 w-16" /> : Number(v ?? 0).toLocaleString("en-US")}</p>
+                            <div className="mt-1 text-2xl font-bold tabular-nums">{v === undefined ? <Skeleton className="h-8 w-16" /> : Number(v).toLocaleString("en-US")}</div>
                         </CardContent>
                     </Card>
                 ))}

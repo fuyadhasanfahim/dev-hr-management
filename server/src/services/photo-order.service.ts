@@ -4,6 +4,7 @@ import PhotoServiceModel from '../models/photo-service.model.js';
 import PhotoReturnFormatModel from '../models/photo-return-format.model.js';
 import PhotoInvoiceModel, { type IPhotoInvoice } from '../models/photo-invoice.model.js';
 import { PhotoInvoiceCounter } from '../models/photo-invoice-counter.model.js';
+import PaymentTokenModel from '../models/payment-token.model.js';
 import ClientModel from '../models/client.model.js';
 import { PaymentService } from './payment.service.js';
 import { AppError } from '../utils/AppError.js';
@@ -136,6 +137,9 @@ async function deleteOrder(id: string) {
 async function changeStatus(id: string, status: PhotoOrderStatus, userId: string, note?: string) {
     const order = await PhotoOrderModel.findById(id);
     if (!order) throw new AppError('Order not found', 404);
+    if (status === 'cancelled' && order.invoiceId) {
+        throw new AppError(`This order is on invoice ${order.invoiceNumber}; delete the invoice before cancelling it.`, 409);
+    }
     if (!STATUS_WORKFLOW[order.status].includes(status)) {
         throw new AppError(`An order that is ${order.status.replace(/_/g, ' ')} cannot move to ${status.replace(/_/g, ' ')}`, 400);
     }
@@ -359,6 +363,8 @@ async function deleteInvoice(id: string) {
     const inv = await PhotoInvoiceModel.findById(id);
     if (!inv) throw new AppError('Invoice not found', 404);
     if (inv.paymentStatus === 'paid') throw new AppError('A paid invoice cannot be deleted', 409);
+    // a payment link for a deleted invoice must stop working
+    await PaymentTokenModel.updateMany({ photoInvoiceId: inv._id, status: 'active' }, { $set: { status: 'void' } });
     await PhotoOrderModel.updateMany({ invoiceId: inv._id }, { $unset: { invoiceId: '', invoiceNumber: '' } });
     await inv.deleteOne();
 }

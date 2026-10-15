@@ -43,7 +43,7 @@ export function buildInvoiceBlocks(d: QuotationDocInput): Block[] {
                     <img src={LOGO_SRC} alt={d.company.name} width={158} height={38} />
                     <div className="qd-mast-r"><span>Invoice</span><b># {d.quotationNumber}</b></div>
                 </div>
-                <div className="qd-cover-title" style={{ paddingBottom: 24 }}>
+                <div className="qd-cover-title" style={{ padding: "24px 0 20px" }}>
                     <p className="qd-kicker">Photo editing services</p>
                     <h1>{inv.periodLabel}</h1>
                 </div>
@@ -137,39 +137,32 @@ export function buildInvoiceBlocks(d: QuotationDocInput): Block[] {
         ),
     });
 
+    // Payment and signature share one row so a short invoice still fits on a single page.
     blocks.push({
-        id: "inv-pay",
+        id: "inv-foot",
         h: 0,
-        keepWithNext: true,
         node: (
-            <div className="qd-payrow">
+            <div className="qd-foot">
                 <div>
-                    <div className="qd-auth-label" style={{ marginBottom: 4 }}>Payment</div>
-                    <p className="qd-p" style={{ padding: 0 }}>
+                    <div className="qd-auth-label" style={{ marginBottom: 6 }}>Payment</div>
+                    <p className="qd-p" style={{ padding: "0 0 12px" }}>
                         {inv.paid ? "This invoice has been paid. Thank you." : `Please pay by ${fmtDate(inv.dueDate)}. Secure online payment by card or PayPal.`}
                     </p>
+                    {!inv.paid && inv.paymentUrl && <a className="qd-pay" href={inv.paymentUrl}>Pay now</a>}
                 </div>
-                {!inv.paid && inv.paymentUrl && <a className="qd-pay" href={inv.paymentUrl}>Pay now</a>}
-            </div>
-        ),
-    });
-
-    blocks.push({
-        id: "inv-auth",
-        h: 0,
-        node: (
-            <div className="qd-auth">
-                <div className="qd-auth-label">Authorized by</div>
-                {SIGNATURE_SRC ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img className="qd-auth-sig" src={SIGNATURE_SRC} alt="" crossOrigin="anonymous" />
-                ) : (
-                    <div className="qd-auth-spacer" />
-                )}
-                <div className="qd-auth-line" />
-                <div className="qd-auth-name">{SIGNATORY_NAME}</div>
-                <div className="qd-auth-role">{SIGNATORY_ROLE}, {d.company.name}</div>
-                <div className="qd-closing-address" style={{ marginTop: 14 }}>{d.company.country || DEFAULT_LEGAL.country} · {d.company.ein || DEFAULT_LEGAL.ein}</div>
+                <div className="qd-auth" style={{ paddingTop: 0 }}>
+                    <div className="qd-auth-label">Authorized by</div>
+                    {SIGNATURE_SRC ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img className="qd-auth-sig" src={SIGNATURE_SRC} alt="" crossOrigin="anonymous" />
+                    ) : (
+                        <div className="qd-auth-spacer" />
+                    )}
+                    <div className="qd-auth-line" />
+                    <div className="qd-auth-name">{SIGNATORY_NAME}</div>
+                    <div className="qd-auth-role">{SIGNATORY_ROLE}, {d.company.name}</div>
+                    <div className="qd-closing-address" style={{ marginTop: 10 }}>{d.company.country || DEFAULT_LEGAL.country} · {d.company.ein || DEFAULT_LEGAL.ein}</div>
+                </div>
             </div>
         ),
     });
