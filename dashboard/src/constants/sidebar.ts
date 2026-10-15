@@ -25,6 +25,7 @@ import {
     IconBuildingCommunity,
     IconHeadset,
     IconCategory,
+    IconPhotoEdit,
 } from "@tabler/icons-react";
 
 
@@ -138,6 +139,13 @@ export const sidebarGroups: SidebarGroup[] = [
                     Role.TEAM_LEADER,
                     Role.STAFF,
                 ],
+            },
+            {
+                title: "Photo Editing Orders",
+                url: "/photo-orders",
+                permission: 'photoOrder.read',
+                icon: IconPhotoEdit,
+                access: [Role.SUPER_ADMIN, Role.ADMIN],
             },
             {
                 title: "Earnings",

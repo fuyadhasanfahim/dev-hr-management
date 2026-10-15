@@ -18,6 +18,7 @@ export const SYSTEM_ROLE_PERMISSIONS: Record<Role, readonly string[]> = {
 
     [Role.ADMIN]: [
         'order.*',
+        'photoOrder.*',
         'quotation.*',
         'receipt.*',
         'client.*',

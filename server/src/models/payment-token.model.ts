@@ -23,9 +23,12 @@ export interface IPaymentToken extends Document {
     /** The signed JWT itself — returned verbatim on reuse so the Pay Now link stays stable. */
     token: string;
 
-    orderId: Types.ObjectId;
-    receiptId: Types.ObjectId;
-    quotationGroupId: string;
+    /** Project-order payments: the order + its receipt ledger. Absent for photo-editing invoices. */
+    orderId?: Types.ObjectId;
+    receiptId?: Types.ObjectId;
+    quotationGroupId?: string;
+    /** Photo-editing invoice payments: set instead of the three fields above. */
+    photoInvoiceId?: Types.ObjectId;
     clientId: Types.ObjectId;
 
     amountDue: number;
@@ -59,9 +62,10 @@ const paymentTokenSchema = new Schema<IPaymentToken>(
         jti: { type: String, required: true, unique: true, index: true },
         token: { type: String, required: true, unique: true },
 
-        orderId: { type: Schema.Types.ObjectId, ref: 'Order', required: true, index: true },
-        receiptId: { type: Schema.Types.ObjectId, ref: 'Receipt', required: true },
-        quotationGroupId: { type: String, required: true },
+        orderId: { type: Schema.Types.ObjectId, ref: 'Order', index: true },
+        receiptId: { type: Schema.Types.ObjectId, ref: 'Receipt' },
+        quotationGroupId: { type: String },
+        photoInvoiceId: { type: Schema.Types.ObjectId, ref: 'PhotoInvoice', index: true },
         clientId: { type: Schema.Types.ObjectId, ref: 'Client', required: true },
 
         amountDue: { type: Number, required: true, min: 0 },
@@ -89,6 +93,7 @@ const paymentTokenSchema = new Schema<IPaymentToken>(
 // voids the previous — see PaymentService.issueTokenForOrder), so lookups by
 // order scoped to "active" stay fast without needing a uniqueness constraint.
 paymentTokenSchema.index({ orderId: 1, status: 1 });
+paymentTokenSchema.index({ photoInvoiceId: 1, status: 1 });
 
 const PaymentTokenModel = model<IPaymentToken>('PaymentToken', paymentTokenSchema);
 export default PaymentTokenModel;

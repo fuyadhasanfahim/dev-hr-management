@@ -71,6 +71,37 @@ const sendInvoiceEmail = async (data: SendInvoiceData) => {
     }
 };
 
+interface SendPhotoInvoiceData {
+    to: string;
+    clientName: string;
+    invoiceNumber: string;
+    period: string;
+    totalFormatted: string;
+    dueDate: string;
+    payUrl?: string;
+    attachment: { filename: string; content: Buffer };
+}
+
+/** Photo-editing invoice: short HTML email with the PDF attached and, while unpaid, a Pay Now button. */
+const sendPhotoInvoiceEmail = async (data: SendPhotoInvoiceData) => {
+    const esc = (v: string) => v.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
+    const html = `<div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;color:#1c1c22;line-height:1.55">
+<h2 style="margin:0 0 12px">Invoice ${esc(data.invoiceNumber)}</h2>
+<p>Hi ${esc(data.clientName)},</p>
+<p>Your photo editing invoice for <strong>${esc(data.period)}</strong> is attached.</p>
+<p style="margin:16px 0"><strong>Total: ${esc(data.totalFormatted)}</strong><br>Due by ${esc(data.dueDate)}</p>
+${data.payUrl ? `<p style="margin:20px 0"><a href="${esc(data.payUrl)}" style="background:#4f46e5;color:#fff;padding:11px 22px;border-radius:6px;text-decoration:none;font-weight:600">Pay now</a></p>` : ''}
+<p>If you have any questions, just reply to this email.</p>
+<p style="color:#6b6b76;font-size:13px">WebBriks</p></div>`;
+    return transporter.sendMail({
+        from: 'Invoice | WebBriks',
+        to: data.to,
+        subject: `Invoice ${data.invoiceNumber} - ${data.period} - WebBriks`,
+        html,
+        attachments: [{ filename: data.attachment.filename, content: data.attachment.content, contentType: 'application/pdf' }],
+    });
+};
+
 interface SendPinResetData {
     to: string;
     staffName: string;
@@ -650,6 +681,7 @@ const sendTaskNotificationEmail = async (data: { to: string, title: string, mess
 
 export default {
     sendInvoiceEmail,
+    sendPhotoInvoiceEmail,
     sendPinResetEmail,
     sendVerificationEmail,
     sendResetPasswordEmail,

@@ -48,6 +48,10 @@ export const PERMISSION_GROUPS = {
             'viewClient',
         ],
     },
+    photoOrder: {
+        label: 'Photo Editing Orders',
+        actions: ['read', 'create', 'update', 'delete', 'changeStatus', 'manageMetadata', 'invoice'],
+    },
     quotation: {
         label: 'Quotations',
         actions: ['read', 'create', 'update', 'delete', 'approve', 'convert'],

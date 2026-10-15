@@ -111,6 +111,10 @@
 .qd-closing-contact { font-size: 13.3px; color: var(--qd-body); margin-bottom: 3px; }
 .qd-closing-address { font-size: 12px; color: var(--qd-muted); }
 
+/* ── invoice: payment row ── */
+.qd-payrow { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 14px 0; margin-top: 10px; border-top: 1px solid var(--qd-rule); border-bottom: 1px solid var(--qd-rule); }
+.qd-pay { flex: none; display: inline-block; background: var(--qd-brand); color: #fff; text-decoration: none; font-weight: 600; font-size: 13px; padding: 9px 22px; border-radius: 4px; }
+
 /* ── print: the same pages, one per sheet ────────────────────────────── */
 @page { size: A4; margin: 0; }
 @media print {

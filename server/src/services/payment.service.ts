@@ -6,6 +6,8 @@ import ReceiptModel from '../models/receipt.model.js';
 import ReceiptPaymentModel from '../models/receipt-payment.model.js';
 import ClientModel from '../models/client.model.js';
 import PaymentTokenModel, { type IPaymentToken } from '../models/payment-token.model.js';
+import PhotoInvoiceModel, { type IPhotoInvoice } from '../models/photo-invoice.model.js';
+import PhotoOrderModel from '../models/photo-order.model.js';
 import UserModel from '../models/user.model.js';
 import { ReceiptService, type AddPaymentInput } from './receipt.service.js';
 import earningService from './earning.service.js';
@@ -27,6 +29,8 @@ import { PAYMENT_TOKEN_EXPIRY_DAYS } from '../constants/timing.js';
 
 const PAYMENT_TOKEN_SECRET = envConfig.payment_token_secret;
 
+const PHOTO_MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
 interface PaymentTokenPayload {
     jti: string;
     orderId: string;
@@ -41,9 +45,12 @@ interface PaymentTokenPayload {
  */
 export interface ResolvedPaymentToken {
     tokenDoc: IPaymentToken;
-    order: IOrder;
-    receiptId: Types.ObjectId;
-    quotationGroupId: string;
+    /** Set for project-order payments. */
+    order?: IOrder;
+    receiptId?: Types.ObjectId;
+    quotationGroupId?: string;
+    /** Set for photo-editing invoice payments (instead of order/receiptId/quotationGroupId). */
+    photoInvoice?: IPhotoInvoice;
     clientId: Types.ObjectId;
     amountDue: number;
     currency: string;
@@ -88,6 +95,21 @@ async function resolveFromTokenDoc(tokenDoc: IPaymentToken): Promise<ResolvedPay
     }
     if (tokenDoc.expiresAt <= new Date()) {
         throw new AppError('This payment link has expired.', 410);
+    }
+
+    if (tokenDoc.photoInvoiceId) {
+        const photoInvoice = await PhotoInvoiceModel.findById(tokenDoc.photoInvoiceId);
+        if (!photoInvoice) throw new AppError('Invoice not found', 404);
+        if (photoInvoice.paymentStatus === 'paid') {
+            throw new AppError('This invoice has already been paid in full.', 409);
+        }
+        return {
+            tokenDoc,
+            photoInvoice,
+            clientId: tokenDoc.clientId,
+            amountDue: photoInvoice.totalAmount,
+            currency: photoInvoice.currency,
+        };
     }
 
     const order = await OrderModel.findById(tokenDoc.orderId);
@@ -306,6 +328,41 @@ export class PaymentService {
     }
 
     /**
+     * Mints (or reuses) the payment link token for a photo-editing invoice. Returns `null` when the
+     * invoice is already paid. Same JWT/DB single-use guarantees as order tokens.
+     */
+    static async issueTokenForPhotoInvoice(invoiceId: string): Promise<{ token: string; amountDue: number; currency: string } | null> {
+        const invoice = await PhotoInvoiceModel.findById(invoiceId).lean();
+        if (!invoice) throw new AppError('Invoice not found', 404);
+        if (invoice.paymentStatus === 'paid') return null;
+
+        const existing = await PaymentTokenModel.findOne({ photoInvoiceId: invoice._id, status: 'active' });
+        if (existing && existing.expiresAt > new Date()) {
+            return { token: existing.token, amountDue: invoice.totalAmount, currency: invoice.currency };
+        }
+        if (existing) {
+            existing.status = 'void';
+            await existing.save();
+        }
+
+        const jti = crypto.randomUUID();
+        // The JWT's `orderId` slot carries the invoice id; the DB row (photoInvoiceId) decides which flow applies.
+        const token = signToken({ jti, orderId: String(invoice._id) });
+        await PaymentTokenModel.create({
+            jti,
+            token,
+            photoInvoiceId: invoice._id,
+            clientId: invoice.clientId,
+            amountDue: invoice.totalAmount,
+            currency: invoice.currency,
+            status: 'active',
+            expiresAt: new Date(Date.now() + PAYMENT_TOKEN_EXPIRY_DAYS * 24 * 60 * 60 * 1000),
+        });
+        logger.info({ invoiceId: String(invoice._id), amountDue: invoice.totalAmount }, 'payment.token.issued.photo_invoice');
+        return { token, amountDue: invoice.totalAmount, currency: invoice.currency };
+    }
+
+    /**
      * Verifies a raw token from a payment request (signature + expiry), then
      * hands off to the shared DB-side resolution. Every public payment route
      * (create-intent, create-order, capture-order) must resolve its token
@@ -360,7 +417,25 @@ export class PaymentService {
 
     /** Public, read-only invoice summary shown on the payment page. Never consumes the token. */
     static async getInvoiceSummary(resolved: ResolvedPaymentToken) {
-        const { order, amountDue, currency } = resolved;
+        if (resolved.photoInvoice) {
+            const inv = resolved.photoInvoice;
+            const client = await ClientModel.findById(inv.clientId).lean();
+            return {
+                invoiceNumber: inv.invoiceNumber,
+                quotationNumber: '',
+                projectTitle: `Photo editing — ${PHOTO_MONTHS[inv.month - 1]} ${inv.year}`,
+                currency: resolved.currency,
+                amountDue: resolved.amountDue,
+                client: { name: client?.name || 'Client', email: client?.emails?.[0] },
+                lines: inv.items.map((i) => ({
+                    label: i.orderName,
+                    sublabel: `${i.images} image${i.images === 1 ? '' : 's'} × ${i.unitPrice}`,
+                    amount: i.amount,
+                })),
+            };
+        }
+        const order = resolved.order!;
+        const { amountDue, currency } = resolved;
         const snap = (order.quotationSnapshot || {}) as Record<string, any>;
         const services: Record<string, any>[] = Array.isArray(snap.services) ? snap.services : [];
         const client = await ClientModel.findById(order.clientId).lean();
@@ -406,6 +481,12 @@ export class PaymentService {
             throw new AppError('No completed payment found for this link.', 404);
         }
 
+        if (tokenDoc.photoInvoiceId) {
+            const photoInvoice = await PhotoInvoiceModel.findById(tokenDoc.photoInvoiceId);
+            if (!photoInvoice) throw new AppError('Invoice not found', 404);
+            return { tokenDoc, photoInvoice, clientId: tokenDoc.clientId, amountDue: tokenDoc.amountDue, currency: tokenDoc.currency };
+        }
+
         const order = await OrderModel.findById(tokenDoc.orderId);
         if (!order) throw new AppError('Order not found', 404);
 
@@ -425,7 +506,25 @@ export class PaymentService {
 
     /** Confirmation summary for the success page + receipt PDF — built from a resolveConsumedToken result. */
     static async getPaymentConfirmation(resolved: ResolvedPaymentToken) {
-        const { order, tokenDoc } = resolved;
+        if (resolved.photoInvoice) {
+            const inv = resolved.photoInvoice;
+            const client = await ClientModel.findById(inv.clientId).lean();
+            if (!inv.gatewayRef || !inv.paidVia || inv.paidAmount == null) {
+                throw new AppError('Payment confirmation is not available for this link.', 404);
+            }
+            return {
+                clientName: client?.name || 'Client',
+                projectTitle: `Photo editing — ${PHOTO_MONTHS[inv.month - 1]} ${inv.year}`,
+                quotationNumber: inv.invoiceNumber,
+                amount: inv.paidAmount,
+                currency: resolved.currency,
+                paymentId: inv.gatewayRef,
+                via: inv.paidVia,
+                paymentDate: inv.paidAt ?? new Date(),
+            };
+        }
+        const { tokenDoc } = resolved;
+        const order = resolved.order!;
         const snap = (order.quotationSnapshot || {}) as Record<string, any>;
         const client = await ClientModel.findById(order.clientId).lean();
         const payment = tokenDoc.receiptPaymentId
@@ -470,7 +569,9 @@ export class PaymentService {
             method?: string;
         },
     ): Promise<{ receiptId: Types.ObjectId; paymentId: Types.ObjectId }> {
-        const { tokenDoc, receiptId, amountDue } = resolved;
+        if (resolved.photoInvoice) return PaymentService.consumeForPhotoInvoice(resolved, opts);
+        const { tokenDoc, amountDue } = resolved;
+        const receiptId = resolved.receiptId!;
 
         // Defense in depth: even though the caller is expected to charge
         // exactly `amountDue`, refuse to record a mismatched amount rather
@@ -549,10 +650,11 @@ export class PaymentService {
             // customer whose card was already charged. Each runs
             // independently (Promise.allSettled) so one failing (e.g. a bad
             // client email on file) doesn't take the others down with it.
-            const snap = (resolved.order.quotationSnapshot || {}) as Record<string, any>;
-            const client = await ClientModel.findById(resolved.order.clientId).lean();
+            const order = resolved.order!;
+            const snap = (order.quotationSnapshot || {}) as Record<string, any>;
+            const client = await ClientModel.findById(order.clientId).lean();
             const clientName = client?.name || snap.clientName || 'Client';
-            const projectTitle = snap.details?.title || snap.templateName || resolved.order.orderNumber;
+            const projectTitle = snap.details?.title || snap.templateName || order.orderNumber;
             const amountFormatted = formatMoneyPdf(opts.amount, resolved.currency);
 
             const results = await Promise.allSettled([
@@ -598,6 +700,72 @@ export class PaymentService {
         } finally {
             session.endSession();
         }
+    }
+
+    /** Photo-invoice variant of consumeAndRecordPayment: flips the token and marks the invoice (and its orders) paid. */
+    private static async consumeForPhotoInvoice(
+        resolved: ResolvedPaymentToken,
+        opts: { amount: number; via: 'stripe' | 'paypal'; gatewayRef: string },
+    ): Promise<{ receiptId: Types.ObjectId; paymentId: Types.ObjectId }> {
+        const { tokenDoc, amountDue } = resolved;
+        const invoice = resolved.photoInvoice!;
+
+        const tolerance = Math.max(0.01, amountDue * 0.0005);
+        if (Math.abs(opts.amount - amountDue) > tolerance) {
+            logger.error({ tokenId: String(tokenDoc._id), expected: amountDue, got: opts.amount, via: opts.via }, 'payment.amount_mismatch');
+            throw new AppError('Payment amount does not match the amount due on this invoice.', 422);
+        }
+
+        const session = await mongoose.startSession();
+        session.startTransaction();
+        try {
+            const consumed = await PaymentTokenModel.findOneAndUpdate(
+                { _id: tokenDoc._id, status: 'active' },
+                { $set: { status: 'consumed', consumedAt: new Date(), consumedVia: opts.via, gatewayRef: opts.gatewayRef } },
+                { new: true, session },
+            );
+            if (!consumed) throw new AppError('This payment link has already been used.', 409);
+
+            await PhotoInvoiceModel.updateOne(
+                { _id: invoice._id },
+                { $set: { paymentStatus: 'paid', paidAt: new Date(), paidAmount: opts.amount, paidVia: opts.via, gatewayRef: opts.gatewayRef } },
+                { session },
+            );
+            await PhotoOrderModel.updateMany({ invoiceId: invoice._id }, { $set: { isPaid: true } }, { session });
+            await session.commitTransaction();
+        } catch (err) {
+            await session.abortTransaction();
+            throw err;
+        } finally {
+            session.endSession();
+        }
+
+        logger.info({ invoiceId: String(invoice._id), amount: opts.amount, via: opts.via }, 'payment.photo_invoice.paid');
+
+        // Best-effort admin notification, same reasoning as for order payments: the money is already captured.
+        try {
+            const client = await ClientModel.findById(invoice.clientId).lean();
+            const systemUserId = await getOrCreateSystemUserId();
+            const clientName = client?.name || 'Client';
+            const projectTitle = `Photo editing — ${PHOTO_MONTHS[invoice.month - 1]} ${invoice.year}`;
+            const amountFormatted = formatMoneyPdf(opts.amount, resolved.currency);
+            await Promise.allSettled([
+                notificationService.notifyAdminsOnlinePaymentReceived({ clientName, projectTitle, amountFormatted, via: opts.via, actorUserId: systemUserId }),
+                emailService.sendAdminPaymentReceiptEmail({
+                    clientName,
+                    projectTitle,
+                    quotationNumber: invoice.invoiceNumber,
+                    amountFormatted,
+                    paymentId: opts.gatewayRef,
+                    via: opts.via,
+                    paymentDateFormatted: new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
+                }),
+            ]);
+        } catch (err) {
+            logger.error({ err, invoiceId: String(invoice._id) }, 'payment.photo_invoice.notification_failed');
+        }
+
+        return { receiptId: invoice._id as unknown as Types.ObjectId, paymentId: invoice._id as unknown as Types.ObjectId };
     }
 }
 

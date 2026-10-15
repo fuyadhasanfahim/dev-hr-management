@@ -50,7 +50,7 @@ function Host({ data, onProgress, onDone, onError }: { data: QuotationDocInput; 
         started.current = true;
         (async () => {
             await waitForReady(root);
-            onDone(await pagesToPdf(root, { title: `Quotation ${data.quotationNumber ?? ""}`.trim(), onProgress, signal }));
+            onDone(await pagesToPdf(root, { title: `${data.invoice ? "Invoice" : "Quotation"} ${data.quotationNumber ?? ""}`.trim(), onProgress, signal }));
         })().catch((e) => alive.current && onError(e));
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);

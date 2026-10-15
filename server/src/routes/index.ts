@@ -27,6 +27,7 @@ import shiftOffDateRoute from "./shift-off-date.route.js";
 import payrollBankSettingsRoute from "./payroll-bank-settings.route.js";
 import { policyRoute } from "./policy.route.js";
 import { quotationRoute } from "./quotation.route.js";
+import { photoOrderRoute } from "./photo-order.route.js";
 import { receiptRoute } from "./receipt.route.js";
 import { paymentRoute } from "./payment.route.js";
 import { earningRoute } from "./earning.route.js";
@@ -159,6 +160,10 @@ const moduleRoutes = [
     {
         path: "/quotations",
         route: quotationRoute,
+    },
+    {
+        path: "/photo-orders",
+        route: photoOrderRoute,
     },
 
     {

@@ -14,3 +14,13 @@ export const DEFAULT_LEGAL = {
     ein: "Federal Tax ID (EIN): 30-1421814",
     vat: "VAT ID: Not Applicable — U.S. Entity",
 };
+
+/** Letterhead details used on invoices (same values as the quotation builder's company block). */
+export const COMPANY_INFO = {
+    name: "Web Briks LLC",
+    address: "House #35 (2nd Floor), Road# 04, Nikunjo 2, Khilkhet, Dhaka-1229",
+    email: "info@webbriks.com",
+    phone: "09617-008822, +88 01767201923, +88 01977201923",
+    website: "www.webbriks.com",
+    logo: "/assets/brand/logo.png",
+};

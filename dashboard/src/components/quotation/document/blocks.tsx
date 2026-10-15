@@ -5,6 +5,7 @@ import { isUpfrontBillingCycle, type BillingCycle, type IQuotationLineItem, type
 import { DEFAULT_LEGAL, LOGO_SRC, SIGNATORY_NAME, SIGNATORY_ROLE, SIGNATURE_SRC } from "./brand";
 import { fmtDate, fmtMoney } from "./format";
 import type { PBlock } from "./paginate";
+import { buildInvoiceBlocks } from "./invoice-blocks";
 import type { QuotationDocInput } from "./types";
 
 export interface Block extends PBlock {
@@ -120,6 +121,7 @@ const sumRow = (label: ReactNode, value: ReactNode, strong = false) => (
 );
 
 export function buildBlocks(d: QuotationDocInput): Block[] {
+    if (d.invoice) return buildInvoiceBlocks(d);
     const cur = d.currency;
     const services = d.services as IQuotationService[];
     const calc = computeQuotationTotals(services);

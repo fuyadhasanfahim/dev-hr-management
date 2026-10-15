@@ -99,6 +99,15 @@ function addTextLayer(pdf: import("jspdf").jsPDF, page: HTMLElement) {
     pdf.setCharSpace(0);
 }
 
+/** Makes every <a href> on the page a clickable area in the PDF (e.g. the invoice's Pay now button). */
+function addLinks(pdf: import("jspdf").jsPDF, page: HTMLElement) {
+    const pageRect = page.getBoundingClientRect();
+    page.querySelectorAll<HTMLAnchorElement>("a[href]").forEach((a) => {
+        const r = a.getBoundingClientRect();
+        if (r.width > 0) pdf.link((r.left - pageRect.left) * PX_TO_MM, (r.top - pageRect.top) * PX_TO_MM, r.width * PX_TO_MM, r.height * PX_TO_MM, { url: a.href });
+    });
+}
+
 /**
  * All same-origin CSS currently applied to the document, as one string. `url()` references are made
  * absolute against their own stylesheet, because once inlined they would resolve against the page
@@ -164,6 +173,7 @@ export async function pagesToPdf(root: HTMLElement, { title = "Quotation", onPro
         if (i > 0) pdf.addPage();
         pdf.addImage(canvas.toDataURL("image/jpeg", 0.92), "JPEG", 0, 0, 210, 297, undefined, "FAST");
         addTextLayer(pdf, pages[i]!);
+        addLinks(pdf, pages[i]!);
     }
     abort();
     onProgress?.({ phase: "finalizing" });

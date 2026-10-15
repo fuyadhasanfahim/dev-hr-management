@@ -49,7 +49,7 @@ async function createStripeIntent(req: Request, res: Response, next: NextFunctio
                 currency: charge.chargeCurrency,
                 metadata: {
                     paymentTokenJti: ctx.tokenDoc.jti,
-                    orderId: String(ctx.order._id),
+                    orderId: String(ctx.order?._id ?? ctx.photoInvoice?._id),
                     // Locked in here, read back verbatim in the webhook — see
                     // resolveGatewayCharge's doc comment for why this must
                     // never be re-derived at confirmation time.

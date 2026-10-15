@@ -90,7 +90,7 @@ export function QuotationDocument({ data, zoom = 1, onLayout }: Props) {
                             <div className="qd-runhead">
                                 {/* eslint-disable-next-line @next/next/no-img-element */}
                                 <img src={LOGO_SRC} alt="" width={92} height={22} />
-                                <span>Quotation <b># {data.quotationNumber || "Assigned on save"}</b></span>
+                                <span>{data.invoice ? "Invoice" : "Quotation"} <b># {data.quotationNumber || "Assigned on save"}</b></span>
                             </div>
                         )}
                         <div className="qd-content">

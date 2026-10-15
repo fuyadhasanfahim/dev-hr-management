@@ -18,4 +18,15 @@ export interface QuotationDocInput {
     keyTerms?: string[];
     workflow?: string[];
     paymentMilestones?: IPaymentMilestone[];
+    /** When set, the document is a photo-editing invoice (rendered by invoice-blocks) instead of a quotation. */
+    invoice?: {
+        periodLabel: string;
+        issueDate: string;
+        dueDate: string;
+        totalImages: number;
+        totalAmount: number;
+        items: { date: string; orderName: string; images: number; unitPrice: number; amount: number }[];
+        paymentUrl?: string;
+        paid?: boolean;
+    };
 }
