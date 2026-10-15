@@ -32,6 +32,7 @@ export const clientApi = apiSlice.injectEndpoints({
                 method: 'POST',
                 body,
             }),
+            transformResponse: (response: { data: Client }) => response.data,
             invalidatesTags: ['Client'],
         }),
         updateClient: builder.mutation<
