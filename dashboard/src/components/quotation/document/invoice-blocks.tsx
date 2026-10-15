@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import { DEFAULT_LEGAL, LOGO_SRC, SIGNATORY_NAME, SIGNATORY_ROLE, SIGNATURE_SRC } from "./brand";
+import { LOGO_SRC, SIGNATORY_NAME, SIGNATORY_ROLE, SIGNATURE_SRC } from "./brand";
 import { currencySymbol, fmtDate } from "./format";
 import type { Block } from "./blocks";
 import type { QuotationDocInput } from "./types";
@@ -43,7 +43,7 @@ export function buildInvoiceBlocks(d: QuotationDocInput): Block[] {
                     <img src={LOGO_SRC} alt={d.company.name} width={158} height={38} />
                     <div className="qd-mast-r"><span>Invoice</span><b># {d.quotationNumber}</b></div>
                 </div>
-                <div className="qd-cover-title" style={{ padding: "24px 0 20px" }}>
+                <div className="qd-cover-title" style={{ padding: "16px 0 10px" }}>
                     <p className="qd-kicker">Photo editing services</p>
                     <h1>{inv.periodLabel}</h1>
                 </div>
@@ -67,7 +67,7 @@ export function buildInvoiceBlocks(d: QuotationDocInput): Block[] {
         id: "inv-parties",
         h: 0,
         node: (
-            <div className="qd-parties">
+            <div className="qd-parties" style={{ paddingTop: 10 }}>
                 <div className="qd-party">
                     <span className="qd-tag">From</span>
                     <div className="qd-name">{d.company.name}</div>
@@ -128,10 +128,8 @@ export function buildInvoiceBlocks(d: QuotationDocInput): Block[] {
     blocks.push({
         id: "inv-sum",
         h: 0,
-        keepWithNext: true,
         node: (
             <div className="qd-sum">
-                <div className="qd-sum-r"><span>Total images</span><span>{inv.totalImages.toLocaleString("en-US")}</span></div>
                 <div className="qd-grand"><span>{inv.paid ? "Total paid" : "Total amount"}</span><b>{money(inv.totalAmount, cur)}</b></div>
             </div>
         ),
@@ -154,14 +152,13 @@ export function buildInvoiceBlocks(d: QuotationDocInput): Block[] {
                     <div className="qd-auth-label">Authorized by</div>
                     {SIGNATURE_SRC ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img className="qd-auth-sig" src={SIGNATURE_SRC} alt="" crossOrigin="anonymous" />
+                        <img className="qd-auth-sig" style={{ height: 46 }} src={SIGNATURE_SRC} alt="" crossOrigin="anonymous" />
                     ) : (
                         <div className="qd-auth-spacer" />
                     )}
                     <div className="qd-auth-line" />
                     <div className="qd-auth-name">{SIGNATORY_NAME}</div>
                     <div className="qd-auth-role">{SIGNATORY_ROLE}, {d.company.name}</div>
-                    <div className="qd-closing-address" style={{ marginTop: 10 }}>{d.company.country || DEFAULT_LEGAL.country} · {d.company.ein || DEFAULT_LEGAL.ein}</div>
                 </div>
             </div>
         ),
