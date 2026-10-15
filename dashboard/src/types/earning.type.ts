@@ -1,7 +1,7 @@
 export type EarningStatus = 'partial' | 'paid' | 'void';
 
 export interface IEarningPayment {
-    receiptPaymentId: string;
+    receiptPaymentId?: string;
     amount: number;
     paymentDate: string;
     paymentType: string;
@@ -18,11 +18,13 @@ export interface IEarning {
         name: string;
         emails: string[];
     };
-    receiptId: {
+    /** Absent for photo-invoice earnings (see photoInvoiceId). */
+    receiptId?: {
         _id: string;
         receiptNumber: string;
-    };
-    quotationGroupId: string;
+    } | null;
+    photoInvoiceId?: string;
+    quotationGroupId?: string;
     quotationNumber: string;
     orderTitle: string;
     currency: string;

@@ -8,6 +8,7 @@ import ClientModel from '../models/client.model.js';
 import PaymentTokenModel, { type IPaymentToken } from '../models/payment-token.model.js';
 import PhotoInvoiceModel, { type IPhotoInvoice } from '../models/photo-invoice.model.js';
 import PhotoOrderModel from '../models/photo-order.model.js';
+import EarningModel from '../models/earning.model.js';
 import UserModel from '../models/user.model.js';
 import { ReceiptService, type AddPaymentInput } from './receipt.service.js';
 import earningService from './earning.service.js';
@@ -702,6 +703,44 @@ export class PaymentService {
         }
     }
 
+    /** Upserts the Earning for a paid photo invoice (month/year follow the payment date). */
+    static async recordPhotoInvoiceEarning(
+        invoice: IPhotoInvoice,
+        opts: { amount: number; via: 'stripe' | 'paypal'; gatewayRef: string },
+        userId: Types.ObjectId,
+    ) {
+        const paidAt = new Date();
+        return EarningModel.findOneAndUpdate(
+            { photoInvoiceId: invoice._id },
+            {
+                $set: {
+                    clientId: invoice.clientId,
+                    quotationNumber: invoice.invoiceNumber,
+                    orderTitle: `Photo editing — ${PHOTO_MONTHS[invoice.month - 1]} ${invoice.year}`,
+                    currency: invoice.currency,
+                    totalAmount: invoice.totalAmount,
+                    paidAmount: opts.amount,
+                    amountInBDT: opts.amount,
+                    status: 'paid',
+                    month: paidAt.getMonth() + 1,
+                    year: paidAt.getFullYear(),
+                    payments: [
+                        {
+                            amount: opts.amount,
+                            paymentDate: paidAt,
+                            paymentType: 'full',
+                            milestoneLabel: invoice.invoiceNumber,
+                            method: opts.via,
+                            note: `Paid online via ${opts.via} (ref: ${opts.gatewayRef})`,
+                        },
+                    ],
+                },
+                $setOnInsert: { photoInvoiceId: invoice._id, createdBy: userId },
+            },
+            { upsert: true, new: true, setDefaultsOnInsert: true },
+        );
+    }
+
     /** Photo-invoice variant of consumeAndRecordPayment: flips the token and marks the invoice (and its orders) paid. */
     private static async consumeForPhotoInvoice(
         resolved: ResolvedPaymentToken,
@@ -741,6 +780,14 @@ export class PaymentService {
         }
 
         logger.info({ invoiceId: String(invoice._id), amount: opts.amount, via: opts.via }, 'payment.photo_invoice.paid');
+
+        // Record the revenue on the Earnings page. Idempotent (one Earning per invoice) and best-effort, like the
+        // order-payment path: the payment is already captured, so a failure here is logged for reconciliation.
+        try {
+            await PaymentService.recordPhotoInvoiceEarning(invoice, opts, await getOrCreateSystemUserId());
+        } catch (err) {
+            logger.error({ err, invoiceId: String(invoice._id) }, 'earning.photo_invoice_sync_failed');
+        }
 
         // Best-effort admin notification, same reasoning as for order payments: the money is already captured.
         try {

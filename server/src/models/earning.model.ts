@@ -9,14 +9,18 @@ const EarningSchema = new Schema<IEarning>(
             required: true,
             index: true,
         },
+        // Project-order earnings mirror a receipt 1:1 ...
         receiptId: {
             type: Schema.Types.ObjectId,
             ref: 'Receipt',
-            required: true,
         },
         quotationGroupId: {
             type: String,
-            required: true,
+        },
+        // ... photo-editing earnings mirror a paid photo invoice instead (quotationNumber holds its invoice number).
+        photoInvoiceId: {
+            type: Schema.Types.ObjectId,
+            ref: 'PhotoInvoice',
         },
         quotationNumber: {
             type: String,
@@ -70,7 +74,6 @@ const EarningSchema = new Schema<IEarning>(
                 receiptPaymentId: {
                     type: Schema.Types.ObjectId,
                     ref: 'ReceiptPayment',
-                    required: true,
                 },
                 amount: { type: Number, required: true },
                 paymentDate: { type: Date, required: true },
@@ -94,7 +97,10 @@ const EarningSchema = new Schema<IEarning>(
 );
 
 // One Earning per Receipt — it only exists once the receipt has a recorded payment.
-EarningSchema.index({ receiptId: 1 }, { unique: true });
+// Partial, so photo-invoice earnings (which have no receipt) never collide on a missing receiptId.
+EarningSchema.index({ receiptId: 1 }, { unique: true, partialFilterExpression: { receiptId: { $exists: true } } });
+// One Earning per paid photo invoice.
+EarningSchema.index({ photoInvoiceId: 1 }, { unique: true, partialFilterExpression: { photoInvoiceId: { $exists: true } } });
 
 EarningSchema.index({ status: 1, year: -1, month: -1 });
 EarningSchema.index({ clientId: 1, year: -1, month: -1 });

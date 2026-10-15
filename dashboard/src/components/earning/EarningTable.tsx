@@ -170,7 +170,7 @@ export function EarningTable({ earnings, isLoading, onReceipt }: EarningTablePro
                 {/* Actions */}
                 <TableCell className="pr-6">
                   <div className="flex justify-end gap-1">
-                    {e.status !== "void" && (
+                    {e.status !== "void" && !e.photoInvoiceId && (
                       <Button
                         variant="ghost"
                         size="icon"
@@ -181,6 +181,7 @@ export function EarningTable({ earnings, isLoading, onReceipt }: EarningTablePro
                         <Receipt className="h-3.5 w-3.5" />
                       </Button>
                     )}
+                    {e.receiptId?._id && (
                     <Button
                       variant="ghost"
                       size="icon"
@@ -192,6 +193,7 @@ export function EarningTable({ earnings, isLoading, onReceipt }: EarningTablePro
                         <Eye className="h-3.5 w-3.5" />
                       </Link>
                     </Button>
+                    )}
                   </div>
                 </TableCell>
               </TableRow>

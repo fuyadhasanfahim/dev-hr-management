@@ -3,7 +3,7 @@ import { Document, Types } from 'mongoose';
 export type EarningStatus = 'partial' | 'paid' | 'void';
 
 export interface IEarningPayment {
-    receiptPaymentId: Types.ObjectId;
+    receiptPaymentId?: Types.ObjectId;
     amount: number;
     paymentDate: Date;
     paymentType: string;
@@ -19,8 +19,10 @@ export interface IEarningPayment {
  */
 export interface IEarning extends Document {
     clientId: Types.ObjectId;
-    receiptId: Types.ObjectId;
-    quotationGroupId: string;
+    receiptId?: Types.ObjectId;
+    quotationGroupId?: string;
+    /** Set (instead of receiptId) for earnings from a paid photo-editing invoice. */
+    photoInvoiceId?: Types.ObjectId;
     quotationNumber: string;
     orderTitle: string;
     currency: string;
