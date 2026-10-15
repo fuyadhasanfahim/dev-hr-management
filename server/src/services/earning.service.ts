@@ -6,6 +6,7 @@ import ReceiptPaymentModel from '../models/receipt-payment.model.js';
 import QuotationModel from '../models/quotation.model.js';
 import { logger } from '../lib/logger.js';
 import commissionService from './commission.service.js';
+import { getUsdToBdtRate } from './fx-rate.service.js';
 import type {
     IEarning,
     IEarningPopulated,
@@ -198,18 +199,24 @@ async function getEarningByIdFromDB(id: string): Promise<IEarningPopulated | nul
         .lean() as Promise<IEarningPopulated | null>;
 }
 
+const isUsd = (currency: unknown) => ['usd', '$'].includes(String(currency ?? '').trim().toLowerCase());
+
+/**
+ * Totals are shown in BDT, so USD earnings are converted at the live rate. Grouping by currency
+ * lets us convert each currency's subtotal once instead of every row.
+ */
 async function getEarningStatsWithFilter(
     params: EarningQueryParams,
 ): Promise<EarningStatsResult> {
     const clientMatch: Record<string, unknown> = {};
     if (params.clientId) clientMatch.clientId = new Types.ObjectId(params.clientId);
 
-    const [totalAgg, filteredAgg] = await Promise.all([
+    const [totalByCurrency, filteredByCurrency] = await Promise.all([
         EarningModel.aggregate([
             { $match: clientMatch },
             {
                 $group: {
-                    _id: null,
+                    _id: '$currency',
                     totalCount: { $sum: 1 },
                     totalAmount: { $sum: '$totalAmount' },
                     totalPaidAmount: { $sum: '$paidAmount' },
@@ -222,7 +229,7 @@ async function getEarningStatsWithFilter(
             { $match: buildEarningFilter(params) },
             {
                 $group: {
-                    _id: null,
+                    _id: '$currency',
                     filteredCount: { $sum: 1 },
                     filteredTotalAmount: { $sum: '$totalAmount' },
                     filteredPaidAmount: { $sum: '$paidAmount' },
@@ -231,18 +238,30 @@ async function getEarningStatsWithFilter(
         ]),
     ]);
 
-    const t = totalAgg[0] || {};
-    const f = filteredAgg[0] || {};
+    const hasUsd = [...totalByCurrency, ...filteredByCurrency].some((g) => isUsd(g._id));
+    let usdToBdtRate: number | undefined;
+    if (hasUsd) {
+        try {
+            usdToBdtRate = await getUsdToBdtRate();
+        } catch (err) {
+            // never break the Earnings page over an FX outage: USD then counts at face value (the old behaviour)
+            logger.error({ err }, 'earning.stats.fx_rate_unavailable');
+        }
+    }
+    const inBdt = (currency: unknown, n: number) => (isUsd(currency) && usdToBdtRate ? n * usdToBdtRate : n);
+    const sum = (rows: Record<string, any>[], key: string, convert = false) =>
+        Math.round(rows.reduce((a, r) => a + (convert ? inBdt(r._id, r[key] || 0) : r[key] || 0), 0) * 100) / 100;
 
     return {
-        totalCount: t.totalCount || 0,
-        totalAmount: t.totalAmount || 0,
-        totalPaidAmount: t.totalPaidAmount || 0,
-        partialCount: t.partialCount || 0,
-        paidCount: t.paidCount || 0,
-        filteredCount: f.filteredCount || 0,
-        filteredTotalAmount: f.filteredTotalAmount || 0,
-        filteredPaidAmount: f.filteredPaidAmount || 0,
+        totalCount: sum(totalByCurrency, 'totalCount'),
+        totalAmount: sum(totalByCurrency, 'totalAmount', true),
+        totalPaidAmount: sum(totalByCurrency, 'totalPaidAmount', true),
+        partialCount: sum(totalByCurrency, 'partialCount'),
+        paidCount: sum(totalByCurrency, 'paidCount'),
+        filteredCount: sum(filteredByCurrency, 'filteredCount'),
+        filteredTotalAmount: sum(filteredByCurrency, 'filteredTotalAmount', true),
+        filteredPaidAmount: sum(filteredByCurrency, 'filteredPaidAmount', true),
+        ...(usdToBdtRate ? { usdToBdtRate } : {}),
     };
 }
 

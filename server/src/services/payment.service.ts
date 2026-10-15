@@ -710,6 +710,15 @@ export class PaymentService {
         userId: Types.ObjectId,
     ) {
         const paidAt = new Date();
+        // amountInBDT is the BDT equivalent; for USD invoices that means converting at the rate of the payment day.
+        let amountInBDT = opts.amount;
+        if (['usd', '$'].includes(invoice.currency.trim().toLowerCase())) {
+            try {
+                amountInBDT = Math.round(opts.amount * (await getUsdToBdtRate()) * 100) / 100;
+            } catch (err) {
+                logger.error({ err, invoiceId: String(invoice._id) }, 'earning.photo_invoice_fx_unavailable');
+            }
+        }
         return EarningModel.findOneAndUpdate(
             { photoInvoiceId: invoice._id },
             {
@@ -720,7 +729,7 @@ export class PaymentService {
                     currency: invoice.currency,
                     totalAmount: invoice.totalAmount,
                     paidAmount: opts.amount,
-                    amountInBDT: opts.amount,
+                    amountInBDT,
                     status: 'paid',
                     month: paidAt.getMonth() + 1,
                     year: paidAt.getFullYear(),

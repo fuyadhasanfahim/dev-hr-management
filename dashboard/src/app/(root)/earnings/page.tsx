@@ -151,6 +151,11 @@ export default function EarningsPage() {
           </h1>
           <p className="text-sm text-muted-foreground mt-0.5 flex items-center gap-2">
             Revenue collected from receipt payments
+            {stats?.usdToBdtRate && (
+              <span className="text-xs">
+                · USD converted to BDT in totals at ৳{stats.usdToBdtRate.toFixed(2)} / $1
+              </span>
+            )}
             {isLoading && (
               <Loader className="h-3 w-3 animate-spin text-primary" />
             )}
@@ -219,6 +224,7 @@ export default function EarningsPage() {
             earnings={pagedEarnings}
             isLoading={isLoading}
             onReceipt={(e) => setReceiptTarget(e)}
+            usdToBdtRate={stats?.usdToBdtRate}
           />
         </div>
 

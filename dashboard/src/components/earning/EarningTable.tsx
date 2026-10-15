@@ -37,9 +37,13 @@ interface EarningTableProps {
   earnings: IEarning[];
   isLoading: boolean;
   onReceipt: (earning: IEarning) => void;
+  /** 1 USD = N BDT; lets USD rows show their BDT equivalent. */
+  usdToBdtRate?: number;
 }
 
-export function EarningTable({ earnings, isLoading, onReceipt }: EarningTableProps) {
+const isUsd = (c?: string | null) => ['usd', '$'].includes(String(c ?? '').trim().toLowerCase());
+
+export function EarningTable({ earnings, isLoading, onReceipt, usdToBdtRate }: EarningTableProps) {
   return (
     <Table>
       <TableHeader>
@@ -138,6 +142,11 @@ export function EarningTable({ earnings, isLoading, onReceipt }: EarningTablePro
                     <div className="text-right text-sm text-foreground">
                       {formatMoney(e.paidAmount, e.currency)}
                     </div>
+                    {usdToBdtRate && isUsd(e.currency) && (
+                      <div className="text-right text-[11px] text-muted-foreground">
+                        ≈ {formatMoney(e.paidAmount * usdToBdtRate, "৳", { withDecimals: false })}
+                      </div>
+                    )}
                     <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
                       <div
                         className={cn(

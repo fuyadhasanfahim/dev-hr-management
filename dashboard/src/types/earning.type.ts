@@ -75,6 +75,8 @@ export interface EarningStats {
     filteredCount: number;
     filteredTotalAmount: number;
     filteredPaidAmount: number;
+    /** Set when USD earnings are converted into the BDT totals (1 USD = N BDT). */
+    usdToBdtRate?: number;
 }
 
 export interface EarningStatsResponse {
