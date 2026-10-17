@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -21,9 +21,6 @@ import {
     IconBulb,
     IconCrown,
     IconClock,
-    IconFolder,
-    IconAlertTriangle,
-    IconTools,
     IconBox,
     IconUsers,
     IconUserPlus,
@@ -36,7 +33,6 @@ import {
     IconPencil,
     IconStarFilled,
     IconFileText,
-    IconListCheck,
     IconPlus,
     IconReceipt,
     IconSettings,
@@ -62,11 +58,9 @@ import {
 import { Calendar } from "@/components/ui/calendar";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { Combobox } from "@/components/ui/combobox";
-import { MultiSelect } from "@/components/ui/multi-select";
+import { Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
-import { useGetServicesQuery } from "@/redux/features/service/serviceApi";
-import { useGetStaffsQuery } from "@/redux/features/staff/staffApi";
 
 import { useCreateClientMutation, useGetClientsQuery } from "@/redux/features/client/clientApi";
 import { useCreateQuotationMutation, useSendQuotationMutation, useUpdateQuotationMutation } from "@/redux/features/quotation/quotationApi";
@@ -88,7 +82,6 @@ import { computeQuotationTotals } from "@/lib/quotation-totals";
 
 type CheckItem = { text: string; on: boolean; price?: number; id?: string; group?: string };
 type LineItem = { title: string; description: string; qty: number; price: number; discount: number; billing: "one-time" | "monthly" | "yearly" };
-type Charge = { name: string; description: string; amount: number; type: "one-time" | "monthly" | "yearly" };
 type Milestone = { label: string; percentage: number; note: string; due?: string };
 type UnitService = { qty: number; rate: number };
 
@@ -164,25 +157,78 @@ function Panel({
     fixed?: string;
 }) {
     return (
-        <section id={id} className={cn("scroll-mt-4 rounded-xl border bg-card p-4 shadow-xs md:p-5", fixed && "flex flex-col overflow-hidden", fixed, className)}>
-            <header className={cn("mb-4 flex items-start gap-3", fixed && "shrink-0")}>
-                {!plain && (
-                    <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                        <Icon className="size-[18px]" />
-                    </span>
-                )}
-                <div className="min-w-0 flex-1">
-                    <h3 className="text-sm font-semibold leading-tight">{title}</h3>
-                    {hint && <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p>}
+        <Card id={id} className={cn("scroll-mt-4 gap-4 py-4 shadow-xs md:py-5", fixed && "overflow-hidden", fixed, className)}>
+            <CardHeader className="px-4 md:px-5">
+                <div className="flex min-w-0 items-start gap-3">
+                    {!plain && (
+                        <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                            <Icon className="size-[18px]" />
+                        </span>
+                    )}
+                    <div className="min-w-0">
+                        <CardTitle className="text-sm leading-tight">{title}</CardTitle>
+                        {hint && <CardDescription className="mt-1 text-xs">{hint}</CardDescription>}
+                    </div>
                 </div>
-                {right}
-            </header>
-            {fixed ? (
-                <ScrollArea className="-mr-3 min-h-0 flex-1 pr-3">{children}</ScrollArea>
-            ) : (
-                children
-            )}
-        </section>
+                {right && <CardAction>{right}</CardAction>}
+            </CardHeader>
+            <CardContent className={cn("px-4 md:px-5", fixed && "flex min-h-0 flex-1 flex-col")}>
+                {fixed ? (
+                    // padding on every side so focus rings are never clipped by the scroll viewport
+                    <ScrollArea className="-mx-1 min-h-0 flex-1">
+                        <div className="p-1 pr-4">{children}</div>
+                    </ScrollArea>
+                ) : (
+                    children
+                )}
+            </CardContent>
+        </Card>
+    );
+}
+
+/** One collapsible step of the Services flow: open = full content, closed = one-line summary + Change. */
+function StageCard({
+    n,
+    title,
+    hint,
+    open,
+    done,
+    summary,
+    onOpen,
+    children,
+    footer,
+}: {
+    n: number;
+    title: string;
+    hint: string;
+    open: boolean;
+    done: boolean;
+    summary?: React.ReactNode;
+    onOpen: () => void;
+    children: React.ReactNode;
+    footer?: React.ReactNode;
+}) {
+    return (
+        <Card className={cn("gap-4 py-4 shadow-xs md:py-5", !open && "gap-0")}>
+            <CardHeader className="px-4 md:px-5">
+                <div className="flex min-w-0 items-center gap-3">
+                    <span className={cn("flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold", done ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground")}>
+                        {done && !open ? <IconCheck className="size-4" /> : n}
+                    </span>
+                    <div className="min-w-0">
+                        <CardTitle className="text-sm leading-tight">{title}</CardTitle>
+                        {open ? <CardDescription className="mt-1 text-xs">{hint}</CardDescription> : done && <div className="mt-1 text-xs text-muted-foreground">{summary}</div>}
+                    </div>
+                </div>
+                {!open && done && (
+                    <CardAction>
+                        <Button type="button" variant="outline" size="sm" className="h-7" onClick={onOpen}>Change</Button>
+                    </CardAction>
+                )}
+            </CardHeader>
+            {open && <CardContent className="px-4 md:px-5">{children}</CardContent>}
+            {open && footer && <CardFooter className="justify-end px-4 md:px-5">{footer}</CardFooter>}
+        </Card>
     );
 }
 
@@ -197,7 +243,51 @@ function Field({ label, required, children, className }: { label: string; requir
     );
 }
 
-/** Checkbox list with inline "add custom" row; used for features, inclusions, exclusions, responsibilities. */
+/** Collapsed "Add …" button that opens an inline input with Cancel / Add. */
+function AddInline({ label, placeholder, onAdd, secondPlaceholder }: { label: string; placeholder: string; onAdd: (text: string, second: string) => void; secondPlaceholder?: string }) {
+    const [open, setOpen] = useState(false);
+    const [text, setText] = useState("");
+    const [second, setSecond] = useState("");
+    const close = () => {
+        setOpen(false);
+        setText("");
+        setSecond("");
+    };
+    const submit = () => {
+        const t = text.trim();
+        if (!t) return;
+        onAdd(t, second.trim());
+        close();
+    };
+    if (!open) {
+        return (
+            <Button type="button" variant="outline" size="sm" className="w-full border-dashed bg-primary/5 text-primary" onClick={() => setOpen(true)}>
+                <IconPlus className="size-4" /> {label}
+            </Button>
+        );
+    }
+    const onKey = (e: React.KeyboardEvent) => {
+        if (e.key === "Enter") {
+            e.preventDefault();
+            submit();
+        }
+        if (e.key === "Escape") close();
+    };
+    return (
+        <div className="space-y-2 rounded-lg border bg-muted/30 p-2.5">
+            <div className="flex gap-2">
+                <Input autoFocus className="h-9 min-w-0 flex-1 bg-background" value={text} placeholder={placeholder} onChange={(e) => setText(e.target.value)} onKeyDown={onKey} />
+                {secondPlaceholder && <Input className="h-9 w-24 shrink-0 bg-background text-center" value={second} placeholder={secondPlaceholder} onChange={(e) => setSecond(e.target.value)} onKeyDown={onKey} />}
+            </div>
+            <div className="flex justify-end gap-2">
+                <Button type="button" variant="outline" size="sm" onClick={close}>Cancel</Button>
+                <Button type="button" size="sm" disabled={!text.trim()} onClick={submit}>Add</Button>
+            </div>
+        </div>
+    );
+}
+
+/** Checkbox list with an inline "add custom" row; used for inclusions, exclusions, responsibilities. */
 function CheckList({
     items,
     onChange,
@@ -211,13 +301,6 @@ function CheckList({
     tone?: "primary" | "danger";
     twoCol?: boolean;
 }) {
-    const [draft, setDraft] = useState("");
-    const add = () => {
-        const text = draft.trim();
-        if (!text) return;
-        onChange([...items, { text, on: true }]);
-        setDraft("");
-    };
     return (
         <div className="space-y-1.5">
             <div className={cn(twoCol ? "grid gap-x-6 gap-y-1.5 sm:grid-cols-2" : "space-y-1.5")}>
@@ -240,23 +323,14 @@ function CheckList({
                 </div>
             ))}
             </div>
-            <div className="flex gap-2 pt-1">
-                <Input
-                    value={draft}
-                    onChange={(e) => setDraft(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), add())}
-                    placeholder={addLabel}
-                    className="h-9"
-                />
-                <Button type="button" variant="outline" size="sm" className="h-9 text-primary" onClick={add}>
-                    <IconPlus className="size-4" /> Add
-                </Button>
+            <div className="pt-1">
+                <AddInline label={addLabel.replace(/…$/, "")} placeholder="Type and press Enter" onAdd={(text) => onChange([...items, { text, on: true }])} />
             </div>
         </div>
     );
 }
 
-/** Plain editable string list (deliverables, milestones etc.). */
+/** Plain editable string list (deliverables, general terms). */
 function TextList({ items, onChange, addLabel }: { items: string[]; onChange: (n: string[]) => void; addLabel: string }) {
     return (
         <div className="space-y-2">
@@ -271,9 +345,7 @@ function TextList({ items, onChange, addLabel }: { items: string[]; onChange: (n
                     </button>
                 </div>
             ))}
-            <Button type="button" variant="outline" size="sm" className="w-full border-dashed text-primary" onClick={() => onChange([...items, ""])}>
-                <IconPlus className="size-4" /> {addLabel}
-            </Button>
+            <AddInline label={addLabel} placeholder="Type and press Enter" onAdd={(text) => onChange([...items, text])} />
         </div>
     );
 }
@@ -292,31 +364,7 @@ function MilestoneList({ items, onChange }: { items: Milestone2[]; onChange: (n:
                     <button type="button" aria-label="Remove" onClick={() => onChange(items.filter((_, j) => j !== i))} className="text-destructive/80 hover:text-destructive"><IconTrash className="size-4" /></button>
                 </div>
             ))}
-            <Button type="button" variant="outline" size="sm" className="w-full border-dashed bg-primary/5 text-primary" onClick={() => onChange([...items, { title: "", duration: "" }])}>
-                <IconPlus className="size-4" /> Add Milestone
-            </Button>
-        </div>
-    );
-}
-
-/** Numbered feature rows with an on/off switch and inline rename (the package's included features). */
-function FeatureToggles({ items, onChange }: { items: CheckItem[]; onChange: (n: CheckItem[]) => void }) {
-    const [editing, setEditing] = useState<number | null>(null);
-    return (
-        <div className="space-y-1">
-            {items.length === 0 && <p className="text-sm text-muted-foreground">Pick a package on the Services step to load its features.</p>}
-            {items.map((it, i) => (
-                <div key={i} className="flex items-center gap-2.5 rounded-md px-1 py-1.5 hover:bg-muted/50">
-                    <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-[11px] font-medium text-muted-foreground">{i + 1}</span>
-                    {editing === i ? (
-                        <Input autoFocus className="h-8 flex-1" value={it.text} onChange={(e) => onChange(items.map((x, j) => (j === i ? { ...x, text: e.target.value } : x)))} onBlur={() => setEditing(null)} onKeyDown={(e) => e.key === "Enter" && setEditing(null)} />
-                    ) : (
-                        <span className={cn("flex-1 text-sm", !it.on && "text-muted-foreground line-through")}>{it.text}</span>
-                    )}
-                    <Switch checked={it.on} onCheckedChange={(v) => onChange(items.map((x, j) => (j === i ? { ...x, on: v } : x)))} aria-label={`Include ${it.text}`} />
-                    <button type="button" aria-label="Edit feature" onClick={() => setEditing(i)} className="text-muted-foreground hover:text-primary"><IconPencil className="size-4" /></button>
-                </div>
-            ))}
+            <AddInline label="Add Milestone" placeholder="Milestone" secondPlaceholder="1 week" onAdd={(title, duration) => onChange([...items, { title, duration }])} />
         </div>
     );
 }
@@ -336,7 +384,6 @@ function totalDuration(items: Milestone2[]): string | null {
     return `${w} ${w === 1 ? "Week" : "Weeks"}`;
 }
 
-const PROJECT_TYPES = ["E-commerce Website", "Corporate Website", "Web Application", "Mobile App", "UI/UX Design", "Digital Marketing", "SEO", "Other"];
 const TAX_OPTIONS = [
     { value: "0", label: "No VAT", sub: "(Price excludes VAT)" },
     { value: "5", label: "VAT 5%", sub: "(Added to total)" },
@@ -447,37 +494,11 @@ export default function QuotationWizard() {
     const [clientMode, setClientMode] = useState<"new" | "existing">("new");
     const [clientName, setClientName] = useState("");
     const [emails, setEmails] = useState<string[]>([""]);
-    const [officeAddress, setOfficeAddress] = useState("");
-    const [description, setDescription] = useState("");
-    const [clientStatus, setClientStatus] = useState<"active" | "inactive">("active");
-    const [telemarketer, setTelemarketer] = useState("");
-    const [assignedServices, setAssignedServices] = useState<string[]>([]);
-    const [teamMembers, setTeamMembers] = useState<{ name: string; email: string; phone: string; designation: string }[]>([]);
-    const [projectType, setProjectType] = useState("E-commerce Website");
-    const [notes, setNotes] = useState("");
     const [creatingClient, setCreatingClient] = useState(false);
     const [createClient] = useCreateClientMutation();
-    const { data: servicesData } = useGetServicesQuery({ isActive: true });
-    const { data: staffsData } = useGetStaffsQuery({ limit: 100 });
-    const serviceOptions = (servicesData?.data ?? []).map((x: { _id: string; name: string }) => ({ value: x._id, label: x.name }));
     const clientOptions = (clientsData?.clients ?? []).map((c: Client) => ({ value: c._id, label: c.name, description: c.emails?.[0] }));
-    const telemarketerOptions = useMemo(() => {
-        /* eslint-disable @typescript-eslint/no-explicit-any */
-        const staffs: any[] = staffsData?.staffs || staffsData?.data || [];
-        const tele = staffs.filter((t) => /telemarketer/i.test(t.designation || t.user?.designation || t.userId?.designation || ""));
-        const list = (tele.length ? tele : staffs).map((t) => {
-            const u = typeof t.userId === "object" ? t.userId : null;
-            return {
-                value: t.user?._id || u?._id || t.userId || t._id,
-                label: t.user?.name || t.name || u?.name || "Unnamed",
-                description: t.user?.email || t.email || u?.email || "",
-            };
-        });
-        /* eslint-enable @typescript-eslint/no-explicit-any */
-        return [{ value: "", label: "Unassigned / None", description: "No telemarketer assigned" }, ...list];
-    }, [staffsData]);
     const [currency, setCurrency] = useState<"BDT" | "USD">("BDT");
-    const [date, setDate] = useState(todayISO());
+    const [date] = useState(todayISO());
     const [validUntil, setValidUntil] = useState(plusDaysISO(30));
     const [taxPct, setTaxPct] = useState(0);
 
@@ -491,28 +512,21 @@ export default function QuotationWizard() {
     const [features, setFeatures] = useState<CheckItem[]>([]);
     const [addonsOn, setAddonsOn] = useState<string[]>([]);
     const [duration, setDuration] = useState("");
-    const [supportPeriod, setSupportPeriod] = useState("");
     const [unit, setUnit] = useState<UnitService>({ qty: 1, rate: 0 });
+    const [stage, setStage] = useState<"service" | "platform" | "package" | "details">("service");
 
     // step 3
     const [overview, setOverview] = useState("");
-    const [scopeText, setScopeText] = useState("");
     const [deliverables, setDeliverables] = useState<string[]>([]);
     const [title, setTitle] = useState("");
     const [timeline, setTimeline] = useState<Milestone2[]>([]);
-    const [assets, setAssets] = useState<CheckItem[]>([]);
-    const [changeNote, setChangeNote] = useState("");
-    const [supportNote, setSupportNote] = useState("");
     const [clientResp, setClientResp] = useState<CheckItem[]>([]);
-    const [exclusions, setExclusions] = useState<string[]>([]);
+    const [exclusions, setExclusions] = useState<CheckItem[]>([]);
 
     // step 4
     const [lines, setLines] = useState<LineItem[]>([{ title: "", description: "", qty: 1, price: 0, discount: 0, billing: "one-time" }]);
-    const [charges, setCharges] = useState<Charge[]>([]);
     const [editing, setEditing] = useState<string | null>("l0");
     const [methods, setMethods] = useState<string[]>(["Bank Transfer", "bKash", "Nagad"]);
-    const [recFee, setRecFee] = useState<{ on: boolean; amount: number; freq: "monthly" | "yearly"; start: string }>({ on: false, amount: 0, freq: "monthly", start: plusDaysISO(30) });
-    const [reminders, setReminders] = useState(true);
     const discountPct = 0; // discounts are per line item now
     const [presetKey, setPresetKey] = useState("50-50");
     const [milestones, setMilestones] = useState<Milestone[]>(withDue(DEFAULT_BLUEPRINT.paymentMilestones));
@@ -520,15 +534,13 @@ export default function QuotationWizard() {
     // step 5
     const [supportDuration, setSupportDuration] = useState("");
     const [incl, setIncl] = useState<BlueprintInclusion[]>([]);
-    const [designMode, setDesignMode] = useState<"" | "template" | "custom">("");
     const [inclusions, setInclusions] = useState<CheckItem[]>([]);
     const [supportExcl, setSupportExcl] = useState<CheckItem[]>([]);
     const [uiRev, setUiRev] = useState(String(DEFAULT_BLUEPRINT.revisions.ui));
     const [devRev, setDevRev] = useState(String(DEFAULT_BLUEPRINT.revisions.dev));
     const [extraRevFee, setExtraRevFee] = useState("0");
     const [devRevFee, setDevRevFee] = useState("0");
-    const [handover, setHandover] = useState<CheckItem[]>([]);
-    const [recurring, setRecurring] = useState({ billing: false, invoice: false, report: false, upgrade: false });
+    const [recurring, setRecurring] = useState({ billing: false, invoice: false, upgrade: false });
     const [grace, setGrace] = useState("");
     const [suspend, setSuspend] = useState("");
     const [cancelNotice, setCancelNotice] = useState("");
@@ -554,7 +566,7 @@ export default function QuotationWizard() {
         touch("milestones");
         setMilestones(v);
     };
-    const hasRecurringLine = lines.some((l) => l.billing !== "one-time") || charges.some((c) => c.type !== "one-time") || recFee.on;
+    const hasRecurringLine = lines.some((l) => l.billing !== "one-time");
 
     // ── selected service → platform → package → add-ons (all from the catalog, by id) ──
     const service = tree.find((x) => x._id === serviceId);
@@ -583,11 +595,9 @@ export default function QuotationWizard() {
                     const note = [l.description.trim(), d ? `${d}% discount applied` : ""].filter(Boolean).join(" · ");
                     return item(l.title.trim(), (Number(l.price) || 0) * (1 - d / 100), note || undefined, Number(l.qty) || 1, l.billing as BillingCycle);
                 }),
-            ...charges.filter((c) => c.name.trim()).map((c) => item(c.name.trim(), Number(c.amount) || 0, c.description.trim() || undefined, 1, c.type as BillingCycle)),
             ...incl
                 .filter((i) => !i.included && Number(i.charge) > 0)
                 .map((i) => item(`${i.label}${i.termMonths ? ` — ${i.termMonths} month${i.termMonths === 1 ? "" : "s"}` : ""}`, Number(i.charge), "Not included in the package", 1, "one-time")),
-            ...(recFee.on && Number(recFee.amount) > 0 ? [item("Recurring Fee", Number(recFee.amount), recFee.start ? `Starts ${recFee.start}` : undefined, 1, recFee.freq as BillingCycle)] : []),
         ];
         const base: IQuotationService = {
             category,
@@ -595,7 +605,6 @@ export default function QuotationWizard() {
             catalogPlatformId: platformId || null,
             catalogPackageId: pkg?._id ?? null,
             catalogFeatureIds: [...features.filter((f) => f.on && f.id).map((f) => f.id as string), ...chosenAddons.map((a) => a._id)],
-            scopeDescription: scopeText.trim() || undefined,
             scopeItems: features.filter((f) => f.on).map((f) => f.text),
             basePrice: 0,
             lineItems: [],
@@ -623,14 +632,10 @@ export default function QuotationWizard() {
         if (s === 0) {
             if (clientMode === "existing" && !clientId) return "Please select a client";
             if (!clientName.trim()) return "Client name is required";
-            if (!snap.companyName.trim()) return "Company name is required";
-            if (!snap.contactName.trim()) return "Contact person is required";
             if (!emails.some((e) => /^\S+@\S+\.\S+$/.test(e.trim()))) return "A valid email address is required";
             if (emails.some((e) => e.trim() && !/^\S+@\S+\.\S+$/.test(e.trim()))) return "One of the email addresses is invalid";
             if (!snap.phone.trim()) return "Phone number is required";
             if (!snap.address.trim()) return "Billing address is required";
-            if (teamMembers.some((m) => !m.name.trim() || !/^\S+@\S+\.\S+$/.test(m.email.trim()))) return "Each team member needs a name and a valid email";
-            if (new Date(validUntil) < new Date(date)) return "Valid-until date cannot be earlier than the quotation date";
         }
         if (s === 1) {
             if (!service) return "Select a service category";
@@ -639,6 +644,7 @@ export default function QuotationWizard() {
         }
         if (s === 3) {
             if (grand <= 0 && recurringMonthly + recurringYearly <= 0) return "Add at least one priced item";
+            if (new Date(validUntil) < new Date(date)) return "Valid-until date cannot be earlier than the quotation date";
             if (msTotal !== 100) return `Payment milestones must total 100% (now ${msTotal}%)`;
         }
         return null;
@@ -656,13 +662,7 @@ export default function QuotationWizard() {
                         emails: emails.map((e) => e.trim()).filter(Boolean),
                         phone: snap.phone.trim(),
                         address: snap.address.trim(),
-                        officeAddress: officeAddress.trim() || undefined,
-                        description: description.trim() || undefined,
                         currency,
-                        status: clientStatus,
-                        teamMembers: teamMembers.map((m) => ({ name: m.name.trim(), email: m.email.trim(), phone: m.phone.trim() || undefined, designation: m.designation.trim() || undefined })),
-                        assignedServices,
-                        assignedTelemarketer: telemarketer || undefined,
                     } as never).unwrap();
                     setClientId(c._id);
                 } catch (err) {
@@ -699,7 +699,6 @@ export default function QuotationWizard() {
 
         // package facts (blank when the catalog does not state them)
         put("duration", () => setDuration(p.duration ?? ""));
-        put("supportPeriod", () => setSupportPeriod(p.supportPeriod ? `${p.supportPeriod} (Free Support)` : ""));
         put("inclusions", () => setInclusions(p.supportInclusions.map((text) => ({ text, on: true }))));
         put("supportExcl", () => setSupportExcl(p.additionalCharges.map((text) => ({ text, on: true }))));
         put("generalTerms", () => setGeneralTerms([...p.notes]));
@@ -714,14 +713,10 @@ export default function QuotationWizard() {
         const t = sec("projectTitle")?.text?.trim();
         put("title", () => setTitle(t ? (company ? `${t} — ${company}` : t) : ""));
         put("overview", () => setOverview(sec("projectOverview")?.text ?? ""));
-        put("scopeText", () => setScopeText(sec("scopeOfWork")?.text ?? ""));
         put("deliverables", () => setDeliverables(titles("deliverables")));
         put("timeline", () => setTimeline((sec("milestones")?.items ?? []).map((i) => ({ title: i.title, duration: unitLabel(i.duration) }))));
         put("clientResp", () => setClientResp(titles("clientResponsibilities").map((text) => ({ text, on: true }))));
-        put("assets", () => setAssets(titles("requiredAssets").map((text) => ({ text, on: false }))));
-        put("exclusions", () => setExclusions(titles("exclusions")));
-        put("changeNote", () => setChangeNote(sec("changeRequestNote")?.text ?? ""));
-        put("supportNote", () => setSupportNote(sec("supportNote")?.text ?? ""));
+        put("exclusions", () => setExclusions(titles("exclusions").map((text) => ({ text, on: true }))));
 
         // blueprint
         const rev = bp.revisions ?? DEFAULT_BLUEPRINT.revisions;
@@ -736,7 +731,6 @@ export default function QuotationWizard() {
         setExtraRate(String(pol?.extraFeatureRate ?? 0));
         setHourlyRate(String(pol?.hourlyRate ?? 0));
         setOwnership(pol?.ownership ?? "");
-        setDesignMode(bp.designMode ?? "");
         put("validUntil", () => pol?.validityDays && setValidUntil(plusDaysISO(pol.validityDays)));
         put("incl", () => setIncl((bp.inclusions ?? []).filter((i) => i.kind !== "support").map((i) => ({ ...i }))));
         const support = (bp.inclusions ?? []).find((i) => i.kind === "support" && i.included && i.termMonths);
@@ -754,6 +748,7 @@ export default function QuotationWizard() {
         const first = defaultPkg((service?.packages ?? []).filter((x) => (x.platformId ?? "") === id));
         if (first) selectPackage(first);
         else { setPkgId(""); setFeatures([]); }
+        setStage("package");
     };
 
     const pickService = (s: CatalogTreeService) => {
@@ -763,6 +758,7 @@ export default function QuotationWizard() {
         const first = defaultPkg(s.packages.filter((x) => (x.platformId ?? "") === firstPlatform));
         if (first) selectPackage(first);
         else { setPkgId(""); setFeatures([]); }
+        setStage(s.platforms.length ? "platform" : "package");
     };
 
     const pickClient = (id: string) => {
@@ -779,6 +775,12 @@ export default function QuotationWizard() {
         });
         setEmails(c.emails?.length ? c.emails : [""]);
         if (c.currency === "USD") setCurrency("USD");
+    };
+
+    /** A new client's name doubles as company + contact name on the document. */
+    const changeName = (v: string) => {
+        setClientName(v);
+        if (clientMode === "new") setSnap((p) => ({ ...p, companyName: v, contactName: v }));
     };
 
     const switchMode = (m: "new" | "existing") => {
@@ -800,15 +802,12 @@ export default function QuotationWizard() {
         const supportLines = [
             ...(supportDuration ? [`Technical support duration: ${supportDuration}`] : []),
             ...(duration ? [`Estimated delivery: ${duration}`] : []),
-            ...(supportPeriod ? [`Support period: ${supportPeriod}`] : []),
             ...inclLines,
             ...inclusions.filter((i) => i.on).map((i) => i.text),
-            ...(supportNote.trim() ? [supportNote.trim()] : []),
         ];
         const recurringBits = [
             recurring.billing && "billing resumes after project completion",
             recurring.invoice && "invoice is sent before each billing cycle",
-            recurring.report && "monthly performance report included",
             recurring.upgrade && "plan upgrade/downgrade allowed anytime",
             grace && `grace period ${grace} days`,
             suspend && `services suspended after ${suspend} days of non-payment`,
@@ -833,15 +832,10 @@ export default function QuotationWizard() {
                     ? msg("Ownership", ownershipCustom)
                     : "",
             hasRecurringLine && recurringBits.length ? `Recurring services: ${recurringBits.join("; ")}.` : "",
-            ...handover.filter((h) => h.on).map((h) => `Handover condition: ${h.text}`),
             ...(methods.length ? [`Accepted payment methods: ${methods.join(", ")}.`] : []),
             ...(milestones[0] ? [`Advance payment: ${milestones[0].percentage}% to start the project.`] : []),
-            ...(reminders ? ["Automatic payment reminders are sent before each due date."] : []),
-            ...(changeNote.trim() ? [`Change requests: ${changeNote.trim()}`] : []),
             ...generalTerms.filter((t) => t.trim()),
         ].filter(Boolean);
-
-        const overviewFull = [overview.trim(), notes.trim()].filter(Boolean).join("\n\n");
 
         return {
             serviceType: (category ?? "web-development") as QuotationCategory,
@@ -849,11 +843,11 @@ export default function QuotationWizard() {
             currency,
             company: COMPANY,
             client: { ...snap, email: emails.find((e) => e.trim())?.trim() ?? "" },
-            details: { title: title.trim() || `${projectType} — ${snap.companyName.trim() || clientName.trim()}`, date: new Date(date).toISOString(), validUntil: new Date(validUntil).toISOString() },
-            overview: overviewFull,
+            details: { title: title.trim() || `${svcLabel || "Quotation"} — ${snap.companyName.trim() || clientName.trim()}`, date: new Date(date).toISOString(), validUntil: new Date(validUntil).toISOString() },
+            overview: overview.trim(),
             services: builtServices,
-            notIncluded: [...exclusions.filter((e) => e.trim()), ...supportExcl.filter((s) => s.on).map((s) => s.text)],
-            clientRequirements: [...clientResp.filter((c) => c.on).map((c) => c.text), ...assets.filter((a) => a.on).map((a) => `Required from client: ${a.text}`)],
+            notIncluded: [...exclusions.filter((e) => e.on && e.text.trim()).map((e) => e.text), ...supportExcl.filter((s) => s.on).map((s) => s.text)],
+            clientRequirements: clientResp.filter((c) => c.on).map((c) => c.text),
             includedSupport: supportLines,
             // domain / hosting terms — renewal timers start from the order date
             inclusions: incl
@@ -1002,15 +996,9 @@ export default function QuotationWizard() {
                 </Field>
             )}
 
-            <div className="grid gap-x-5 gap-y-4 md:grid-cols-2 xl:grid-cols-3">
+            <div className="grid gap-x-5 gap-y-4 md:grid-cols-2">
                 <Field label="Client Name" required>
-                    <Input className="h-10" placeholder="e.g. ABC Fashion Ltd." value={clientName} onChange={(e) => setClientName(e.target.value)} />
-                </Field>
-                <Field label="Company Name" required>
-                    <Input className="h-10" placeholder="Company name" value={snap.companyName} onChange={(e) => setSnap({ ...snap, companyName: e.target.value })} />
-                </Field>
-                <Field label="Contact Person" required>
-                    <Input className="h-10" placeholder="e.g. John Doe" value={snap.contactName} onChange={(e) => setSnap({ ...snap, contactName: e.target.value })} />
+                    <Input className="h-10" placeholder="e.g. ABC Fashion Ltd." value={clientName} disabled={clientMode === "existing"} onChange={(e) => changeName(e.target.value)} />
                 </Field>
 
                 <div className="space-y-2">
@@ -1042,260 +1030,207 @@ export default function QuotationWizard() {
                     </Select>
                 </Field>
 
-                <Field label="Billing Address" required>
+                <Field label="Billing Address" required className="md:col-span-2">
                     <Textarea rows={3} className="resize-none" placeholder="House, road, area, city, postal code" value={snap.address} onChange={(e) => setSnap({ ...snap, address: e.target.value })} />
-                </Field>
-                {clientMode === "new" && (
-                    <Field label="Office Address">
-                        <Textarea rows={3} className="resize-none" placeholder="Suite, building, business park" value={officeAddress} onChange={(e) => setOfficeAddress(e.target.value)} />
-                    </Field>
-                )}
-                {clientMode === "new" && (
-                    <Field label="Status">
-                        <Select value={clientStatus} onValueChange={(v) => setClientStatus(v as "active" | "inactive")}>
-                            <SelectTrigger className="h-10 w-full"><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="active">Active</SelectItem>
-                                <SelectItem value="inactive">Inactive</SelectItem>
-                            </SelectContent>
-                        </Select>
-                    </Field>
-                )}
-
-                {clientMode === "new" && (
-                    <>
-                        <Field label="Assigned Services" className="md:col-span-2">
-                            <MultiSelect options={serviceOptions} selected={assignedServices} onChange={setAssignedServices} placeholder="Select services…" />
-                        </Field>
-                        <Field label="Telemarketer">
-                            <Combobox
-                                options={telemarketerOptions}
-                                value={telemarketer}
-                                onChange={setTelemarketer}
-                                placeholder="Hand over to a telemarketer…"
-                                searchPlaceholder="Search by name or email…"
-                                emptyText="No telemarketer found"
-                                className="h-10"
-                            />
-                        </Field>
-                        <Field label="Client Description" className="md:col-span-2 xl:col-span-3">
-                            <Textarea rows={2} className="resize-none" placeholder="Notes about this client" value={description} onChange={(e) => setDescription(e.target.value)} />
-                        </Field>
-                    </>
-                )}
-
-                <Field label="Project Type" required>
-                    <Select value={projectType} onValueChange={setProjectType}>
-                        <SelectTrigger className="h-10 w-full"><SelectValue /></SelectTrigger>
-                        <SelectContent>{PROJECT_TYPES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
-                    </Select>
-                </Field>
-                <Field label="Tax / VAT Option">
-                    <Select value={String(taxPct)} onValueChange={(v) => setTaxPct(Number(v))}>
-                        <SelectTrigger className="h-10 w-full"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                            {TAX_OPTIONS.map((t) => (
-                                <SelectItem key={t.value} value={t.value}>{t.label} <span className="text-muted-foreground">{t.sub}</span></SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                </Field>
-                <div className="hidden xl:block" />
-                <Field label="Quotation Date" required>
-                    <DatePicker value={date} onChange={setDate} />
-                </Field>
-                <Field label="Valid Until" required>
-                    <DatePicker value={validUntil} onChange={edit("validUntil", setValidUntil)} min={date} />
-                </Field>
-
-                {clientMode === "new" && (
-                    <div className="space-y-3 md:col-span-2 xl:col-span-3">
-                        <div className="flex items-center justify-between">
-                            <Label className="text-xs font-medium">Team Members</Label>
-                            <Button type="button" variant="outline" size="sm" onClick={() => setTeamMembers([...teamMembers, { name: "", email: "", phone: "", designation: "" }])}>
-                                <IconPlus className="size-3.5" /> Add member
-                            </Button>
-                        </div>
-                        {teamMembers.map((m, i) => (
-                            <div key={i} className="grid gap-2 rounded-lg border p-3 md:grid-cols-[1fr_1fr_1fr_1fr_auto]">
-                                {(["name", "email", "phone", "designation"] as const).map((k) => (
-                                    <Input
-                                        key={k}
-                                        className="h-10"
-                                        type={k === "email" ? "email" : "text"}
-                                        placeholder={k === "name" ? "Name *" : k === "email" ? "Email *" : k === "phone" ? "Phone" : "Designation"}
-                                        value={m[k]}
-                                        onChange={(e) => setTeamMembers(teamMembers.map((x, j) => (j === i ? { ...x, [k]: e.target.value } : x)))}
-                                    />
-                                ))}
-                                <Button type="button" variant="outline" size="icon" className="size-10" aria-label="Remove member" onClick={() => setTeamMembers(teamMembers.filter((_, j) => j !== i))}>
-                                    <IconTrash className="size-4" />
-                                </Button>
-                            </div>
-                        ))}
-                    </div>
-                )}
-
-                <Field label="Additional Notes (Optional)" className="md:col-span-2 xl:col-span-3">
-                    <Textarea rows={2} maxLength={500} className="resize-none" placeholder="Add any additional information about the client, project or special requirements…" value={notes} onChange={(e) => setNotes(e.target.value)} />
-                    <p className="text-right text-[11px] text-muted-foreground">{notes.length}/500</p>
                 </Field>
             </div>
         </section>
     );
 
+    const hasPlatforms = (service?.platforms.length ?? 0) > 0;
+    const showPackages = !!service && (!hasPlatforms || !!platformId);
+    const pkgStageNo = hasPlatforms ? 3 : 2;
+    const goDetails = () => {
+        setStage("details");
+        requestAnimationFrame(() => document.getElementById("sec-features")?.scrollIntoView({ behavior: "smooth" }));
+    };
     const servicesStep = (
-        <>
-                <div className={cn("min-w-0 space-y-4 xl:col-start-1", !pkg && "xl:col-span-2")}>
-                    <Panel plain icon={IconListCheck} title="1. Select Service Category" hint="Choose the service you want to include in this quotation.">
-                        {catalogLoading && <p className="text-sm text-muted-foreground">Loading services…</p>}
-                        {!catalogLoading && tree.length === 0 && (
-                            <p className="text-sm text-muted-foreground">
-                                No services in the catalog yet. Add them from <Link href="/catalog" className="text-primary underline">Service Catalog</Link>.
-                            </p>
-                        )}
-                        <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-4">
-                            {tree.map((s) => {
-                                const Icon = catalogIcon(s.icon);
-                                const on = serviceId === s._id;
-                                return (
-                                    <button
-                                        key={s._id}
-                                        type="button"
-                                        onClick={() => pickService(s)}
-                                        className={cn(
-                                            "relative flex flex-col items-start gap-1.5 rounded-xl border p-3 text-left transition hover:border-primary/50",
-                                            on && "border-primary bg-primary/5 ring-1 ring-primary",
-                                        )}
-                                    >
-                                        {on && (
-                                            <span className="absolute right-2 top-2 flex size-5 items-center justify-center rounded-full bg-primary text-primary-foreground">
-                                                <IconCheck className="size-3.5" />
-                                            </span>
-                                        )}
-                                        <Icon className={cn("size-7", on ? "text-primary" : "text-foreground/80")} />
-                                        <span className={cn("text-sm font-semibold leading-tight", on && "text-primary")}>{s.name}</span>
-                                        <span className="text-[11px] leading-snug text-muted-foreground">{s.description}</span>
-                                    </button>
-                                );
-                            })}
-                        </div>
-                    </Panel>
-
-                    {service && service.platforms.length > 0 && (
-                        <Panel plain icon={IconCode} title="2. Select Platform / Technology" hint="Choose the technology stack for your project.">
-                            <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-4">
-                                {service.platforms.map((p) => {
-                                    const on = platformId === p._id;
-                                    return (
-                                        <button
-                                            key={p._id}
-                                            type="button"
-                                            onClick={() => pickPlatform(p._id)}
-                                            className={cn(
-                                                "relative flex flex-col items-start gap-2 rounded-xl border p-3 text-left transition hover:border-primary/50",
-                                                on && "border-primary bg-primary/5 ring-1 ring-primary",
-                                            )}
-                                        >
-                                            <span className={cn("absolute right-2 top-2 flex size-4 items-center justify-center rounded-full border", on ? "border-primary bg-primary text-primary-foreground" : "border-muted-foreground/40")}>
-                                                {on && <IconCheck className="size-3" />}
-                                            </span>
-                                            <span className="flex h-8 items-center gap-1.5">
-                                                {p.logo ? (
-                                                    <>
-                                                        <BrandLogo name={p.logo} color={p.color} />
-                                                        {p.logoSecondary && <BrandLogo name={p.logoSecondary} color="#5FA04E" />}
-                                                    </>
-                                                ) : (
-                                                    <IconCode className="size-7" />
-                                                )}
-                                            </span>
-                                            <span className="text-sm font-semibold leading-tight">{p.name}</span>
-                                            <span className="text-[11px] leading-snug text-muted-foreground">{p.description}</span>
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                        </Panel>
-                    )}
-
-                    {service && pkgs.length > 0 && (
-                        <Panel plain icon={IconListCheck} title={`${service.platforms.length > 0 ? "3" : "2"}. Select Package`} hint={isUnit ? "Choose what you are quoting, then set quantity and rate." : "Choose a package or go with custom build."}>
-                            <div className={cn("grid gap-3", pkgs.length > 2 ? "sm:grid-cols-2 2xl:grid-cols-3" : "sm:grid-cols-2")}>
-                                {pkgs.map((p) => {
-                                    const on = pkgId === p._id;
-                                    return (
-                                        <button
-                                            key={p._id}
-                                            type="button"
-                                            onClick={() => selectPackage(p)}
-                                            className={cn(
-                                                "relative flex flex-col items-start gap-1.5 rounded-xl border p-3.5 text-left transition hover:border-primary/50",
-                                                on && "border-primary bg-primary/5 ring-1 ring-primary",
-                                            )}
-                                        >
-                                            <span className="flex w-full items-center justify-between gap-2">
-                                                <span className="flex flex-wrap items-center gap-2 text-sm font-semibold">
-                                                    {p.name}
-                                                    {p.badge && (
-                                                        <span className="flex items-center gap-1 rounded bg-primary px-1.5 py-0.5 text-[10px] font-semibold text-primary-foreground">
-                                                            <IconStarFilled className="size-2.5" /> {p.badge}
-                                                        </span>
-                                                    )}
-                                                </span>
-                                                <span className={cn("flex size-4 shrink-0 items-center justify-center rounded-full border", on ? "border-primary bg-primary text-primary-foreground" : "border-muted-foreground/40")}>
-                                                    {on && <IconCheck className="size-3" />}
-                                                </span>
-                                            </span>
-                                            <span className="text-[11px] leading-snug text-muted-foreground">{p.description}</span>
-                                            <span className="text-xl font-bold">{priceText(p, cur)}</span>
-                                            <ul className="space-y-1 text-[11px]">
-                                                {p.bullets.map((b) => (
-                                                    <li key={b} className="flex items-start gap-1.5">
-                                                        <IconCheck className="mt-0.5 size-3 shrink-0 text-primary" /> {b}
-                                                    </li>
-                                                ))}
-                                            </ul>
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                            {pkg && isUnit && (
-                                <div className="mt-4 grid gap-4 md:grid-cols-2">
-                                    <Field label={`Quantity (${pkg.unitLabel || "units"})`}>
-                                        <Input type="number" min={1} value={unit.qty} onChange={(e) => setUnit({ ...unit, qty: Number(e.target.value) || 1 })} />
-                                    </Field>
-                                    <Field label={`Rate per ${pkg.unitLabel || "unit"} (${cur})`}>
-                                        <Input type="number" min={0} value={unit.rate} onChange={(e) => setUnit({ ...unit, rate: Number(e.target.value) || 0 })} />
-                                        {pkg.priceMax ? <p className="text-[11px] text-muted-foreground">Standard range {money(pkg.price ?? 0, cur)} – {money(pkg.priceMax, cur)}; final rate depends on scope.</p> : null}
-                                    </Field>
-                                </div>
-                            )}
-                            {pkg && !isUnit && pkg.price === null && (
-                                <div className="mt-3 max-w-[260px]">
-                                    <Field label={`Custom price (${cur})`}>
-                                        <Input type="number" min={0} value={customPrice} onChange={(e) => setCustomPrice(Number(e.target.value) || 0)} />
-                                    </Field>
-                                </div>
-                            )}
-                        </Panel>
-                    )}
-                    {service && pkgs.length === 0 && (
-                        <Panel plain icon={IconInfoCircle} title="Packages" hint="No packages defined for this selection.">
-                            <p className="text-sm text-muted-foreground">
-                                Add packages in <Link href="/catalog" className="text-primary underline">Service Catalog</Link>, or price this service with line items on the Pricing step.
-                            </p>
-                        </Panel>
-                    )}
+        <div className="min-w-0 space-y-4">
+            <StageCard
+                n={1}
+                title="Select Service Category"
+                hint="Choose the service you want to include in this quotation."
+                open={stage === "service"}
+                done={!!service}
+                onOpen={() => setStage("service")}
+                summary={service ? <span className="font-medium text-foreground">{service.name}</span> : null}
+            >
+                {catalogLoading && <p className="text-sm text-muted-foreground">Loading services…</p>}
+                {!catalogLoading && tree.length === 0 && (
+                    <p className="text-sm text-muted-foreground">
+                        No services in the catalog yet. Add them from <Link href="/catalog" className="text-primary underline">Service Catalog</Link>.
+                    </p>
+                )}
+                <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-4">
+                    {tree.map((s) => {
+                        const Icon = catalogIcon(s.icon);
+                        const on = serviceId === s._id;
+                        return (
+                            <button
+                                key={s._id}
+                                type="button"
+                                onClick={() => pickService(s)}
+                                className={cn(
+                                    "relative flex flex-col items-start gap-1.5 rounded-xl border p-3 text-left transition hover:border-primary/50",
+                                    on && "border-primary bg-primary/5 ring-1 ring-primary",
+                                )}
+                            >
+                                {on && (
+                                    <span className="absolute right-2 top-2 flex size-5 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                                        <IconCheck className="size-3.5" />
+                                    </span>
+                                )}
+                                <Icon className={cn("size-7", on ? "text-primary" : "text-foreground/80")} />
+                                <span className={cn("text-sm font-semibold leading-tight", on && "text-primary")}>{s.name}</span>
+                                <span className="text-[11px] leading-snug text-muted-foreground">{s.description}</span>
+                            </button>
+                        );
+                    })}
                 </div>
+            </StageCard>
 
-                {service && pkg && (
-                    <div className="min-w-0 space-y-4 xl:col-start-2">
+            {service && hasPlatforms && (
+                <StageCard
+                    n={2}
+                    title="Select Platform / Technology"
+                    hint="Choose the technology stack for your project."
+                    open={stage === "platform"}
+                    done={!!platformId}
+                    onOpen={() => setStage("platform")}
+                    summary={<span className="font-medium text-foreground">{platform}</span>}
+                >
+                    <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-4">
+                        {service.platforms.map((p) => {
+                            const on = platformId === p._id;
+                            return (
+                                <button
+                                    key={p._id}
+                                    type="button"
+                                    onClick={() => pickPlatform(p._id)}
+                                    className={cn(
+                                        "relative flex flex-col items-start gap-2 rounded-xl border p-3 text-left transition hover:border-primary/50",
+                                        on && "border-primary bg-primary/5 ring-1 ring-primary",
+                                    )}
+                                >
+                                    <span className={cn("absolute right-2 top-2 flex size-4 items-center justify-center rounded-full border", on ? "border-primary bg-primary text-primary-foreground" : "border-muted-foreground/40")}>
+                                        {on && <IconCheck className="size-3" />}
+                                    </span>
+                                    <span className="flex h-8 items-center gap-1.5">
+                                        {p.logo ? (
+                                            <>
+                                                <BrandLogo name={p.logo} color={p.color} />
+                                                {p.logoSecondary && <BrandLogo name={p.logoSecondary} color="#5FA04E" />}
+                                            </>
+                                        ) : (
+                                            <IconCode className="size-7" />
+                                        )}
+                                    </span>
+                                    <span className="text-sm font-semibold leading-tight">{p.name}</span>
+                                    <span className="text-[11px] leading-snug text-muted-foreground">{p.description}</span>
+                                </button>
+                            );
+                        })}
+                    </div>
+                </StageCard>
+            )}
+
+            {showPackages && pkgs.length > 0 && (
+                <StageCard
+                    n={pkgStageNo}
+                    title="Select Package"
+                    hint={isUnit ? "Choose what you are quoting, then set quantity and rate." : "Choose a package or go with custom build."}
+                    open={stage === "package"}
+                    done={!!pkg}
+                    onOpen={() => setStage("package")}
+                    summary={pkg ? <span><span className="font-medium text-foreground">{pkg.name}</span> · {priceText(pkg, cur)}</span> : null}
+                    footer={
+                        <Button type="button" disabled={!pkg} onClick={goDetails}>
+                            Continue to features <IconArrowRight className="size-4" />
+                        </Button>
+                    }
+                >
+                    <div className={cn("grid gap-3", pkgs.length > 2 ? "sm:grid-cols-2 2xl:grid-cols-3" : "sm:grid-cols-2")}>
+                        {pkgs.map((p) => {
+                            const on = pkgId === p._id;
+                            return (
+                                <button
+                                    key={p._id}
+                                    type="button"
+                                    onClick={() => selectPackage(p)}
+                                    className={cn(
+                                        "relative flex flex-col items-start gap-1.5 rounded-xl border p-3.5 text-left transition hover:border-primary/50",
+                                        on && "border-primary bg-primary/5 ring-1 ring-primary",
+                                    )}
+                                >
+                                    <span className="flex w-full items-center justify-between gap-2">
+                                        <span className="flex flex-wrap items-center gap-2 text-sm font-semibold">
+                                            {p.name}
+                                            {p.badge && (
+                                                <span className="flex items-center gap-1 rounded bg-primary px-1.5 py-0.5 text-[10px] font-semibold text-primary-foreground">
+                                                    <IconStarFilled className="size-2.5" /> {p.badge}
+                                                </span>
+                                            )}
+                                        </span>
+                                        <span className={cn("flex size-4 shrink-0 items-center justify-center rounded-full border", on ? "border-primary bg-primary text-primary-foreground" : "border-muted-foreground/40")}>
+                                            {on && <IconCheck className="size-3" />}
+                                        </span>
+                                    </span>
+                                    <span className="text-[11px] leading-snug text-muted-foreground">{p.description}</span>
+                                    <span className="text-xl font-bold">{priceText(p, cur)}</span>
+                                    <ul className="space-y-1 text-[11px]">
+                                        {p.bullets.map((b) => (
+                                            <li key={b} className="flex items-start gap-1.5">
+                                                <IconCheck className="mt-0.5 size-3 shrink-0 text-primary" /> {b}
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </button>
+                            );
+                        })}
+                    </div>
+                    {pkg && isUnit && (
+                        <div className="mt-4 grid gap-4 md:grid-cols-2">
+                            <Field label={`Quantity (${pkg.unitLabel || "units"})`}>
+                                <Input type="number" min={1} value={unit.qty} onChange={(e) => setUnit({ ...unit, qty: Number(e.target.value) || 1 })} />
+                            </Field>
+                            <Field label={`Rate per ${pkg.unitLabel || "unit"} (${cur})`}>
+                                <Input type="number" min={0} value={unit.rate} onChange={(e) => setUnit({ ...unit, rate: Number(e.target.value) || 0 })} />
+                                {pkg.priceMax ? <p className="text-[11px] text-muted-foreground">Standard range {money(pkg.price ?? 0, cur)} – {money(pkg.priceMax, cur)}; final rate depends on scope.</p> : null}
+                            </Field>
+                        </div>
+                    )}
+                    {pkg && !isUnit && pkg.price === null && (
+                        <div className="mt-3 max-w-[260px]">
+                            <Field label={`Custom price (${cur})`}>
+                                <Input type="number" min={0} value={customPrice} onChange={(e) => setCustomPrice(Number(e.target.value) || 0)} />
+                            </Field>
+                        </div>
+                    )}
+                </StageCard>
+            )}
+            {showPackages && pkgs.length === 0 && (
+                <Panel plain icon={IconInfoCircle} title="Packages" hint="No packages defined for this selection.">
+                    <p className="text-sm text-muted-foreground">
+                        Add packages in <Link href="/catalog" className="text-primary underline">Service Catalog</Link>, or price this service with line items on the Pricing step.
+                    </p>
+                </Panel>
+            )}
+
+            {service && pkg && (
+                <StageCard
+                    n={pkgStageNo + 1}
+                    title="Features & Add-ons"
+                    hint="Edit the included features and pick optional add-ons."
+                    open={stage === "details"}
+                    done
+                    onOpen={goDetails}
+                    summary={<span>{features.filter((f) => f.on).length} features · {chosenAddons.length} add-ons</span>}
+                >
+                    <div className={cn("grid items-start gap-4", addonList.length > 0 && "lg:grid-cols-2")}>
                         <Panel
-                            plain
                             id="sec-features"
                             icon={IconSettings}
-                            title={`${service.platforms.length > 0 ? "4" : "3"}. Included Features`}
+                            title="Included Features"
                             hint="Edit, add or remove features for this quotation."
                             right={
                                 <Button type="button" variant="outline" size="sm" className="h-7 text-primary" onClick={() => selectPackage(pkg, true)}>
@@ -1306,7 +1241,7 @@ export default function QuotationWizard() {
                             <FeatureEditor items={features} onChange={edit("features", setFeatures)} />
                         </Panel>
                         {addonList.length > 0 && (
-                            <Panel plain fixed="h-[22rem]" id="sec-addons" icon={IconPlus} title={`${service.platforms.length > 0 ? "5" : "4"}. Optional Add-on Features`} hint="Add features to enhance the package.">
+                            <Panel fixed="h-[28rem]" id="sec-addons" icon={IconPlus} title="Optional Add-on Features" hint="Add features to enhance the package.">
                                 <ul className="divide-y">
                                     {addonList.map((a) => (
                                         <li key={a._id}>
@@ -1316,7 +1251,6 @@ export default function QuotationWizard() {
                                                     onCheckedChange={(v) => setAddonsOn(v ? [...addonsOn, a._id] : addonsOn.filter((n) => n !== a._id))}
                                                 />
                                                 <span className="flex-1">{a.name}</span>
-                                                <IconInfoCircle className="size-4 text-muted-foreground" />
                                                 <span className="w-20 text-right font-medium">{money(a.price, cur)}</span>
                                             </label>
                                         </li>
@@ -1325,8 +1259,9 @@ export default function QuotationWizard() {
                             </Panel>
                         )}
                     </div>
-                )}
-        </>
+                </StageCard>
+            )}
+        </div>
     );
 
     const durTotal = totalDuration(timeline);
@@ -1334,25 +1269,10 @@ export default function QuotationWizard() {
     const scopeText3 = {
         deliverables: flow === "retainer" ? ["Monthly Deliverables", "What is delivered every month."] : flow === "production" ? ["Deliverables per Item", "What the client receives for each product / video."] : ["Deliverables", "List the key deliverables for this project."],
         milestones: flow === "production" ? ["Production Workflow", "How the work moves from brief to delivery."] : ["Project Milestones & Timeline", "Define major milestones and estimated timeline."],
-        assets: flow === "production" ? ["Client Brief & Inputs", "What we need from the client to quote and produce."] : ["Required Assets from Client", "List the assets, access and information required from client."],
         exclusions: flow === "retainer" ? ["Not Included", "Clearly mention what is not included."] : ["Exclusions", "Clearly mention what is not included in this quotation."],
     };
-    const scopeHidden: string[] = flow === "retainer" ? ["milestones", "supportNote"] : flow === "production" ? ["supportNote"] : [];
-    const noteBox = (value: string, set: (v: string) => void, k: string, ph: string) => (
-        <>
-            <Textarea rows={8} maxLength={1000} className="resize-none" value={value} onChange={(e) => { touch(k); set(e.target.value); }} placeholder={ph} />
-            <p className="mt-1 text-right text-[11px] text-muted-foreground">{value.length}/1000</p>
-        </>
-    );
+    const scopeHidden: string[] = flow === "retainer" ? ["milestones"] : [];
     const scopeBlocks: { key: string; node: React.ReactNode }[] = [
-        {
-            key: "deliverables",
-            node: (
-                <Panel fixed={SCOPE_H} icon={IconBox} title={scopeText3.deliverables[0]} hint={scopeText3.deliverables[1]}>
-                    <TextList items={deliverables} onChange={edit("deliverables", setDeliverables)} addLabel="Add Deliverable" />
-                </Panel>
-            ),
-        },
         {
             key: "milestones",
             node: (
@@ -1371,20 +1291,6 @@ export default function QuotationWizard() {
             ),
         },
         {
-            key: "features",
-            node: (
-                <Panel
-                    fixed={SCOPE_H}
-                    icon={IconListCheck}
-                    title="Included Features"
-                    hint="Core features included in this package."
-                    right={pkg ? <Button type="button" variant="outline" size="sm" className="h-7 text-primary" onClick={() => selectPackage(pkg, true)}>Reset to Default</Button> : undefined}
-                >
-                    <FeatureToggles items={features} onChange={edit("features", setFeatures)} />
-                </Panel>
-            ),
-        },
-        {
             key: "clientResp",
             node: (
                 <Panel fixed={SCOPE_H} icon={IconUser} title="Client Responsibilities" hint="What we expect from the client during the project.">
@@ -1393,57 +1299,10 @@ export default function QuotationWizard() {
             ),
         },
         {
-            key: "assets",
-            node: (
-                <Panel fixed={SCOPE_H} icon={IconFolder} title={scopeText3.assets[0]} hint={scopeText3.assets[1]}>
-                    <CheckList items={assets} onChange={edit("assets", setAssets)} addLabel="Add required asset…" />
-                </Panel>
-            ),
-        },
-        {
-            key: "addons",
-            node: (
-                <Panel fixed={SCOPE_H} icon={IconPlus} title="Add-on Deliverables (Optional)" hint="Additional features or services that can be added.">
-                    {addonList.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">No add-ons for this package yet. Add them in the catalog.</p>
-                    ) : (
-                        <ul className="divide-y">
-                            {addonList.map((a) => (
-                                <li key={a._id}>
-                                    <label className="flex cursor-pointer items-center gap-3 py-2 text-sm">
-                                        <Checkbox checked={addonsOn.includes(a._id)} onCheckedChange={(v) => setAddonsOn(v ? [...addonsOn, a._id] : addonsOn.filter((n) => n !== a._id))} />
-                                        <span className="flex-1">{a.name}</span>
-                                        <span className="w-20 text-right font-medium">{money(a.price, cur)}</span>
-                                    </label>
-                                </li>
-                            ))}
-                        </ul>
-                    )}
-                </Panel>
-            ),
-        },
-        {
             key: "exclusions",
             node: (
                 <Panel fixed={SCOPE_H} icon={IconX} title={scopeText3.exclusions[0]} hint={scopeText3.exclusions[1]}>
-                    <Textarea rows={8} maxLength={1000} className="resize-none" value={exclusions.join("\n")} onChange={(e) => { touch("exclusions"); setExclusions(e.target.value.split("\n")); }} placeholder="One item per line" />
-                    <p className="mt-1 text-right text-[11px] text-muted-foreground">{exclusions.join("\n").length}/1000</p>
-                </Panel>
-            ),
-        },
-        {
-            key: "changeNote",
-            node: (
-                <Panel fixed={SCOPE_H} icon={IconAlertTriangle} title="Change Request Notes" hint="Define how change requests will be handled.">
-                    {noteBox(changeNote, setChangeNote, "changeNote", "Any changes to the agreed scope after project initiation…")}
-                </Panel>
-            ),
-        },
-        {
-            key: "supportNote",
-            node: (
-                <Panel fixed={SCOPE_H} icon={IconTools} title="Support & Maintenance Notes" hint="Include support and post-launch details.">
-                    {noteBox(supportNote, setSupportNote, "supportNote", "What post-launch support and maintenance covers…")}
+                    <CheckList items={exclusions} onChange={edit("exclusions", setExclusions)} addLabel="Add exclusion…" tone="danger" />
                 </Panel>
             ),
         },
@@ -1456,7 +1315,7 @@ export default function QuotationWizard() {
                     <Panel fixed={SCOPE_H} icon={IconFileText} title="Project Overview" hint="Provide a brief overview of the project and its objectives.">
                         <div className="space-y-3">
                             <Field label="Project Title" required>
-                                <Input value={title} onChange={(e) => { touch("title"); setTitle(e.target.value); }} placeholder={`${projectType} — ${snap.companyName || clientName || "Client"}`} />
+                                <Input value={title} onChange={(e) => { touch("title"); setTitle(e.target.value); }} placeholder={`${svcLabel || "Quotation"} — ${snap.companyName || clientName || "Client"}`} />
                             </Field>
                             <Field label="Project Overview" required>
                                 <Textarea rows={6} maxLength={1000} className="resize-none" value={overview} onChange={(e) => { touch("overview"); setOverview(e.target.value); }} placeholder="Describe the project…" />
@@ -1464,8 +1323,8 @@ export default function QuotationWizard() {
                             </Field>
                         </div>
                     </Panel>
-                    <Panel fixed={SCOPE_H} icon={IconFileText} title="Scope of Work" hint="Define the overall scope of work for this project.">
-                        {noteBox(scopeText, setScopeText, "scopeText", "The scope includes…")}
+                    <Panel fixed={SCOPE_H} icon={IconBox} title={scopeText3.deliverables[0]} hint={scopeText3.deliverables[1]}>
+                        <TextList items={deliverables} onChange={edit("deliverables", setDeliverables)} addLabel="Add Deliverable" />
                     </Panel>
                 </div>
                 <Panel plain icon={IconFileText} title="Quotation Summary" right={<button type="button" onClick={() => go(0)} className="text-xs font-medium text-primary hover:underline">Edit client</button>}>
@@ -1498,16 +1357,14 @@ export default function QuotationWizard() {
     );
 
     const setLine = (i: number, patch: Partial<LineItem>) => setLines(lines.map((l, j) => (j === i ? { ...l, ...patch } : l)));
-    const setCharge = (i: number, patch: Partial<Charge>) => setCharges(charges.map((c, j) => (j === i ? { ...c, ...patch } : c)));
     const fmtDate = (v?: string) => (v ? (parseISO(v) as Date).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "—");
     const DISCOUNTS = [0, 5, 10, 15, 20, 25, 30, 40, 50];
     const pkgRows = [
-        ...(pkg ? [isUnit ? { title: pkg.name, desc: pkg.description ?? "", price: Number(unit.rate) || 0, qty: unit.qty } : { title: `${svcLabel} (${pkg.name})`, desc: pkg.description ?? "", price: pkgPrice, qty: 1 }] : []),
-        ...chosenAddons.map((a) => ({ title: a.name, desc: "Optional add-on", price: a.price, qty: 1 })),
+        ...(pkg ? [isUnit ? { title: pkg.name, desc: pkg.description ?? "", price: Number(unit.rate) || 0, qty: unit.qty, cycle: pkg.billingCycle as string } : { title: `${svcLabel} (${pkg.name})`, desc: pkg.description ?? "", price: pkgPrice, qty: 1, cycle: pkg.billingCycle as string }] : []),
+        ...chosenAddons.map((a) => ({ title: a.name, desc: "Optional add-on", price: a.price, qty: 1, cycle: "one-time" as string })),
     ];
     const lineAmt = (l: LineItem) => (Number(l.price) || 0) * (Number(l.qty) || 1) * (1 - Math.min(100, Math.max(0, Number(l.discount) || 0)) / 100);
     const itemsSubtotal = pkgRows.reduce((a, r) => a + r.price * r.qty, 0) + lines.reduce((a, l) => a + (l.billing === "one-time" ? lineAmt(l) : 0), 0);
-    const chargesTotal = charges.filter((c) => c.type === "one-time").reduce((a, c) => a + (Number(c.amount) || 0), 0);
     const validDays = Math.max(0, Math.round(((parseISO(validUntil)?.getTime() ?? 0) - (parseISO(date)?.getTime() ?? 0)) / 86400000));
     const recYearEq = recurringMonthly * 12 + recurringYearly;
     const thCls = "border-b bg-muted/50 px-2 py-2 text-left text-xs font-semibold";
@@ -1526,24 +1383,25 @@ export default function QuotationWizard() {
                 hint="Configure your service pricing, quantities, discounts and additional charges."
                 right={
                     <div className="grid grid-cols-2 gap-3">
-                        <Field label="Currency">
-                            <Select value={currency} onValueChange={(v) => setCurrency(v as "BDT" | "USD")}>
-                                <SelectTrigger className="h-9 w-full"><SelectValue /></SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="BDT">BDT (৳)</SelectItem>
-                                    <SelectItem value="USD">USD ($)</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </Field>
                         <Field label="Validity Period">
                             <DatePicker value={validUntil} onChange={edit("validUntil", setValidUntil)} min={date} className="h-9" />
                             <p className="text-[11px] text-muted-foreground">Valid for {validDays} days.</p>
+                        </Field>
+                        <Field label="Tax / VAT">
+                            <Select value={String(taxPct)} onValueChange={(v) => setTaxPct(Number(v))}>
+                                <SelectTrigger className="h-9 w-full"><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                    {TAX_OPTIONS.map((t) => (
+                                        <SelectItem key={t.value} value={t.value}>{t.label} <span className="text-muted-foreground">{t.sub}</span></SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
                         </Field>
                     </div>
                 }
             >
                 <div className="overflow-x-auto rounded-lg border">
-                    <table className="w-full min-w-[780px] text-sm">
+                    <table className="w-full min-w-[900px] text-sm">
                         <thead>
                             <tr>
                                 <th className={cn(thCls, "w-10")}>#</th>
@@ -1552,6 +1410,7 @@ export default function QuotationWizard() {
                                 <th className={cn(thCls, "w-20")}>Qty</th>
                                 <th className={cn(thCls, "w-32")}>Unit Price ({cur})</th>
                                 <th className={cn(thCls, "w-24")}>Discount</th>
+                                <th className={cn(thCls, "w-28")}>Billing</th>
                                 <th className={cn(thCls, "w-28 text-right")}>Amount ({cur})</th>
                                 <th className={cn(thCls, "w-20 text-center")}>Actions</th>
                             </tr>
@@ -1565,6 +1424,7 @@ export default function QuotationWizard() {
                                     <td className="px-2 py-2">{r.qty}</td>
                                     <td className="px-2 py-2">{r.price.toLocaleString("en-US")}</td>
                                     <td className="px-2 py-2 text-muted-foreground">—</td>
+                                    <td className="px-2 py-2 text-xs text-muted-foreground">{r.cycle === "one-time" ? "One-time" : r.cycle.replace("per-", "")}</td>
                                     <td className="px-2 py-2 text-right font-medium">{(r.price * r.qty).toLocaleString("en-US")}</td>
                                     <td className="px-2 py-2 text-center">
                                         <button type="button" aria-label="Edit on Services step" onClick={() => go(1)} className="text-muted-foreground hover:text-primary"><IconPencil className="size-4" /></button>
@@ -1587,6 +1447,16 @@ export default function QuotationWizard() {
                                                 <SelectContent>{DISCOUNTS.map((d) => <SelectItem key={d} value={String(d)}>{d}%</SelectItem>)}</SelectContent>
                                             </Select>
                                         </td>
+                                        <td className="px-2 py-2">
+                                            <Select value={l.billing} onValueChange={(v) => setLine(i, { billing: v as LineItem["billing"] })}>
+                                                <SelectTrigger className="h-9 w-24"><SelectValue /></SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="one-time">One-time</SelectItem>
+                                                    <SelectItem value="monthly">Monthly</SelectItem>
+                                                    <SelectItem value="yearly">Yearly</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </td>
                                         <td className="px-2 py-2 text-right font-medium">{Math.round(lineAmt(l)).toLocaleString("en-US")}</td>
                                         <td className="px-2 py-2">
                                             <div className="flex items-center justify-center gap-2">
@@ -1603,59 +1473,6 @@ export default function QuotationWizard() {
                 <Button type="button" variant="outline" size="sm" className="mt-3 w-full border-dashed bg-primary/5 text-primary" onClick={() => { setLines([...lines, { title: "", description: "", qty: 1, price: 0, discount: 0, billing: "one-time" }]); setEditing(`l${lines.length}`); }}>
                     <IconPlus className="size-4" /> Add Another Item
                 </Button>
-            </Panel>
-
-            <Panel
-                icon={IconSettings}
-                title="Additional Charges (Optional)"
-                hint="Add any additional charges such as domain, hosting, or third-party services."
-                right={<Button type="button" variant="outline" size="sm" className="text-primary" onClick={() => { setCharges([...charges, { name: "", description: "", amount: 0, type: "one-time" }]); setEditing(`c${charges.length}`); }}><IconPlus className="size-4" /> Add Charge</Button>}
-            >
-                <div className="overflow-x-auto rounded-lg border">
-                    <table className="w-full min-w-[640px] text-sm">
-                        <thead>
-                            <tr>
-                                <th className={cn(thCls, "w-10")}>#</th>
-                                <th className={thCls}>Charge Name</th>
-                                <th className={thCls}>Description</th>
-                                <th className={cn(thCls, "w-36")}>Amount ({cur})</th>
-                                <th className={cn(thCls, "w-32")}>Type</th>
-                                <th className={cn(thCls, "w-20 text-center")}>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {charges.length === 0 && <tr><td colSpan={6} className="px-3 py-4 text-center text-xs text-muted-foreground">No additional charges.</td></tr>}
-                            {charges.map((c, i) => {
-                                const key = `c${i}`;
-                                const ed = editing === key;
-                                return (
-                                    <tr key={key} className="border-b align-middle last:border-0">
-                                        <td className="px-2 py-2 text-muted-foreground">{i + 1}</td>
-                                        <td className="px-2 py-2">{ed ? <Input className="h-9" value={c.name} onChange={(e) => setCharge(i, { name: e.target.value })} placeholder="Charge name" /> : <span className="font-medium">{c.name || "—"}</span>}</td>
-                                        <td className="px-2 py-2">{ed ? <Input className="h-9" value={c.description} onChange={(e) => setCharge(i, { description: e.target.value })} placeholder="Description" /> : <span className="text-xs text-muted-foreground">{c.description}</span>}</td>
-                                        <td className="px-2 py-2"><Input className="h-9 w-32" type="number" min={0} value={c.amount} onChange={(e) => setCharge(i, { amount: Number(e.target.value) || 0 })} /></td>
-                                        <td className="px-2 py-2">
-                                            <Select value={c.type} onValueChange={(v) => setCharge(i, { type: v as Charge["type"] })}>
-                                                <SelectTrigger className="h-9 w-28"><SelectValue /></SelectTrigger>
-                                                <SelectContent>
-                                                    <SelectItem value="one-time">One-time</SelectItem>
-                                                    <SelectItem value="monthly">Monthly</SelectItem>
-                                                    <SelectItem value="yearly">Yearly</SelectItem>
-                                                </SelectContent>
-                                            </Select>
-                                        </td>
-                                        <td className="px-2 py-2">
-                                            <div className="flex items-center justify-center gap-2">
-                                                <button type="button" aria-label="Edit charge" onClick={() => setEditing(ed ? null : key)} className="text-muted-foreground hover:text-primary"><IconPencil className="size-4" /></button>
-                                                <button type="button" aria-label="Remove charge" onClick={() => setCharges(charges.filter((_, j) => j !== i))} className="text-destructive/80 hover:text-destructive"><IconTrash className="size-4" /></button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                );
-                            })}
-                        </tbody>
-                    </table>
-                </div>
             </Panel>
 
             <Panel
@@ -1752,37 +1569,6 @@ export default function QuotationWizard() {
                                 <Input className="h-9 w-28 bg-muted/50" readOnly value={Math.round((grand * (milestones[0]?.percentage ?? 0)) / 100).toLocaleString("en-US")} />
                             </div>
                         </div>
-                        <div className="grid grid-cols-[1fr_auto] items-center gap-3">
-                            <Label className="text-xs">Recurring Fee (Optional)</Label>
-                            <Switch checked={recFee.on} onCheckedChange={(v) => setRecFee({ ...recFee, on: v })} />
-                        </div>
-                        {recFee.on && (
-                            <div className="grid grid-cols-2 gap-2">
-                                <Input className="h-9" type="number" min={0} placeholder="Amount" value={recFee.amount} onChange={(e) => setRecFee({ ...recFee, amount: Number(e.target.value) || 0 })} />
-                                <Select value={recFee.freq} onValueChange={(v) => setRecFee({ ...recFee, freq: v as "monthly" | "yearly" })}>
-                                    <SelectTrigger className="h-9 w-full"><SelectValue /></SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="monthly">Monthly</SelectItem>
-                                        <SelectItem value="yearly">Yearly</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                                <div className="col-span-2"><DatePicker className="h-9" value={recFee.start} onChange={(v) => setRecFee({ ...recFee, start: v })} /></div>
-                            </div>
-                        )}
-                        <div className="grid grid-cols-[1fr_auto] items-center gap-3">
-                            <Label className="text-xs">Grace Period</Label>
-                            <div className="flex items-center gap-2">
-                                <Input className="h-9 w-20" type="number" min={0} value={grace} onChange={(e) => setGrace(e.target.value)} />
-                                <span className="text-xs text-muted-foreground">days</span>
-                            </div>
-                        </div>
-                        <div className="grid grid-cols-[1fr_auto] items-center gap-3">
-                            <div>
-                                <Label className="text-xs">Automatic Reminders</Label>
-                                <p className="text-[11px] text-muted-foreground">Send payment reminders automatically.</p>
-                            </div>
-                            <Switch checked={reminders} onCheckedChange={setReminders} />
-                        </div>
                     </div>
                 </div>
             </Panel>
@@ -1794,7 +1580,6 @@ export default function QuotationWizard() {
             <Panel icon={IconFileText} title="Quotation Summary" hint="A detailed breakdown of costs and payment information.">
                 <dl className="space-y-2 text-sm">
                     <Row k="Subtotal (Items)" v={money(itemsSubtotal, cur)} />
-                    <Row k="Additional Charges" v={money(chargesTotal, cur)} />
                     <div className="flex justify-between border-t pt-2 font-semibold"><dt>Subtotal</dt><dd>{money(calc.totals.subtotal, cur)}</dd></div>
                     <Row k={`VAT / Tax (${taxPct}%)`} v={money(calc.totals.taxAmount, cur)} />
                 </dl>
@@ -1890,21 +1675,26 @@ export default function QuotationWizard() {
     const supportOpts = ["1 Month", "3 Months", "6 Months", "12 Months", "24 Months"];
     const termsBlocks: { key: string; span?: boolean; node: React.ReactNode }[] = [
         {
-            key: "supportDuration",
+            key: "support",
             node: (
-                <Panel fixed={TERMS_H} icon={IconSettings} title="Technical Support Duration" hint="How long the client receives technical support after delivery.">
+                <Panel fixed={TERMS_H} icon={IconSettings} title="Support & Delivery" hint="Delivery estimate and free technical support after delivery.">
                     <div className="space-y-3">
-                        <Field label="Support Duration">
-                            <Select value={supportDuration} onValueChange={setSupportDuration}>
-                                <SelectTrigger className="h-10 w-full"><SelectValue placeholder="Not set" /></SelectTrigger>
-                                <SelectContent>
-                                    {(supportDuration && !supportOpts.includes(supportDuration) ? [...supportOpts, supportDuration] : supportOpts).map((o) => (
-                                        <SelectItem key={o} value={o}>{o}</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
+                        <Field label="Estimated Delivery">
+                            <Input className="h-10" value={duration} placeholder="e.g. 4–6 weeks" onChange={(e) => { touch("duration"); setDuration(e.target.value); }} />
                         </Field>
-                        {supportDuration && (
+                        {flow === "project" && (
+                            <Field label="Support Duration">
+                                <Select value={supportDuration} onValueChange={setSupportDuration}>
+                                    <SelectTrigger className="h-10 w-full"><SelectValue placeholder="Not set" /></SelectTrigger>
+                                    <SelectContent>
+                                        {(supportDuration && !supportOpts.includes(supportDuration) ? [...supportOpts, supportDuration] : supportOpts).map((o) => (
+                                            <SelectItem key={o} value={o}>{o}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </Field>
+                        )}
+                        {flow === "project" && supportDuration && (
                             <div className="flex items-center gap-3 rounded-lg bg-primary/10 px-4 py-2.5">
                                 <IconCrown className="size-6 shrink-0 text-primary" />
                                 <div>
@@ -1982,44 +1772,20 @@ export default function QuotationWizard() {
         { key: "uiRev", node: rev("UI/UX Revisions", "Number of design revisions included in this package.", uiRev, setUiRev, optsWith(uiRev, ["1", "2", "3", "5", "10"]), extraRevFee, setExtraRevFee, IconPencil) },
         { key: "devRev", node: rev("Development Revisions", "Number of development revisions included after delivery.", devRev, setDevRev, optsWith(devRev, ["1", "3", "5", "10"]), devRevFee, setDevRevFee, IconCode) },
         {
-            key: "handover",
-            node: (
-                <Panel fixed={TERMS_H} icon={IconFolder} title="Project Handover Conditions" hint="The project is complete and handed over once these are met.">
-                    <CheckList items={handover} onChange={edit("handover", setHandover)} addLabel="Add condition…" />
-                </Panel>
-            ),
-        },
-        {
             key: "recurring",
             node: (
-                <Panel fixed={TERMS_H} icon={IconReceipt} title="Recurring Service Rules" hint="Applicable for recurring services (e.g., maintenance, SEO, hosting).">
+                <Panel fixed={TERMS_H} icon={IconReceipt} title="Recurring Service Policy" hint="Applicable for recurring services (e.g., maintenance, SEO, hosting).">
                     <div className="space-y-3">
                         {toggle("Enable recurring billing after project completion", "billing")}
                         {toggle("Send automated invoice before each billing cycle", "invoice")}
-                        {toggle("Include monthly performance report", "report")}
                         {toggle("Allow service plan upgrade/downgrade anytime", "upgrade")}
                     </div>
-                </Panel>
-            ),
-        },
-        {
-            key: "suspension",
-            node: (
-                <Panel fixed={TERMS_H} icon={IconClock} title="Suspension & Grace Policy" hint="Define policy for non-payment of recurring invoices.">
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="mt-4 grid grid-cols-2 gap-3">
                         <Field label="Grace Period">{sel(grace, setGrace, optsWith(grace, ["3", "7", "10", "15"]), " Days")}</Field>
                         <Field label="Suspension After">{sel(suspend, setSuspend, optsWith(suspend, ["7", "15", "30"]), " Days")}</Field>
+                        <Field label="Cancellation Notice" className="col-span-2">{sel(cancelNotice, setCancelNotice, optsWith(cancelNotice, ["7", "15", "30", "60"]), " Days' Notice")}</Field>
                     </div>
                     {info("If payment is not received within the grace period, services will be temporarily suspended after the specified period.")}
-                </Panel>
-            ),
-        },
-        {
-            key: "cancellation",
-            node: (
-                <Panel fixed={TERMS_H} icon={IconX} title="Cancellation Policy" hint="Notice required to cancel recurring services.">
-                    {sel(cancelNotice, setCancelNotice, optsWith(cancelNotice, ["7", "15", "30", "60"]), " Days' Notice")}
-                    {cancelNotice && info(`Client must provide at least ${cancelNotice} days' written notice for cancellation of recurring services.`)}
                 </Panel>
             ),
         },
@@ -2074,12 +1840,12 @@ export default function QuotationWizard() {
     ].filter((b) => {
         const hide: string[] =
             flow === "retainer"
-                ? ["supportDuration", "inclusions", "domainHosting", "exclusions", "handover"]
+                ? ["inclusions", "domainHosting", "exclusions"]
                 : flow === "production"
-                  ? ["supportDuration", "inclusions", "domainHosting", "handover", "recurring", "suspension", "cancellation"]
+                  ? ["inclusions", "domainHosting", "recurring"]
                   : [];
         if (hide.includes(b.key)) return false;
-        if (["recurring", "suspension", "cancellation"].includes(b.key)) return showRecurring;
+        if (b.key === "recurring") return showRecurring;
         return true;
     });
 
@@ -2127,7 +1893,7 @@ export default function QuotationWizard() {
     const ready = checklist.every(([, ok]) => ok);
     const baseTotal = isUnit ? (Number(unit.rate) || 0) * unit.qty : pkgPrice;
     const addonTotal = chosenAddons.reduce((a, x) => a + x.price, 0);
-    const otherTotal = Math.max(0, itemsSubtotal + chargesTotal - baseTotal - addonTotal);
+    const otherTotal = Math.max(0, itemsSubtotal - baseTotal - addonTotal);
     const primaryEmail = emails.find((e) => e.trim()) ?? "";
     const cardCls = "rounded-xl border p-4";
     const docInput = docNow();
@@ -2317,11 +2083,11 @@ export default function QuotationWizard() {
 
             <Stepper step={step} maxStep={maxStep} onGo={go} />
 
-            <div className={cn("grid items-start gap-5", step !== 5 && step !== 0 && step !== 2 && (step === 1 ? "xl:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_330px]" : "xl:grid-cols-[minmax(0,1fr)_300px]"))}>
-                <div className={cn("min-w-0", step === 1 && "contents")}>{bodies[step]}</div>
+            <div className={cn("grid items-start gap-5", step !== 5 && step !== 0 && step !== 2 && (step === 1 ? "xl:grid-cols-[minmax(0,1fr)_340px]" : "xl:grid-cols-[minmax(0,1fr)_300px]"))}>
+                <div className="min-w-0">{bodies[step]}</div>
 
                 {step === 1 && (
-                    <aside className="min-w-0 space-y-4 xl:sticky xl:top-4 xl:col-start-3 xl:row-start-1">
+                    <aside className="min-w-0 space-y-4 xl:sticky xl:top-4">
                         <Panel plain icon={IconFileText} title="Package Summary" right={pkg ? <span className="rounded bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">{pkg.name}</span> : undefined}>
                             {service ? (
                                 <div className="space-y-4 text-sm">
@@ -2345,14 +2111,13 @@ export default function QuotationWizard() {
                                             </div>
                                         )}
                                         {pkg && <Row k="Selected Package" v={pkg.name} />}
-                                        {designMode && <Row k="Design" v={designMode === "template" ? "Template-based" : "Custom UI/UX"} />}
                                         {pkg && <Row k="Base Package Price" v={money(isUnit ? (Number(unit.rate) || 0) * unit.qty : pkgPrice, cur)} />}
                                     </dl>
                                     {features.length > 0 && (
                                         <div className="border-t pt-3">
                                             <div className="mb-2 flex items-center justify-between">
                                                 <p className="text-xs font-semibold">Included Features ({features.filter((f) => f.on).length})</p>
-                                                <Button type="button" variant="outline" size="sm" className="h-6 px-2 text-[11px] text-primary" onClick={() => document.getElementById("sec-features")?.scrollIntoView({ behavior: "smooth" })}>Edit</Button>
+                                                <Button type="button" variant="outline" size="sm" className="h-6 px-2 text-[11px] text-primary" onClick={goDetails}>Edit</Button>
                                             </div>
                                             <ul className="space-y-1.5 text-xs">
                                                 {features.filter((f) => f.on).slice(0, 5).map((f) => (
@@ -2366,7 +2131,7 @@ export default function QuotationWizard() {
                                         <div className="border-t pt-3">
                                             <div className="mb-2 flex items-center justify-between">
                                                 <p className="text-xs font-semibold">Add-on Features ({chosenAddons.length})</p>
-                                                <Button type="button" variant="outline" size="sm" className="h-6 px-2 text-[11px] text-primary" onClick={() => document.getElementById("sec-addons")?.scrollIntoView({ behavior: "smooth" })}>Edit</Button>
+                                                <Button type="button" variant="outline" size="sm" className="h-6 px-2 text-[11px] text-primary" onClick={goDetails}>Edit</Button>
                                             </div>
                                             <ul className="space-y-1.5 text-xs">
                                                 {chosenAddons.map((a) => (
@@ -2383,16 +2148,6 @@ export default function QuotationWizard() {
                                     <div className="flex items-center justify-between rounded-lg bg-primary/10 px-3 py-3">
                                         <span className="text-xs font-semibold text-primary">Total Amount ({cur})</span>
                                         <span className="text-xl font-bold text-primary">{money(grand, cur)}</span>
-                                    </div>
-                                    <div className="space-y-2 border-t pt-3">
-                                        <div className="flex items-center justify-between gap-3">
-                                            <Label className="text-xs font-semibold">Package Duration</Label>
-                                            <Input className="h-8 w-40 text-xs" value={duration} onChange={(e) => setDuration(e.target.value)} />
-                                        </div>
-                                        <div className="flex items-center justify-between gap-3">
-                                            <Label className="text-xs font-semibold">Support Period</Label>
-                                            <Input className="h-8 w-40 text-xs" value={supportPeriod} onChange={(e) => setSupportPeriod(e.target.value)} />
-                                        </div>
                                     </div>
                                 </div>
                             ) : (
@@ -2460,7 +2215,7 @@ export default function QuotationWizard() {
             <QuotationEmailDialog
                 open={pickerOpen}
                 clientId={clientId}
-                quotationLabel={`${savedNo || "Quotation"} • ${title.trim() || projectType}`}
+                quotationLabel={`${savedNo || "Quotation"} • ${title.trim() || svcLabel}`}
                 extraEmails={emails.filter((e) => e.trim())}
                 onClose={() => {
                     if (sending) return;
@@ -2483,56 +2238,42 @@ function Row({ k, v }: { k: string; v: string }) {
     );
 }
 
-/** Feature checklist with per-row edit / delete and an "Add Custom Feature" row. */
+/** Feature checklist with per-row edit / delete and an inline "Add Custom Feature" (Cancel / Add). */
 function FeatureEditor({ items, onChange }: { items: CheckItem[]; onChange: (n: CheckItem[]) => void }) {
     const [editing, setEditing] = useState<number | null>(null);
-    const [adding, setAdding] = useState(false);
-    const [draft, setDraft] = useState("");
-    const commit = () => {
-        const text = draft.trim();
-        if (text) onChange([...items, { text, on: true }]);
-        setDraft("");
-        setAdding(false);
-    };
     return (
-        <ScrollArea className="h-[26rem] pr-3">
-        <div className="space-y-1">
-            {items.map((it, i) => (
-                <div key={i}>
-                {it.group && it.group !== items[i - 1]?.group && (
-                    <p className="px-1 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground first:pt-0">{it.group}</p>
-                )}
-                <div className="flex items-center gap-2.5 rounded-md px-1 py-1.5 hover:bg-muted/50">
-                    <IconGripVertical className="size-4 shrink-0 text-muted-foreground/60" />
-                    <Checkbox checked={it.on} onCheckedChange={(v) => onChange(items.map((x, j) => (j === i ? { ...x, on: !!v } : x)))} />
-                    {editing === i ? (
-                        <Input
-                            autoFocus
-                            className="h-8 flex-1"
-                            value={it.text}
-                            onChange={(e) => onChange(items.map((x, j) => (j === i ? { ...x, text: e.target.value } : x)))}
-                            onBlur={() => setEditing(null)}
-                            onKeyDown={(e) => e.key === "Enter" && setEditing(null)}
-                        />
-                    ) : (
-                        <span className={cn("flex-1 text-sm", !it.on && "text-muted-foreground line-through")}>{it.text}</span>
-                    )}
-                    <button type="button" aria-label="Edit feature" onClick={() => setEditing(i)} className="text-muted-foreground hover:text-primary"><IconPencil className="size-4" /></button>
-                    <button type="button" aria-label="Remove feature" onClick={() => onChange(items.filter((_, j) => j !== i))} className="text-destructive/80 hover:text-destructive"><IconTrash className="size-4" /></button>
+        // the p-1 inside the -mx-1 viewport leaves room for focus rings, so they are never clipped
+        <ScrollArea className="-mx-1 h-[26rem]">
+            <div className="space-y-1 p-1 pr-4">
+                {items.map((it, i) => (
+                    <div key={i}>
+                        {it.group && it.group !== items[i - 1]?.group && (
+                            <p className="px-1 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground first:pt-0">{it.group}</p>
+                        )}
+                        <div className="flex items-center gap-2.5 rounded-md px-1 py-1.5 hover:bg-muted/50">
+                            <IconGripVertical className="size-4 shrink-0 text-muted-foreground/60" />
+                            <Checkbox checked={it.on} onCheckedChange={(v) => onChange(items.map((x, j) => (j === i ? { ...x, on: !!v } : x)))} />
+                            {editing === i ? (
+                                <Input
+                                    autoFocus
+                                    className="h-8 flex-1"
+                                    value={it.text}
+                                    onChange={(e) => onChange(items.map((x, j) => (j === i ? { ...x, text: e.target.value } : x)))}
+                                    onBlur={() => setEditing(null)}
+                                    onKeyDown={(e) => (e.key === "Enter" || e.key === "Escape") && setEditing(null)}
+                                />
+                            ) : (
+                                <span className={cn("flex-1 text-sm", !it.on && "text-muted-foreground line-through")}>{it.text}</span>
+                            )}
+                            <button type="button" aria-label="Edit feature" onClick={() => setEditing(i)} className="text-muted-foreground hover:text-primary"><IconPencil className="size-4" /></button>
+                            <button type="button" aria-label="Remove feature" onClick={() => onChange(items.filter((_, j) => j !== i))} className="text-destructive/80 hover:text-destructive"><IconTrash className="size-4" /></button>
+                        </div>
+                    </div>
+                ))}
+                <div className="pt-2">
+                    <AddInline label="Add Custom Feature" placeholder="Feature name…" onAdd={(text) => onChange([...items, { text, on: true }])} />
                 </div>
-                </div>
-            ))}
-            {adding ? (
-                <div className="flex gap-2 pt-2">
-                    <Input autoFocus className="h-9" value={draft} placeholder="Feature name…" onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => e.key === "Enter" && commit()} />
-                    <Button type="button" size="sm" className="h-9" onClick={commit}>Add</Button>
-                </div>
-            ) : (
-                <Button type="button" variant="outline" size="sm" className="mt-2 w-full bg-primary/5 text-primary" onClick={() => setAdding(true)}>
-                    <IconPlus className="size-4" /> Add Custom Feature
-                </Button>
-            )}
-        </div>
+            </div>
         </ScrollArea>
     );
 }
