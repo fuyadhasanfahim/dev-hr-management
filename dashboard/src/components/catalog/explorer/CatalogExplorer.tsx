@@ -20,6 +20,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
@@ -62,11 +63,11 @@ import type {
 } from '@/types/catalog.type';
 import { EntityFormDialog, IdChecklist, type Form } from '../EntityFormDialog';
 import { SECTION_META, unitLabel } from '../canvas/section-meta';
+import { BlueprintEditor } from '../BlueprintEditor';
+import type { Blueprint } from '@/lib/quotation-blueprint';
 
 // ───────────────────────────── helpers ─────────────────────────────
 
-/** The quotation wizard only reads these content blocks, so they are the only ones the explorer shows. */
-const CONTENT_KINDS: CatalogSectionKind[] = ['projectTitle', 'projectOverview', 'deliverables', 'milestones', 'clientResponsibilities', 'exclusions'];
 
 const errMsg = (e: unknown) => (e as { data?: { message?: string } })?.data?.message || 'Something went wrong';
 const bySort = <T extends { sortOrder: number; name?: string }>(a: T, b: T) => a.sortOrder - b.sortOrder || (a.name ?? '').localeCompare(b.name ?? '');
@@ -424,15 +425,206 @@ function SectionCard({ graph, service, pkg, kind, canManage }: { graph: CatalogG
     );
 }
 
-function ContentTab({ graph, service, pkg, canManage }: { graph: CatalogGraph; service: CatalogService; pkg: CatalogPackage | null; canManage: boolean }) {
+/** Package facts + the lists the wizard's Terms step is pre-filled from. */
+function PackageFacts({ pkg, canManage }: { pkg: CatalogPackage; canManage: boolean }) {
+    const act = useActions();
+    const [duration, setDuration] = useState(pkg.duration ?? '');
+    const [support, setSupport] = useState(pkg.supportPeriod ?? '');
+    const dirty = duration !== (pkg.duration ?? '') || support !== (pkg.supportPeriod ?? '');
     return (
-        <div className="grid gap-4 lg:grid-cols-2">
-            {CONTENT_KINDS.map((k) => (
-                <div key={k} className={cn('min-w-0', SECTION_META[k].type === 'text' && 'lg:col-span-1')}>
-                    <SectionCard graph={graph} service={service} pkg={pkg} kind={k} canManage={canManage} />
+        <Card className="gap-3 py-4 shadow-xs">
+            <CardHeader className="px-4 md:px-5">
+                <CardTitle className="text-sm">Delivery & support period</CardTitle>
+                <CardDescription className="text-xs">Fills Estimated Delivery and the free support duration in the quotation.</CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-3 px-4 sm:grid-cols-2 md:px-5">
+                <div className="space-y-1.5">
+                    <p className="text-xs font-medium">Estimated delivery</p>
+                    <Input disabled={!canManage} value={duration} placeholder="e.g. 4–6 weeks" onChange={(e) => setDuration(e.target.value)} />
                 </div>
+                <div className="space-y-1.5">
+                    <p className="text-xs font-medium">Free support period</p>
+                    <Input disabled={!canManage} value={support} placeholder="e.g. 6 Months" onChange={(e) => setSupport(e.target.value)} />
+                </div>
+                {canManage && (
+                    <div className="flex justify-end sm:col-span-2">
+                        <Button type="button" size="sm" disabled={!dirty} onClick={() => void act.run(() => act.patch('packages', pkg._id, { duration: duration.trim(), supportPeriod: support.trim() }), 'Saved')}>Save</Button>
+                    </div>
+                )}
+            </CardContent>
+        </Card>
+    );
+}
+
+function PkgStringList({ pkg, field, title, hint, canManage }: { pkg: CatalogPackage; field: 'supportInclusions' | 'additionalCharges' | 'notes'; title: string; hint: string; canManage: boolean }) {
+    const act = useActions();
+    const items = pkg[field] ?? [];
+    const [edit, setEdit] = useState<{ i: number; text: string } | null>(null);
+    const save = (next: string[]) => act.run(() => act.patch('packages', pkg._id, { [field]: next }));
+    const move = (i: number, d: -1 | 1) => {
+        const j = i + d;
+        if (j < 0 || j >= items.length) return;
+        const next = [...items];
+        [next[i], next[j]] = [next[j]!, next[i]!];
+        void save(next);
+    };
+    const saveEdit = async () => {
+        if (!edit) return;
+        if (edit.text.trim()) await save(items.map((t, i) => (i === edit.i ? edit.text.trim() : t)));
+        setEdit(null);
+    };
+    const noun = title.toLowerCase();
+    return (
+        <Card className="gap-3 py-4 shadow-xs">
+            <CardHeader className="px-4 md:px-5">
+                <CardTitle className="text-sm">{title}</CardTitle>
+                <CardDescription className="text-xs">{hint}</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2 px-4 md:px-5">
+                <div className="space-y-0.5">
+                    {items.map((t, i) => (
+                        <div key={`${i}-${t}`} className="flex items-center gap-2 rounded-md px-1 py-1 hover:bg-muted/50">
+                            <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-[11px] font-medium text-muted-foreground">{i + 1}</span>
+                            {edit?.i === i ? (
+                                <>
+                                    <Input autoFocus className="h-8 min-w-0 flex-1" value={edit.text} onChange={(e) => setEdit({ i, text: e.target.value })} onKeyDown={(e) => (e.key === 'Enter' ? void saveEdit() : e.key === 'Escape' && setEdit(null))} />
+                                    <IconBtn label="Save" onClick={() => void saveEdit()} className="text-primary"><IconCheck className="size-4" /></IconBtn>
+                                    <IconBtn label="Cancel" onClick={() => setEdit(null)}><IconX className="size-4" /></IconBtn>
+                                </>
+                            ) : (
+                                <>
+                                    <span className="min-w-0 flex-1 break-words text-sm">{t}</span>
+                                    {canManage && (
+                                        <div className="flex shrink-0 items-center">
+                                            <IconBtn label="Move up" disabled={i === 0} onClick={() => move(i, -1)}><IconArrowUp className="size-4" /></IconBtn>
+                                            <IconBtn label="Move down" disabled={i === items.length - 1} onClick={() => move(i, 1)}><IconArrowDown className="size-4" /></IconBtn>
+                                            <IconBtn label="Edit" className="hover:text-primary" onClick={() => setEdit({ i, text: t })}><IconPencil className="size-4" /></IconBtn>
+                                            <IconBtn label="Delete" className="text-destructive/80 hover:text-destructive" onClick={() => void save(items.filter((_, j) => j !== i))}><IconTrash className="size-4" /></IconBtn>
+                                        </div>
+                                    )}
+                                </>
+                            )}
+                        </div>
+                    ))}
+                    {items.length === 0 && <p className="py-1 text-sm text-muted-foreground">Nothing added yet.</p>}
+                </div>
+                {canManage && (
+                    <div className="flex items-start gap-2 pt-1">
+                        <div className="min-w-0 flex-1"><AddInline label={`Add ${noun}`} placeholder="Type a title and press Enter" onAdd={(t) => void save([...items, t])} /></div>
+                        <BulkButton noun={noun} prompt={listPrompt(noun)} placeholder={'["First item", "Second item"]'} parse={parseLines} onImport={(list) => void save([...items, ...freshOnly(items, list)])} />
+                    </div>
+                )}
+            </CardContent>
+        </Card>
+    );
+}
+
+/** Blueprint (inclusions, revisions, payment milestones, policies) with an explicit Save instead of saving per keystroke. */
+function BlueprintTab({ entity, id, value, scope, canManage }: { entity: 'services' | 'packages'; id: string; value: Blueprint | null | undefined; scope: 'service' | 'package'; canManage: boolean }) {
+    const act = useActions();
+    const [v, setV] = useState<Blueprint | null>(value ?? null);
+    const dirty = JSON.stringify(v ?? null) !== JSON.stringify(value ?? null);
+    return (
+        <Card className="gap-3 py-4 shadow-xs">
+            <CardHeader className="px-4 md:px-5">
+                <CardTitle className="text-sm">Quotation blueprint</CardTitle>
+                <CardDescription className="text-xs">Domain / hosting inclusions, revisions, payment milestones and policies the wizard starts with.</CardDescription>
+                {canManage && (
+                    <CardAction>
+                        <Button type="button" size="sm" disabled={!dirty} onClick={() => void act.run(() => act.patch(entity, id, { blueprint: v }), 'Blueprint saved')}>Save</Button>
+                    </CardAction>
+                )}
+            </CardHeader>
+            <CardContent className="px-4 md:px-5">
+                <fieldset disabled={!canManage} className="min-w-0 border-0 p-0"><BlueprintEditor value={v} onChange={setV} scope={scope} /></fieldset>
+            </CardContent>
+        </Card>
+    );
+}
+
+const SECTION_TABS: { value: string; label: string; kinds: CatalogSectionKind[] }[] = [
+    { value: 'project', label: 'Project', kinds: ['projectTitle', 'projectOverview'] },
+    { value: 'deliverables', label: 'Deliverables', kinds: ['deliverables'] },
+    { value: 'timeline', label: 'Milestones & timeline', kinds: ['milestones'] },
+    { value: 'responsibilities', label: 'Client responsibilities', kinds: ['clientResponsibilities'] },
+    { value: 'exclusions', label: 'Exclusions', kinds: ['exclusions'] },
+];
+
+/** Every block of the selection on its own tab. A dot on a tab means it has content (own or inherited). */
+function DetailTabs({ graph, service, pkg, canManage, packagesView }: { graph: CatalogGraph; service: CatalogService; pkg: CatalogPackage | null; canManage: boolean; packagesView?: React.ReactNode }) {
+    const hasContent = (kinds: CatalogSectionKind[]) =>
+        kinds.some((k) =>
+            filled(
+                graph.sections.find((s) => s.serviceId === service._id && s.kind === k && pkgKey(s) === (pkg?._id ?? '')) ??
+                    (pkg ? graph.sections.find((s) => s.serviceId === service._id && s.kind === k && !s.packageId) : undefined),
+            ),
+        );
+    const Dot = ({ on }: { on: boolean }) => (on ? <span className="ml-1.5 inline-block size-1.5 rounded-full bg-primary" /> : null);
+    const count = (n: number) => <span className="ml-1.5 text-xs text-muted-foreground">{n}</span>;
+    return (
+        <Tabs defaultValue={pkg ? 'features' : 'packages'} key={pkg?._id ?? service._id}>
+            <TabsList className="h-auto flex-wrap justify-start">
+                {pkg ? (
+                    <>
+                        <TabsTrigger value="features">Features{count(pkg.featureIds.length)}</TabsTrigger>
+                        <TabsTrigger value="addons">Add-ons{count(pkg.addonIds.length)}</TabsTrigger>
+                    </>
+                ) : (
+                    <TabsTrigger value="packages">Packages</TabsTrigger>
+                )}
+                {SECTION_TABS.map((t) => (
+                    <TabsTrigger key={t.value} value={t.value}>{t.label}<Dot on={hasContent(t.kinds)} /></TabsTrigger>
+                ))}
+                {pkg && <TabsTrigger value="terms">Terms & support</TabsTrigger>}
+                <TabsTrigger value="blueprint">Blueprint</TabsTrigger>
+            </TabsList>
+
+            {pkg ? (
+                <>
+                    <TabsContent value="features" className="mt-3">
+                        <Card className="py-4 shadow-xs"><CardContent className="px-4 md:px-5"><FeaturesTab graph={graph} pkg={pkg} kind="included" canManage={canManage} /></CardContent></Card>
+                    </TabsContent>
+                    <TabsContent value="addons" className="mt-3">
+                        <Card className="py-4 shadow-xs"><CardContent className="px-4 md:px-5"><FeaturesTab graph={graph} pkg={pkg} kind="addon" canManage={canManage} /></CardContent></Card>
+                    </TabsContent>
+                </>
+            ) : (
+                <TabsContent value="packages" className="mt-3">{packagesView}</TabsContent>
+            )}
+
+            {SECTION_TABS.map((t) => (
+                <TabsContent key={t.value} value={t.value} className="mt-3">
+                    {!pkg && <p className="mb-3 text-xs text-muted-foreground">Service default: used by every package unless the package has its own version.</p>}
+                    <div className={cn('grid gap-4', t.kinds.length > 1 && 'lg:grid-cols-2')}>
+                        {t.kinds.map((k) => (
+                            <SectionCard key={k} graph={graph} service={service} pkg={pkg} kind={k} canManage={canManage} />
+                        ))}
+                    </div>
+                </TabsContent>
             ))}
-        </div>
+
+            {pkg && (
+                <TabsContent value="terms" className="mt-3">
+                    <div className="grid gap-4 lg:grid-cols-2">
+                        <div className="lg:col-span-2"><PackageFacts pkg={pkg} canManage={canManage} /></div>
+                        <PkgStringList pkg={pkg} field="supportInclusions" title="Support inclusions" hint="What the free technical support covers." canManage={canManage} />
+                        <PkgStringList pkg={pkg} field="additionalCharges" title="Support exclusions" hint="What is not covered or is charged extra." canManage={canManage} />
+                        <div className="lg:col-span-2"><PkgStringList pkg={pkg} field="notes" title="General terms" hint="Shown as General Terms & Conditions in the quotation." canManage={canManage} /></div>
+                    </div>
+                </TabsContent>
+            )}
+
+            <TabsContent value="blueprint" className="mt-3">
+                <BlueprintTab
+                    key={pkg?._id ?? service._id}
+                    entity={pkg ? 'packages' : 'services'}
+                    id={pkg?._id ?? service._id}
+                    value={(pkg ?? service).blueprint}
+                    scope={pkg ? 'package' : 'service'}
+                    canManage={canManage}
+                />
+            </TabsContent>
+        </Tabs>
     );
 }
 
@@ -490,14 +682,14 @@ export default function CatalogExplorer() {
     return (
         <div className="grid min-h-0 items-start gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
             {/* ── tree ── */}
-            <Card className="gap-3 py-4 shadow-xs lg:sticky lg:top-4 lg:max-h-[calc(100vh-9rem)] lg:overflow-hidden">
+            <Card className="h-[60vh] gap-3 py-4 shadow-xs lg:sticky lg:top-4 lg:h-[calc(100vh-9rem)]">
                 <CardHeader className="px-4">
                     <div className="relative">
                         <IconSearch className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
                         <Input className="pl-8" placeholder="Search services, packages…" value={q} onChange={(e) => setQ(e.target.value)} />
                     </div>
                 </CardHeader>
-                <CardContent className="min-h-0 flex-1 space-y-1 overflow-y-auto px-2">
+                <ScrollArea className="min-h-0 flex-1 px-2"><div className="space-y-1 pr-2">
                     {tree.length === 0 && <p className="px-2 py-4 text-sm text-muted-foreground">Nothing found.</p>}
                     {tree.map(({ svc, groups }) => {
                         const expanded = isOpen(svc._id);
@@ -538,7 +730,7 @@ export default function CatalogExplorer() {
                             </div>
                         );
                     })}
-                </CardContent>
+                </div></ScrollArea>
                 {canManage && (
                     <div className="px-4">
                         <Button type="button" variant="outline" size="sm" className="w-full" onClick={() => setForm({ entity: 'services', id: null })}>
@@ -591,32 +783,13 @@ export default function CatalogExplorer() {
                     </Card>
                 )}
 
-                {curSvc && curPkg && (
-                    <Tabs defaultValue="features" key={curPkg._id}>
-                        <TabsList>
-                            <TabsTrigger value="features">Features <span className="ml-1.5 text-xs text-muted-foreground">{curPkg.featureIds.length}</span></TabsTrigger>
-                            <TabsTrigger value="addons">Add-ons <span className="ml-1.5 text-xs text-muted-foreground">{curPkg.addonIds.length}</span></TabsTrigger>
-                            <TabsTrigger value="content">Content</TabsTrigger>
-                        </TabsList>
-                        <TabsContent value="features" className="mt-3">
-                            <Card className="py-4 shadow-xs"><CardContent className="px-4 md:px-5"><FeaturesTab graph={graph} pkg={curPkg} kind="included" canManage={canManage} /></CardContent></Card>
-                        </TabsContent>
-                        <TabsContent value="addons" className="mt-3">
-                            <Card className="py-4 shadow-xs"><CardContent className="px-4 md:px-5"><FeaturesTab graph={graph} pkg={curPkg} kind="addon" canManage={canManage} /></CardContent></Card>
-                        </TabsContent>
-                        <TabsContent value="content" className="mt-3">
-                            <ContentTab graph={graph} service={curSvc} pkg={curPkg} canManage={canManage} />
-                        </TabsContent>
-                    </Tabs>
-                )}
-
-                {curSvc && !curPkg && (
-                    <Tabs defaultValue="packages" key={curSvc._id}>
-                        <TabsList>
-                            <TabsTrigger value="packages">Packages</TabsTrigger>
-                            <TabsTrigger value="content">Default content</TabsTrigger>
-                        </TabsList>
-                        <TabsContent value="packages" className="mt-3">
+                {curSvc && (
+                    <DetailTabs
+                        graph={graph}
+                        service={curSvc}
+                        pkg={curPkg ?? null}
+                        canManage={canManage}
+                        packagesView={
                             <Card className="py-2 shadow-xs">
                                 <CardContent className="divide-y px-4 md:px-5">
                                     {graph.packages.filter((p) => p.serviceId === curSvc._id).sort(bySort).map((p) => (
@@ -631,12 +804,8 @@ export default function CatalogExplorer() {
                                     {graph.packages.every((p) => p.serviceId !== curSvc._id) && <p className="py-4 text-sm text-muted-foreground">No packages yet.</p>}
                                 </CardContent>
                             </Card>
-                        </TabsContent>
-                        <TabsContent value="content" className="mt-3">
-                            <p className="mb-3 text-xs text-muted-foreground">Used by every package of this service unless the package has its own version.</p>
-                            <ContentTab graph={graph} service={curSvc} pkg={null} canManage={canManage} />
-                        </TabsContent>
-                    </Tabs>
+                        }
+                    />
                 )}
             </div>
 
