@@ -19,7 +19,6 @@ import {
     IconPhone,
     IconWorld,
     IconSend,
-    IconBulb,
     IconCrown,
     IconClock,
     IconUsers,
@@ -174,7 +173,13 @@ function IconBtn({ label, onClick, disabled, className, children }: { label: str
     );
 }
 
-const fadeIn = { initial: { opacity: 0, y: -6 }, animate: { opacity: 1, y: 0 }, exit: { opacity: 0, y: -6 }, transition: { duration: 0.18 } };
+/** Height + fade collapse. Overflow is only clipped while animating so focus rings are never cut off. */
+const collapseMotion = {
+    initial: { height: 0, opacity: 0, overflow: "hidden" },
+    animate: { height: "auto", opacity: 1, transitionEnd: { overflow: "visible" } },
+    exit: { height: 0, opacity: 0, overflow: "hidden" },
+    transition: { duration: 0.26, ease: [0.4, 0, 0.2, 1] as [number, number, number, number] },
+};
 
 function Panel({
     icon: Icon,
@@ -204,7 +209,7 @@ function Panel({
 }) {
     const [open, setOpen] = useState(true);
     const body = (
-        <CardContent className={cn("px-4 md:px-5", fixed && "flex min-h-0 flex-1 flex-col")}>
+        <CardContent className={cn("px-4 md:px-5", fixed && "flex min-h-0 flex-1 flex-col", collapsible && "pt-4")}>
             {fixed ? (
                 // padding on every side so focus rings are never clipped by the scroll viewport
                 <ScrollArea className="-mx-1 min-h-0 flex-1">
@@ -216,7 +221,7 @@ function Panel({
         </CardContent>
     );
     return (
-        <Card id={id} className={cn("scroll-mt-4 gap-4 py-4 shadow-xs md:py-5", fixed && "overflow-hidden", fixed, collapsible && !open && "gap-0", className)}>
+        <Card id={id} className={cn("scroll-mt-4 gap-4 py-4 shadow-xs md:py-5", fixed && "overflow-hidden", fixed, collapsible && "gap-0", className)}>
             <CardHeader className="px-4 md:px-5">
                 <div className="flex min-w-0 items-start gap-3">
                     {!plain && (
@@ -240,7 +245,7 @@ function Panel({
                     </CardAction>
                 )}
             </CardHeader>
-            {collapsible ? <AnimatePresence initial={false}>{open && <motion.div key="body" {...fadeIn}>{body}</motion.div>}</AnimatePresence> : body}
+            {collapsible ? <AnimatePresence initial={false}>{open && <motion.div key="body" {...collapseMotion}>{body}</motion.div>}</AnimatePresence> : body}
         </Card>
     );
 }
@@ -270,7 +275,7 @@ function StageCard({
     footer?: React.ReactNode;
 }) {
     return (
-        <Card className={cn("py-4 shadow-xs md:py-5", open ? "gap-4" : "gap-0")}>
+        <Card className="gap-0 py-4 shadow-xs md:py-5">
             <CardHeader className="px-4 md:px-5">
                 <button type="button" onClick={onToggle} aria-expanded={open} className="flex min-w-0 items-center gap-3 rounded-md text-left outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50">
                     <span className={cn("flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold transition-colors", done ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground")}>
@@ -290,9 +295,11 @@ function StageCard({
             </CardHeader>
             <AnimatePresence initial={false}>
                 {open && (
-                    <motion.div key="body" {...fadeIn} className="space-y-4">
-                        <CardContent className="px-4 md:px-5">{children}</CardContent>
-                        {footer && <CardFooter className="justify-end px-4 md:px-5">{footer}</CardFooter>}
+                    <motion.div key="body" {...collapseMotion}>
+                        <div className="space-y-4 pt-4">
+                            <CardContent className="px-4 md:px-5">{children}</CardContent>
+                            {footer && <CardFooter className="justify-end px-4 md:px-5">{footer}</CardFooter>}
+                        </div>
                     </motion.div>
                 )}
             </AnimatePresence>
@@ -355,84 +362,318 @@ function AddInline({ label, placeholder, onAdd, secondPlaceholder }: { label: st
     );
 }
 
-/** Checkbox list with an inline "add custom" row; used for inclusions, exclusions, responsibilities. */
+const norm = (t: string) => t.trim().toLowerCase();
+/** Keeps only the incoming strings that are not already in `existing` (case-insensitive) and not repeated. */
+const freshOnly = (existing: string[], incoming: string[]) => {
+    const have = new Set(existing.map(norm));
+    return incoming.filter((t) => {
+        const k = norm(t);
+        if (!k || have.has(k)) return false;
+        have.add(k);
+        return true;
+    });
+};
+
+/** JSON array of strings / {name|title|text} objects, or plain text with one item per line. */
+function parseLines(text: string): string[] {
+    const raw = text.trim().replace(/^```[a-z]*\n?/i, "").replace(/\n?```$/, "").trim();
+    if (!raw) return [];
+    if (raw.startsWith("[") || raw.startsWith("{")) {
+        try {
+            const parsed = JSON.parse(raw);
+            const arr: unknown[] = Array.isArray(parsed) ? parsed : Array.isArray(parsed?.items) ? parsed.items : [parsed];
+            const out = arr
+                .map((x) => {
+                    if (typeof x === "string") return x;
+                    const o = (x ?? {}) as Record<string, unknown>;
+                    return [o.name, o.title, o.text, o.label].find((v) => typeof v === "string") ?? "";
+                })
+                .map((x) => String(x).trim())
+                .filter(Boolean);
+            if (out.length) return out;
+        } catch {
+            /* fall through to one-item-per-line */
+        }
+    }
+    return raw
+        .split("\n")
+        .map((l) => l.trim().replace(/^([-*•◦▪+]|\d+[.)])\s*/, "").trim())
+        .filter(Boolean);
+}
+
+type Milestone2 = { title: string; duration: string };
+
+/** JSON [{title, duration}] / strings, or lines like "Design - 1 week". */
+function parseMilestones(text: string): Milestone2[] {
+    const raw = text.trim().replace(/^```[a-z]*\n?/i, "").replace(/\n?```$/, "").trim();
+    if (!raw) return [];
+    if (raw.startsWith("[") || raw.startsWith("{")) {
+        try {
+            const parsed = JSON.parse(raw);
+            const arr: unknown[] = Array.isArray(parsed) ? parsed : [parsed];
+            const out = arr
+                .map((x): Milestone2 => {
+                    if (typeof x === "string") return { title: x.trim(), duration: "" };
+                    const o = (x ?? {}) as Record<string, unknown>;
+                    const t = [o.title, o.name, o.label].find((v) => typeof v === "string");
+                    return { title: String(t ?? "").trim(), duration: typeof o.duration === "string" ? o.duration.trim() : "" };
+                })
+                .filter((m) => m.title);
+            if (out.length) return out;
+        } catch {
+            /* fall through to lines */
+        }
+    }
+    return parseLines(raw).map((l) => {
+        const m = l.match(/^(.*?)\s*(?:[-–—|:]\s*)(\d+(?:\.\d+)?\s*(?:day|week|month)s?)$/i);
+        return m ? { title: m[1].trim(), duration: m[2].trim() } : { title: l, duration: "" };
+    });
+}
+
+const listPrompt = (noun: string) => `You are helping me fill the "${noun}" list of a client quotation.
+Return ONLY a valid JSON array of short strings - no explanation and no markdown fence - for example:
+
+["First item", "Second item", "Third item"]
+
+Rules:
+1. One short, clear phrase or sentence per item (under 100 characters).
+2. No numbering, no bullets, no nested items, no duplicates.
+
+The context to base the list on:
+<describe the service / project here>`;
+
+const milestonePrompt = `You are helping me fill the "project milestones" list of a client quotation.
+Return ONLY a valid JSON array - no explanation and no markdown fence - in exactly this shape:
+
+[
+  { "title": "Discovery & wireframes", "duration": "1 week" },
+  { "title": "Design", "duration": "2 weeks" }
+]
+
+Rules:
+1. "title" is a short milestone name; "duration" is a short span such as "3 days", "1 week" or "1 month".
+2. Keep the milestones in the order the work happens. No other keys, no duplicates.
+
+The project to plan:
+<describe the project here>`;
+
+function BulkDialog<T>({
+    open,
+    onOpenChange,
+    title,
+    description,
+    prompt,
+    placeholder,
+    parse,
+    onImport,
+}: {
+    open: boolean;
+    onOpenChange: (v: boolean) => void;
+    title: string;
+    description: string;
+    prompt: string;
+    placeholder: string;
+    parse: (text: string) => T[];
+    onImport: (items: T[]) => void;
+}) {
+    const [text, setText] = useState("");
+    const parsed = useMemo(() => parse(text), [text, parse]);
+    const close = (v: boolean) => {
+        onOpenChange(v);
+        if (!v) setText("");
+    };
+    return (
+        <Dialog open={open} onOpenChange={close}>
+            <DialogContent className="sm:max-w-2xl">
+                <DialogHeader>
+                    <DialogTitle>{title}</DialogTitle>
+                    <DialogDescription>{description}</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-3">
+                    <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => navigator.clipboard.writeText(prompt).then(() => toast.success("AI prompt copied - paste it into ChatGPT / Claude, then paste the JSON it returns here"), () => toast.error("Could not copy the prompt"))}
+                    >
+                        <IconCopy className="size-4" /> Copy prompt
+                    </Button>
+                    <Textarea rows={12} className="font-mono text-xs" value={text} onChange={(e) => setText(e.target.value)} placeholder={placeholder} />
+                    <p className="text-xs text-muted-foreground">{text.trim() ? (parsed.length ? `${parsed.length} item${parsed.length === 1 ? "" : "s"} found` : "Nothing readable found - check the pasted text") : "Nothing pasted yet"}</p>
+                </div>
+                <DialogFooter>
+                    <Button type="button" variant="outline" onClick={() => close(false)}>Cancel</Button>
+                    <Button
+                        type="button"
+                        disabled={!parsed.length}
+                        onClick={() => {
+                            onImport(parsed);
+                            close(false);
+                        }}
+                    >
+                        Import {parsed.length || ""}
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+/** Icon button + dialog: paste many items at once into a simple list. */
+function BulkButton<T>({ noun, prompt, placeholder, parse, onImport }: { noun: string; prompt: string; placeholder: string; parse: (text: string) => T[]; onImport: (items: T[]) => void }) {
+    const [open, setOpen] = useState(false);
+    return (
+        <>
+            <IconBtn label={`Bulk paste ${noun}`} className="size-9 border" onClick={() => setOpen(true)}>
+                <IconClipboardText className="size-[18px]" />
+            </IconBtn>
+            <BulkDialog
+                open={open}
+                onOpenChange={setOpen}
+                title={`Bulk paste ${noun}`}
+                description={`Paste JSON (or one item per line). Items already in the list are skipped.`}
+                prompt={prompt}
+                placeholder={placeholder}
+                parse={parse}
+                onImport={(items) => {
+                    onImport(items);
+                    toast.success(`${items.length} item${items.length === 1 ? "" : "s"} added`);
+                }}
+            />
+        </>
+    );
+}
+
+function EditableText({ value, editing, onChange, onDone, off, className }: { value: string; editing: boolean; onChange: (v: string) => void; onDone: () => void; off?: boolean; className?: string }) {
+    return editing ? (
+        <Input autoFocus className="h-8 min-w-0 flex-1" value={value} onChange={(e) => onChange(e.target.value)} onBlur={onDone} onKeyDown={(e) => (e.key === "Enter" || e.key === "Escape") && onDone()} />
+    ) : (
+        <span className={cn("min-w-0 flex-1 break-words text-sm", off && "text-muted-foreground line-through", className)}>{value}</span>
+    );
+}
+
+function RowActions({ onEdit, onDelete }: { onEdit: () => void; onDelete: () => void }) {
+    return (
+        <div className="flex shrink-0 items-center">
+            <IconBtn label="Edit" onClick={onEdit} className="hover:text-primary"><IconPencil className="size-4" /></IconBtn>
+            <IconBtn label="Delete" onClick={onDelete} className="text-destructive/80 hover:text-destructive"><IconTrash className="size-4" /></IconBtn>
+        </div>
+    );
+}
+
+/** Checkbox list: type a title to add, then edit / delete it. Bulk paste for many at once. */
 function CheckList({
     items,
     onChange,
     addLabel,
+    noun,
     tone = "primary",
     twoCol,
 }: {
     items: CheckItem[];
     onChange: (next: CheckItem[]) => void;
     addLabel: string;
+    noun: string;
     tone?: "primary" | "danger";
     twoCol?: boolean;
 }) {
-    return (
-        <div className="space-y-1.5">
-            <div className={cn(twoCol ? "grid gap-x-6 gap-y-1.5 sm:grid-cols-2" : "space-y-1.5")}>
-            {items.map((it, i) => (
-                <div key={i} className="group flex items-center gap-2.5 rounded-md px-1 py-1 hover:bg-muted/50">
-                    <Checkbox
-                        checked={it.on}
-                        onCheckedChange={(v) => onChange(items.map((x, j) => (j === i ? { ...x, on: !!v } : x)))}
-                        className={cn(tone === "danger" && "data-[state=checked]:border-destructive data-[state=checked]:bg-destructive")}
-                    />
-                    <span className={cn("flex-1 text-sm", !it.on && "text-muted-foreground line-through")}>{it.text}</span>
-                    <Tip label="Remove"><button
-                        type="button"
-                        aria-label="Remove"
-                        onClick={() => onChange(items.filter((_, j) => j !== i))}
-                        className="text-muted-foreground opacity-0 transition hover:text-destructive group-hover:opacity-100"
-                    >
-                        <IconTrash className="size-4" />
-                    </button></Tip>
-                </div>
-            ))}
-            </div>
-            <div className="pt-1">
-                <AddInline label={addLabel.replace(/…$/, "")} placeholder="Type and press Enter" onAdd={(text) => onChange([...items, { text, on: true }])} />
-            </div>
-        </div>
-    );
-}
-
-/** Plain editable string list (deliverables, general terms). */
-function TextList({ items, onChange, addLabel }: { items: string[]; onChange: (n: string[]) => void; addLabel: string }) {
+    const [editing, setEditing] = useState<number | null>(null);
     return (
         <div className="space-y-2">
-            {items.map((it, i) => (
-                <div key={i} className="flex items-center gap-2">
-                    <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-[11px] font-medium text-muted-foreground">
-                        {i + 1}
-                    </span>
-                    <Input value={it} onChange={(e) => onChange(items.map((x, j) => (j === i ? e.target.value : x)))} className="h-9" />
-                    <Tip label="Remove"><button type="button" aria-label="Remove" onClick={() => onChange(items.filter((_, j) => j !== i))} className="text-muted-foreground hover:text-destructive">
-                        <IconTrash className="size-4" />
-                    </button></Tip>
+            <div className={cn(twoCol ? "grid gap-x-6 gap-y-1 sm:grid-cols-2" : "space-y-1")}>
+                {items.map((it, i) => (
+                    <div key={i} className="flex items-center gap-2 rounded-md px-1 py-1 hover:bg-muted/50">
+                        <Checkbox
+                            checked={it.on}
+                            onCheckedChange={(v) => onChange(items.map((x, j) => (j === i ? { ...x, on: !!v } : x)))}
+                            className={cn(tone === "danger" && "data-[state=checked]:border-destructive data-[state=checked]:bg-destructive")}
+                        />
+                        <EditableText value={it.text} off={!it.on} editing={editing === i} onChange={(v) => onChange(items.map((x, j) => (j === i ? { ...x, text: v } : x)))} onDone={() => setEditing(null)} />
+                        <RowActions onEdit={() => setEditing(i)} onDelete={() => onChange(items.filter((_, j) => j !== i))} />
+                    </div>
+                ))}
+            </div>
+            <div className="flex items-start gap-2 pt-1">
+                <div className="min-w-0 flex-1">
+                    <AddInline label={addLabel.replace(/…$/, "")} placeholder="Type a title and press Enter" onAdd={(text) => onChange([...items, { text, on: true }])} />
                 </div>
-            ))}
-            <AddInline label={addLabel} placeholder="Type and press Enter" onAdd={(text) => onChange([...items, text])} />
+                <BulkButton
+                    noun={noun}
+                    prompt={listPrompt(noun)}
+                    placeholder={'["First item", "Second item"]'}
+                    parse={parseLines}
+                    onImport={(lines) => onChange([...items, ...freshOnly(items.map((x) => x.text), lines).map((text) => ({ text, on: true }))])}
+                />
+            </div>
         </div>
     );
 }
 
-type Milestone2 = { title: string; duration: string };
+/** Plain list (deliverables, general terms): title only, then edit / delete. */
+function TextList({ items, onChange, addLabel, noun }: { items: string[]; onChange: (n: string[]) => void; addLabel: string; noun: string }) {
+    const [editing, setEditing] = useState<number | null>(null);
+    return (
+        <div className="space-y-2">
+            <div className="space-y-1">
+                {items.map((it, i) => (
+                    <div key={i} className="flex items-center gap-2 rounded-md px-1 py-1 hover:bg-muted/50">
+                        <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-[11px] font-medium text-muted-foreground">{i + 1}</span>
+                        <EditableText value={it} editing={editing === i} onChange={(v) => onChange(items.map((x, j) => (j === i ? v : x)))} onDone={() => setEditing(null)} />
+                        <RowActions onEdit={() => setEditing(i)} onDelete={() => onChange(items.filter((_, j) => j !== i))} />
+                    </div>
+                ))}
+            </div>
+            <div className="flex items-start gap-2 pt-1">
+                <div className="min-w-0 flex-1">
+                    <AddInline label={addLabel} placeholder="Type a title and press Enter" onAdd={(text) => onChange([...items, text])} />
+                </div>
+                <BulkButton noun={noun} prompt={listPrompt(noun)} placeholder={'["First item", "Second item"]'} parse={parseLines} onImport={(lines) => onChange([...items, ...freshOnly(items, lines)])} />
+            </div>
+        </div>
+    );
+}
 
-/** Milestone rows: title + short duration chip ("1 week"). */
+/** Milestone rows: title + short duration ("1 week"), then edit / delete. */
 function MilestoneList({ items, onChange }: { items: Milestone2[]; onChange: (n: Milestone2[]) => void }) {
+    const [editing, setEditing] = useState<number | null>(null);
+    const patch = (i: number, p: Partial<Milestone2>) => onChange(items.map((x, j) => (j === i ? { ...x, ...p } : x)));
     return (
         <div className="space-y-2">
-            {items.map((it, i) => (
-                <div key={i} className="flex items-center gap-2">
-                    <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-[11px] font-medium text-muted-foreground">{i + 1}</span>
-                    <Input value={it.title} placeholder="Milestone" onChange={(e) => onChange(items.map((x, j) => (j === i ? { ...x, title: e.target.value } : x)))} className="h-9 min-w-0 flex-1" />
-                    <Input value={it.duration} placeholder="1 week" onChange={(e) => onChange(items.map((x, j) => (j === i ? { ...x, duration: e.target.value } : x)))} className="h-9 w-24 shrink-0 text-center" />
-                    <Tip label="Remove"><button type="button" aria-label="Remove" onClick={() => onChange(items.filter((_, j) => j !== i))} className="text-destructive/80 hover:text-destructive"><IconTrash className="size-4" /></button></Tip>
+            <div className="space-y-1">
+                {items.map((it, i) => (
+                    <div key={i} className="flex items-center gap-2 rounded-md px-1 py-1 hover:bg-muted/50">
+                        <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-[11px] font-medium text-muted-foreground">{i + 1}</span>
+                        {editing === i ? (
+                            <>
+                                <Input autoFocus className="h-8 min-w-0 flex-1" value={it.title} placeholder="Milestone" onChange={(e) => patch(i, { title: e.target.value })} onKeyDown={(e) => (e.key === "Enter" || e.key === "Escape") && setEditing(null)} />
+                                <Input className="h-8 w-24 shrink-0 text-center" value={it.duration} placeholder="1 week" onChange={(e) => patch(i, { duration: e.target.value })} onKeyDown={(e) => (e.key === "Enter" || e.key === "Escape") && setEditing(null)} />
+                                <Button type="button" size="sm" className="h-8" onClick={() => setEditing(null)}>Done</Button>
+                            </>
+                        ) : (
+                            <>
+                                <span className="min-w-0 flex-1 break-words text-sm">{it.title}</span>
+                                {it.duration && <span className="shrink-0 rounded bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">{it.duration}</span>}
+                                <RowActions onEdit={() => setEditing(i)} onDelete={() => onChange(items.filter((_, j) => j !== i))} />
+                            </>
+                        )}
+                    </div>
+                ))}
+            </div>
+            <div className="flex items-start gap-2 pt-1">
+                <div className="min-w-0 flex-1">
+                    <AddInline label="Add Milestone" placeholder="Milestone title" secondPlaceholder="1 week" onAdd={(title, duration) => onChange([...items, { title, duration }])} />
                 </div>
-            ))}
-            <AddInline label="Add Milestone" placeholder="Milestone" secondPlaceholder="1 week" onAdd={(title, duration) => onChange([...items, { title, duration }])} />
+                <BulkButton
+                    noun="milestones"
+                    prompt={milestonePrompt}
+                    placeholder={'[{ "title": "Design", "duration": "2 weeks" }]'}
+                    parse={parseMilestones}
+                    onImport={(ms) => {
+                        const keep = new Set(freshOnly(items.map((x) => x.title), ms.map((x) => x.title)).map(norm));
+                        onChange([...items, ...ms.filter((m) => keep.has(norm(m.title)))]);
+                    }}
+                />
+            </div>
         </div>
     );
 }
@@ -508,46 +749,17 @@ function parseFeatureTree(text: string): CheckItem[] {
 }
 
 function BulkImportDialog({ open, onOpenChange, onImport }: { open: boolean; onOpenChange: (v: boolean) => void; onImport: (items: CheckItem[]) => void }) {
-    const [text, setText] = useState("");
-    const parsed = useMemo(() => parseFeatureTree(text), [text]);
-    const close = (v: boolean) => {
-        onOpenChange(v);
-        if (!v) setText("");
-    };
     return (
-        <Dialog open={open} onOpenChange={close}>
-            <DialogContent className="sm:max-w-2xl">
-                <DialogHeader>
-                    <DialogTitle>Bulk import features</DialogTitle>
-                    <DialogDescription>Paste JSON (or an indented list) with main features, sub-features and sub-sub-features. New features are added below the current ones.</DialogDescription>
-                </DialogHeader>
-                <div className="space-y-3">
-                    <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => navigator.clipboard.writeText(FEATURE_PROMPT).then(() => toast.success("AI prompt copied - paste it into ChatGPT / Claude, then paste the JSON it returns here"), () => toast.error("Could not copy the prompt"))}
-                    >
-                        <IconCopy className="size-4" /> Copy prompt
-                    </Button>
-                    <Textarea rows={12} className="font-mono text-xs" value={text} onChange={(e) => setText(e.target.value)} placeholder={'[\n  { "name": "Store Design and Setup", "children": [ { "name": "Homepage design" } ] }\n]'} />
-                    <p className="text-xs text-muted-foreground">{text.trim() ? (parsed.length ? `${parsed.length} feature${parsed.length === 1 ? "" : "s"} found` : "Nothing readable found - check the JSON") : "Nothing pasted yet"}</p>
-                </div>
-                <DialogFooter>
-                    <Button type="button" variant="outline" onClick={() => close(false)}>Cancel</Button>
-                    <Button
-                        type="button"
-                        disabled={!parsed.length}
-                        onClick={() => {
-                            onImport(parsed);
-                            close(false);
-                        }}
-                    >
-                        Import {parsed.length || ""}
-                    </Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
+        <BulkDialog
+            open={open}
+            onOpenChange={onOpenChange}
+            title="Bulk import features"
+            description="Paste JSON (or an indented list) with main features, sub-features and sub-sub-features. New features are added below the current ones."
+            prompt={FEATURE_PROMPT}
+            placeholder={'[\n  { "name": "Store Design and Setup", "children": [ { "name": "Homepage design" } ] }\n]'}
+            parse={parseFeatureTree}
+            onImport={onImport}
+        />
     );
 }
 
@@ -663,7 +875,8 @@ export default function QuotationWizard() {
     const { generate: generatePdf, stage: pdfStage, busy: pdfBusy } = useQuotationPdf();
     const { print: printDoc, host: printHost } = useQuotationPrint();
     const numberRef = useRef("");
-    const previewBox = useRef<HTMLDivElement>(null);
+    // state (not a ref) so the fit effect re-runs once the step transition has actually mounted the preview
+    const [previewEl, setPreviewEl] = useState<HTMLDivElement | null>(null);
     const [autoFit, setAutoFit] = useState(true);
     const autoFitRef = useRef(true);
     autoFitRef.current = autoFit;
@@ -722,10 +935,12 @@ export default function QuotationWizard() {
     const [addonsOn, setAddonsOn] = useState<string[]>([]);
     const [duration, setDuration] = useState("");
     const [unit, setUnit] = useState<UnitService>({ qty: 1, rate: 0 });
-    const [stage, setStage] = useState<Stage | null>("service");
+    // every card opens / closes on its own; picking a service / platform just hands over to the next one
+    const [openStages, setOpenStages] = useState<Stage[]>(["service"]);
+    const swapStage = (from: Stage, to: Stage) => setOpenStages((o) => [...o.filter((x) => x !== from), ...(o.includes(to) ? [] : [to])]);
     const [customAddons, setCustomAddons] = useState<AddonRow[]>([]);
     const [bulkOpen, setBulkOpen] = useState(false);
-    const [scopeStage, setScopeStage] = useState<string | null>("overview");
+    const [scopeOpen, setScopeOpen] = useState<string[]>(["overview", "deliverables", "milestones", "clientResp", "exclusions"]);
     const [customTax, setCustomTax] = useState(false);
 
     // step 3
@@ -966,7 +1181,7 @@ export default function QuotationWizard() {
         const first = defaultPkg((service?.packages ?? []).filter((x) => (x.platformId ?? "") === id));
         if (first) selectPackage(first);
         else { setPkgId(""); setFeatures([]); }
-        setStage("package");
+        swapStage("platform", "package");
     };
 
     const pickService = (s: CatalogTreeService) => {
@@ -976,7 +1191,7 @@ export default function QuotationWizard() {
         const first = defaultPkg(s.packages.filter((x) => (x.platformId ?? "") === firstPlatform));
         if (first) selectPackage(first);
         else { setPkgId(""); setFeatures([]); }
-        setStage(s.platforms.length ? "platform" : "package");
+        swapStage("service", s.platforms.length ? "platform" : "package");
     };
 
     const pickClient = (id: string) => {
@@ -1322,9 +1537,9 @@ export default function QuotationWizard() {
     const hasPlatforms = (service?.platforms.length ?? 0) > 0;
     const showPackages = !!service && (!hasPlatforms || !!platformId);
     const pkgStageNo = hasPlatforms ? 3 : 2;
-    const toggleStage = (st: Stage) => setStage(stage === st ? null : st);
-    const goStage = (st: Stage) => {
-        setStage(st);
+    const toggleStage = (st: Stage) => setOpenStages((o) => (o.includes(st) ? o.filter((x) => x !== st) : [...o, st]));
+    const goStage = (st: Stage, from?: Stage) => {
+        setOpenStages((o) => [...o.filter((x) => x !== from), ...(o.includes(st) ? [] : [st])]);
         requestAnimationFrame(() => document.getElementById(`sec-${st}`)?.scrollIntoView({ behavior: "smooth", block: "start" }));
     };
     const importFeatures = (incoming: CheckItem[]) => {
@@ -1339,7 +1554,7 @@ export default function QuotationWizard() {
                 n={1}
                 title="Select Service Category"
                 hint="Choose the service you want to include in this quotation."
-                open={stage === "service"}
+                open={openStages.includes("service")}
                 done={!!service}
                 onToggle={() => toggleStage("service")}
                 summary={service ? <span className="font-medium text-foreground">{service.name}</span> : undefined}
@@ -1383,7 +1598,7 @@ export default function QuotationWizard() {
                     n={2}
                     title="Select Platform / Technology"
                     hint="Choose the technology stack for your project."
-                    open={stage === "platform"}
+                    open={openStages.includes("platform")}
                     done={!!platformId}
                     onToggle={() => toggleStage("platform")}
                     summary={platform ? <span className="font-medium text-foreground">{platform}</span> : undefined}
@@ -1428,12 +1643,12 @@ export default function QuotationWizard() {
                     n={pkgStageNo}
                     title="Select Package"
                     hint={isUnit ? "Choose what you are quoting, then set quantity and rate." : "Choose a package or go with custom build."}
-                    open={stage === "package"}
+                    open={openStages.includes("package")}
                     done={!!pkg}
                     onToggle={() => toggleStage("package")}
                     summary={pkg ? <span><span className="font-medium text-foreground">{pkg.name}</span> · {priceText(pkg, cur)}</span> : undefined}
                     footer={
-                        <Button type="button" disabled={!pkg} onClick={() => goStage("features")}>
+                        <Button type="button" disabled={!pkg} onClick={() => goStage("features", "package")}>
                             Continue to features <IconArrowRight className="size-4" />
                         </Button>
                     }
@@ -1512,7 +1727,7 @@ export default function QuotationWizard() {
                             n={pkgStageNo + 1}
                             title="Included Features"
                             hint="Name each feature. Use the arrows to reorder and the indent buttons to nest sub-features."
-                            open={stage === "features"}
+                            open={openStages.includes("features")}
                             done={features.some((f) => f.on)}
                             onToggle={() => toggleStage("features")}
                             summary={`${features.filter((f) => f.on).length} features included`}
@@ -1523,7 +1738,7 @@ export default function QuotationWizard() {
                                 </>
                             }
                             footer={
-                                <Button type="button" onClick={() => goStage("addons")}>
+                                <Button type="button" onClick={() => goStage("addons", "features")}>
                                     Continue to add-ons <IconArrowRight className="size-4" />
                                 </Button>
                             }
@@ -1536,7 +1751,7 @@ export default function QuotationWizard() {
                             n={pkgStageNo + 2}
                             title="Optional Add-ons"
                             hint="Extra paid items on top of the package. Add your own if it is not in the catalog."
-                            open={stage === "addons"}
+                            open={openStages.includes("addons")}
                             done={chosenAddons.length > 0}
                             onToggle={() => toggleStage("addons")}
                             summary={chosenAddons.length ? `${chosenAddons.length} selected · ${money(chosenAddons.reduce((a, x) => a + x.price, 0), cur)}` : "None selected"}
@@ -1606,7 +1821,7 @@ export default function QuotationWizard() {
             done: !!overview.trim(),
             summary: title.trim() || overview.trim().slice(0, 90) || undefined,
             node: (
-                <div className="max-w-3xl space-y-3">
+                <div className="space-y-3">
                     <Field label="Project Title" required>
                         <Input value={title} onChange={(e) => { touch("title"); setTitle(e.target.value); }} placeholder={`${svcLabel || "Quotation"} — ${snap.companyName || clientName || "Client"}`} />
                     </Field>
@@ -1623,7 +1838,7 @@ export default function QuotationWizard() {
             hint: scopeText3.deliverables[1],
             done: deliverables.some((d) => d.trim()),
             summary: count(deliverables.filter((d) => d.trim()).length, "deliverable"),
-            node: <div className="max-w-3xl"><TextList items={deliverables} onChange={edit("deliverables", setDeliverables)} addLabel="Add Deliverable" /></div>,
+            node: <TextList items={deliverables} onChange={edit("deliverables", setDeliverables)} addLabel="Add Deliverable" noun="deliverables" />,
         },
         ...(flow === "retainer"
             ? []
@@ -1635,7 +1850,7 @@ export default function QuotationWizard() {
                       done: timeline.some((t) => t.title.trim()),
                       summary: count(timeline.filter((t) => t.title.trim()).length, "milestone") && `${count(timeline.filter((t) => t.title.trim()).length, "milestone")}${durTotal ? ` · ${durTotal}` : ""}`,
                       node: (
-                          <div className="max-w-3xl">
+                          <div>
                               <MilestoneList items={timeline} onChange={edit("timeline", setTimeline)} />
                               {durTotal && (
                                   <div className="mt-3 flex items-start gap-2 rounded-lg bg-primary/5 p-3">
@@ -1656,7 +1871,7 @@ export default function QuotationWizard() {
             hint: "What we expect from the client during the project.",
             done: clientResp.some((c) => c.on),
             summary: count(clientResp.filter((c) => c.on).length, "item"),
-            node: <div className="max-w-3xl"><CheckList items={clientResp} onChange={edit("clientResp", setClientResp)} addLabel="Add responsibility…" /></div>,
+            node: <CheckList items={clientResp} onChange={edit("clientResp", setClientResp)} addLabel="Add responsibility…" noun="client responsibilities" />,
         },
         {
             key: "exclusions",
@@ -1664,40 +1879,31 @@ export default function QuotationWizard() {
             hint: scopeText3.exclusions[1],
             done: exclusions.some((e) => e.on),
             summary: count(exclusions.filter((e) => e.on).length, "item"),
-            node: <div className="max-w-3xl"><CheckList items={exclusions} onChange={edit("exclusions", setExclusions)} addLabel="Add exclusion…" tone="danger" /></div>,
+            node: <CheckList items={exclusions} onChange={edit("exclusions", setExclusions)} addLabel="Add exclusion…" noun="exclusions" tone="danger" />,
         },
     ];
 
+    const scopeSpan: Record<string, string> =
+        scopeSections.length >= 5
+            ? { overview: "lg:col-span-7", deliverables: "lg:col-span-5", milestones: "lg:col-span-4", clientResp: "lg:col-span-4", exclusions: "lg:col-span-4" }
+            : { overview: "lg:col-span-7", deliverables: "lg:col-span-5", clientResp: "lg:col-span-6", exclusions: "lg:col-span-6" };
     const scopeStep = (
-        <div className="mx-auto max-w-4xl space-y-4">
-            {scopeSections.map((sec, i) => {
-                const next = scopeSections[i + 1];
-                return (
+        <div className="grid grid-flow-dense items-start gap-4 lg:grid-cols-12">
+            {scopeSections.map((sec, i) => (
+                <div key={sec.key} className={cn("min-w-0", scopeSpan[sec.key])}>
                     <StageCard
-                        key={sec.key}
                         n={i + 1}
                         title={sec.title}
                         hint={sec.hint}
-                        open={scopeStage === sec.key}
+                        open={scopeOpen.includes(sec.key)}
                         done={sec.done}
                         summary={sec.summary}
-                        onToggle={() => setScopeStage(scopeStage === sec.key ? null : sec.key)}
-                        footer={
-                            next ? (
-                                <Button type="button" onClick={() => setScopeStage(next.key)}>
-                                    Next: {next.title} <IconArrowRight className="size-4" />
-                                </Button>
-                            ) : (
-                                <Button type="button" onClick={() => go(3)}>
-                                    Continue to Pricing <IconArrowRight className="size-4" />
-                                </Button>
-                            )
-                        }
+                        onToggle={() => setScopeOpen((o) => (o.includes(sec.key) ? o.filter((x) => x !== sec.key) : [...o, sec.key]))}
                     >
                         {sec.node}
                     </StageCard>
-                );
-            })}
+                </div>
+            ))}
         </div>
     );
 
@@ -2014,7 +2220,7 @@ export default function QuotationWizard() {
             span: true,
             node: (
                 <Panel collapsible icon={IconCircleCheck} title="Support Inclusions" hint="What is included in the technical support.">
-                    <CheckList twoCol items={inclusions} onChange={edit("inclusions", setInclusions)} addLabel="Add custom support inclusion…" />
+                    <CheckList twoCol items={inclusions} onChange={edit("inclusions", setInclusions)} addLabel="Add support inclusion…" noun="support inclusions" />
                 </Panel>
             ),
         },
@@ -2067,7 +2273,7 @@ export default function QuotationWizard() {
             key: "exclusions",
             node: (
                 <Panel collapsible icon={IconX} title={flow === "production" ? "Exclusions & Additional Charges" : "Support Exclusions"} hint={flow === "production" ? "Not covered by the quoted rate." : "What is not included in the technical support."}>
-                    <CheckList items={supportExcl} onChange={edit("supportExcl", setSupportExcl)} addLabel="Add custom exclusion…" tone="danger" />
+                    <CheckList items={supportExcl} onChange={edit("supportExcl", setSupportExcl)} addLabel="Add exclusion…" noun="support exclusions" tone="danger" />
                 </Panel>
             ),
         },
@@ -2141,7 +2347,7 @@ export default function QuotationWizard() {
             key: "general",
             node: (
                 <Panel collapsible icon={IconFileText} title="General Terms & Conditions" hint="Additional terms and conditions for this quotation.">
-                    <TextList items={generalTerms} onChange={edit("generalTerms", setGeneralTerms)} addLabel="Add term" />
+                    <TextList items={generalTerms} onChange={edit("generalTerms", setGeneralTerms)} addLabel="Add term" noun="general terms" />
                 </Panel>
             ),
         },
@@ -2157,36 +2363,24 @@ export default function QuotationWizard() {
         return true;
     });
 
+    const termSpan: Record<string, string> = {
+        support: "lg:col-span-4",
+        inclusions: "lg:col-span-8",
+        domainHosting: "lg:col-span-6",
+        exclusions: "lg:col-span-6",
+        uiRev: "lg:col-span-4",
+        devRev: "lg:col-span-4",
+        extra: "lg:col-span-4",
+        recurring: "lg:col-span-6",
+        ownership: "lg:col-span-6",
+        general: "lg:col-span-12",
+    };
     const termsStep = (
-        <div className="gap-4 lg:columns-2">
+        <div className="grid grid-flow-dense items-start gap-4 lg:grid-cols-12">
             {termsBlocks.map((b) => (
-                <div key={b.key} className="mb-4 min-w-0 break-inside-avoid">{b.node}</div>
+                <div key={b.key} className={cn("min-w-0", termSpan[b.key] ?? "lg:col-span-6")}>{b.node}</div>
             ))}
         </div>
-    );
-
-    const termsAside = (
-        <aside className="min-w-0 space-y-4 xl:sticky xl:top-4">
-            <Panel icon={IconFileText} title="Quotation Summary">
-                <dl className="space-y-2 text-sm">
-                    <Row k="Quotation No" v="Auto-generated on save" />
-                    <Row k="Client" v={snap.companyName || clientName || "—"} />
-                    <Row k="Package" v={pkg?.name ?? "—"} />
-                    <Row k="Total Amount" v={money(grand, cur)} />
-                    <Row k="Validity" v={fmtDate(validUntil)} />
-                </dl>
-            </Panel>
-            <div className="rounded-xl border bg-card p-4 shadow-xs">
-                <div className="flex items-center justify-between text-sm font-semibold"><span>Step 5 of 6</span><span className="text-xs text-muted-foreground">83%</span></div>
-                <div className="mt-2 h-2 rounded-full bg-muted"><div className="h-full w-[83%] rounded-full bg-primary" /></div>
-                <p className="mt-3 text-sm font-semibold">Terms, Support & Revision Policy</p>
-                <p className="mt-1 text-xs text-muted-foreground">Define the support duration, revision limits, policies and general terms for this quotation.</p>
-            </div>
-            <section className="rounded-xl border bg-primary/5 p-4">
-                <h3 className="mb-1.5 flex items-center gap-2 text-sm font-semibold text-primary"><IconBulb className="size-4" /> Pro Tip</h3>
-                <p className="text-xs text-muted-foreground">Clear terms and support policies help avoid misunderstandings and ensure a smooth project delivery.</p>
-            </section>
-        </aside>
     );
 
     // ── step 6: summary + document preview ──
@@ -2208,19 +2402,19 @@ export default function QuotationWizard() {
 
     /** Zoom so a whole A4 page fits the preview column. */
     const fitZoom = () => {
-        const w = previewBox.current?.clientWidth ?? 0;
+        const w = previewEl?.clientWidth ?? 0;
         if (w) setZoom(Math.max(30, Math.min(100, Math.floor(((w - 32) / 794) * 20) * 5)));
     };
     // Keep the page fitted to the column (also on resize / phones) until the user picks a zoom by hand.
     useEffect(() => {
-        const el = previewBox.current;
+        const el = previewEl;
         if (step !== 5 || !el) return;
         setAutoFit(true);
         const ro = new ResizeObserver(() => autoFitRef.current && fitZoom());
         ro.observe(el);
         requestAnimationFrame(fitZoom);
         return () => ro.disconnect();
-    }, [step, expanded]);
+    }, [step, expanded, previewEl]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const previewStep = (
         <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,460px)_minmax(0,1fr)]">
@@ -2350,7 +2544,7 @@ export default function QuotationWizard() {
                         </Button>
                     </div>
                 </header>
-                <div ref={previewBox} className="rounded-lg bg-[#e7e7eb] dark:bg-[#26262c]">
+                <div ref={setPreviewEl} className="rounded-lg bg-[#e7e7eb] dark:bg-[#26262c]">
                     <ScrollArea className={cn(expanded ? "h-[calc(100vh-10rem)]" : "h-[68vh]")}>
                         <div className="mx-auto w-fit p-4">
                             <QuotationDocument data={docInput} zoom={zoom / 100} />
@@ -2393,7 +2587,7 @@ export default function QuotationWizard() {
 
             <Stepper step={step} maxStep={maxStep} onGo={go} />
 
-            <div className={cn("grid items-start gap-5", step !== 5 && step !== 0 && step !== 2 && (step === 1 ? "xl:grid-cols-[minmax(0,1fr)_340px]" : "xl:grid-cols-[minmax(0,1fr)_300px]"))}>
+            <div className={cn("grid items-start gap-5", (step === 1 || step === 3) && (step === 1 ? "xl:grid-cols-[minmax(0,1fr)_340px]" : "xl:grid-cols-[minmax(0,1fr)_300px]"))}>
                 <div className="min-w-0">
                     <AnimatePresence mode="wait" initial={false}>
                         <motion.div key={step} initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2 }}>
@@ -2473,7 +2667,6 @@ export default function QuotationWizard() {
                     </aside>
                 )}
                 {step === 3 && pricingAside}
-                {step === 4 && termsAside}
                 {step !== 5 && step !== 1 && step !== 0 && step !== 2 && step !== 3 && step !== 4 && (
                     <aside className="space-y-4 xl:sticky xl:top-4">
                         <Panel icon={IconFileText} title="Quotation Summary">
