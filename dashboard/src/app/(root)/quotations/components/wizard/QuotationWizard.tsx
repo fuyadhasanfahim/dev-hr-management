@@ -430,6 +430,51 @@ function parseMilestones(text: string): Milestone2[] {
     });
 }
 
+type AddonDraft = { name: string; price: number };
+
+/** JSON [{name, price}] / strings, or lines like "SEO setup - 5000". */
+function parseAddons(text: string): AddonDraft[] {
+    const raw = text.trim().replace(/^```[a-z]*\n?/i, "").replace(/\n?```$/, "").trim();
+    if (!raw) return [];
+    const num = (v: unknown) => Number(String(v ?? "").replace(/[^0-9.]/g, "")) || 0;
+    if (raw.startsWith("[") || raw.startsWith("{")) {
+        try {
+            const parsed = JSON.parse(raw);
+            const arr: unknown[] = Array.isArray(parsed) ? parsed : [parsed];
+            const out = arr
+                .map((x): AddonDraft => {
+                    if (typeof x === "string") return { name: x.trim(), price: 0 };
+                    const o = (x ?? {}) as Record<string, unknown>;
+                    const n = [o.name, o.title, o.label].find((v) => typeof v === "string");
+                    return { name: String(n ?? "").trim(), price: num(o.price) };
+                })
+                .filter((a) => a.name);
+            if (out.length) return out;
+        } catch {
+            /* fall through to lines */
+        }
+    }
+    return parseLines(raw).map((l) => {
+        const m = l.match(/^(.*?)\s*(?:[-–—|:]\s*)[৳$]?\s*([\d,]+(?:\.\d+)?)$/);
+        return m ? { name: m[1].trim(), price: num(m[2]) } : { name: l, price: 0 };
+    });
+}
+
+const addonPrompt = `You are helping me fill the "optional add-ons" list of a client quotation.
+Return ONLY a valid JSON array - no explanation and no markdown fence - in exactly this shape:
+
+[
+  { "name": "SEO setup", "price": 5000 },
+  { "name": "Extra landing page", "price": 3000 }
+]
+
+Rules:
+1. "name" is a short add-on name; "price" is a plain number with no currency symbol (use 0 if unknown).
+2. No other keys, no duplicates.
+
+The service to suggest add-ons for:
+<describe the service here>`;
+
 const listPrompt = (noun: string) => `You are helping me fill the "${noun}" list of a client quotation.
 Return ONLY a valid JSON array of short strings - no explanation and no markdown fence - for example:
 
@@ -1786,15 +1831,30 @@ export default function QuotationWizard() {
                                     </li>
                                 ))}
                             </ul>
-                            <div className="mt-3">
-                                <AddInline
-                                    label="Add Custom Add-on"
-                                    placeholder="Add-on name"
-                                    secondPlaceholder="Price"
-                                    onAdd={(name, price) => {
-                                        const id = `custom-${Date.now()}`;
-                                        setCustomAddons([...customAddons, { _id: id, name, price: Number(price) || 0, custom: true }]);
-                                        setAddonsOn([...addonsOn, id]);
+                            <div className="mt-3 flex items-start gap-2">
+                                <div className="min-w-0 flex-1">
+                                    <AddInline
+                                        label="Add Custom Add-on"
+                                        placeholder="Add-on name"
+                                        secondPlaceholder="Price"
+                                        onAdd={(name, price) => {
+                                            const id = `custom-${Date.now()}`;
+                                            setCustomAddons([...customAddons, { _id: id, name, price: Number(price) || 0, custom: true }]);
+                                            setAddonsOn([...addonsOn, id]);
+                                        }}
+                                    />
+                                </div>
+                                <BulkButton
+                                    noun="add-ons"
+                                    prompt={addonPrompt}
+                                    placeholder={'[{ "name": "SEO setup", "price": 5000 }]'}
+                                    parse={parseAddons}
+                                    onImport={(rows) => {
+                                        const names = new Set(freshOnly(addonRows.map((a) => a.name), rows.map((r) => r.name)).map(norm));
+                                        const stamp = Date.now();
+                                        const added = rows.filter((r) => names.has(norm(r.name))).map((r, i) => ({ _id: `custom-${stamp}-${i}`, name: r.name, price: r.price, custom: true }));
+                                        setCustomAddons([...customAddons, ...added]);
+                                        setAddonsOn([...addonsOn, ...added.map((a) => a._id)]);
                                     }}
                                 />
                             </div>
