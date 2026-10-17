@@ -84,7 +84,7 @@ import { BrandLogo } from "@/components/catalog/BrandLogo";
 import type { CatalogSectionKind, CatalogTreePackage, CatalogTreeService } from "@/types/catalog.type";
 import { Client } from "@/types/client.type";
 import type { BillingCycle, IQuotationService, QuotationCategory } from "@/types/quotation.type";
-import { unitLabel } from "@/components/catalog/canvas/section-meta";
+import { unitLabel } from "@/components/catalog/section-meta";
 import { DEFAULT_BLUEPRINT, flowOf, resolveBlueprint, type BlueprintInclusion, type FlowType } from "@/lib/quotation-blueprint";
 import { computeQuotationTotals } from "@/lib/quotation-totals";
 

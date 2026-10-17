@@ -3,8 +3,6 @@
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import {
-    IconArrowDown,
-    IconArrowUp,
     IconCheck,
     IconChevronDown,
     IconIndentDecrease,
@@ -33,6 +31,7 @@ import { usePermissions } from '@/hooks/use-permissions';
 import {
     AddInline,
     BulkButton,
+    DragGrip,
     FEATURE_PROMPT,
     IconBtn,
     Tip,
@@ -40,10 +39,10 @@ import {
     canIndent,
     fixDepths,
     freshOnly,
-    hasSiblingAfter,
     listPrompt,
     milestonePrompt,
-    moveBlock,
+    moveBlockTo,
+    moveTo,
     norm,
     parseAddons,
     parseFeatureTree,
@@ -51,7 +50,7 @@ import {
     parseMilestones,
     removeKeepChildren,
     shiftBlock,
-    siblingBefore,
+    useDragReorder,
 } from '@/components/quotation/list-kit';
 import {
     useCreateCatalogItemMutation,
@@ -73,7 +72,7 @@ import type {
     FormEntity,
 } from '@/types/catalog.type';
 import { EntityFormDialog, IdChecklist, type Form } from '../EntityFormDialog';
-import { SECTION_META, unitLabel } from '../canvas/section-meta';
+import { SECTION_META, unitLabel } from '../section-meta';
 import { BlueprintEditor } from '../BlueprintEditor';
 import type { Blueprint } from '@/lib/quotation-blueprint';
 
@@ -179,6 +178,7 @@ function FeaturesTab({ graph, pkg, kind, canManage }: { graph: CatalogGraph; pkg
         );
     };
     const saveRows = (next: FeatureRow[]) => act.run(() => persist(next));
+    const dnd = useDragReorder((from, to) => void saveRows(moveBlockTo(rows, from, to)));
 
     /** Reuses an identical feature of this service/platform, otherwise creates it. */
     const ensure = async (name: string, price: number) => {
@@ -226,7 +226,8 @@ function FeaturesTab({ graph, pkg, kind, canManage }: { graph: CatalogGraph; pkg
                 {rows.map((r, i) => {
                     const f = r.f;
                     return (
-                        <div key={f._id} className="flex items-center gap-2 rounded-md py-1.5 pr-1 hover:bg-muted/50" style={{ paddingLeft: 4 + r.depth * 22 }}>
+                        <div key={f._id} {...dnd.row(i)} className={cn('flex items-center gap-2 rounded-md py-1.5 pr-1 hover:bg-muted/50', dnd.rowClass(i))} style={{ paddingLeft: 4 + r.depth * 22 }}>
+                            {canManage && <DragGrip {...dnd.handle(i)} />}
                             <span className="w-9 shrink-0 text-[11px] tabular-nums text-muted-foreground">{isAddon ? i + 1 : labels[i]}</span>
                             {edit?.id === f._id ? (
                                 <>
@@ -244,8 +245,6 @@ function FeaturesTab({ graph, pkg, kind, canManage }: { graph: CatalogGraph; pkg
                                     {isAddon && <span className="shrink-0 text-sm font-medium">{money(f.price)}</span>}
                                     {canManage && (
                                         <div className="flex shrink-0 items-center">
-                                            <IconBtn label="Move up" disabled={siblingBefore(rows, i) < 0} onClick={() => void saveRows(moveBlock(rows, i, -1))}><IconArrowUp className="size-4" /></IconBtn>
-                                            <IconBtn label="Move down" disabled={!hasSiblingAfter(rows, i)} onClick={() => void saveRows(moveBlock(rows, i, 1))}><IconArrowDown className="size-4" /></IconBtn>
                                             {!isAddon && (
                                                 <>
                                                     <IconBtn label="Make sub-feature" disabled={!canIndent(rows, i)} onClick={() => void saveRows(shiftBlock(rows, i, 1))}><IconIndentIncrease className="size-4" /></IconBtn>
@@ -349,13 +348,7 @@ function ListSection({ section, canManage }: { section: CatalogSection; canManag
     const items = section.items;
     const [edit, setEdit] = useState<{ key: string; title: string; duration: string } | null>(null);
     const save = (next: CatalogSectionItem[]) => act.run(() => act.patch('sections', section._id, { items: next }));
-    const move = (i: number, d: -1 | 1) => {
-        const j = i + d;
-        if (j < 0 || j >= items.length) return;
-        const next = [...items];
-        [next[i], next[j]] = [next[j]!, next[i]!];
-        void save(next);
-    };
+    const dnd = useDragReorder((from, to) => void save(moveTo(items, from, to)));
     const saveEdit = async () => {
         if (!edit || !edit.title.trim()) return setEdit(null);
         await save(items.map((it) => (it.key === edit.key ? { ...it, title: edit.title.trim(), ...(withDur ? { duration: toDuration(edit.duration) } : {}) } : it)));
@@ -366,7 +359,8 @@ function ListSection({ section, canManage }: { section: CatalogSection; canManag
         <div className="space-y-2">
             <div className="space-y-0.5">
                 {items.map((it, i) => (
-                    <div key={it.key} className="flex items-center gap-2 rounded-md px-1 py-1 hover:bg-muted/50">
+                    <div key={it.key} {...dnd.row(i)} className={cn('flex items-center gap-2 rounded-md px-1 py-1 hover:bg-muted/50', dnd.rowClass(i))}>
+                        {canManage && <DragGrip {...dnd.handle(i)} />}
                         <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-[11px] font-medium text-muted-foreground">{i + 1}</span>
                         {edit?.key === it.key ? (
                             <>
@@ -381,9 +375,7 @@ function ListSection({ section, canManage }: { section: CatalogSection; canManag
                                 {withDur && it.duration && <span className="shrink-0 rounded bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">{unitLabel(it.duration)}</span>}
                                 {canManage && (
                                     <div className="flex shrink-0 items-center">
-                                        <IconBtn label="Move up" disabled={i === 0} onClick={() => move(i, -1)}><IconArrowUp className="size-4" /></IconBtn>
-                                        <IconBtn label="Move down" disabled={i === items.length - 1} onClick={() => move(i, 1)}><IconArrowDown className="size-4" /></IconBtn>
-                                        <IconBtn label="Edit" className="hover:text-primary" onClick={() => setEdit({ key: it.key, title: it.title, duration: unitLabel(it.duration) })}><IconPencil className="size-4" /></IconBtn>
+                                                                                <IconBtn label="Edit" className="hover:text-primary" onClick={() => setEdit({ key: it.key, title: it.title, duration: unitLabel(it.duration) })}><IconPencil className="size-4" /></IconBtn>
                                         <IconBtn label="Delete" className="text-destructive/80 hover:text-destructive" onClick={() => void save(items.filter((x) => x.key !== it.key))}><IconTrash className="size-4" /></IconBtn>
                                     </div>
                                 )}
@@ -516,13 +508,7 @@ function PkgStringList({ pkg, field, title, hint, canManage }: { pkg: CatalogPac
     const items = pkg[field] ?? [];
     const [edit, setEdit] = useState<{ i: number; text: string } | null>(null);
     const save = (next: string[]) => act.run(() => act.patch('packages', pkg._id, { [field]: next }));
-    const move = (i: number, d: -1 | 1) => {
-        const j = i + d;
-        if (j < 0 || j >= items.length) return;
-        const next = [...items];
-        [next[i], next[j]] = [next[j]!, next[i]!];
-        void save(next);
-    };
+    const dnd = useDragReorder((from, to) => void save(moveTo(items, from, to)));
     const saveEdit = async () => {
         if (!edit) return;
         if (edit.text.trim()) await save(items.map((t, i) => (i === edit.i ? edit.text.trim() : t)));
@@ -538,7 +524,8 @@ function PkgStringList({ pkg, field, title, hint, canManage }: { pkg: CatalogPac
             <CardContent className="space-y-2 px-4 md:px-5">
                 <div className="space-y-0.5">
                     {items.map((t, i) => (
-                        <div key={`${i}-${t}`} className="flex items-center gap-2 rounded-md px-1 py-1 hover:bg-muted/50">
+                        <div key={`${i}-${t}`} {...dnd.row(i)} className={cn('flex items-center gap-2 rounded-md px-1 py-1 hover:bg-muted/50', dnd.rowClass(i))}>
+                            {canManage && <DragGrip {...dnd.handle(i)} />}
                             <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-[11px] font-medium text-muted-foreground">{i + 1}</span>
                             {edit?.i === i ? (
                                 <>
@@ -551,9 +538,7 @@ function PkgStringList({ pkg, field, title, hint, canManage }: { pkg: CatalogPac
                                     <span className="min-w-0 flex-1 break-words text-sm">{t}</span>
                                     {canManage && (
                                         <div className="flex shrink-0 items-center">
-                                            <IconBtn label="Move up" disabled={i === 0} onClick={() => move(i, -1)}><IconArrowUp className="size-4" /></IconBtn>
-                                            <IconBtn label="Move down" disabled={i === items.length - 1} onClick={() => move(i, 1)}><IconArrowDown className="size-4" /></IconBtn>
-                                            <IconBtn label="Edit" className="hover:text-primary" onClick={() => setEdit({ i, text: t })}><IconPencil className="size-4" /></IconBtn>
+                                                                                        <IconBtn label="Edit" className="hover:text-primary" onClick={() => setEdit({ i, text: t })}><IconPencil className="size-4" /></IconBtn>
                                             <IconBtn label="Delete" className="text-destructive/80 hover:text-destructive" onClick={() => void save(items.filter((_, j) => j !== i))}><IconTrash className="size-4" /></IconBtn>
                                         </div>
                                     )}

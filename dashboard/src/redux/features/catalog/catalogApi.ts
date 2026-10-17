@@ -29,10 +29,6 @@ export const catalogApi = apiSlice.injectEndpoints({
             transformResponse: (r: { data: CatalogGraph }) => r.data,
             providesTags: ['Catalog'],
         }),
-        /** Node positions are saved silently — no refetch, so dragging never re-renders the board. */
-        saveCatalogLayout: builder.mutation<unknown, { positions: Record<string, { x: number; y: number }> }>({
-            query: (body) => ({ url: '/catalog/layout', method: 'PUT', body }),
-        }),
         duplicateCatalogItem: builder.mutation<unknown, { entity: 'packages' | 'sections'; id: string; body: Doc }>({
             query: ({ entity, id, body }) => ({ url: `/catalog/${entity}/${id}/duplicate`, method: 'POST', body }),
             invalidatesTags: ['Catalog'],
@@ -61,7 +57,6 @@ export const catalogApi = apiSlice.injectEndpoints({
 export const {
     useGetCatalogTreeQuery,
     useGetCatalogGraphQuery,
-    useSaveCatalogLayoutMutation,
     useDuplicateCatalogItemMutation,
     useGetCatalogItemsQuery,
     useCreateCatalogItemMutation,

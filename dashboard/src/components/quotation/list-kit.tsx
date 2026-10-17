@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { IconClipboardText, IconCopy, IconPencil, IconPlus, IconTrash } from "@tabler/icons-react";
+import { IconClipboardText, IconCopy, IconGripVertical, IconPencil, IconPlus, IconTrash } from "@tabler/icons-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -460,4 +460,86 @@ export function canIndent<T extends Deep>(items: T[], i: number): boolean {
 export function removeKeepChildren<T extends Deep>(items: T[], i: number): T[] {
     const j = blockEnd(items, i);
     return [...items.slice(0, i), ...items.slice(i + 1, j).map((x) => ({ ...x, depth: Math.max(0, depthOf(x) - 1) })), ...items.slice(j)];
+}
+
+
+/** Moves one item to insertion index `to` (0..length, in the original list). */
+export function moveTo<T>(items: T[], from: number, to: number): T[] {
+    if (to === from || to === from + 1) return items;
+    const next = [...items];
+    const [it] = next.splice(from, 1);
+    next.splice(to > from ? to - 1 : to, 0, it!);
+    return next;
+}
+
+/** Moves an outline item together with its sub-items to insertion index `to`; levels are re-fixed by the caller. */
+export function moveBlockTo<T extends { depth?: number }>(items: T[], from: number, to: number): T[] {
+    const end = blockEnd(items, from);
+    if (to >= from && to <= end) return items;
+    const block = items.slice(from, end);
+    const rest = [...items.slice(0, from), ...items.slice(end)];
+    const at = to > end ? to - block.length : to;
+    return [...rest.slice(0, at), ...block, ...rest.slice(at)];
+}
+
+/**
+ * Native drag-and-drop reordering. Spread `handle(i)` on the grip (only the grip starts a drag, so text fields
+ * stay selectable) and `row(i)` on the row; `rowClass(i)` draws the drop line. `onMove(from, to)` gets an insertion index.
+ */
+export function useDragReorder(onMove: (from: number, to: number) => void) {
+    const [drag, setDrag] = useState<number | null>(null);
+    const [over, setOver] = useState<{ i: number; after: boolean } | null>(null);
+    const reset = () => {
+        setDrag(null);
+        setOver(null);
+    };
+    return {
+        handle: (i: number) => ({
+            draggable: true,
+            onDragStart: (e: React.DragEvent) => {
+                e.dataTransfer.effectAllowed = "move";
+                e.dataTransfer.setData("text/plain", String(i));
+                const row = (e.currentTarget as HTMLElement).closest("[data-drag-row]");
+                if (row) e.dataTransfer.setDragImage(row, 16, 16);
+                setDrag(i);
+            },
+            onDragEnd: reset,
+        }),
+        row: (i: number) => ({
+            "data-drag-row": true,
+            onDragOver: (e: React.DragEvent) => {
+                if (drag === null) return;
+                e.preventDefault();
+                const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                const after = e.clientY > r.top + r.height / 2;
+                setOver((o) => (o && o.i === i && o.after === after ? o : { i, after }));
+            },
+            onDrop: (e: React.DragEvent) => {
+                if (drag === null || !over) return;
+                e.preventDefault();
+                const from = drag;
+                const to = over.i + (over.after ? 1 : 0);
+                reset();
+                onMove(from, to);
+            },
+        }),
+        rowClass: (i: number) =>
+            cn(
+                "relative",
+                drag === i && "opacity-40",
+                drag !== null && over?.i === i && "before:pointer-events-none before:absolute before:inset-x-0 before:z-10 before:h-0.5 before:rounded before:bg-primary",
+                drag !== null && over?.i === i && (over.after ? "before:bottom-0" : "before:top-0"),
+            ),
+    };
+}
+
+/** The grip a row is dragged by. */
+export function DragGrip(props: React.HTMLAttributes<HTMLSpanElement>) {
+    return (
+        <Tip label="Drag to reorder">
+            <span {...props} className="flex size-6 shrink-0 cursor-grab items-center justify-center rounded text-muted-foreground/70 hover:bg-muted hover:text-foreground active:cursor-grabbing">
+                <IconGripVertical className="size-4" />
+            </span>
+        </Tip>
+    );
 }
