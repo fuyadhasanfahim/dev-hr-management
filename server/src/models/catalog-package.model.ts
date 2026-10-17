@@ -20,6 +20,8 @@ export interface ICatalogPackage extends Document {
     unitLabel?: string;
     bullets: string[];
     featureIds: Types.ObjectId[];
+    /** Outline depth per included feature id (1 = sub-feature, 2 = sub-sub-feature); absent / 0 = main feature. */
+    featureDepths?: Record<string, number>;
     addonIds: Types.ObjectId[];
     duration?: string;
     supportPeriod?: string;
@@ -49,6 +51,7 @@ const catalogPackageSchema = new Schema<ICatalogPackage>(
         unitLabel: { type: String, trim: true },
         bullets: [{ type: String, trim: true }],
         featureIds: [{ type: Schema.Types.ObjectId, ref: 'CatalogFeature' }],
+        featureDepths: { type: Schema.Types.Mixed, default: {} },
         addonIds: [{ type: Schema.Types.ObjectId, ref: 'CatalogFeature' }],
         duration: { type: String, trim: true },
         supportPeriod: { type: String, trim: true },

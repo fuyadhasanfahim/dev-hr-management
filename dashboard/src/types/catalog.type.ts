@@ -67,6 +67,8 @@ export interface CatalogPackage extends Base {
     unitLabel?: string;
     bullets: string[];
     featureIds: string[];
+    /** Outline depth per included feature id (1 = sub, 2 = sub-sub); missing = main feature. */
+    featureDepths?: Record<string, number>;
     addonIds: string[];
     duration?: string;
     supportPeriod?: string;

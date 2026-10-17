@@ -7,6 +7,8 @@ import {
     IconArrowUp,
     IconCheck,
     IconChevronDown,
+    IconIndentDecrease,
+    IconIndentIncrease,
     IconChevronRight,
     IconCopy,
     IconLink,
@@ -20,7 +22,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { ScrollArea } from '@/components/ui/scroll-area';
+import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
@@ -31,16 +33,25 @@ import { usePermissions } from '@/hooks/use-permissions';
 import {
     AddInline,
     BulkButton,
+    FEATURE_PROMPT,
     IconBtn,
     Tip,
     addonPrompt,
+    canIndent,
+    fixDepths,
     freshOnly,
+    hasSiblingAfter,
     listPrompt,
     milestonePrompt,
+    moveBlock,
     norm,
     parseAddons,
+    parseFeatureTree,
     parseLines,
     parseMilestones,
+    removeKeepChildren,
+    shiftBlock,
+    siblingBefore,
 } from '@/components/quotation/list-kit';
 import {
     useCreateCatalogItemMutation,
@@ -130,47 +141,67 @@ function CoverageChips({ graph, pkg }: { graph: CatalogGraph; pkg: CatalogPackag
 
 // ───────────────────────────── features / add-ons tab ─────────────────────────────
 
+type FeatureRow = { f: CatalogFeature; depth: number };
+
+/** Included features are an outline (main → sub → sub-sub); add-ons are a flat priced list. */
 function FeaturesTab({ graph, pkg, kind, canManage }: { graph: CatalogGraph; pkg: CatalogPackage; kind: 'included' | 'addon'; canManage: boolean }) {
     const act = useActions();
-    const field = kind === 'included' ? 'featureIds' : 'addonIds';
+    const isAddon = kind === 'addon';
+    const field = isAddon ? 'addonIds' : 'featureIds';
     const byId = new Map(graph.features.map((f) => [f._id, f]));
-    const rows = pkg[field].map((id) => byId.get(id)).filter((f): f is CatalogFeature => !!f);
-    const rowIds = rows.map((r) => r._id);
+    const rows: FeatureRow[] = fixDepths(
+        pkg[field]
+            .map((id) => byId.get(id))
+            .filter((f): f is CatalogFeature => !!f)
+            .map((f) => ({ f, depth: isAddon ? 0 : pkg.featureDepths?.[f._id] ?? 0 })),
+    );
+    const rowIds = rows.map((r) => r.f._id);
     const [edit, setEdit] = useState<{ id: string; name: string; price: string } | null>(null);
     const [linkOpen, setLinkOpen] = useState(false);
     const [pick, setPick] = useState<string[]>([]);
-    const isAddon = kind === 'addon';
 
-    const setIds = (next: string[]) => act.run(() => act.patch('packages', pkg._id, { [field]: next }));
-    const move = (i: number, d: -1 | 1) => {
-        const j = i + d;
-        if (j < 0 || j >= rowIds.length) return;
-        const next = [...rowIds];
-        [next[i], next[j]] = [next[j]!, next[i]!];
-        void setIds(next);
+    const counters = [0, 0, 0];
+    const labels = rows.map((r) => {
+        counters[r.depth]!++;
+        for (let k = r.depth + 1; k < 3; k++) counters[k] = 0;
+        return counters.slice(0, r.depth + 1).join('.');
+    });
+
+    /** Saves order + outline depths together (the server drops depths of ids that are no longer linked). */
+    const persist = (next: FeatureRow[]) => {
+        const fixed = fixDepths(next);
+        return act.patch(
+            'packages',
+            pkg._id,
+            isAddon
+                ? { addonIds: fixed.map((r) => r.f._id) }
+                : { featureIds: fixed.map((r) => r.f._id), featureDepths: Object.fromEntries(fixed.filter((r) => r.depth > 0).map((r) => [r.f._id, r.depth])) },
+        );
     };
+    const saveRows = (next: FeatureRow[]) => act.run(() => persist(next));
 
     /** Reuses an identical feature of this service/platform, otherwise creates it. */
     const ensure = async (name: string, price: number) => {
         const hit = graph.features.find((f) => f.serviceId === pkg.serviceId && f.kind === kind && (f.platformId ?? null) === (pkg.platformId ?? null) && norm(f.name) === norm(name));
-        if (hit) return hit._id;
-        const doc = await act.create('features', { serviceId: pkg.serviceId, platformId: pkg.platformId ?? null, name, kind, price });
-        return doc._id;
+        if (hit) return hit;
+        return (await act.create('features', { serviceId: pkg.serviceId, platformId: pkg.platformId ?? null, name, kind, price })) as unknown as CatalogFeature;
     };
-    const addMany = (list: { name: string; price: number }[]) =>
+    const addMany = (list: { name: string; price: number; depth: number }[]) =>
         act.run(async () => {
-            const names = new Set(freshOnly(rows.map((r) => r.name), list.map((l) => l.name)).map(norm));
-            const add: string[] = [];
+            const names = new Set(freshOnly(rows.map((r) => r.f.name), list.map((l) => l.name)).map(norm));
+            const add: FeatureRow[] = [];
             for (const it of list.filter((l) => names.has(norm(l.name)))) {
-                const id = await ensure(it.name, it.price);
-                if (!rowIds.includes(id) && !add.includes(id)) add.push(id);
+                const f = await ensure(it.name, it.price);
+                if (rowIds.includes(f._id) || add.some((a) => a.f._id === f._id)) continue;
+                add.push({ f, depth: isAddon ? 0 : it.depth });
             }
-            if (add.length) await act.patch('packages', pkg._id, { [field]: [...rowIds, ...add] });
+            if (add.length) await persist([...rows, ...add]);
         });
 
-    const removeFrom = (f: CatalogFeature) =>
+    const removeFrom = (i: number) =>
         act.run(async () => {
-            await act.patch('packages', pkg._id, { [field]: rowIds.filter((i) => i !== f._id) });
+            const f = rows[i]!.f;
+            await persist(isAddon ? rows.filter((_, k) => k !== i) : removeKeepChildren(rows, i));
             const used = graph.packages.some((p) => p._id !== pkg._id && (p.featureIds.includes(f._id) || p.addonIds.includes(f._id)));
             if (!used) await act.remove('features', f._id); // nothing else uses it, so do not leave an orphan behind
         });
@@ -192,35 +223,44 @@ function FeaturesTab({ graph, pkg, kind, canManage }: { graph: CatalogGraph; pkg
         <div className="space-y-3">
             {rows.length === 0 && <p className="py-2 text-sm text-muted-foreground">{isAddon ? 'No add-ons for this package yet.' : 'No features for this package yet.'}</p>}
             <div className="space-y-0.5">
-                {rows.map((f, i) => (
-                    <div key={f._id} className="flex items-center gap-2 rounded-md px-1 py-1.5 hover:bg-muted/50">
-                        <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-[11px] font-medium text-muted-foreground">{i + 1}</span>
-                        {edit?.id === f._id ? (
-                            <>
-                                <Input autoFocus className="h-8 min-w-0 flex-1" value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value })} onKeyDown={(e) => (e.key === 'Enter' ? void saveEdit() : e.key === 'Escape' && setEdit(null))} />
-                                {isAddon && <Input className="h-8 w-24 text-right" type="number" min={0} value={edit.price} onChange={(e) => setEdit({ ...edit, price: e.target.value })} onKeyDown={(e) => (e.key === 'Enter' ? void saveEdit() : e.key === 'Escape' && setEdit(null))} />}
-                                <IconBtn label="Save" onClick={() => void saveEdit()} className="text-primary"><IconCheck className="size-4" /></IconBtn>
-                                <IconBtn label="Cancel" onClick={() => setEdit(null)}><IconX className="size-4" /></IconBtn>
-                            </>
-                        ) : (
-                            <>
-                                <span className="min-w-0 flex-1 break-words text-sm">
-                                    {f.name}
-                                    {f.group && <Badge variant="secondary" className="ml-2 text-[10px]">{f.group}</Badge>}
-                                </span>
-                                {isAddon && <span className="shrink-0 text-sm font-medium">{money(f.price)}</span>}
-                                {canManage && (
-                                    <div className="flex shrink-0 items-center">
-                                        <IconBtn label="Move up" disabled={i === 0} onClick={() => move(i, -1)}><IconArrowUp className="size-4" /></IconBtn>
-                                        <IconBtn label="Move down" disabled={i === rows.length - 1} onClick={() => move(i, 1)}><IconArrowDown className="size-4" /></IconBtn>
-                                        <IconBtn label="Edit" className="hover:text-primary" onClick={() => setEdit({ id: f._id, name: f.name, price: String(f.price) })}><IconPencil className="size-4" /></IconBtn>
-                                        <IconBtn label="Remove from this package" className="text-destructive/80 hover:text-destructive" onClick={() => void removeFrom(f)}><IconTrash className="size-4" /></IconBtn>
-                                    </div>
-                                )}
-                            </>
-                        )}
-                    </div>
-                ))}
+                {rows.map((r, i) => {
+                    const f = r.f;
+                    return (
+                        <div key={f._id} className="flex items-center gap-2 rounded-md py-1.5 pr-1 hover:bg-muted/50" style={{ paddingLeft: 4 + r.depth * 22 }}>
+                            <span className="w-9 shrink-0 text-[11px] tabular-nums text-muted-foreground">{isAddon ? i + 1 : labels[i]}</span>
+                            {edit?.id === f._id ? (
+                                <>
+                                    <Input autoFocus className="h-8 min-w-0 flex-1" value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value })} onKeyDown={(e) => (e.key === 'Enter' ? void saveEdit() : e.key === 'Escape' && setEdit(null))} />
+                                    {isAddon && <Input className="h-8 w-24 text-right" type="number" min={0} value={edit.price} onChange={(e) => setEdit({ ...edit, price: e.target.value })} onKeyDown={(e) => (e.key === 'Enter' ? void saveEdit() : e.key === 'Escape' && setEdit(null))} />}
+                                    <IconBtn label="Save" onClick={() => void saveEdit()} className="text-primary"><IconCheck className="size-4" /></IconBtn>
+                                    <IconBtn label="Cancel" onClick={() => setEdit(null)}><IconX className="size-4" /></IconBtn>
+                                </>
+                            ) : (
+                                <>
+                                    <span className={cn('min-w-0 flex-1 break-words text-sm', !isAddon && r.depth === 0 && 'font-medium')}>
+                                        {f.name}
+                                        {f.group && <Badge variant="secondary" className="ml-2 text-[10px]">{f.group}</Badge>}
+                                    </span>
+                                    {isAddon && <span className="shrink-0 text-sm font-medium">{money(f.price)}</span>}
+                                    {canManage && (
+                                        <div className="flex shrink-0 items-center">
+                                            <IconBtn label="Move up" disabled={siblingBefore(rows, i) < 0} onClick={() => void saveRows(moveBlock(rows, i, -1))}><IconArrowUp className="size-4" /></IconBtn>
+                                            <IconBtn label="Move down" disabled={!hasSiblingAfter(rows, i)} onClick={() => void saveRows(moveBlock(rows, i, 1))}><IconArrowDown className="size-4" /></IconBtn>
+                                            {!isAddon && (
+                                                <>
+                                                    <IconBtn label="Make sub-feature" disabled={!canIndent(rows, i)} onClick={() => void saveRows(shiftBlock(rows, i, 1))}><IconIndentIncrease className="size-4" /></IconBtn>
+                                                    <IconBtn label="Make main feature" disabled={r.depth === 0} onClick={() => void saveRows(shiftBlock(rows, i, -1))}><IconIndentDecrease className="size-4" /></IconBtn>
+                                                </>
+                                            )}
+                                            <IconBtn label="Edit" className="hover:text-primary" onClick={() => setEdit({ id: f._id, name: f.name, price: String(f.price) })}><IconPencil className="size-4" /></IconBtn>
+                                            <IconBtn label="Remove from this package" className="text-destructive/80 hover:text-destructive" onClick={() => void removeFrom(i)}><IconTrash className="size-4" /></IconBtn>
+                                        </div>
+                                    )}
+                                </>
+                            )}
+                        </div>
+                    );
+                })}
             </div>
 
             {canManage && (
@@ -230,13 +270,19 @@ function FeaturesTab({ graph, pkg, kind, canManage }: { graph: CatalogGraph; pkg
                             label={isAddon ? 'Add Add-on' : 'Add Feature'}
                             placeholder={isAddon ? 'Add-on name' : 'Feature name'}
                             secondPlaceholder={isAddon ? 'Price' : undefined}
-                            onAdd={(name, price) => void addMany([{ name, price: Number(price) || 0 }])}
+                            onAdd={(name, price) => void addMany([{ name, price: Number(price) || 0, depth: 0 }])}
                         />
                     </div>
                     {isAddon ? (
-                        <BulkButton noun="add-ons" prompt={addonPrompt} placeholder={'[{ "name": "SEO setup", "price": 5000 }]'} parse={parseAddons} onImport={(list) => void addMany(list)} />
+                        <BulkButton noun="add-ons" prompt={addonPrompt} placeholder={'[{ "name": "SEO setup", "price": 5000 }]'} parse={parseAddons} onImport={(list) => void addMany(list.map((a) => ({ ...a, depth: 0 })))} />
                     ) : (
-                        <BulkButton noun="features" prompt={listPrompt('included features')} placeholder={'["Product catalog", "Checkout"]'} parse={parseLines} onImport={(list) => void addMany(list.map((name) => ({ name, price: 0 })))} />
+                        <BulkButton
+                            noun="features"
+                            prompt={FEATURE_PROMPT}
+                            placeholder={'[\n  { "name": "Store Design and Setup", "children": [ { "name": "Homepage design" } ] }\n]'}
+                            parse={parseFeatureTree}
+                            onImport={(list) => void addMany(list.map((l) => ({ name: l.text, price: 0, depth: l.depth ?? 0 })))}
+                        />
                     )}
                     <Tip label={`Link an existing ${isAddon ? 'add-on' : 'feature'} of this service`}>
                         <Button type="button" variant="outline" size="icon" className="size-9" aria-label="Link existing" disabled={!linkable.length} onClick={() => { setPick([]); setLinkOpen(true); }}>
@@ -255,7 +301,16 @@ function FeaturesTab({ graph, pkg, kind, canManage }: { graph: CatalogGraph; pkg
                     <div className="max-h-[50vh] overflow-y-auto"><IdChecklist options={linkable} value={pick} onChange={setPick} /></div>
                     <DialogFooter>
                         <Button type="button" variant="outline" onClick={() => setLinkOpen(false)}>Cancel</Button>
-                        <Button type="button" disabled={!pick.length} onClick={async () => { await setIds([...rowIds, ...pick]); setLinkOpen(false); }}>Link {pick.length || ''}</Button>
+                        <Button
+                            type="button"
+                            disabled={!pick.length}
+                            onClick={async () => {
+                                await saveRows([...rows, ...pick.map((id) => ({ f: byId.get(id)!, depth: 0 }))]);
+                                setLinkOpen(false);
+                            }}
+                        >
+                            Link {pick.length || ''}
+                        </Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
@@ -563,7 +618,8 @@ function DetailTabs({ graph, service, pkg, canManage, packagesView }: { graph: C
     const count = (n: number) => <span className="ml-1.5 text-xs text-muted-foreground">{n}</span>;
     return (
         <Tabs defaultValue={pkg ? 'features' : 'packages'} key={pkg?._id ?? service._id}>
-            <TabsList className="h-auto flex-wrap justify-start">
+            <ScrollArea className="w-full whitespace-nowrap">
+            <TabsList className="w-max">
                 {pkg ? (
                     <>
                         <TabsTrigger value="features">Features{count(pkg.featureIds.length)}</TabsTrigger>
@@ -578,6 +634,8 @@ function DetailTabs({ graph, service, pkg, canManage, packagesView }: { graph: C
                 {pkg && <TabsTrigger value="terms">Terms & support</TabsTrigger>}
                 <TabsTrigger value="blueprint">Blueprint</TabsTrigger>
             </TabsList>
+            <ScrollBar orientation="horizontal" />
+            </ScrollArea>
 
             {pkg ? (
                 <>

@@ -131,7 +131,7 @@ const defs: Record<CatalogEntity, EntityDef> = {
         model: CatalogPackage,
         fields: [
             'serviceId', 'platformId', 'name', 'badge', 'description', 'price', 'priceMax', 'billingCycle', 'unitLabel',
-            'bullets', 'featureIds', 'addonIds', 'duration', 'supportPeriod', 'bestFor', 'notes', 'supportInclusions',
+            'bullets', 'featureIds', 'featureDepths', 'addonIds', 'duration', 'supportPeriod', 'bestFor', 'notes', 'supportInclusions',
             'additionalCharges', 'blueprint', 'sortOrder', 'isActive',
         ],
         required: ['serviceId', 'name'],
@@ -164,6 +164,17 @@ const defs: Record<CatalogEntity, EntityDef> = {
                             (!f.platformId || String(f.platformId) === String(platformId ?? '')),
                     );
                 if (!ok) throw new AppError(`${key} must be ${kind} features of the same service/platform`, 400);
+            }
+
+            // Outline depths only apply to linked included features: keep sub (1) / sub-sub (2) levels, drop the rest.
+            if (d.featureDepths !== undefined || d.featureIds) {
+                const linked = new Set<string>((d.featureIds ?? cur?.featureIds ?? []).map(String));
+                const raw: Doc = d.featureDepths !== undefined ? d.featureDepths : ((cur?.featureDepths as Doc | undefined) ?? {});
+                d.featureDepths = Object.fromEntries(
+                    Object.entries(raw && typeof raw === 'object' ? raw : {})
+                        .filter(([id, depth]) => linked.has(id) && (Number(depth) === 1 || Number(depth) === 2))
+                        .map(([id, depth]) => [id, Number(depth)]),
+                );
             }
         },
         guardDelete: async () => undefined,
@@ -419,10 +430,14 @@ export const duplicatePackage = async (id: string, target: { serviceId?: string;
     if (platformId && !svc.platformIds.map(String).includes(String(platformId))) throw new AppError('Platform is not enabled for this service', 400);
 
     let featureIds = src.featureIds, addonIds = src.addonIds;
+    let featureDepths = (src.featureDepths ?? {}) as Record<string, number>;
     if (!sameService || String(platformId ?? '') !== String(src.platformId ?? '')) {
+        const idMap = new Map<string, string>();
         const clone = async (ids: Types.ObjectId[]) => {
             const out: Types.ObjectId[] = [];
-            for (const f of await CatalogFeature.find({ _id: { $in: ids } }).lean()) {
+            for (const srcId of ids) {
+                const f = await CatalogFeature.findById(srcId).lean();
+                if (!f) continue;
                 // Fields in the upsert filter are inserted from it; only the remaining content goes in $setOnInsert.
                 const { _id, createdAt, updatedAt, __v, serviceId: _s, platformId: _p, kind, name, ...rest } = f as Doc;
                 void _id; void createdAt; void updatedAt; void __v; void _s; void _p;
@@ -432,11 +447,13 @@ export const duplicatePackage = async (id: string, target: { serviceId?: string;
                     { upsert: true, new: true },
                 ).lean();
                 out.push(doc!._id as Types.ObjectId);
+                idMap.set(String(srcId), String(doc!._id));
             }
             return out;
         };
         featureIds = await clone(src.featureIds);
         addonIds = await clone(src.addonIds);
+        featureDepths = Object.fromEntries(Object.entries(featureDepths).filter(([k]) => idMap.has(k)).map(([k, v]) => [idMap.get(k)!, v]));
     }
 
     // Unique name/slug inside the target scope.
@@ -446,7 +463,7 @@ export const duplicatePackage = async (id: string, target: { serviceId?: string;
 
     const { _id, createdAt, updatedAt, __v, ...rest } = src as Doc;
     void _id; void createdAt; void updatedAt; void __v;
-    const created = (await CatalogPackage.create({ ...rest, name, slug: slugify(name), serviceId, platformId, featureIds, addonIds })).toObject();
+    const created = (await CatalogPackage.create({ ...rest, name, slug: slugify(name), serviceId, platformId, featureIds, featureDepths, addonIds })).toObject();
 
     for (const sec of await CatalogSection.find({ packageId: src._id }).lean()) {
         await CatalogSection.create({ serviceId, packageId: created._id, kind: sec.kind, items: freshKeys(sec.items as unknown as Doc[]), text: sec.text, sortOrder: sec.sortOrder, isActive: sec.isActive });

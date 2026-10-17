@@ -332,3 +332,132 @@ export function RowActions({ onEdit, onDelete }: { onEdit: () => void; onDelete:
     );
 }
 
+
+export const FEATURE_PROMPT = `You are helping me fill the "Included Features" list of a client quotation.
+Break the service I describe at the bottom into main features, sub-features and sub-sub-features (maximum 3 levels).
+Return ONLY valid JSON - no explanation and no markdown fence - in exactly this shape:
+
+[
+  {
+    "name": "Store Design and Setup",
+    "children": [
+      { "name": "Homepage design", "children": [ { "name": "Hero banner" } ] },
+      { "name": "Product page" }
+    ]
+  }
+]
+
+Rules:
+1. "name" is a short, human-readable feature name (string, required).
+2. "children" is optional - add it only when the feature has sub-features. Maximum depth is 3 levels.
+3. Do NOT include prices, routes, descriptions or any other keys.
+4. Keep every name under 80 characters and do not repeat the same feature twice.
+
+The service to break down:
+<describe the service here>`;
+
+export const depthOf = (it: { depth?: number }) => it.depth ?? 0;
+/** End (exclusive) of the block made of item `i` and all of its descendants. */
+export const blockEnd = (items: { depth?: number }[], i: number) => {
+    let j = i + 1;
+    while (j < items.length && depthOf(items[j]) > depthOf(items[i])) j++;
+    return j;
+};
+
+/** Pasted JSON ({name, children}) or indented plain text → flat list with depth. */
+export function parseFeatureTree(text: string): OutlineItem[] {
+    const raw = text.trim().replace(/^```[a-z]*\n?/i, "").replace(/\n?```$/, "").trim();
+    if (!raw) return [];
+    const out: OutlineItem[] = [];
+    const walk = (node: unknown, depth: number) => {
+        if (typeof node === "string") {
+            if (node.trim()) out.push({ text: node.trim(), on: true, depth: Math.min(depth, 2) });
+            return;
+        }
+        if (!node || typeof node !== "object") return;
+        const o = node as Record<string, unknown>;
+        const name = [o.name, o.title, o.label, o.feature].find((v) => typeof v === "string" && v.trim()) as string | undefined;
+        if (name) out.push({ text: name.trim(), on: true, depth: Math.min(depth, 2) });
+        const kids = [o.children, o.subFeatures, o.sub, o.items].find(Array.isArray) as unknown[] | undefined;
+        kids?.forEach((k) => walk(k, name ? depth + 1 : depth));
+    };
+    if (raw.startsWith("[") || raw.startsWith("{")) {
+        try {
+            const parsed = JSON.parse(raw);
+            (Array.isArray(parsed) ? parsed : [parsed]).forEach((n) => walk(n, 0));
+            if (out.length) return out;
+        } catch {
+            /* fall through to the indented-text parser */
+        }
+    }
+    const stack: number[] = [];
+    raw.split("\n").forEach((line) => {
+        if (!line.trim()) return;
+        const width = (line.match(/^\s*/)?.[0] ?? "").replace(/\t/g, "    ").length;
+        while (stack.length && stack[stack.length - 1] >= width) stack.pop();
+        const depth = Math.min(stack.length, 2);
+        stack.push(width);
+        const t = line.trim().replace(/^[-*•◦▪+]\s*/, "").trim();
+        if (t) out.push({ text: t, on: true, depth });
+    });
+    return out;
+}
+
+
+export type OutlineItem = { text: string; on: boolean; depth?: number };
+
+type Deep = { depth?: number };
+
+/** First item is always main level; no item sits more than one level below the one before it; max 3 levels. */
+export function fixDepths<T extends Deep>(items: T[]): T[] {
+    let prev = -1;
+    return items.map((x) => {
+        const d = Math.max(0, Math.min(depthOf(x), prev + 1, 2));
+        prev = d;
+        return d === depthOf(x) ? x : { ...x, depth: d };
+    });
+}
+
+/** Index of the previous item on the same level inside the same parent, or -1. */
+export function siblingBefore<T extends Deep>(items: T[], i: number): number {
+    const d = depthOf(items[i]!);
+    for (let k = i - 1; k >= 0; k--) {
+        if (depthOf(items[k]!) < d) return -1;
+        if (depthOf(items[k]!) === d) return k;
+    }
+    return -1;
+}
+
+export function hasSiblingAfter<T extends Deep>(items: T[], i: number): boolean {
+    const j = blockEnd(items, i);
+    return j < items.length && depthOf(items[j]!) === depthOf(items[i]!);
+}
+
+/** Swaps an item (with its sub-items) with the neighbouring item of the same level. */
+export function moveBlock<T extends Deep>(items: T[], i: number, dir: -1 | 1): T[] {
+    const j = blockEnd(items, i);
+    if (dir === -1) {
+        const p = siblingBefore(items, i);
+        return p < 0 ? items : [...items.slice(0, p), ...items.slice(i, j), ...items.slice(p, i), ...items.slice(j)];
+    }
+    if (!hasSiblingAfter(items, i)) return items;
+    const k = blockEnd(items, j);
+    return [...items.slice(0, i), ...items.slice(j, k), ...items.slice(i, j), ...items.slice(k)];
+}
+
+export function shiftBlock<T extends Deep>(items: T[], i: number, by: 1 | -1): T[] {
+    const j = blockEnd(items, i);
+    return items.map((x, k) => (k >= i && k < j ? { ...x, depth: depthOf(x) + by } : x));
+}
+
+export function canIndent<T extends Deep>(items: T[], i: number): boolean {
+    if (i === 0) return false;
+    const j = blockEnd(items, i);
+    return depthOf(items[i - 1]!) >= depthOf(items[i]!) && Math.max(...items.slice(i, j).map(depthOf)) < 2;
+}
+
+/** Removes one item; its sub-items move up a level instead of disappearing. */
+export function removeKeepChildren<T extends Deep>(items: T[], i: number): T[] {
+    const j = blockEnd(items, i);
+    return [...items.slice(0, i), ...items.slice(i + 1, j).map((x) => ({ ...x, depth: Math.max(0, depthOf(x) - 1) })), ...items.slice(j)];
+}

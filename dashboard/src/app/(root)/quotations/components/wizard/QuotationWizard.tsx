@@ -68,7 +68,7 @@ import { MultiSelect } from "@/components/ui/multi-select";
 import { Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
-import { Tip, IconBtn, AddInline, norm, freshOnly, parseLines, parseMilestones, parseAddons, addonPrompt, listPrompt, milestonePrompt, BulkDialog, BulkButton, EditableText, RowActions, type Milestone2 } from "@/components/quotation/list-kit";
+import { FEATURE_PROMPT, depthOf, blockEnd, fixDepths, parseFeatureTree, Tip, IconBtn, AddInline, norm, freshOnly, parseLines, parseMilestones, parseAddons, addonPrompt, listPrompt, milestonePrompt, BulkDialog, BulkButton, EditableText, RowActions, type Milestone2 } from "@/components/quotation/list-kit";
 
 import { useGetServicesQuery } from "@/redux/features/service/serviceApi";
 import { useGetStaffsQuery } from "@/redux/features/staff/staffApi";
@@ -405,76 +405,6 @@ function MilestoneList({ items, onChange }: { items: Milestone2[]; onChange: (n:
             </div>
         </div>
     );
-}
-
-const FEATURE_PROMPT = `You are helping me fill the "Included Features" list of a client quotation.
-Break the service I describe at the bottom into main features, sub-features and sub-sub-features (maximum 3 levels).
-Return ONLY valid JSON - no explanation and no markdown fence - in exactly this shape:
-
-[
-  {
-    "name": "Store Design and Setup",
-    "children": [
-      { "name": "Homepage design", "children": [ { "name": "Hero banner" } ] },
-      { "name": "Product page" }
-    ]
-  }
-]
-
-Rules:
-1. "name" is a short, human-readable feature name (string, required).
-2. "children" is optional - add it only when the feature has sub-features. Maximum depth is 3 levels.
-3. Do NOT include prices, routes, descriptions or any other keys.
-4. Keep every name under 80 characters and do not repeat the same feature twice.
-
-The service to break down:
-<describe the service here>`;
-
-const depthOf = (it: CheckItem) => it.depth ?? 0;
-/** End (exclusive) of the block made of item `i` and all of its descendants. */
-const blockEnd = (items: CheckItem[], i: number) => {
-    let j = i + 1;
-    while (j < items.length && depthOf(items[j]) > depthOf(items[i])) j++;
-    return j;
-};
-
-/** Pasted JSON ({name, children}) or indented plain text → flat list with depth. */
-function parseFeatureTree(text: string): CheckItem[] {
-    const raw = text.trim().replace(/^```[a-z]*\n?/i, "").replace(/\n?```$/, "").trim();
-    if (!raw) return [];
-    const out: CheckItem[] = [];
-    const walk = (node: unknown, depth: number) => {
-        if (typeof node === "string") {
-            if (node.trim()) out.push({ text: node.trim(), on: true, depth: Math.min(depth, 2) });
-            return;
-        }
-        if (!node || typeof node !== "object") return;
-        const o = node as Record<string, unknown>;
-        const name = [o.name, o.title, o.label, o.feature].find((v) => typeof v === "string" && v.trim()) as string | undefined;
-        if (name) out.push({ text: name.trim(), on: true, depth: Math.min(depth, 2) });
-        const kids = [o.children, o.subFeatures, o.sub, o.items].find(Array.isArray) as unknown[] | undefined;
-        kids?.forEach((k) => walk(k, name ? depth + 1 : depth));
-    };
-    if (raw.startsWith("[") || raw.startsWith("{")) {
-        try {
-            const parsed = JSON.parse(raw);
-            (Array.isArray(parsed) ? parsed : [parsed]).forEach((n) => walk(n, 0));
-            if (out.length) return out;
-        } catch {
-            /* fall through to the indented-text parser */
-        }
-    }
-    const stack: number[] = [];
-    raw.split("\n").forEach((line) => {
-        if (!line.trim()) return;
-        const width = (line.match(/^\s*/)?.[0] ?? "").replace(/\t/g, "    ").length;
-        while (stack.length && stack[stack.length - 1] >= width) stack.pop();
-        const depth = Math.min(stack.length, 2);
-        stack.push(width);
-        const t = line.trim().replace(/^[-*•◦▪+]\s*/, "").trim();
-        if (t) out.push({ text: t, on: true, depth });
-    });
-    return out;
 }
 
 function BulkImportDialog({ open, onOpenChange, onImport }: { open: boolean; onOpenChange: (v: boolean) => void; onImport: (items: CheckItem[]) => void }) {
@@ -856,7 +786,7 @@ export default function QuotationWizard() {
         setAddonsOn((cur) => cur.filter((x) => x.startsWith("custom-")));
         setCustomPrice(0);
         setUnit({ qty: 1, rate: p.price ?? 0 });
-        setFeatures(p.features.map((f) => ({ text: f.name, on: true, id: f._id, group: f.group })));
+        setFeatures(fixDepths(p.features.map((f) => ({ text: f.name, on: true, id: f._id, group: f.group, depth: p.featureDepths?.[f._id] ?? 0 }))));
         dirty.current.delete("features");
 
         // package facts (blank when the catalog does not state them)
