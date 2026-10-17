@@ -1,0 +1,1397 @@
+[
+ {
+  "service": "website-development",
+  "platform": "laravel",
+  "slug": "starter",
+  "duration": "15–20 working days",
+  "revisions": {
+   "ui": 2,
+   "dev": 2
+  },
+  "paymentMilestones": [
+   {
+    "label": "Advance Payment",
+    "percentage": 50,
+    "note": "To start the project"
+   },
+   {
+    "label": "Final Payment",
+    "percentage": 50,
+    "note": "Before go-live / handover"
+   }
+  ],
+  "title": "E-Commerce Website Development (Laravel Starter)",
+  "overview": "Webbriks will build a complete, mobile-responsive e-commerce website for [Client Name] on Laravel and MySQL. The client selects one design from the Webbriks template collection, and we customise it with the brand logo, colours, banners and content. The website includes product and category management, colour/size variants, cart and checkout, customer accounts, COD and manual payments, coupons, basic inventory and an admin dashboard for orders and customers. One courier API, basic fraud detection, and Meta Pixel, GA4 and GTM tracking are set up. The package includes one year of Hostinger VPS hosting (50GB KVM 1), one year of domain registration and 12 months of technical support.",
+  "deliverables": [
+   "Template selection from the Webbriks collection and setup on the client's domain",
+   "Brand customisation: logo, colours, fonts, homepage banners and content placement",
+   "Responsive layout for mobile, tablet and desktop",
+   "Pages: Home, Shop/Category, Product Details, Cart, Checkout, Customer Account, About, Contact, Privacy Policy, Return & Refund Policy, Terms",
+   "Product, category and brand management with colour/size variants",
+   "Shopping cart, checkout, COD and manual payment (bKash/Nagad/Rocket number display)",
+   "Customer registration, login, wishlist and product reviews",
+   "Admin dashboard: order and customer management, order status, basic inventory",
+   "Coupon and discount management",
+   "Basic sales and order reports",
+   "1 courier API integration (Steadfast, Pathao or RedX — client's choice)",
+   "Basic fraud detection (order history and repeat-cancellation flags)",
+   "Meta Pixel, GA4 and GTM setup with standard e-commerce events",
+   "Upload of up to 20 initial products (client provides data and images)",
+   "Standard performance optimisation and SSL/HTTPS",
+   "1 basic admin training session (online, up to 1 hour)"
+  ],
+  "milestones": [
+   "Kick-off, template selection and content collection — Day 1–3",
+   "Website setup and brand customisation — Day 4–8",
+   "E-commerce functions, courier and tracking setup — Day 9–14",
+   "Client review, revisions and product upload — Day 15–18",
+   "Final testing, go-live and admin training — Day 19–20"
+  ],
+  "clientResponsibilities": [
+   "Select one template from the Webbriks collection within 3 working days",
+   "Provide logo, brand colours, banner images and all page text",
+   "Provide product data: names, prices, descriptions, variants, stock and images",
+   "Provide preferred domain name and approve it before registration",
+   "Share courier merchant account (API key/credentials) for the selected courier",
+   "Provide Meta Business Manager and Google account access for tracking setup",
+   "Provide business policies: delivery charges, return, refund and exchange rules",
+   "Review each submission and send consolidated feedback within 3 working days",
+   "Clear payments as per the payment schedule"
+  ],
+  "exclusions": [
+   "Custom UI/UX design, Figma design or a design built from scratch",
+   "Online payment gateway integration (SSLCommerz, bKash PGW, aamarPay, etc.)",
+   "SMS gateway integration",
+   "Messenger/WhatsApp automation",
+   "Meta Conversion API, TikTok Pixel and enhanced e-commerce tracking",
+   "More than 1 courier API, 1-click or bulk courier booking",
+   "Product uploads beyond 20 products",
+   "Product photography, content writing, copywriting and logo design",
+   "Custom landing pages and multi-language/multi-currency",
+   "Mobile app development",
+   "Digital marketing, ad campaign management and SEO beyond basic setup",
+   "Hosting and domain renewal after the first year"
+  ],
+  "supportNote": "Estimated delivery: 15–20 working days after the advance payment and required materials. Free technical support: 12 months from the go-live date. Support requests are handled via WhatsApp/email, Saturday–Thursday, 10 AM–7 PM. Response time: within 1 working day; critical issues (site down, checkout not working) are prioritised.",
+  "supportInclusions": [
+   "Bug fixing of existing features",
+   "Minor text corrections",
+   "Small UI alignment corrections",
+   "Troubleshooting of existing functionality",
+   "Tracking configuration error correction",
+   "Fixing existing responsive issues",
+   "Fixing existing checkout/order bugs",
+   "Server monitoring and SSL renewal during the hosting period",
+   "Guidance on using the admin panel"
+  ],
+  "supportExclusions": [
+   "New feature development",
+   "New page design or a new template",
+   "Major UI/UX redesign",
+   "New API or third-party integration",
+   "Additional tracking implementation",
+   "New custom modules",
+   "Major workflow modification",
+   "Regular product upload, content update or banner design",
+   "Issues caused by client edits, third-party code or unauthorised access",
+   "Data entry and store operations"
+  ],
+  "notes": [
+   "Design policy: this package does not include a custom UI/UX or Figma design process. The client selects one design from Webbriks' template collection; the website is built with their logo, colours, banner and required content.",
+   "Template layouts and features are limited to what the selected template supports.",
+   "UI/UX revisions: This package uses a ready-made template. 2 rounds of customisation revisions are included (colours, banners, section order, content placement). Changing to a different template after setup starts is charged as a new setup.",
+   "Development revisions: 2 rounds of development revisions are included within 15 days of the delivery demo, limited to the agreed features. Requests after this period or outside scope are treated as change requests.",
+   "Hosting & domain: Renewal timers start from the order date. Renewal fees after year one are paid by the client at the provider's current rate.",
+   "Extra charges: Any feature, page, integration or change not listed in Deliverables is treated as a change request.",
+   "Extra charges: Webbriks will share a written estimate (cost + time) for each change request. Work starts only after the client approves the estimate in writing.",
+   "Extra charges: Approved change requests may extend the delivery timeline and are billed separately from the package price.",
+   "Extra charges: Small changes may be grouped and billed together at the end of the project.",
+   "Extra charges: After delivery, new features are quoted as a separate project or add-on.",
+   "Ownership: After full payment, the client owns the final website, its content, product data, customer data, brand assets and domain.",
+   "Ownership: The client receives admin access and all account credentials created for the project at handover, after the final payment.",
+   "Ownership: Webbriks retains ownership of its reusable code libraries, frameworks, internal tools and templates. The client receives a perpetual, non-exclusive licence to use them for this project.",
+   "Ownership: Third-party themes, plugins, apps, fonts, stock images and APIs remain under their own licences and terms.",
+   "Ownership: Content, images and logos supplied by the client must be owned or licensed by the client. The client is responsible for any copyright claims arising from supplied material.",
+   "Ownership: Webbriks may show the completed work in its portfolio and marketing, unless the client requests confidentiality in writing.",
+   "Ownership: Until full payment is received, all deliverables remain the property of Webbriks.",
+   "This quotation is valid for 15 days from the date of issue.",
+   "Work starts after the advance payment and the required client materials are received.",
+   "All delivery timelines are estimates in working days. Timelines pause while Webbriks waits for client feedback, content, approvals, access or payments.",
+   "The client should share feedback within 3 working days of each submission. Feedback must be consolidated and sent by one authorised contact person.",
+   "If the client is unresponsive for more than 30 days, the project may be put on hold. Restarting may require a revised timeline and a reactivation fee.",
+   "Any change to the agreed scope must be requested in writing and may change the price and timeline.",
+   "Third-party costs are not included unless stated: payment gateway fees, SMS credits, courier charges, paid apps or plugins, premium themes, Shopify subscription, ad spend and API usage fees.",
+   "Webbriks is not responsible for downtime, policy changes, pricing changes or feature changes made by third-party providers (hosting, Meta, Google, Shopify, courier, payment or SMS providers).",
+   "The client is responsible for the accuracy and legality of all products, content, prices, offers and policies published on the website or in ads.",
+   "Go-live, final handover and credential transfer happen after the final payment is cleared.",
+   "The advance payment is non-refundable once work has started. If the client cancels mid-project, work completed up to that point is billable.",
+   "Both parties will keep confidential business information shared during the project private.",
+   "Webbriks is not liable for delays caused by events beyond reasonable control, such as natural disasters, internet shutdowns, power failures or government restrictions.",
+   "Prices exclude VAT, tax or bank/MFS charges unless stated otherwise.",
+   "Disputes will be settled through discussion first, and are governed by the laws of Bangladesh."
+  ]
+ },
+ {
+  "service": "website-development",
+  "platform": "laravel",
+  "slug": "business-pro",
+  "duration": "30–40 working days",
+  "revisions": {
+   "ui": 3,
+   "dev": 3
+  },
+  "paymentMilestones": [
+   {
+    "label": "Advance Payment",
+    "percentage": 50,
+    "note": "To start the project"
+   },
+   {
+    "label": "Design Approval Payment",
+    "percentage": 30,
+    "note": "After design approval"
+   },
+   {
+    "label": "Final Payment",
+    "percentage": 20,
+    "note": "Before go-live / handover"
+   }
+  ],
+  "title": "Custom E-Commerce Website Development (Laravel Business Pro)",
+  "overview": "Webbriks will design and develop a fully custom e-commerce website for [Client Name] on Laravel and MySQL. The project starts with a brand-specific Figma design for the homepage, category, product and checkout pages, followed by development of a fast, responsive store. On top of all Starter features, it adds advanced fraud detection with risk indicators, 1-click and bulk courier booking with label printing (up to 2 couriers), Messenger/WhatsApp order automation, online payment gateway, SMS gateway, a Meta Ads report in the admin panel, Meta Conversion API, GA4 enhanced e-commerce and TikTok Pixel. It also includes advanced inventory, upsell/bundle offers, customer segmentation, staff roles and one campaign landing page, with one year of hosting, domain and 12 months of support.",
+  "deliverables": [
+   "Everything in Laravel Starter, plus:",
+   "Custom UI/UX design in Figma: Homepage, Category, Product Details, Cart/Checkout and mobile views",
+   "Custom-coded, responsive frontend based on the approved Figma design",
+   "Advanced fraud detection: customer order history, repeat cancellation, suspicious order flags, rule-based risk indicators",
+   "1-click courier booking, bulk order processing, shipping label printing and delivery status tracking (up to 2 courier APIs)",
+   "Online payment gateway integration (1 provider: SSLCommerz, bKash PGW, aamarPay or similar)",
+   "SMS gateway integration for order confirmation and status updates (1 provider)",
+   "Messenger and WhatsApp automation: order confirmation, status notifications, predefined replies (via approved APIs)",
+   "Meta Ads report in admin panel: ad spend, campaign performance, purchases, reported ROAS",
+   "Advanced inventory: low-stock alerts, stock movement history",
+   "Advanced product filtering, product bundles, upsell and cross-sell",
+   "Advanced coupon and discount rules",
+   "Meta Conversion API, GA4 enhanced e-commerce, TikTok Pixel and abandoned cart tracking",
+   "Customer segmentation and purchase history",
+   "Advanced sales and performance dashboard",
+   "Limited staff role management (e.g., Admin, Manager, Order Staff)",
+   "1 custom campaign landing page",
+   "Upload of up to 50 initial products",
+   "1 admin training session (online, up to 2 hours) + short user guide"
+  ],
+  "milestones": [
+   "Kick-off, requirement discussion and content collection — Day 1–3",
+   "Figma UI/UX design and revisions — Day 4–12",
+   "Design approval (2nd payment milestone) — Day 13",
+   "Frontend and core e-commerce development — Day 14–24",
+   "Integrations: payment, SMS, couriers, messaging, tracking, Meta Ads report — Day 25–32",
+   "Client review (UAT), revisions and product upload — Day 33–37",
+   "Final testing, go-live and admin training — Day 38–40"
+  ],
+  "clientResponsibilities": [
+   "Provide brand guideline, logo, colours, fonts and reference websites before design starts",
+   "Provide all page text, banners and product data with images",
+   "Approve the Figma design in writing before development begins",
+   "Open and verify merchant accounts for the payment gateway (trade licence, NID, bank details as required by the provider)",
+   "Provide SMS gateway account and buy SMS credits",
+   "Provide courier merchant accounts and API credentials (up to 2)",
+   "Provide Meta Business Manager, Ad Account, Facebook Page and WhatsApp Business access; complete business verification if Meta requires it",
+   "Provide Google and TikTok business account access",
+   "Define fraud rules, delivery charges and return/refund policies",
+   "Nominate one decision-maker and send consolidated feedback within 3 working days",
+   "Clear payments as per the payment schedule"
+  ],
+  "exclusions": [
+   "More than 1 payment gateway or more than 2 courier APIs",
+   "AI chatbot, AI calling or other AI automation",
+   "POS, ERP, accounting or multi-warehouse modules",
+   "Multi-language or multi-currency",
+   "Mobile app development",
+   "More than 1 landing page",
+   "Product uploads beyond 50 products",
+   "Product photography, video, copywriting and logo design",
+   "Payment gateway, SMS, WhatsApp API and courier usage fees",
+   "Ad campaign management and ad spend",
+   "Hosting and domain renewal after the first year"
+  ],
+  "supportNote": "Estimated delivery: 30–40 working days after the advance payment and required materials. Free technical support: 12 months from the go-live date, via WhatsApp/email, Saturday–Thursday, 10 AM–7 PM. Response time: within 1 working day; critical issues are prioritised the same day.",
+  "supportInclusions": [
+   "Bug fixing of existing features",
+   "Minor text corrections and small UI alignment corrections",
+   "Troubleshooting of existing functionality and integrations",
+   "Tracking configuration error correction",
+   "Fixing existing responsive and checkout/order bugs",
+   "Reconnecting existing integrations if credentials change (same provider)",
+   "Server monitoring and SSL renewal during the hosting period",
+   "Admin panel guidance for the client's team"
+  ],
+  "supportExclusions": [
+   "New feature development or new custom modules",
+   "New page design or major UI/UX redesign",
+   "New API integration or switching to a different provider",
+   "Additional tracking implementation",
+   "Major workflow modification",
+   "Fixes required due to third-party API changes that need new development",
+   "Regular content, product or banner updates",
+   "Issues caused by client edits, third-party code or unauthorised access"
+  ],
+  "notes": [
+   "Development starts only after written approval of the Figma design.",
+   "Payment gateway and WhatsApp/Messenger automation go live only after the provider approves the client's merchant or business account. Approval delays do not count against the delivery timeline.",
+   "UI/UX revisions: 3 rounds of Figma design revisions are included before development. After the design is approved, layout changes are charged as change requests.",
+   "Development revisions: 3 rounds of development revisions are included within 20 days of the delivery demo, limited to the approved design and agreed features.",
+   "Hosting & domain: Renewal timers start from the order date. Renewal fees after year one are paid by the client.",
+   "Extra charges: Any feature, page, integration or change not listed in Deliverables is treated as a change request.",
+   "Extra charges: Webbriks will share a written estimate (cost + time) for each change request. Work starts only after the client approves the estimate in writing.",
+   "Extra charges: Approved change requests may extend the delivery timeline and are billed separately from the package price.",
+   "Extra charges: Small changes may be grouped and billed together at the end of the project.",
+   "Extra charges: After delivery, new features are quoted as a separate project or add-on.",
+   "Ownership: After full payment, the client owns the final website, its content, product data, customer data, brand assets and domain.",
+   "Ownership: The client receives admin access and all account credentials created for the project at handover, after the final payment.",
+   "Ownership: Webbriks retains ownership of its reusable code libraries, frameworks, internal tools and templates. The client receives a perpetual, non-exclusive licence to use them for this project.",
+   "Ownership: Third-party themes, plugins, apps, fonts, stock images and APIs remain under their own licences and terms.",
+   "Ownership: Content, images and logos supplied by the client must be owned or licensed by the client. The client is responsible for any copyright claims arising from supplied material.",
+   "Ownership: Webbriks may show the completed work in its portfolio and marketing, unless the client requests confidentiality in writing.",
+   "Ownership: Until full payment is received, all deliverables remain the property of Webbriks.",
+   "This quotation is valid for 15 days from the date of issue.",
+   "Work starts after the advance payment and the required client materials are received.",
+   "All delivery timelines are estimates in working days. Timelines pause while Webbriks waits for client feedback, content, approvals, access or payments.",
+   "The client should share feedback within 3 working days of each submission. Feedback must be consolidated and sent by one authorised contact person.",
+   "If the client is unresponsive for more than 30 days, the project may be put on hold. Restarting may require a revised timeline and a reactivation fee.",
+   "Any change to the agreed scope must be requested in writing and may change the price and timeline.",
+   "Third-party costs are not included unless stated: payment gateway fees, SMS credits, courier charges, paid apps or plugins, premium themes, Shopify subscription, ad spend and API usage fees.",
+   "Webbriks is not responsible for downtime, policy changes, pricing changes or feature changes made by third-party providers (hosting, Meta, Google, Shopify, courier, payment or SMS providers).",
+   "The client is responsible for the accuracy and legality of all products, content, prices, offers and policies published on the website or in ads.",
+   "Go-live, final handover and credential transfer happen after the final payment is cleared.",
+   "The advance payment is non-refundable once work has started. If the client cancels mid-project, work completed up to that point is billable.",
+   "Both parties will keep confidential business information shared during the project private.",
+   "Webbriks is not liable for delays caused by events beyond reasonable control, such as natural disasters, internet shutdowns, power failures or government restrictions.",
+   "Prices exclude VAT, tax or bank/MFS charges unless stated otherwise.",
+   "Disputes will be settled through discussion first, and are governed by the laws of Bangladesh."
+  ]
+ },
+ {
+  "service": "website-development",
+  "platform": "next-js-node-js",
+  "slug": "starter",
+  "duration": "30–40 working days",
+  "revisions": {
+   "ui": 2,
+   "dev": 2
+  },
+  "paymentMilestones": [
+   {
+    "label": "Advance Payment",
+    "percentage": 50,
+    "note": "To start the project"
+   },
+   {
+    "label": "Final Payment",
+    "percentage": 50,
+    "note": "Before go-live / handover"
+   }
+  ],
+  "title": "Custom Next.js E-Commerce Website (Starter)",
+  "overview": "Webbriks will design and build a custom e-commerce website for [Client Name] using Next.js, Node.js, Express.js and MariaDB, built for fast loading and smooth mobile shopping. The project includes a custom UI/UX design, a fully custom homepage and essential pages, product and category management with variants, cart and checkout, customer accounts, wishlist and reviews, COD and manual payments, order management, basic inventory and coupons. One courier API with booking and status view from the admin, district-based delivery charges, basic fraud detection, Meta Pixel, GA4 and GTM are set up. Branding support includes a professional logo, cover photo and Facebook page optimisation. One year of VPS hosting, domain and 12 months of support are included.",
+  "deliverables": [
+   "Custom UI/UX design for Homepage, Category, Product Details, Cart/Checkout and mobile views",
+   "Fully custom homepage and essential pages: Shop, Product, Cart, Checkout, Account, About, Contact, Policy pages",
+   "Next.js frontend, Node.js/Express.js backend and MariaDB database",
+   "Product, category and brand management with colour/size variants",
+   "Shopping cart, checkout, COD and manual payment options",
+   "Customer registration, login, wishlist and review system",
+   "Order management with order status; basic inventory/stock tracking",
+   "Coupon and discount management",
+   "Basic fraud detection (order history and repeat-cancellation flags)",
+   "1 courier API integration with courier booking and status view from admin",
+   "Basic shipping charge configuration and district-based delivery charges",
+   "Meta Browser Pixel, GA4 and GTM with standard e-commerce event tracking",
+   "Basic sales and order dashboard",
+   "Secure admin dashboard, SSL/HTTPS and security foundation",
+   "Professional logo design (2 concepts, 2 revision rounds) and Facebook cover photo",
+   "Facebook page optimisation (profile, cover, bio, CTA button, page info)",
+   "Upload of up to 30 initial products",
+   "1 basic admin training session (online, up to 1.5 hours)"
+  ],
+  "milestones": [
+   "Kick-off, requirement discussion and content collection — Day 1–3",
+   "Logo, cover photo and Facebook page optimisation — Day 4–8",
+   "UI/UX design and revisions — Day 6–13",
+   "Design approval — Day 14",
+   "Frontend, backend and core e-commerce development — Day 15–28",
+   "Courier, tracking and dashboard setup — Day 29–33",
+   "Client review, revisions and product upload — Day 34–37",
+   "Final testing, go-live and admin training — Day 38–40"
+  ],
+  "clientResponsibilities": [
+   "Share business details, brand preferences and reference websites/logos",
+   "Approve the logo concept and UI/UX design in writing",
+   "Provide all page text, banners and product data with images",
+   "Provide Facebook Page admin access, Meta Business Manager and Google account access",
+   "Share courier merchant account and API credentials",
+   "Provide delivery charge rules by district and return/refund policy",
+   "Send consolidated feedback within 3 working days",
+   "Clear payments as per the payment schedule"
+  ],
+  "exclusions": [
+   "Online payment gateway and SMS gateway integration",
+   "Messenger/WhatsApp automation",
+   "Meta Conversion API, TikTok Pixel and enhanced e-commerce tracking",
+   "More than 1 courier API; 1-click or bulk courier booking",
+   "Staff roles/RBAC, customer CRM and advanced reports",
+   "Landing pages, multi-language or multi-currency",
+   "Full brand identity (brand guideline, stationery, packaging design)",
+   "Product photography, video and copywriting",
+   "Product uploads beyond 30 products",
+   "Mobile app development",
+   "Ad campaign management and ad spend",
+   "Hosting and domain renewal after the first year"
+  ],
+  "supportNote": "Estimated delivery: 30–40 working days after the advance payment and required materials. Free technical support: 12 months from the go-live date, via WhatsApp/email, Saturday–Thursday, 10 AM–7 PM. Response time: within 1 working day.",
+  "supportInclusions": [
+   "Existing feature bug fixing",
+   "Minor text correction",
+   "Small UI alignment correction",
+   "Existing functionality troubleshooting",
+   "Tracking configuration error correction",
+   "Existing responsive issues",
+   "Existing checkout/order bugs",
+   "Server monitoring, security patches and SSL renewal during the hosting period"
+  ],
+  "supportExclusions": [
+   "New feature development",
+   "New page design",
+   "Major UI/UX redesign",
+   "New API integration",
+   "Additional tracking implementation",
+   "New custom modules",
+   "Major workflow modification",
+   "New logo, social media design or regular content updates"
+  ],
+  "notes": [
+   "Final logo files (AI/SVG/PNG/PDF) are delivered after full payment.",
+   "Development starts after written approval of the UI/UX design.",
+   "UI/UX revisions: 2 rounds of UI/UX design revisions are included. Logo: 2 initial concepts with 2 revision rounds on the selected concept.",
+   "Development revisions: 2 rounds of development revisions within 15 days of the delivery demo, limited to the approved design and agreed features.",
+   "Hosting & domain: Renewal timers start from the order date. Renewal fees after year one are paid by the client.",
+   "Extra charges: Any feature, page, integration or change not listed in Deliverables is treated as a change request.",
+   "Extra charges: Webbriks will share a written estimate (cost + time) for each change request. Work starts only after the client approves the estimate in writing.",
+   "Extra charges: Approved change requests may extend the delivery timeline and are billed separately from the package price.",
+   "Extra charges: Small changes may be grouped and billed together at the end of the project.",
+   "Extra charges: After delivery, new features are quoted as a separate project or add-on.",
+   "Ownership: After full payment, the client owns the final website, its content, product data, customer data, brand assets and domain.",
+   "Ownership: The client receives admin access and all account credentials created for the project at handover, after the final payment.",
+   "Ownership: Webbriks retains ownership of its reusable code libraries, frameworks, internal tools and templates. The client receives a perpetual, non-exclusive licence to use them for this project.",
+   "Ownership: Third-party themes, plugins, apps, fonts, stock images and APIs remain under their own licences and terms.",
+   "Ownership: Content, images and logos supplied by the client must be owned or licensed by the client. The client is responsible for any copyright claims arising from supplied material.",
+   "Ownership: Webbriks may show the completed work in its portfolio and marketing, unless the client requests confidentiality in writing.",
+   "Ownership: Until full payment is received, all deliverables remain the property of Webbriks.",
+   "This quotation is valid for 15 days from the date of issue.",
+   "Work starts after the advance payment and the required client materials are received.",
+   "All delivery timelines are estimates in working days. Timelines pause while Webbriks waits for client feedback, content, approvals, access or payments.",
+   "The client should share feedback within 3 working days of each submission. Feedback must be consolidated and sent by one authorised contact person.",
+   "If the client is unresponsive for more than 30 days, the project may be put on hold. Restarting may require a revised timeline and a reactivation fee.",
+   "Any change to the agreed scope must be requested in writing and may change the price and timeline.",
+   "Third-party costs are not included unless stated: payment gateway fees, SMS credits, courier charges, paid apps or plugins, premium themes, Shopify subscription, ad spend and API usage fees.",
+   "Webbriks is not responsible for downtime, policy changes, pricing changes or feature changes made by third-party providers (hosting, Meta, Google, Shopify, courier, payment or SMS providers).",
+   "The client is responsible for the accuracy and legality of all products, content, prices, offers and policies published on the website or in ads.",
+   "Go-live, final handover and credential transfer happen after the final payment is cleared.",
+   "The advance payment is non-refundable once work has started. If the client cancels mid-project, work completed up to that point is billable.",
+   "Both parties will keep confidential business information shared during the project private.",
+   "Webbriks is not liable for delays caused by events beyond reasonable control, such as natural disasters, internet shutdowns, power failures or government restrictions.",
+   "Prices exclude VAT, tax or bank/MFS charges unless stated otherwise.",
+   "Disputes will be settled through discussion first, and are governed by the laws of Bangladesh."
+  ]
+ },
+ {
+  "service": "website-development",
+  "platform": "next-js-node-js",
+  "slug": "business-pro",
+  "duration": "45–60 working days",
+  "revisions": {
+   "ui": 3,
+   "dev": 3
+  },
+  "paymentMilestones": [
+   {
+    "label": "Advance Payment",
+    "percentage": 50,
+    "note": "To start the project"
+   },
+   {
+    "label": "Design Approval Payment",
+    "percentage": 30,
+    "note": "After design approval"
+   },
+   {
+    "label": "Final Payment",
+    "percentage": 20,
+    "note": "Before go-live / handover"
+   }
+  ],
+  "title": "Premium Custom E-Commerce Platform (Next.js Business Pro)",
+  "overview": "Webbriks will design and develop a premium e-commerce platform for [Client Name] using Next.js, Node.js, Express.js and MariaDB. It includes everything in the Next.js Starter plus a premium custom UI/UX design, advanced fraud detection with rule-based risk scoring, 1-click and bulk courier booking with labels (up to 2 couriers), Messenger and WhatsApp automation, a Meta Ads report in the admin panel, advanced inventory, Meta Conversion API, GA4 enhanced events, TikTok Pixel and abandoned cart tracking. It also adds customer CRM and segmentation, advanced filtering, bundles and cross-sell, online payment and SMS gateways, staff access roles, an advanced dashboard and one marketing landing page, with one year of VPS hosting, domain and 12 months of technical support.",
+  "deliverables": [
+   "Everything in Next.js Starter, plus:",
+   "Premium custom UI/UX design in Figma (desktop and mobile) for all key pages",
+   "Advanced fraud detection: order history, repeat-cancellation behaviour, suspicious order flags, rule-based risk scoring, manual review from admin",
+   "1-click courier integration: one-click and bulk booking, consignment ID, shipping label printing, courier status sync (up to 2 courier APIs)",
+   "Messenger and WhatsApp automation: order confirmation, status updates, welcome message, quick replies, predefined flows (via approved APIs)",
+   "Meta Ads report in admin: ad spend, campaign performance, purchases, reported ROAS",
+   "Advanced sales and inventory: low-stock alerts, stock movement history, product sales reports, on-hand/reserved stock summary",
+   "Meta Conversion API, GA4 enhanced e-commerce events, TikTok Pixel, abandoned cart tracking",
+   "Customer CRM: purchase history, basic lifetime value report, VIP/repeat segments, customer notes",
+   "Advanced product filtering and search",
+   "Advanced coupon and discount rules; product bundles, upsell and cross-sell offers",
+   "Online payment gateway integration (1 provider)",
+   "SMS gateway integration (1 provider)",
+   "Basic automated abandoned cart reminders (SMS/WhatsApp)",
+   "Advanced sales and performance dashboard",
+   "Staff access roles (limited RBAC)",
+   "1 custom marketing landing page",
+   "Upload of up to 50 initial products",
+   "2 admin training sessions (online, up to 2 hours each) + user guide"
+  ],
+  "milestones": [
+   "Discovery workshop, requirement sign-off and content collection — Day 1–5",
+   "Logo, cover photo and Facebook page optimisation — Day 4–10",
+   "Premium Figma UI/UX design and revisions — Day 6–17",
+   "Design approval (2nd payment milestone) — Day 18",
+   "Frontend, backend and core e-commerce development — Day 19–34",
+   "Automation and integrations: payment, SMS, couriers, messaging, tracking, CRM, Meta Ads report — Day 35–47",
+   "Landing page, dashboard and staff roles — Day 45–50",
+   "Client UAT, revisions and product upload — Day 51–56",
+   "Final testing, go-live, training and handover — Day 57–60"
+  ],
+  "clientResponsibilities": [
+   "Attend the discovery session and approve the requirement document",
+   "Provide brand guideline, references, page content and product data with images",
+   "Approve the logo, Figma design and landing page content in writing",
+   "Open and verify payment gateway merchant account (trade licence, NID, bank details as required)",
+   "Provide SMS gateway account and SMS credits; courier merchant accounts and API credentials (up to 2)",
+   "Provide Meta Business Manager, Ad Account, Page, WhatsApp Business and TikTok/Google access; complete Meta business verification if required",
+   "Define fraud rules, customer segments, staff roles, delivery charges and return/refund policy",
+   "Nominate one decision-maker; send consolidated feedback within 3 working days",
+   "Clear payments as per the payment schedule"
+  ],
+  "exclusions": [
+   "Custom Solution modules: multi-warehouse, POS, ERP, accounting, HR/payroll",
+   "AI chatbot, AI order verification calls and other AI features",
+   "More than 1 payment gateway, 1 SMS provider or 2 courier APIs",
+   "Multi-language or multi-currency; Shopify/WooCommerce sync",
+   "Mobile app development",
+   "More than 1 landing page; product uploads beyond 50",
+   "Product photography, video and copywriting",
+   "Gateway, SMS, WhatsApp API and courier usage fees",
+   "Ad campaign management and ad spend",
+   "Hosting and domain renewal after the first year"
+  ],
+  "supportNote": "Estimated delivery: 45–60 working days after the advance payment and required materials. Free technical support: 12 months from the go-live date, via WhatsApp/email, Saturday–Thursday, 10 AM–7 PM. Response time: within 1 working day; critical issues (site down, checkout or payment failure) handled the same day.",
+  "supportInclusions": [
+   "Existing feature bug fixing",
+   "Minor text and small UI alignment corrections",
+   "Existing functionality and integration troubleshooting",
+   "Tracking configuration error correction",
+   "Existing responsive and checkout/order bugs",
+   "Reconnecting existing integrations when credentials change (same provider)",
+   "Server monitoring, security patches, backups and SSL renewal during the hosting period",
+   "Admin guidance for the client's staff"
+  ],
+  "supportExclusions": [
+   "New feature development or new custom modules",
+   "New page design or major UI/UX redesign",
+   "New API integration or provider switch",
+   "Additional tracking implementation",
+   "Major workflow modification",
+   "Redevelopment needed due to third-party API changes",
+   "Regular product, content or banner updates",
+   "Issues caused by client edits or unauthorised access"
+  ],
+  "notes": [
+   "A requirement document is signed off before design starts; it becomes the reference for scope.",
+   "Payment gateway and WhatsApp/Messenger automation go live after provider approval. Provider approval time is not counted in the delivery timeline.",
+   "UI/UX revisions: 3 rounds of Figma design revisions are included before development. Logo: 2 concepts with 2 revision rounds.",
+   "Development revisions: 3 rounds of development revisions within 20 days of the delivery demo, limited to the approved design and agreed features.",
+   "Hosting & domain: Renewal timers start from the order date. Renewal fees after year one are paid by the client. A hosting upgrade may be recommended if traffic grows.",
+   "Extra charges: Any feature, page, integration or change not listed in Deliverables is treated as a change request.",
+   "Extra charges: Webbriks will share a written estimate (cost + time) for each change request. Work starts only after the client approves the estimate in writing.",
+   "Extra charges: Approved change requests may extend the delivery timeline and are billed separately from the package price.",
+   "Extra charges: Small changes may be grouped and billed together at the end of the project.",
+   "Extra charges: After delivery, new features are quoted as a separate project or add-on.",
+   "Ownership: After full payment, the client owns the final website, its content, product data, customer data, brand assets and domain.",
+   "Ownership: The client receives admin access and all account credentials created for the project at handover, after the final payment.",
+   "Ownership: Webbriks retains ownership of its reusable code libraries, frameworks, internal tools and templates. The client receives a perpetual, non-exclusive licence to use them for this project.",
+   "Ownership: Third-party themes, plugins, apps, fonts, stock images and APIs remain under their own licences and terms.",
+   "Ownership: Content, images and logos supplied by the client must be owned or licensed by the client. The client is responsible for any copyright claims arising from supplied material.",
+   "Ownership: Webbriks may show the completed work in its portfolio and marketing, unless the client requests confidentiality in writing.",
+   "Ownership: Until full payment is received, all deliverables remain the property of Webbriks.",
+   "This quotation is valid for 15 days from the date of issue.",
+   "Work starts after the advance payment and the required client materials are received.",
+   "All delivery timelines are estimates in working days. Timelines pause while Webbriks waits for client feedback, content, approvals, access or payments.",
+   "The client should share feedback within 3 working days of each submission. Feedback must be consolidated and sent by one authorised contact person.",
+   "If the client is unresponsive for more than 30 days, the project may be put on hold. Restarting may require a revised timeline and a reactivation fee.",
+   "Any change to the agreed scope must be requested in writing and may change the price and timeline.",
+   "Third-party costs are not included unless stated: payment gateway fees, SMS credits, courier charges, paid apps or plugins, premium themes, Shopify subscription, ad spend and API usage fees.",
+   "Webbriks is not responsible for downtime, policy changes, pricing changes or feature changes made by third-party providers (hosting, Meta, Google, Shopify, courier, payment or SMS providers).",
+   "The client is responsible for the accuracy and legality of all products, content, prices, offers and policies published on the website or in ads.",
+   "Go-live, final handover and credential transfer happen after the final payment is cleared.",
+   "The advance payment is non-refundable once work has started. If the client cancels mid-project, work completed up to that point is billable.",
+   "Both parties will keep confidential business information shared during the project private.",
+   "Webbriks is not liable for delays caused by events beyond reasonable control, such as natural disasters, internet shutdowns, power failures or government restrictions.",
+   "Prices exclude VAT, tax or bank/MFS charges unless stated otherwise.",
+   "Disputes will be settled through discussion first, and are governed by the laws of Bangladesh."
+  ]
+ },
+ {
+  "service": "website-development",
+  "platform": "next-js-node-js",
+  "slug": "custom-solution",
+  "duration": "Phased, as agreed",
+  "revisions": {
+   "ui": 3,
+   "dev": 3
+  },
+  "paymentMilestones": [
+   {
+    "label": "Advance Payment",
+    "percentage": 50,
+    "note": "To start the project"
+   },
+   {
+    "label": "Design Approval Payment",
+    "percentage": 30,
+    "note": "After design approval"
+   },
+   {
+    "label": "Final Payment",
+    "percentage": 20,
+    "note": "Before go-live / handover"
+   }
+  ],
+  "title": "Custom Enterprise Commerce & Business Automation Platform",
+  "overview": "Webbriks will design and develop a custom commerce and operations platform for [Client Name], built around the company's own workflows. The solution is built on Next.js, Node.js, Express.js and MariaDB and is delivered in phases. Based on the confirmed modules, it may include multi-warehouse and multi-store inventory, a barcode POS with multi-terminal and split payments, AI sales chatbot and Bangla AI order verification, enterprise finance (P&L, receivables/payables, expenses), loyalty and CRM, and custom integrations such as ERP, accounting, Shopify/WooCommerce sync, REST APIs and webhooks. The final scope, price and timeline are fixed in a signed requirement document after the discovery phase.",
+  "deliverables": [
+   "Phase 0 is always included. Other modules are selected per project and listed in the quotation.",
+   "Phase 0 — Discovery: workflow mapping, requirement document, module list, system architecture, phased timeline",
+   "Core commerce: everything in Next.js Business Pro (as the base platform)",
+   "Inventory & warehouse: multi-warehouse inventory, real-time stock sync, transfer slips, reorder alerts, on-hand/committed/on-hold stock, multi-store management",
+   "POS & retail: barcode POS checkout, multi-terminal POS, split payment (cash, card, MFS), thermal receipt printing (58/80mm), online–offline stock sync",
+   "AI & automation: AI sales chatbot (Messenger/WhatsApp), Bangla AI order verification calls, AI abandoned cart recovery, vision AI product recognition, AI content generation, AI landing page builder",
+   "Finance & CRM: balance sheet and P&L, flexible P&L date modes, receivables/payables, expense and petty cash ledger, customer credit and due tracking, advanced segmentation, loyalty and reward points",
+   "Integrations & security: Shopify/WooCommerce sync, ERP/accounting/POS integration, phone OTP, advanced COD rules, custom RBAC, audit logs, open REST API and webhooks, HR/attendance/payroll, multi-language and multi-currency",
+   "Technical documentation, staff training per module and handover"
+  ],
+  "milestones": [
+   "Phase 0 — Discovery and requirement sign-off — 1–2 weeks",
+   "Phase 1 — UI/UX design and core commerce platform — 6–8 weeks",
+   "Phase 2 — Selected operations modules (inventory, POS, finance) — 4–8 weeks",
+   "Phase 3 — AI, automation and integrations — 4–6 weeks",
+   "UAT, data migration, training and go-live — 2–3 weeks",
+   "Total duration depends on the selected modules; typically 4–6 months. Each phase has its own sign-off and payment milestone."
+  ],
+  "clientResponsibilities": [
+   "Assign a project owner and department contacts (sales, warehouse, accounts) for discovery and UAT",
+   "Share current workflows, sample documents, reports and existing system access",
+   "Provide data for migration in an agreed format (products, customers, stock, opening balances)",
+   "Arrange POS hardware: barcode scanners, thermal printers, cash drawers, terminals",
+   "Provide third-party accounts and API access (ERP, accounting, payment, SMS, courier, AI/telephony providers)",
+   "Sign off the requirement document and each phase deliverable in writing",
+   "Clear phase payments on time"
+  ],
+  "exclusions": [
+   "Any module not listed in the signed requirement document",
+   "Hardware purchase, installation and network setup",
+   "Third-party licence, API, AI usage, telephony, SMS and cloud costs",
+   "Data cleaning of the client's existing records",
+   "Native mobile apps (quoted separately)",
+   "On-site support outside Dhaka unless agreed"
+  ],
+  "supportNote": "Delivery is phased as per the signed requirement document. Free technical support: 12 months from final go-live (or as agreed in the contract). Optional Annual Maintenance Contract (AMC) and Service Level Agreement (SLA) with defined response times are available.",
+  "supportInclusions": [
+   "Bug fixing of delivered modules",
+   "Troubleshooting of existing functions and integrations",
+   "Security patches and server monitoring during the hosting period",
+   "Minor configuration changes (roles, rules, report filters)",
+   "Staff guidance on delivered modules"
+  ],
+  "supportExclusions": [
+   "New modules, features or reports",
+   "Workflow redesign after sign-off",
+   "Integration with new third-party systems",
+   "Hardware troubleshooting",
+   "Data entry and daily operations"
+  ],
+  "notes": [
+   "The discovery phase may be billed separately and adjusted against the project fee if the client proceeds.",
+   "Source code ownership and escrow terms are defined in the contract.",
+   "A non-disclosure agreement (NDA) can be signed on request.",
+   "UI/UX revisions: 3 rounds of design revisions per phase.",
+   "Development revisions: 3 rounds of revisions per module during UAT, limited to the signed requirement document.",
+   "Hosting & domain: Hosting is sized to the system's load (VPS or cloud server). Server, domain, backup and third-party service costs are listed in the quotation. All accounts are registered in the client's name.",
+   "Extra charges: Any feature, page, integration or change not listed in Deliverables is treated as a change request.",
+   "Extra charges: Webbriks will share a written estimate (cost + time) for each change request. Work starts only after the client approves the estimate in writing.",
+   "Extra charges: Approved change requests may extend the delivery timeline and are billed separately from the package price.",
+   "Extra charges: Small changes may be grouped and billed together at the end of the project.",
+   "Extra charges: After delivery, new features are quoted as a separate project or add-on.",
+   "Ownership: After full payment, the client owns the final website, its content, product data, customer data, brand assets and domain.",
+   "Ownership: The client receives admin access and all account credentials created for the project at handover, after the final payment.",
+   "Ownership: Webbriks retains ownership of its reusable code libraries, frameworks, internal tools and templates. The client receives a perpetual, non-exclusive licence to use them for this project.",
+   "Ownership: Third-party themes, plugins, apps, fonts, stock images and APIs remain under their own licences and terms.",
+   "Ownership: Content, images and logos supplied by the client must be owned or licensed by the client. The client is responsible for any copyright claims arising from supplied material.",
+   "Ownership: Webbriks may show the completed work in its portfolio and marketing, unless the client requests confidentiality in writing.",
+   "Ownership: Until full payment is received, all deliverables remain the property of Webbriks.",
+   "This quotation is valid for 15 days from the date of issue.",
+   "Work starts after the advance payment and the required client materials are received.",
+   "All delivery timelines are estimates in working days. Timelines pause while Webbriks waits for client feedback, content, approvals, access or payments.",
+   "The client should share feedback within 3 working days of each submission. Feedback must be consolidated and sent by one authorised contact person.",
+   "If the client is unresponsive for more than 30 days, the project may be put on hold. Restarting may require a revised timeline and a reactivation fee.",
+   "Any change to the agreed scope must be requested in writing and may change the price and timeline.",
+   "Third-party costs are not included unless stated: payment gateway fees, SMS credits, courier charges, paid apps or plugins, premium themes, Shopify subscription, ad spend and API usage fees.",
+   "Webbriks is not responsible for downtime, policy changes, pricing changes or feature changes made by third-party providers (hosting, Meta, Google, Shopify, courier, payment or SMS providers).",
+   "The client is responsible for the accuracy and legality of all products, content, prices, offers and policies published on the website or in ads.",
+   "Go-live, final handover and credential transfer happen after the final payment is cleared.",
+   "The advance payment is non-refundable once work has started. If the client cancels mid-project, work completed up to that point is billable.",
+   "Both parties will keep confidential business information shared during the project private.",
+   "Webbriks is not liable for delays caused by events beyond reasonable control, such as natural disasters, internet shutdowns, power failures or government restrictions.",
+   "Prices exclude VAT, tax or bank/MFS charges unless stated otherwise.",
+   "Disputes will be settled through discussion first, and are governed by the laws of Bangladesh."
+  ]
+ },
+ {
+  "service": "e-commerce-shopify",
+  "platform": "shopify",
+  "slug": "shopify-starter",
+  "duration": "10–15 working days",
+  "revisions": {
+   "ui": 2,
+   "dev": 2
+  },
+  "paymentMilestones": [
+   {
+    "label": "Advance Payment",
+    "percentage": 50,
+    "note": "To start the project"
+   },
+   {
+    "label": "Final Payment",
+    "percentage": 50,
+    "note": "Before go-live / handover"
+   }
+  ],
+  "title": "Shopify Store Setup & Customisation (Shopify Starter)",
+  "overview": "Webbriks will set up a professional, mobile-responsive Shopify store for [Client Name]. The client selects one Webbriks-approved free Shopify theme, and we customise it with the brand logo, colours, fonts, banners, navigation and homepage sections. The store includes product and collection management with variants, theme-supported search and filtering, cart and checkout, customer accounts, inventory, discount codes, COD and manual payment configuration, delivery charge and shipping zone setup, and order fulfilment management. We also configure Meta Pixel, GA4, GTM, basic Shopify analytics and the Facebook & Instagram sales channel where eligible, connect the custom domain, upload up to 30 products, set up basic SEO and train the client's team, with 12 months of technical support.",
+  "deliverables": [
+   "Shopify store creation and initial configuration (store settings, currency BDT, tax, notifications)",
+   "1 Webbriks-approved free theme, selected and customised",
+   "Logo, colours, fonts and banner setup",
+   "Mobile, tablet and desktop responsive layout",
+   "Pages: Home, About Us, Contact, FAQ, Privacy, Refund, Shipping and Terms policies",
+   "Navigation menu and footer customisation",
+   "Basic homepage sections and featured collections",
+   "Product and collection management with size/colour variants",
+   "Product search and filtering (theme-supported)",
+   "Shopping cart, checkout and customer account setup",
+   "Inventory and stock management; coupon/discount codes",
+   "COD and manual payment configuration",
+   "Delivery charge and shipping zone setup (e.g., Inside Dhaka / Outside Dhaka)",
+   "Order status and fulfilment workflow",
+   "Basic fraud indicators and manual order review process",
+   "Meta Pixel, GA4 and GTM setup; basic Shopify analytics",
+   "Facebook & Instagram sales channel configuration (where eligible)",
+   "Custom domain connection and Shopify-managed SSL",
+   "Up to 30 initial product uploads",
+   "Basic SEO configuration (titles, meta descriptions, URL handles)",
+   "Store management training (online, up to 1 hour)"
+  ],
+  "milestones": [
+   "Kick-off, Shopify account setup and theme selection — Day 1–2",
+   "Theme customisation, pages and navigation — Day 3–7",
+   "Payment, shipping, tracking and sales channel setup — Day 8–10",
+   "Product upload, client review and revisions — Day 11–13",
+   "Final testing, launch and training — Day 14–15"
+  ],
+  "clientResponsibilities": [
+   "Create or own the Shopify account and pay the Shopify subscription plan directly to Shopify",
+   "Select one theme from the Webbriks-approved list within 2 working days",
+   "Purchase the domain (or provide DNS access to an existing domain)",
+   "Provide logo, brand colours, banners, page text and policies",
+   "Provide product data and images for up to 30 products",
+   "Provide Meta Business Manager, Facebook Page, Instagram and Google account access",
+   "Meet Meta's commerce eligibility requirements for the sales channel",
+   "Send consolidated feedback within 3 working days"
+  ],
+  "exclusions": [
+   "Shopify subscription fees, transaction fees and paid apps",
+   "Premium (paid) themes and custom theme development",
+   "Custom UI/UX or Figma design",
+   "Courier integration, SMS gateway and online payment gateway setup",
+   "Messenger/WhatsApp automation; Conversion API and TikTok Pixel",
+   "Domain purchase (unless added separately)",
+   "Product uploads beyond 30 products",
+   "Product photography, copywriting and logo design",
+   "Ad campaign management and advanced SEO"
+  ],
+  "supportNote": "Estimated delivery: 10–15 working days after the advance payment, Shopify access and required materials. Free technical support: 12 months from launch, via WhatsApp/email, Saturday–Thursday, 10 AM–7 PM. Response time: within 1 working day.",
+  "supportInclusions": [
+   "Existing feature bug fixing",
+   "Minor text correction",
+   "Small UI alignment correction",
+   "Existing functionality troubleshooting",
+   "Tracking configuration error correction",
+   "Existing responsive issues",
+   "Existing checkout/order bugs",
+   "Guidance on Shopify admin use"
+  ],
+  "supportExclusions": [
+   "New feature development",
+   "New page design",
+   "Major UI/UX redesign or theme change",
+   "New API or app integration",
+   "Additional tracking implementation",
+   "New custom modules",
+   "Major workflow modification",
+   "Issues caused by Shopify platform changes, theme updates or third-party apps",
+   "Regular product upload and content updates"
+  ],
+  "notes": [
+   "Design policy: this package does not include custom UI/UX or Figma design. The client chooses one Webbriks-selected Shopify theme, and branding and content are customised on that theme.",
+   "Layout and features are limited to what the free theme and Shopify's native features support.",
+   "The Shopify store is created in the client's name; Webbriks works as a collaborator/staff account.",
+   "UI/UX revisions: This package uses a free Shopify theme. 2 rounds of theme customisation revisions are included. Changing to a different theme after setup starts is charged separately.",
+   "Development revisions: 2 rounds of revisions within 15 days of the store demo, limited to the agreed setup.",
+   "Hosting & domain: Hosting and SSL are managed by Shopify under the client's subscription plan",
+   "Hosting & domain: Custom domain connection included; domain purchase and renewal paid by the client",
+   "Hosting & domain: Shopify account, store ownership and domain: client",
+   "Hosting & domain: Shopify plan renewal follows Shopify's billing cycle",
+   "Extra charges: Any feature, page, integration or change not listed in Deliverables is treated as a change request.",
+   "Extra charges: Webbriks will share a written estimate (cost + time) for each change request. Work starts only after the client approves the estimate in writing.",
+   "Extra charges: Approved change requests may extend the delivery timeline and are billed separately from the package price.",
+   "Extra charges: Small changes may be grouped and billed together at the end of the project.",
+   "Extra charges: After delivery, new features are quoted as a separate project or add-on.",
+   "Ownership: After full payment, the client owns the final website, its content, product data, customer data, brand assets and domain.",
+   "Ownership: The client receives admin access and all account credentials created for the project at handover, after the final payment.",
+   "Ownership: Webbriks retains ownership of its reusable code libraries, frameworks, internal tools and templates. The client receives a perpetual, non-exclusive licence to use them for this project.",
+   "Ownership: Third-party themes, plugins, apps, fonts, stock images and APIs remain under their own licences and terms.",
+   "Ownership: Content, images and logos supplied by the client must be owned or licensed by the client. The client is responsible for any copyright claims arising from supplied material.",
+   "Ownership: Webbriks may show the completed work in its portfolio and marketing, unless the client requests confidentiality in writing.",
+   "Ownership: Until full payment is received, all deliverables remain the property of Webbriks.",
+   "This quotation is valid for 15 days from the date of issue.",
+   "Work starts after the advance payment and the required client materials are received.",
+   "All delivery timelines are estimates in working days. Timelines pause while Webbriks waits for client feedback, content, approvals, access or payments.",
+   "The client should share feedback within 3 working days of each submission. Feedback must be consolidated and sent by one authorised contact person.",
+   "If the client is unresponsive for more than 30 days, the project may be put on hold. Restarting may require a revised timeline and a reactivation fee.",
+   "Any change to the agreed scope must be requested in writing and may change the price and timeline.",
+   "Third-party costs are not included unless stated: payment gateway fees, SMS credits, courier charges, paid apps or plugins, premium themes, Shopify subscription, ad spend and API usage fees.",
+   "Webbriks is not responsible for downtime, policy changes, pricing changes or feature changes made by third-party providers (hosting, Meta, Google, Shopify, courier, payment or SMS providers).",
+   "The client is responsible for the accuracy and legality of all products, content, prices, offers and policies published on the website or in ads.",
+   "Go-live, final handover and credential transfer happen after the final payment is cleared.",
+   "The advance payment is non-refundable once work has started. If the client cancels mid-project, work completed up to that point is billable.",
+   "Both parties will keep confidential business information shared during the project private.",
+   "Webbriks is not liable for delays caused by events beyond reasonable control, such as natural disasters, internet shutdowns, power failures or government restrictions.",
+   "Prices exclude VAT, tax or bank/MFS charges unless stated otherwise.",
+   "Disputes will be settled through discussion first, and are governed by the laws of Bangladesh."
+  ]
+ },
+ {
+  "service": "e-commerce-shopify",
+  "platform": "shopify",
+  "slug": "shopify-business-pro",
+  "duration": "25–35 working days",
+  "revisions": {
+   "ui": 3,
+   "dev": 3
+  },
+  "paymentMilestones": [
+   {
+    "label": "Advance Payment",
+    "percentage": 50,
+    "note": "To start the project"
+   },
+   {
+    "label": "Design Approval Payment",
+    "percentage": 30,
+    "note": "After design approval"
+   },
+   {
+    "label": "Final Payment",
+    "percentage": 20,
+    "note": "Before go-live / handover"
+   }
+  ],
+  "title": "Custom Shopify Store Design & Development (Shopify Business Pro)",
+  "overview": "Webbriks will design and build a custom, conversion-focused Shopify store for [Client Name]. The project starts with a Figma-based custom design for the homepage, product and collection pages, developed as custom Shopify theme sections. On top of all Starter features, it adds advanced fraud review workflows, courier booking and tracking for local couriers such as Steadfast, Pathao or RedX (up to 2, via supported apps or integrations), Messenger and WhatsApp automation, Meta Conversion API, GA4 enhanced e-commerce and TikTok Pixel. Conversion features include bundles, upsell/cross-sell, advanced discounts, reviews, wishlist, advanced filtering, abandoned checkout recovery and customer segmentation. SMS setup, one landing page, up to 100 product uploads and 12 months of support are included.",
+  "deliverables": [
+   "Everything in Shopify Starter, plus:",
+   "Figma-based custom UI/UX design: homepage, product page, collection page (desktop and mobile)",
+   "Custom Shopify theme sections and conversion-focused layout",
+   "Custom product page sections and advanced collection page design",
+   "Advanced fraud detection setup: suspicious order flags, repeat customer history and risk review workflow (via supported app/rules)",
+   "1-click courier booking and tracking workflow for up to 2 supported local couriers",
+   "Messenger and WhatsApp automation: order confirmation, shipping updates, support replies (via supported apps/approved APIs)",
+   "Meta Pixel + Conversion API data sharing, GA4 enhanced e-commerce, TikTok Pixel and event testing",
+   "Product bundles, upsell/cross-sell, advanced discount setup",
+   "Customer reviews and wishlist (native or compatible apps)",
+   "Advanced product search and filtering",
+   "SMS gateway setup (compatible provider)",
+   "Abandoned checkout recovery configuration",
+   "Customer segmentation and marketing lists",
+   "1 custom campaign landing page",
+   "Advanced Shopify analytics setup",
+   "Basic technical SEO; performance and image optimisation",
+   "Up to 100 initial product uploads",
+   "Store management training (online, up to 2 hours)"
+  ],
+  "milestones": [
+   "Kick-off, requirement discussion and content collection — Day 1–3",
+   "Figma UI/UX design and revisions — Day 4–10",
+   "Design approval (2nd payment milestone) — Day 11",
+   "Custom theme development and store setup — Day 12–21",
+   "Apps, courier, SMS, messaging and tracking integrations — Day 22–27",
+   "Landing page, product upload, client review and revisions — Day 28–32",
+   "Final testing, launch and training — Day 33–35"
+  ],
+  "clientResponsibilities": [
+   "Own the Shopify account and pay the Shopify plan and any paid apps directly",
+   "Provide brand guideline, references, page content and product data for up to 100 products",
+   "Approve the Figma design in writing before development",
+   "Provide courier merchant accounts, SMS provider account and credits",
+   "Provide Meta Business Manager, Ad Account, WhatsApp Business, TikTok and Google access",
+   "Purchase the domain or provide DNS access",
+   "Send consolidated feedback within 3 working days"
+  ],
+  "exclusions": [
+   "Shopify plan, transaction fees and paid app subscriptions",
+   "Couriers or features not supported by available Shopify apps/integrations",
+   "Fully custom private app development",
+   "More than 2 couriers or 1 landing page",
+   "Product uploads beyond 100 products",
+   "Multi-language/multi-currency (Shopify Markets) setup",
+   "Product photography, copywriting and logo design",
+   "Ad campaign management and ongoing SEO",
+   "Domain purchase (unless added separately)"
+  ],
+  "supportNote": "Estimated delivery: 25–35 working days after the advance payment, Shopify access and required materials. Free technical support: 12 months from launch, via WhatsApp/email, Saturday–Thursday, 10 AM–7 PM. Response time: within 1 working day.",
+  "supportInclusions": [
+   "Existing feature bug fixing",
+   "Minor text and small UI alignment corrections",
+   "Existing functionality and app configuration troubleshooting",
+   "Tracking configuration error correction",
+   "Existing responsive and checkout/order issues",
+   "Guidance on Shopify admin and configured apps"
+  ],
+  "supportExclusions": [
+   "New feature development or new custom sections",
+   "New page design or major UI/UX redesign",
+   "New app/API integration or app replacement",
+   "Additional tracking implementation",
+   "Major workflow modification",
+   "Issues caused by Shopify platform updates, third-party app changes or app removal",
+   "Regular product and content updates"
+  ],
+  "notes": [
+   "Courier, messaging, fraud and review features depend on apps available on the Shopify App Store. Monthly app charges are paid by the client.",
+   "The custom theme is delivered to the client's store after full payment.",
+   "UI/UX revisions: 3 rounds of Figma design revisions are included before development.",
+   "Development revisions: 3 rounds of revisions within 20 days of the store demo, limited to the approved design and agreed features.",
+   "Hosting & domain: Hosting and SSL are managed by Shopify under the client's plan",
+   "Hosting & domain: Custom domain connection included; domain purchase and renewal paid by the client",
+   "Hosting & domain: Shopify account, store, theme code and domain: client",
+   "Extra charges: Any feature, page, integration or change not listed in Deliverables is treated as a change request.",
+   "Extra charges: Webbriks will share a written estimate (cost + time) for each change request. Work starts only after the client approves the estimate in writing.",
+   "Extra charges: Approved change requests may extend the delivery timeline and are billed separately from the package price.",
+   "Extra charges: Small changes may be grouped and billed together at the end of the project.",
+   "Extra charges: After delivery, new features are quoted as a separate project or add-on.",
+   "Ownership: After full payment, the client owns the final website, its content, product data, customer data, brand assets and domain.",
+   "Ownership: The client receives admin access and all account credentials created for the project at handover, after the final payment.",
+   "Ownership: Webbriks retains ownership of its reusable code libraries, frameworks, internal tools and templates. The client receives a perpetual, non-exclusive licence to use them for this project.",
+   "Ownership: Third-party themes, plugins, apps, fonts, stock images and APIs remain under their own licences and terms.",
+   "Ownership: Content, images and logos supplied by the client must be owned or licensed by the client. The client is responsible for any copyright claims arising from supplied material.",
+   "Ownership: Webbriks may show the completed work in its portfolio and marketing, unless the client requests confidentiality in writing.",
+   "Ownership: Until full payment is received, all deliverables remain the property of Webbriks.",
+   "This quotation is valid for 15 days from the date of issue.",
+   "Work starts after the advance payment and the required client materials are received.",
+   "All delivery timelines are estimates in working days. Timelines pause while Webbriks waits for client feedback, content, approvals, access or payments.",
+   "The client should share feedback within 3 working days of each submission. Feedback must be consolidated and sent by one authorised contact person.",
+   "If the client is unresponsive for more than 30 days, the project may be put on hold. Restarting may require a revised timeline and a reactivation fee.",
+   "Any change to the agreed scope must be requested in writing and may change the price and timeline.",
+   "Third-party costs are not included unless stated: payment gateway fees, SMS credits, courier charges, paid apps or plugins, premium themes, Shopify subscription, ad spend and API usage fees.",
+   "Webbriks is not responsible for downtime, policy changes, pricing changes or feature changes made by third-party providers (hosting, Meta, Google, Shopify, courier, payment or SMS providers).",
+   "The client is responsible for the accuracy and legality of all products, content, prices, offers and policies published on the website or in ads.",
+   "Go-live, final handover and credential transfer happen after the final payment is cleared.",
+   "The advance payment is non-refundable once work has started. If the client cancels mid-project, work completed up to that point is billable.",
+   "Both parties will keep confidential business information shared during the project private.",
+   "Webbriks is not liable for delays caused by events beyond reasonable control, such as natural disasters, internet shutdowns, power failures or government restrictions.",
+   "Prices exclude VAT, tax or bank/MFS charges unless stated otherwise.",
+   "Disputes will be settled through discussion first, and are governed by the laws of Bangladesh."
+  ]
+ },
+ {
+  "service": "performance-marketing",
+  "platform": null,
+  "slug": "starter-package",
+  "duration": "7–10 days onboarding",
+  "revisions": {
+   "ui": 2,
+   "dev": null
+  },
+  "paymentMilestones": [
+   {
+    "label": "Monthly Fee",
+    "percentage": 100,
+    "note": "In advance, before the 5th of each month; ad budget is paid by the client directly to the ad platform"
+   }
+  ],
+  "title": "Performance Marketing & Social Media Management (Starter)",
+  "overview": "Webbriks will manage sales-focused performance marketing for [Client Name] on Meta (Facebook & Instagram) and Google. Work starts with product, audience and competitor research and a strategic marketing plan. We then plan, launch and optimise conversion campaigns, remarketing, Google Search and Shopping/Performance Max where applicable, tracking CPA, ROAS and conversion rate. Webbriks also provides creative strategy (angles, hooks, key messages, offers and formats) and manages Facebook & Instagram with 8–12 posts per month, including content calendar, copywriting, static and carousel design, reels editing from supplied footage, scheduling and a monthly performance review. This package covers a monthly ad spend below ৳5 lakh; the ad budget is paid separately by the client.",
+  "deliverables": [
+   "Research & strategy (first month): product and business analysis, customer and audience analysis, competitor and market analysis, strategic marketing plan",
+   "Meta Ads: sales/conversion campaign planning, campaign creation and configuration, audience research and targeting, remarketing/retargeting, creative and A/B testing, budget allocation and optimisation, performance monitoring",
+   "Google Ads: search campaign planning and setup, Shopping/Performance Max where applicable, keyword and search intent research, search terms and negative keyword optimisation, conversion tracking review, bid and budget optimisation",
+   "Creative strategy: product-specific angles, hooks and key messages, pain point/solution angles, USP communication, offer and promotion ideas, recommended video/static/carousel formats, creative testing recommendations",
+   "Social media management: 8–12 posts per month (2–3 per week) across static, carousel, reels and informative posts; monthly content strategy and calendar; copywriting and captions; reel scripts; static/carousel design; reels editing from client-provided footage; scheduling and publishing on Facebook and Instagram",
+   "Reporting: weekly performance update (WhatsApp/email) and monthly performance report with next-month plan",
+   "Strategy review call: monthly (Starter tier)"
+  ],
+  "milestones": [
+   "Onboarding: account access, tracking audit and business questionnaire — Day 1–3",
+   "Research and strategic marketing plan — Day 4–7",
+   "Content calendar and first creatives approved — Day 7–10",
+   "Campaign launch — Day 10",
+   "Testing and learning phase — Weeks 2–4",
+   "Monthly cycle: optimisation, weekly updates, monthly report and next-month plan"
+  ],
+  "clientResponsibilities": [
+   "Provide admin/partner access to Meta Business Manager, Ad Account, Facebook Page, Instagram and Google Ads",
+   "Fund the ad account directly and keep a valid payment method active",
+   "Ensure the website/landing page, Pixel/CAPI and GA4 tracking work correctly (Webbriks reviews and advises)",
+   "Supply product information, prices, offers, stock status and product photos/videos",
+   "Approve the monthly content calendar and creatives within 2 working days",
+   "Handle customer inbox replies, order confirmation and delivery",
+   "Inform Webbriks of stock-outs, price changes and offers at least 3 days in advance",
+   "Pay the monthly fee in advance"
+  ],
+  "exclusions": [
+   "Ad budget/ad spend and any platform taxes or fees",
+   "Product photography, video shooting, models and professional ad scriptwriting production (available as a separate Webbriks service)",
+   "Website development, landing page development and tracking implementation",
+   "TikTok, YouTube, LinkedIn or other platform management",
+   "Inbox management, comment moderation and customer service",
+   "Influencer marketing and paid collaborations",
+   "SEO and email/SMS marketing",
+   "Recovery of disabled or restricted ad accounts (guidance only)"
+  ],
+  "supportNote": "The service runs month to month after onboarding. Minimum engagement: 3 months, as results improve after the learning phase. Either party can stop the service with 15 days' written notice before the next billing date. Communication via a shared WhatsApp group, Saturday–Thursday, 10 AM–7 PM.",
+  "supportInclusions": [
+   "Day-to-day campaign monitoring and optimisation",
+   "Weekly performance updates and monthly report",
+   "Monthly strategy review call",
+   "Ad policy guidance and ad rejection handling",
+   "Tracking health checks (Pixel, CAPI, GA4) with recommendations"
+  ],
+  "supportExclusions": [
+   "Fixing website or tracking code",
+   "Posts beyond the monthly quota or urgent same-day designs",
+   "Out-of-hours campaign changes, except agreed emergencies",
+   "Work for additional brands, pages or ad accounts"
+  ],
+  "notes": [
+   "Advertising results depend on product, price, offer, competition, website experience and budget. Webbriks optimises for performance but does not guarantee specific sales, ROAS or CPA.",
+   "If monthly ad spend moves above ৳5 lakh for two consecutive months, the plan moves to the Growth tier from the next month.",
+   "All ads must follow Meta and Google advertising policies. Webbriks is not responsible for account restrictions caused by restricted products or client-supplied content.",
+   "Unused posts do not roll over to the next month.",
+   "Revisions: Creative revisions: 2 rounds per post or creative. Additional rounds or posts beyond the monthly quota are charged per design.",
+   "Extra charges: Extra posts, extra platforms, ad creative production, photography/video shoots, landing pages and managing a higher ad spend than the selected tier are quoted separately.",
+   "Ownership: Ad accounts, pages, pixels, audiences and campaign data belong to the client and stay in the client's Business Manager.",
+   "Ownership: Designs, captions and reports made for the client are owned by the client after the monthly fee is paid.",
+   "Ownership: Strategy documents and frameworks remain Webbriks' know-how, licensed to the client for their own use.",
+   "This quotation is valid for 15 days from the date of issue.",
+   "Work starts after the advance payment and the required client materials are received.",
+   "All delivery timelines are estimates in working days. Timelines pause while Webbriks waits for client feedback, content, approvals, access or payments.",
+   "The client should share feedback within 3 working days of each submission. Feedback must be consolidated and sent by one authorised contact person.",
+   "If the client is unresponsive for more than 30 days, the project may be put on hold. Restarting may require a revised timeline and a reactivation fee.",
+   "Any change to the agreed scope must be requested in writing and may change the price and timeline.",
+   "Third-party costs are not included unless stated: payment gateway fees, SMS credits, courier charges, paid apps or plugins, premium themes, Shopify subscription, ad spend and API usage fees.",
+   "Webbriks is not responsible for downtime, policy changes, pricing changes or feature changes made by third-party providers (hosting, Meta, Google, Shopify, courier, payment or SMS providers).",
+   "The client is responsible for the accuracy and legality of all products, content, prices, offers and policies published on the website or in ads.",
+   "Go-live, final handover and credential transfer happen after the final payment is cleared.",
+   "The advance payment is non-refundable once work has started. If the client cancels mid-project, work completed up to that point is billable.",
+   "Both parties will keep confidential business information shared during the project private.",
+   "Webbriks is not liable for delays caused by events beyond reasonable control, such as natural disasters, internet shutdowns, power failures or government restrictions.",
+   "Prices exclude VAT, tax or bank/MFS charges unless stated otherwise.",
+   "Disputes will be settled through discussion first, and are governed by the laws of Bangladesh."
+  ]
+ },
+ {
+  "service": "performance-marketing",
+  "platform": null,
+  "slug": "growth-package",
+  "duration": "7–10 days onboarding",
+  "revisions": {
+   "ui": 2,
+   "dev": null
+  },
+  "paymentMilestones": [
+   {
+    "label": "Monthly Fee",
+    "percentage": 100,
+    "note": "In advance, before the 5th of each month; ad budget is paid by the client directly to the ad platform"
+   }
+  ],
+  "title": "Performance Marketing & Social Media Management (Growth)",
+  "overview": "Webbriks will manage sales-focused performance marketing for [Client Name] on Meta (Facebook & Instagram) and Google. Work starts with product, audience and competitor research and a strategic marketing plan. We then plan, launch and optimise conversion campaigns, remarketing, Google Search and Shopping/Performance Max where applicable, tracking CPA, ROAS and conversion rate. Webbriks also provides creative strategy (angles, hooks, key messages, offers and formats) and manages Facebook & Instagram with 8–12 posts per month, including content calendar, copywriting, static and carousel design, reels editing from supplied footage, scheduling and a monthly performance review. This package covers a monthly ad spend above ৳5 lakh; the ad budget is paid separately by the client.",
+  "deliverables": [
+   "Research & strategy (first month): product and business analysis, customer and audience analysis, competitor and market analysis, strategic marketing plan",
+   "Meta Ads: sales/conversion campaign planning, campaign creation and configuration, audience research and targeting, remarketing/retargeting, creative and A/B testing, budget allocation and optimisation, performance monitoring",
+   "Google Ads: search campaign planning and setup, Shopping/Performance Max where applicable, keyword and search intent research, search terms and negative keyword optimisation, conversion tracking review, bid and budget optimisation",
+   "Creative strategy: product-specific angles, hooks and key messages, pain point/solution angles, USP communication, offer and promotion ideas, recommended video/static/carousel formats, creative testing recommendations",
+   "Social media management: 8–12 posts per month (2–3 per week) across static, carousel, reels and informative posts; monthly content strategy and calendar; copywriting and captions; reel scripts; static/carousel design; reels editing from client-provided footage; scheduling and publishing on Facebook and Instagram",
+   "Reporting: weekly performance update (WhatsApp/email) and monthly performance report with next-month plan",
+   "Strategy review call: bi-weekly (Growth tier)"
+  ],
+  "milestones": [
+   "Onboarding: account access, tracking audit and business questionnaire — Day 1–3",
+   "Research and strategic marketing plan — Day 4–7",
+   "Content calendar and first creatives approved — Day 7–10",
+   "Campaign launch — Day 10",
+   "Testing and learning phase — Weeks 2–4",
+   "Monthly cycle: optimisation, weekly updates, monthly report and next-month plan"
+  ],
+  "clientResponsibilities": [
+   "Provide admin/partner access to Meta Business Manager, Ad Account, Facebook Page, Instagram and Google Ads",
+   "Fund the ad account directly and keep a valid payment method active",
+   "Ensure the website/landing page, Pixel/CAPI and GA4 tracking work correctly (Webbriks reviews and advises)",
+   "Supply product information, prices, offers, stock status and product photos/videos",
+   "Approve the monthly content calendar and creatives within 2 working days",
+   "Handle customer inbox replies, order confirmation and delivery",
+   "Inform Webbriks of stock-outs, price changes and offers at least 3 days in advance",
+   "Pay the monthly fee in advance"
+  ],
+  "exclusions": [
+   "Ad budget/ad spend and any platform taxes or fees",
+   "Product photography, video shooting, models and professional ad scriptwriting production (available as a separate Webbriks service)",
+   "Website development, landing page development and tracking implementation",
+   "TikTok, YouTube, LinkedIn or other platform management",
+   "Inbox management, comment moderation and customer service",
+   "Influencer marketing and paid collaborations",
+   "SEO and email/SMS marketing",
+   "Recovery of disabled or restricted ad accounts (guidance only)"
+  ],
+  "supportNote": "The service runs month to month after onboarding. Minimum engagement: 3 months, as results improve after the learning phase. Either party can stop the service with 15 days' written notice before the next billing date. Communication via a shared WhatsApp group, Saturday–Thursday, 10 AM–7 PM.",
+  "supportInclusions": [
+   "Day-to-day campaign monitoring and optimisation",
+   "Weekly performance updates and monthly report",
+   "Monthly strategy review call",
+   "Ad policy guidance and ad rejection handling",
+   "Tracking health checks (Pixel, CAPI, GA4) with recommendations"
+  ],
+  "supportExclusions": [
+   "Fixing website or tracking code",
+   "Posts beyond the monthly quota or urgent same-day designs",
+   "Out-of-hours campaign changes, except agreed emergencies",
+   "Work for additional brands, pages or ad accounts"
+  ],
+  "notes": [
+   "Advertising results depend on product, price, offer, competition, website experience and budget. Webbriks optimises for performance but does not guarantee specific sales, ROAS or CPA.",
+   "If monthly ad spend moves above ৳5 lakh for two consecutive months, the plan moves to the Growth tier from the next month.",
+   "All ads must follow Meta and Google advertising policies. Webbriks is not responsible for account restrictions caused by restricted products or client-supplied content.",
+   "Unused posts do not roll over to the next month.",
+   "Revisions: Creative revisions: 2 rounds per post or creative. Additional rounds or posts beyond the monthly quota are charged per design.",
+   "Extra charges: Extra posts, extra platforms, ad creative production, photography/video shoots, landing pages and managing a higher ad spend than the selected tier are quoted separately.",
+   "Ownership: Ad accounts, pages, pixels, audiences and campaign data belong to the client and stay in the client's Business Manager.",
+   "Ownership: Designs, captions and reports made for the client are owned by the client after the monthly fee is paid.",
+   "Ownership: Strategy documents and frameworks remain Webbriks' know-how, licensed to the client for their own use.",
+   "This quotation is valid for 15 days from the date of issue.",
+   "Work starts after the advance payment and the required client materials are received.",
+   "All delivery timelines are estimates in working days. Timelines pause while Webbriks waits for client feedback, content, approvals, access or payments.",
+   "The client should share feedback within 3 working days of each submission. Feedback must be consolidated and sent by one authorised contact person.",
+   "If the client is unresponsive for more than 30 days, the project may be put on hold. Restarting may require a revised timeline and a reactivation fee.",
+   "Any change to the agreed scope must be requested in writing and may change the price and timeline.",
+   "Third-party costs are not included unless stated: payment gateway fees, SMS credits, courier charges, paid apps or plugins, premium themes, Shopify subscription, ad spend and API usage fees.",
+   "Webbriks is not responsible for downtime, policy changes, pricing changes or feature changes made by third-party providers (hosting, Meta, Google, Shopify, courier, payment or SMS providers).",
+   "The client is responsible for the accuracy and legality of all products, content, prices, offers and policies published on the website or in ads.",
+   "Go-live, final handover and credential transfer happen after the final payment is cleared.",
+   "The advance payment is non-refundable once work has started. If the client cancels mid-project, work completed up to that point is billable.",
+   "Both parties will keep confidential business information shared during the project private.",
+   "Webbriks is not liable for delays caused by events beyond reasonable control, such as natural disasters, internet shutdowns, power failures or government restrictions.",
+   "Prices exclude VAT, tax or bank/MFS charges unless stated otherwise.",
+   "Disputes will be settled through discussion first, and are governed by the laws of Bangladesh."
+  ]
+ },
+ {
+  "service": "product-photography",
+  "platform": null,
+  "slug": "product-photography",
+  "duration": "5–10 working days",
+  "revisions": {
+   "ui": 1,
+   "dev": null
+  },
+  "paymentMilestones": [
+   {
+    "label": "Advance Payment",
+    "percentage": 50,
+    "note": "At confirmation (orders under ৳10,000: 100% advance)"
+   },
+   {
+    "label": "Final Payment",
+    "percentage": 50,
+    "note": "Before final file delivery"
+   }
+  ],
+  "title": "Product Photography",
+  "overview": "Webbriks will produce professional visual content for [Client Name] to present products clearly and support online sales and ad campaigns. The order covers [X] products with four professionally edited photographs from different angles per product, [X] short-form product reels of 15–30 seconds, and [X] product explainer or ad creative videos of 30–60 seconds. Our team plans shots, lighting, concept and video direction, then completes editing, retouching, colour correction and final polish. Final edited files are delivered in web- and ad-ready formats. Editing is included in the rate; model fees, outdoor shooting, transport and special props are not included unless listed in this quotation.",
+  "deliverables": [
+   "Product photography: 4 edited photos per product from different angles; white or plain background unless agreed; background clean-up, colour correction and necessary retouching; high-resolution JPG plus web-optimised versions",
+   "Shot list and creative brief confirmed before production",
+   "Delivery via Google Drive link"
+  ],
+  "milestones": [
+   "Requirement discussion: products, quantity, angles, formats and creative brief — Day 1",
+   "Product handover to Webbriks studio — as scheduled by client",
+   "Planning and production (shoot) — Day 1–3 after handover",
+   "Post-production: editing, retouching, colour and polish — Day 3–6",
+   "Preview delivery, revisions and final file delivery — Day 6–10",
+   "Standard timeline: photography up to 50 products and reels in 5–7 working days; explainer/ad videos in 7–10 working days after product handover. Larger orders get a schedule in the quotation."
+  ],
+  "clientResponsibilities": [
+   "Share product list, quantity, required angles, formats and reference images/videos",
+   "Deliver clean, ready-to-shoot products (ironed, tagged, complete with accessories) to the Webbriks studio",
+   "Supply brand assets (logo, fonts, colours) and any text, prices or offers for videos",
+   "Supply special or client-requested props",
+   "Approve the shot list/script before production",
+   "Review previews and send consolidated feedback within 2 working days",
+   "Collect products within 7 days of final delivery (or arrange courier at own cost)"
+  ],
+  "exclusions": [
+   "Model or talent fees",
+   "Outdoor shooting, location rent, transport/conveyance and travel costs",
+   "Special, unusual or client-requested props",
+   "Professional voice-over, licensed commercial music and complex 3D/motion graphics",
+   "Raw/unedited files and project source files",
+   "Additional angles beyond 4 per product, or extra video durations",
+   "Ad campaign management and posting",
+   "Complex setups, special locations or services outside the agreed scope (priced individually)"
+  ],
+  "supportNote": "Delivery estimate starts from product handover and confirmed brief. Final files stay available on the shared Drive link for 30 days; Webbriks keeps a backup for 90 days.",
+  "supportInclusions": [
+   "Re-export in another size or aspect ratio from final edits (minor)",
+   "Fixing technical errors in delivered files (wrong crop, colour mismatch, missed retouch)",
+   "Re-sharing delivery links within the backup period"
+  ],
+  "supportExclusions": [
+   "Reshoots due to changed requirements after approval",
+   "New concepts, scripts or additional edits after final delivery",
+   "Retrieval of files after the 90-day backup period"
+  ],
+  "notes": [
+   "All prices are indicative; the final rate depends on product size, handling, setup, lighting and retouching complexity.",
+   "Webbriks handles products with care but is not liable for normal wear or for damage to fragile items not declared at handover.",
+   "Uncollected products after 30 days may incur a storage charge.",
+   "Revisions: Photos: 1 round of minor retouch revisions. Reels and videos: 2 rounds of edit revisions (text, music, cuts, colour). A reshoot or concept change is charged as a new unit.",
+   "Extra charges: Additional angles, extra products, longer video durations, models, outdoor shoots, props and rush delivery (within 48 hours) are quoted separately before work starts. Volume and recurring orders may receive lower per-unit rates.",
+   "Ownership: After full payment, the client may use the final files for commercial purposes: website, social media, marketplaces and ads.",
+   "Ownership: Webbriks keeps copyright of raw footage and may use the content in its portfolio, unless the client asks for confidentiality.",
+   "Ownership: Files may not be resold or licensed to third parties without Webbriks' permission.",
+   "This quotation is valid for 15 days from the date of issue.",
+   "Work starts after the advance payment and the required client materials are received.",
+   "All delivery timelines are estimates in working days. Timelines pause while Webbriks waits for client feedback, content, approvals, access or payments.",
+   "The client should share feedback within 3 working days of each submission. Feedback must be consolidated and sent by one authorised contact person.",
+   "If the client is unresponsive for more than 30 days, the project may be put on hold. Restarting may require a revised timeline and a reactivation fee.",
+   "Any change to the agreed scope must be requested in writing and may change the price and timeline.",
+   "Third-party costs are not included unless stated: payment gateway fees, SMS credits, courier charges, paid apps or plugins, premium themes, Shopify subscription, ad spend and API usage fees.",
+   "Webbriks is not responsible for downtime, policy changes, pricing changes or feature changes made by third-party providers (hosting, Meta, Google, Shopify, courier, payment or SMS providers).",
+   "The client is responsible for the accuracy and legality of all products, content, prices, offers and policies published on the website or in ads.",
+   "Go-live, final handover and credential transfer happen after the final payment is cleared.",
+   "The advance payment is non-refundable once work has started. If the client cancels mid-project, work completed up to that point is billable.",
+   "Both parties will keep confidential business information shared during the project private.",
+   "Webbriks is not liable for delays caused by events beyond reasonable control, such as natural disasters, internet shutdowns, power failures or government restrictions.",
+   "Prices exclude VAT, tax or bank/MFS charges unless stated otherwise.",
+   "Disputes will be settled through discussion first, and are governed by the laws of Bangladesh."
+  ]
+ },
+ {
+  "service": "product-reels-video",
+  "platform": null,
+  "slug": "short-form-product-reel",
+  "duration": "5–10 working days",
+  "revisions": {
+   "ui": 2,
+   "dev": null
+  },
+  "paymentMilestones": [
+   {
+    "label": "Advance Payment",
+    "percentage": 50,
+    "note": "At confirmation (orders under ৳10,000: 100% advance)"
+   },
+   {
+    "label": "Final Payment",
+    "percentage": 50,
+    "note": "Before final file delivery"
+   }
+  ],
+  "title": "Product Reels / Ad Creative Video Production",
+  "overview": "Webbriks will produce professional visual content for [Client Name] to present products clearly and support online sales and ad campaigns. The order covers [X] products with four professionally edited photographs from different angles per product, [X] short-form product reels of 15–30 seconds, and [X] product explainer or ad creative videos of 30–60 seconds. Our team plans shots, lighting, concept and video direction, then completes editing, retouching, colour correction and final polish. Final edited files are delivered in web- and ad-ready formats. Editing is included in the rate; model fees, outdoor shooting, transport and special props are not included unless listed in this quotation.",
+  "deliverables": [
+   "Short-form reels: 1 edited reel of 15–30 seconds per unit; 9:16 vertical MP4 (1080×1920); background music from licence-free libraries; basic text/caption overlays",
+   "Shot list and creative brief confirmed before production",
+   "Delivery via Google Drive link"
+  ],
+  "milestones": [
+   "Requirement discussion: products, quantity, angles, formats and creative brief — Day 1",
+   "Product handover to Webbriks studio — as scheduled by client",
+   "Planning and production (shoot) — Day 1–3 after handover",
+   "Post-production: editing, retouching, colour and polish — Day 3–6",
+   "Preview delivery, revisions and final file delivery — Day 6–10",
+   "Standard timeline: photography up to 50 products and reels in 5–7 working days; explainer/ad videos in 7–10 working days after product handover. Larger orders get a schedule in the quotation."
+  ],
+  "clientResponsibilities": [
+   "Share product list, quantity, required angles, formats and reference images/videos",
+   "Deliver clean, ready-to-shoot products (ironed, tagged, complete with accessories) to the Webbriks studio",
+   "Supply brand assets (logo, fonts, colours) and any text, prices or offers for videos",
+   "Supply special or client-requested props",
+   "Approve the shot list/script before production",
+   "Review previews and send consolidated feedback within 2 working days",
+   "Collect products within 7 days of final delivery (or arrange courier at own cost)"
+  ],
+  "exclusions": [
+   "Model or talent fees",
+   "Outdoor shooting, location rent, transport/conveyance and travel costs",
+   "Special, unusual or client-requested props",
+   "Professional voice-over, licensed commercial music and complex 3D/motion graphics",
+   "Raw/unedited files and project source files",
+   "Additional angles beyond 4 per product, or extra video durations",
+   "Ad campaign management and posting",
+   "Complex setups, special locations or services outside the agreed scope (priced individually)"
+  ],
+  "supportNote": "Delivery estimate starts from product handover and confirmed brief. Final files stay available on the shared Drive link for 30 days; Webbriks keeps a backup for 90 days.",
+  "supportInclusions": [
+   "Re-export in another size or aspect ratio from final edits (minor)",
+   "Fixing technical errors in delivered files (wrong crop, colour mismatch, missed retouch)",
+   "Re-sharing delivery links within the backup period"
+  ],
+  "supportExclusions": [
+   "Reshoots due to changed requirements after approval",
+   "New concepts, scripts or additional edits after final delivery",
+   "Retrieval of files after the 90-day backup period"
+  ],
+  "notes": [
+   "All prices are indicative; the final rate depends on product size, handling, setup, lighting and retouching complexity.",
+   "Webbriks handles products with care but is not liable for normal wear or for damage to fragile items not declared at handover.",
+   "Uncollected products after 30 days may incur a storage charge.",
+   "Revisions: Photos: 1 round of minor retouch revisions. Reels and videos: 2 rounds of edit revisions (text, music, cuts, colour). A reshoot or concept change is charged as a new unit.",
+   "Extra charges: Additional angles, extra products, longer video durations, models, outdoor shoots, props and rush delivery (within 48 hours) are quoted separately before work starts. Volume and recurring orders may receive lower per-unit rates.",
+   "Ownership: After full payment, the client may use the final files for commercial purposes: website, social media, marketplaces and ads.",
+   "Ownership: Webbriks keeps copyright of raw footage and may use the content in its portfolio, unless the client asks for confidentiality.",
+   "Ownership: Files may not be resold or licensed to third parties without Webbriks' permission.",
+   "This quotation is valid for 15 days from the date of issue.",
+   "Work starts after the advance payment and the required client materials are received.",
+   "All delivery timelines are estimates in working days. Timelines pause while Webbriks waits for client feedback, content, approvals, access or payments.",
+   "The client should share feedback within 3 working days of each submission. Feedback must be consolidated and sent by one authorised contact person.",
+   "If the client is unresponsive for more than 30 days, the project may be put on hold. Restarting may require a revised timeline and a reactivation fee.",
+   "Any change to the agreed scope must be requested in writing and may change the price and timeline.",
+   "Third-party costs are not included unless stated: payment gateway fees, SMS credits, courier charges, paid apps or plugins, premium themes, Shopify subscription, ad spend and API usage fees.",
+   "Webbriks is not responsible for downtime, policy changes, pricing changes or feature changes made by third-party providers (hosting, Meta, Google, Shopify, courier, payment or SMS providers).",
+   "The client is responsible for the accuracy and legality of all products, content, prices, offers and policies published on the website or in ads.",
+   "Go-live, final handover and credential transfer happen after the final payment is cleared.",
+   "The advance payment is non-refundable once work has started. If the client cancels mid-project, work completed up to that point is billable.",
+   "Both parties will keep confidential business information shared during the project private.",
+   "Webbriks is not liable for delays caused by events beyond reasonable control, such as natural disasters, internet shutdowns, power failures or government restrictions.",
+   "Prices exclude VAT, tax or bank/MFS charges unless stated otherwise.",
+   "Disputes will be settled through discussion first, and are governed by the laws of Bangladesh."
+  ]
+ },
+ {
+  "service": "product-reels-video",
+  "platform": null,
+  "slug": "product-explainer-ad-creative-video",
+  "duration": "5–10 working days",
+  "revisions": {
+   "ui": 2,
+   "dev": null
+  },
+  "paymentMilestones": [
+   {
+    "label": "Advance Payment",
+    "percentage": 50,
+    "note": "At confirmation (orders under ৳10,000: 100% advance)"
+   },
+   {
+    "label": "Final Payment",
+    "percentage": 50,
+    "note": "Before final file delivery"
+   }
+  ],
+  "title": "Product Reels / Ad Creative Video Production",
+  "overview": "Webbriks will produce professional visual content for [Client Name] to present products clearly and support online sales and ad campaigns. The order covers [X] products with four professionally edited photographs from different angles per product, [X] short-form product reels of 15–30 seconds, and [X] product explainer or ad creative videos of 30–60 seconds. Our team plans shots, lighting, concept and video direction, then completes editing, retouching, colour correction and final polish. Final edited files are delivered in web- and ad-ready formats. Editing is included in the rate; model fees, outdoor shooting, transport and special props are not included unless listed in this quotation.",
+  "deliverables": [
+   "Explainer / ad creative video: 1 edited video of 30–60 seconds per unit (up to 70–80 seconds when agreed); concept and shot direction; MP4 in 9:16, 1:1 or 4:5 as required; text overlays, music and basic motion graphics",
+   "Shot list and creative brief confirmed before production",
+   "Delivery via Google Drive link"
+  ],
+  "milestones": [
+   "Requirement discussion: products, quantity, angles, formats and creative brief — Day 1",
+   "Product handover to Webbriks studio — as scheduled by client",
+   "Planning and production (shoot) — Day 1–3 after handover",
+   "Post-production: editing, retouching, colour and polish — Day 3–6",
+   "Preview delivery, revisions and final file delivery — Day 6–10",
+   "Standard timeline: photography up to 50 products and reels in 5–7 working days; explainer/ad videos in 7–10 working days after product handover. Larger orders get a schedule in the quotation."
+  ],
+  "clientResponsibilities": [
+   "Share product list, quantity, required angles, formats and reference images/videos",
+   "Deliver clean, ready-to-shoot products (ironed, tagged, complete with accessories) to the Webbriks studio",
+   "Supply brand assets (logo, fonts, colours) and any text, prices or offers for videos",
+   "Supply special or client-requested props",
+   "Approve the shot list/script before production",
+   "Review previews and send consolidated feedback within 2 working days",
+   "Collect products within 7 days of final delivery (or arrange courier at own cost)"
+  ],
+  "exclusions": [
+   "Model or talent fees",
+   "Outdoor shooting, location rent, transport/conveyance and travel costs",
+   "Special, unusual or client-requested props",
+   "Professional voice-over, licensed commercial music and complex 3D/motion graphics",
+   "Raw/unedited files and project source files",
+   "Additional angles beyond 4 per product, or extra video durations",
+   "Ad campaign management and posting",
+   "Complex setups, special locations or services outside the agreed scope (priced individually)"
+  ],
+  "supportNote": "Delivery estimate starts from product handover and confirmed brief. Final files stay available on the shared Drive link for 30 days; Webbriks keeps a backup for 90 days.",
+  "supportInclusions": [
+   "Re-export in another size or aspect ratio from final edits (minor)",
+   "Fixing technical errors in delivered files (wrong crop, colour mismatch, missed retouch)",
+   "Re-sharing delivery links within the backup period"
+  ],
+  "supportExclusions": [
+   "Reshoots due to changed requirements after approval",
+   "New concepts, scripts or additional edits after final delivery",
+   "Retrieval of files after the 90-day backup period"
+  ],
+  "notes": [
+   "All prices are indicative; the final rate depends on product size, handling, setup, lighting and retouching complexity.",
+   "Webbriks handles products with care but is not liable for normal wear or for damage to fragile items not declared at handover.",
+   "Uncollected products after 30 days may incur a storage charge.",
+   "Revisions: Photos: 1 round of minor retouch revisions. Reels and videos: 2 rounds of edit revisions (text, music, cuts, colour). A reshoot or concept change is charged as a new unit.",
+   "Extra charges: Additional angles, extra products, longer video durations, models, outdoor shoots, props and rush delivery (within 48 hours) are quoted separately before work starts. Volume and recurring orders may receive lower per-unit rates.",
+   "Ownership: After full payment, the client may use the final files for commercial purposes: website, social media, marketplaces and ads.",
+   "Ownership: Webbriks keeps copyright of raw footage and may use the content in its portfolio, unless the client asks for confidentiality.",
+   "Ownership: Files may not be resold or licensed to third parties without Webbriks' permission.",
+   "This quotation is valid for 15 days from the date of issue.",
+   "Work starts after the advance payment and the required client materials are received.",
+   "All delivery timelines are estimates in working days. Timelines pause while Webbriks waits for client feedback, content, approvals, access or payments.",
+   "The client should share feedback within 3 working days of each submission. Feedback must be consolidated and sent by one authorised contact person.",
+   "If the client is unresponsive for more than 30 days, the project may be put on hold. Restarting may require a revised timeline and a reactivation fee.",
+   "Any change to the agreed scope must be requested in writing and may change the price and timeline.",
+   "Third-party costs are not included unless stated: payment gateway fees, SMS credits, courier charges, paid apps or plugins, premium themes, Shopify subscription, ad spend and API usage fees.",
+   "Webbriks is not responsible for downtime, policy changes, pricing changes or feature changes made by third-party providers (hosting, Meta, Google, Shopify, courier, payment or SMS providers).",
+   "The client is responsible for the accuracy and legality of all products, content, prices, offers and policies published on the website or in ads.",
+   "Go-live, final handover and credential transfer happen after the final payment is cleared.",
+   "The advance payment is non-refundable once work has started. If the client cancels mid-project, work completed up to that point is billable.",
+   "Both parties will keep confidential business information shared during the project private.",
+   "Webbriks is not liable for delays caused by events beyond reasonable control, such as natural disasters, internet shutdowns, power failures or government restrictions.",
+   "Prices exclude VAT, tax or bank/MFS charges unless stated otherwise.",
+   "Disputes will be settled through discussion first, and are governed by the laws of Bangladesh."
+  ]
+ }
+]
