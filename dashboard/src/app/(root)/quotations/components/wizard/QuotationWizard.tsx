@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -21,14 +22,21 @@ import {
     IconBulb,
     IconCrown,
     IconClock,
-    IconBox,
     IconUsers,
     IconUserPlus,
+    IconAlertCircle,
     IconCheck,
+    IconChevronDown,
+    IconArrowUp,
+    IconArrowDown,
+    IconIndentIncrease,
+    IconIndentDecrease,
+    IconRestore,
+    IconClipboardText,
+    IconCopy,
     IconCircleCheck,
     IconCode,
     IconDeviceFloppy,
-    IconGripVertical,
     IconInfoCircle,
     IconPencil,
     IconStarFilled,
@@ -58,10 +66,15 @@ import {
 import { Calendar } from "@/components/ui/calendar";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { Combobox } from "@/components/ui/combobox";
+import { MultiSelect } from "@/components/ui/multi-select";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 
+import { useGetServicesQuery } from "@/redux/features/service/serviceApi";
+import { useGetStaffsQuery } from "@/redux/features/staff/staffApi";
 import { useCreateClientMutation, useGetClientsQuery } from "@/redux/features/client/clientApi";
 import { useCreateQuotationMutation, useSendQuotationMutation, useUpdateQuotationMutation } from "@/redux/features/quotation/quotationApi";
 import { QuotationEmailDialog } from "../QuotationEmailDialog";
@@ -80,7 +93,9 @@ import { computeQuotationTotals } from "@/lib/quotation-totals";
 
 // ───────────────────────────── types & constants ─────────────────────────────
 
-type CheckItem = { text: string; on: boolean; price?: number; id?: string; group?: string };
+type CheckItem = { text: string; on: boolean; price?: number; id?: string; group?: string; /** 0 = main, 1 = sub, 2 = sub-sub */ depth?: number };
+type AddonRow = { _id: string; name: string; price: number; custom?: boolean };
+type Stage = "service" | "platform" | "package" | "features" | "addons";
 type LineItem = { title: string; description: string; qty: number; price: number; discount: number; billing: "one-time" | "monthly" | "yearly" };
 type Milestone = { label: string; percentage: number; note: string; due?: string };
 type UnitService = { qty: number; rate: number };
@@ -133,6 +148,34 @@ const money = (n: number, cur: string) => `${cur === "USD" ? "$" : "৳"} ${Math
 
 // ───────────────────────────── small building blocks ─────────────────────────────
 
+/** shadcn tooltip around any icon-only control. */
+function Tip({ label, children }: { label: string; children: React.ReactElement }) {
+    return (
+        <Tooltip>
+            <TooltipTrigger asChild>{children}</TooltipTrigger>
+            <TooltipContent>{label}</TooltipContent>
+        </Tooltip>
+    );
+}
+
+function IconBtn({ label, onClick, disabled, className, children }: { label: string; onClick: () => void; disabled?: boolean; className?: string; children: React.ReactNode }) {
+    return (
+        <Tip label={label}>
+            <button
+                type="button"
+                aria-label={label}
+                disabled={disabled}
+                onClick={onClick}
+                className={cn("inline-flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-30", className)}
+            >
+                {children}
+            </button>
+        </Tip>
+    );
+}
+
+const fadeIn = { initial: { opacity: 0, y: -6 }, animate: { opacity: 1, y: 0 }, exit: { opacity: 0, y: -6 }, transition: { duration: 0.18 } };
+
 function Panel({
     icon: Icon,
     title,
@@ -143,6 +186,7 @@ function Panel({
     plain,
     id,
     fixed,
+    collapsible,
 }: {
     icon: typeof IconUser;
     title: string;
@@ -155,9 +199,24 @@ function Panel({
     id?: string;
     /** Fixed card height (a Tailwind `h-*` class). Content past it scrolls in a shadcn ScrollArea. */
     fixed?: string;
+    /** Adds a collapse chevron to the header. */
+    collapsible?: boolean;
 }) {
+    const [open, setOpen] = useState(true);
+    const body = (
+        <CardContent className={cn("px-4 md:px-5", fixed && "flex min-h-0 flex-1 flex-col")}>
+            {fixed ? (
+                // padding on every side so focus rings are never clipped by the scroll viewport
+                <ScrollArea className="-mx-1 min-h-0 flex-1">
+                    <div className="p-1 pr-4">{children}</div>
+                </ScrollArea>
+            ) : (
+                children
+            )}
+        </CardContent>
+    );
     return (
-        <Card id={id} className={cn("scroll-mt-4 gap-4 py-4 shadow-xs md:py-5", fixed && "overflow-hidden", fixed, className)}>
+        <Card id={id} className={cn("scroll-mt-4 gap-4 py-4 shadow-xs md:py-5", fixed && "overflow-hidden", fixed, collapsible && !open && "gap-0", className)}>
             <CardHeader className="px-4 md:px-5">
                 <div className="flex min-w-0 items-start gap-3">
                     {!plain && (
@@ -170,23 +229,23 @@ function Panel({
                         {hint && <CardDescription className="mt-1 text-xs">{hint}</CardDescription>}
                     </div>
                 </div>
-                {right && <CardAction>{right}</CardAction>}
-            </CardHeader>
-            <CardContent className={cn("px-4 md:px-5", fixed && "flex min-h-0 flex-1 flex-col")}>
-                {fixed ? (
-                    // padding on every side so focus rings are never clipped by the scroll viewport
-                    <ScrollArea className="-mx-1 min-h-0 flex-1">
-                        <div className="p-1 pr-4">{children}</div>
-                    </ScrollArea>
-                ) : (
-                    children
+                {(right || collapsible) && (
+                    <CardAction className="flex items-center gap-1">
+                        {right}
+                        {collapsible && (
+                            <IconBtn label={open ? "Collapse" : "Expand"} onClick={() => setOpen(!open)}>
+                                <IconChevronDown className={cn("size-4 transition-transform", open && "rotate-180")} />
+                            </IconBtn>
+                        )}
+                    </CardAction>
                 )}
-            </CardContent>
+            </CardHeader>
+            {collapsible ? <AnimatePresence initial={false}>{open && <motion.div key="body" {...fadeIn}>{body}</motion.div>}</AnimatePresence> : body}
         </Card>
     );
 }
 
-/** One collapsible step of the Services flow: open = full content, closed = one-line summary + Change. */
+/** A collapsible step card: open = full content, closed = one-line summary. Click the header to toggle. */
 function StageCard({
     n,
     title,
@@ -194,7 +253,8 @@ function StageCard({
     open,
     done,
     summary,
-    onOpen,
+    onToggle,
+    actions,
     children,
     footer,
 }: {
@@ -204,30 +264,38 @@ function StageCard({
     open: boolean;
     done: boolean;
     summary?: React.ReactNode;
-    onOpen: () => void;
+    onToggle: () => void;
+    actions?: React.ReactNode;
     children: React.ReactNode;
     footer?: React.ReactNode;
 }) {
     return (
-        <Card className={cn("gap-4 py-4 shadow-xs md:py-5", !open && "gap-0")}>
+        <Card className={cn("py-4 shadow-xs md:py-5", open ? "gap-4" : "gap-0")}>
             <CardHeader className="px-4 md:px-5">
-                <div className="flex min-w-0 items-center gap-3">
-                    <span className={cn("flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold", done ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground")}>
-                        {done && !open ? <IconCheck className="size-4" /> : n}
+                <button type="button" onClick={onToggle} aria-expanded={open} className="flex min-w-0 items-center gap-3 rounded-md text-left outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50">
+                    <span className={cn("flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold transition-colors", done ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground")}>
+                        {done ? <IconCheck className="size-4" /> : n}
                     </span>
-                    <div className="min-w-0">
+                    <span className="min-w-0">
                         <CardTitle className="text-sm leading-tight">{title}</CardTitle>
-                        {open ? <CardDescription className="mt-1 text-xs">{hint}</CardDescription> : done && <div className="mt-1 text-xs text-muted-foreground">{summary}</div>}
-                    </div>
-                </div>
-                {!open && done && (
-                    <CardAction>
-                        <Button type="button" variant="outline" size="sm" className="h-7" onClick={onOpen}>Change</Button>
-                    </CardAction>
-                )}
+                        <span className="mt-1 block text-xs text-muted-foreground">{open ? hint : (summary ?? "Not added yet")}</span>
+                    </span>
+                </button>
+                <CardAction className="flex items-center gap-1">
+                    {open && actions}
+                    <IconBtn label={open ? "Collapse" : "Expand"} onClick={onToggle}>
+                        <IconChevronDown className={cn("size-4 transition-transform", open && "rotate-180")} />
+                    </IconBtn>
+                </CardAction>
             </CardHeader>
-            {open && <CardContent className="px-4 md:px-5">{children}</CardContent>}
-            {open && footer && <CardFooter className="justify-end px-4 md:px-5">{footer}</CardFooter>}
+            <AnimatePresence initial={false}>
+                {open && (
+                    <motion.div key="body" {...fadeIn} className="space-y-4">
+                        <CardContent className="px-4 md:px-5">{children}</CardContent>
+                        {footer && <CardFooter className="justify-end px-4 md:px-5">{footer}</CardFooter>}
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </Card>
     );
 }
@@ -312,14 +380,14 @@ function CheckList({
                         className={cn(tone === "danger" && "data-[state=checked]:border-destructive data-[state=checked]:bg-destructive")}
                     />
                     <span className={cn("flex-1 text-sm", !it.on && "text-muted-foreground line-through")}>{it.text}</span>
-                    <button
+                    <Tip label="Remove"><button
                         type="button"
                         aria-label="Remove"
                         onClick={() => onChange(items.filter((_, j) => j !== i))}
                         className="text-muted-foreground opacity-0 transition hover:text-destructive group-hover:opacity-100"
                     >
                         <IconTrash className="size-4" />
-                    </button>
+                    </button></Tip>
                 </div>
             ))}
             </div>
@@ -340,9 +408,9 @@ function TextList({ items, onChange, addLabel }: { items: string[]; onChange: (n
                         {i + 1}
                     </span>
                     <Input value={it} onChange={(e) => onChange(items.map((x, j) => (j === i ? e.target.value : x)))} className="h-9" />
-                    <button type="button" aria-label="Remove" onClick={() => onChange(items.filter((_, j) => j !== i))} className="text-muted-foreground hover:text-destructive">
+                    <Tip label="Remove"><button type="button" aria-label="Remove" onClick={() => onChange(items.filter((_, j) => j !== i))} className="text-muted-foreground hover:text-destructive">
                         <IconTrash className="size-4" />
-                    </button>
+                    </button></Tip>
                 </div>
             ))}
             <AddInline label={addLabel} placeholder="Type and press Enter" onAdd={(text) => onChange([...items, text])} />
@@ -361,11 +429,125 @@ function MilestoneList({ items, onChange }: { items: Milestone2[]; onChange: (n:
                     <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-[11px] font-medium text-muted-foreground">{i + 1}</span>
                     <Input value={it.title} placeholder="Milestone" onChange={(e) => onChange(items.map((x, j) => (j === i ? { ...x, title: e.target.value } : x)))} className="h-9 min-w-0 flex-1" />
                     <Input value={it.duration} placeholder="1 week" onChange={(e) => onChange(items.map((x, j) => (j === i ? { ...x, duration: e.target.value } : x)))} className="h-9 w-24 shrink-0 text-center" />
-                    <button type="button" aria-label="Remove" onClick={() => onChange(items.filter((_, j) => j !== i))} className="text-destructive/80 hover:text-destructive"><IconTrash className="size-4" /></button>
+                    <Tip label="Remove"><button type="button" aria-label="Remove" onClick={() => onChange(items.filter((_, j) => j !== i))} className="text-destructive/80 hover:text-destructive"><IconTrash className="size-4" /></button></Tip>
                 </div>
             ))}
             <AddInline label="Add Milestone" placeholder="Milestone" secondPlaceholder="1 week" onAdd={(title, duration) => onChange([...items, { title, duration }])} />
         </div>
+    );
+}
+
+const FEATURE_PROMPT = `You are helping me fill the "Included Features" list of a client quotation.
+Break the service I describe at the bottom into main features, sub-features and sub-sub-features (maximum 3 levels).
+Return ONLY valid JSON - no explanation and no markdown fence - in exactly this shape:
+
+[
+  {
+    "name": "Store Design and Setup",
+    "children": [
+      { "name": "Homepage design", "children": [ { "name": "Hero banner" } ] },
+      { "name": "Product page" }
+    ]
+  }
+]
+
+Rules:
+1. "name" is a short, human-readable feature name (string, required).
+2. "children" is optional - add it only when the feature has sub-features. Maximum depth is 3 levels.
+3. Do NOT include prices, routes, descriptions or any other keys.
+4. Keep every name under 80 characters and do not repeat the same feature twice.
+
+The service to break down:
+<describe the service here>`;
+
+const depthOf = (it: CheckItem) => it.depth ?? 0;
+/** End (exclusive) of the block made of item `i` and all of its descendants. */
+const blockEnd = (items: CheckItem[], i: number) => {
+    let j = i + 1;
+    while (j < items.length && depthOf(items[j]) > depthOf(items[i])) j++;
+    return j;
+};
+
+/** Pasted JSON ({name, children}) or indented plain text → flat list with depth. */
+function parseFeatureTree(text: string): CheckItem[] {
+    const raw = text.trim().replace(/^```[a-z]*\n?/i, "").replace(/\n?```$/, "").trim();
+    if (!raw) return [];
+    const out: CheckItem[] = [];
+    const walk = (node: unknown, depth: number) => {
+        if (typeof node === "string") {
+            if (node.trim()) out.push({ text: node.trim(), on: true, depth: Math.min(depth, 2) });
+            return;
+        }
+        if (!node || typeof node !== "object") return;
+        const o = node as Record<string, unknown>;
+        const name = [o.name, o.title, o.label, o.feature].find((v) => typeof v === "string" && v.trim()) as string | undefined;
+        if (name) out.push({ text: name.trim(), on: true, depth: Math.min(depth, 2) });
+        const kids = [o.children, o.subFeatures, o.sub, o.items].find(Array.isArray) as unknown[] | undefined;
+        kids?.forEach((k) => walk(k, name ? depth + 1 : depth));
+    };
+    if (raw.startsWith("[") || raw.startsWith("{")) {
+        try {
+            const parsed = JSON.parse(raw);
+            (Array.isArray(parsed) ? parsed : [parsed]).forEach((n) => walk(n, 0));
+            if (out.length) return out;
+        } catch {
+            /* fall through to the indented-text parser */
+        }
+    }
+    const stack: number[] = [];
+    raw.split("\n").forEach((line) => {
+        if (!line.trim()) return;
+        const width = (line.match(/^\s*/)?.[0] ?? "").replace(/\t/g, "    ").length;
+        while (stack.length && stack[stack.length - 1] >= width) stack.pop();
+        const depth = Math.min(stack.length, 2);
+        stack.push(width);
+        const t = line.trim().replace(/^[-*•◦▪+]\s*/, "").trim();
+        if (t) out.push({ text: t, on: true, depth });
+    });
+    return out;
+}
+
+function BulkImportDialog({ open, onOpenChange, onImport }: { open: boolean; onOpenChange: (v: boolean) => void; onImport: (items: CheckItem[]) => void }) {
+    const [text, setText] = useState("");
+    const parsed = useMemo(() => parseFeatureTree(text), [text]);
+    const close = (v: boolean) => {
+        onOpenChange(v);
+        if (!v) setText("");
+    };
+    return (
+        <Dialog open={open} onOpenChange={close}>
+            <DialogContent className="sm:max-w-2xl">
+                <DialogHeader>
+                    <DialogTitle>Bulk import features</DialogTitle>
+                    <DialogDescription>Paste JSON (or an indented list) with main features, sub-features and sub-sub-features. New features are added below the current ones.</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-3">
+                    <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => navigator.clipboard.writeText(FEATURE_PROMPT).then(() => toast.success("AI prompt copied - paste it into ChatGPT / Claude, then paste the JSON it returns here"), () => toast.error("Could not copy the prompt"))}
+                    >
+                        <IconCopy className="size-4" /> Copy prompt
+                    </Button>
+                    <Textarea rows={12} className="font-mono text-xs" value={text} onChange={(e) => setText(e.target.value)} placeholder={'[\n  { "name": "Store Design and Setup", "children": [ { "name": "Homepage design" } ] }\n]'} />
+                    <p className="text-xs text-muted-foreground">{text.trim() ? (parsed.length ? `${parsed.length} feature${parsed.length === 1 ? "" : "s"} found` : "Nothing readable found - check the JSON") : "Nothing pasted yet"}</p>
+                </div>
+                <DialogFooter>
+                    <Button type="button" variant="outline" onClick={() => close(false)}>Cancel</Button>
+                    <Button
+                        type="button"
+                        disabled={!parsed.length}
+                        onClick={() => {
+                            onImport(parsed);
+                            close(false);
+                        }}
+                    >
+                        Import {parsed.length || ""}
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
     );
 }
 
@@ -412,6 +594,7 @@ function DatePicker({ value, onChange, min, className }: { value: string; onChan
             <PopoverContent className="w-auto p-0" align="start">
                 <Calendar
                     mode="single"
+                    classNames={{ today: "bg-accent text-accent-foreground rounded-md" }}
                     selected={sel}
                     defaultMonth={sel}
                     disabled={min ? { before: parseISO(min) as Date } : undefined}
@@ -432,29 +615,30 @@ function Stepper({ step, maxStep, onGo }: { step: number; maxStep: number; onGo:
         <ol className="flex items-start rounded-xl border bg-card px-3 py-4 shadow-xs md:px-6">
             {STEPS.map((s, i) => {
                 const active = i === step;
-                const done = i < step;
+                const reached = i <= maxStep; // furthest step the user has been to stays lit
+                const passed = i < maxStep;
                 return (
                     <li key={s.title} className="flex flex-1 items-start last:flex-none">
-                        <button
-                            type="button"
-                            disabled={i > maxStep}
-                            onClick={() => onGo(i)}
-                            className="flex flex-col items-center gap-1.5 disabled:cursor-not-allowed"
-                        >
-                            <span
+                        <button type="button" disabled={i > maxStep} onClick={() => onGo(i)} className="flex flex-col items-center gap-1.5 disabled:cursor-not-allowed">
+                            <motion.span
+                                animate={{ scale: active ? 1.1 : 1 }}
                                 className={cn(
-                                    "flex size-8 items-center justify-center rounded-full border text-xs font-semibold transition",
+                                    "flex size-8 items-center justify-center rounded-full border text-xs font-semibold transition-colors",
                                     active && "border-primary bg-primary text-primary-foreground shadow-md shadow-primary/30",
-                                    done && "border-primary bg-primary/10 text-primary",
-                                    !active && !done && "bg-muted text-muted-foreground",
+                                    !active && reached && "border-primary bg-primary/10 text-primary",
+                                    !active && !reached && "bg-muted text-muted-foreground",
                                 )}
                             >
-                                {done ? <IconCheck className="size-4" /> : i + 1}
-                            </span>
-                            <span className={cn("text-xs font-semibold", active ? "text-primary" : "text-foreground/80")}>{s.title}</span>
+                                {passed && !active ? <IconCheck className="size-4" /> : i + 1}
+                            </motion.span>
+                            <span className={cn("text-xs font-semibold", active ? "text-primary" : reached ? "text-foreground" : "text-muted-foreground")}>{s.title}</span>
                             <span className="hidden text-[11px] text-muted-foreground md:block">{s.sub}</span>
                         </button>
-                        {i < STEPS.length - 1 && <span className={cn("mx-2 mt-4 h-px flex-1", done ? "bg-primary" : "bg-border")} />}
+                        {i < STEPS.length - 1 && (
+                            <span className="relative mx-2 mt-4 h-0.5 flex-1 overflow-hidden rounded bg-border">
+                                <motion.span className="absolute inset-0 origin-left bg-primary" initial={false} animate={{ scaleX: passed ? 1 : 0 }} transition={{ duration: 0.35 }} />
+                            </span>
+                        )}
                     </li>
                 );
             })}
@@ -497,6 +681,31 @@ export default function QuotationWizard() {
     const [creatingClient, setCreatingClient] = useState(false);
     const [createClient] = useCreateClientMutation();
     const clientOptions = (clientsData?.clients ?? []).map((c: Client) => ({ value: c._id, label: c.name, description: c.emails?.[0] }));
+    // extra client fields (shown for "New Client" only, same as the Clients > Add form)
+    const [officeAddress, setOfficeAddress] = useState("");
+    const [description, setDescription] = useState("");
+    const [clientStatus, setClientStatus] = useState<"active" | "inactive">("active");
+    const [telemarketer, setTelemarketer] = useState("");
+    const [assignedServices, setAssignedServices] = useState<string[]>([]);
+    const [teamMembers, setTeamMembers] = useState<{ name: string; email: string; phone: string; designation: string }[]>([]);
+    const { data: servicesData } = useGetServicesQuery({ isActive: true });
+    const { data: staffsData } = useGetStaffsQuery({ limit: 100 });
+    const serviceOptions = (servicesData?.data ?? []).map((x: { _id: string; name: string }) => ({ value: x._id, label: x.name }));
+    const telemarketerOptions = useMemo(() => {
+        /* eslint-disable @typescript-eslint/no-explicit-any */
+        const staffs: any[] = staffsData?.staffs || staffsData?.data || [];
+        const tele = staffs.filter((t) => /telemarketer/i.test(t.designation || t.user?.designation || t.userId?.designation || ""));
+        const list = (tele.length ? tele : staffs).map((t) => {
+            const u = typeof t.userId === "object" ? t.userId : null;
+            return {
+                value: t.user?._id || u?._id || t.userId || t._id,
+                label: t.user?.name || t.name || u?.name || "Unnamed",
+                description: t.user?.email || t.email || u?.email || "",
+            };
+        });
+        /* eslint-enable @typescript-eslint/no-explicit-any */
+        return [{ value: "", label: "Unassigned / None", description: "No telemarketer assigned" }, ...list];
+    }, [staffsData]);
     const [currency, setCurrency] = useState<"BDT" | "USD">("BDT");
     const [date] = useState(todayISO());
     const [validUntil, setValidUntil] = useState(plusDaysISO(30));
@@ -513,7 +722,11 @@ export default function QuotationWizard() {
     const [addonsOn, setAddonsOn] = useState<string[]>([]);
     const [duration, setDuration] = useState("");
     const [unit, setUnit] = useState<UnitService>({ qty: 1, rate: 0 });
-    const [stage, setStage] = useState<"service" | "platform" | "package" | "details">("service");
+    const [stage, setStage] = useState<Stage | null>("service");
+    const [customAddons, setCustomAddons] = useState<AddonRow[]>([]);
+    const [bulkOpen, setBulkOpen] = useState(false);
+    const [scopeStage, setScopeStage] = useState<string | null>("overview");
+    const [customTax, setCustomTax] = useState(false);
 
     // step 3
     const [overview, setOverview] = useState("");
@@ -525,8 +738,6 @@ export default function QuotationWizard() {
 
     // step 4
     const [lines, setLines] = useState<LineItem[]>([{ title: "", description: "", qty: 1, price: 0, discount: 0, billing: "one-time" }]);
-    const [editing, setEditing] = useState<string | null>("l0");
-    const [methods, setMethods] = useState<string[]>(["Bank Transfer", "bKash", "Nagad"]);
     const discountPct = 0; // discounts are per line item now
     const [presetKey, setPresetKey] = useState("50-50");
     const [milestones, setMilestones] = useState<Milestone[]>(withDue(DEFAULT_BLUEPRINT.paymentMilestones));
@@ -578,8 +789,8 @@ export default function QuotationWizard() {
     const pkg = pkgs.find((x) => x._id === pkgId);
     const isUnit = service?.pricingMode === "unit";
     const pkgPrice = pkg && !isUnit ? (pkg.price ?? (Number(customPrice) || 0)) : 0;
-    const addonList = pkg?.addons ?? [];
-    const chosenAddons = addonList.filter((a) => addonsOn.includes(a._id));
+    const addonRows: AddonRow[] = [...(pkg?.addons ?? []).map((a) => ({ _id: a._id, name: a.name, price: a.price })), ...customAddons];
+    const chosenAddons = addonRows.filter((a) => addonsOn.includes(a._id));
 
     // ── build the same service payload the existing API expects ──
     const builtServices = ((): IQuotationService[] => {
@@ -604,8 +815,8 @@ export default function QuotationWizard() {
             catalogServiceId: service._id,
             catalogPlatformId: platformId || null,
             catalogPackageId: pkg?._id ?? null,
-            catalogFeatureIds: [...features.filter((f) => f.on && f.id).map((f) => f.id as string), ...chosenAddons.map((a) => a._id)],
-            scopeItems: features.filter((f) => f.on).map((f) => f.text),
+            catalogFeatureIds: [...features.filter((f) => f.on && f.id).map((f) => f.id as string), ...chosenAddons.filter((a) => !a.custom).map((a) => a._id)],
+            scopeItems: features.filter((f) => f.on).map((f) => "  ".repeat(f.depth ?? 0) + f.text),
             basePrice: 0,
             lineItems: [],
             discount: discountPct,
@@ -636,6 +847,7 @@ export default function QuotationWizard() {
             if (emails.some((e) => e.trim() && !/^\S+@\S+\.\S+$/.test(e.trim()))) return "One of the email addresses is invalid";
             if (!snap.phone.trim()) return "Phone number is required";
             if (!snap.address.trim()) return "Billing address is required";
+            if (clientMode === "new" && teamMembers.some((m) => !m.name.trim() || !/^\S+@\S+\.\S+$/.test(m.email.trim()))) return "Each team member needs a name and a valid email";
         }
         if (s === 1) {
             if (!service) return "Select a service category";
@@ -662,7 +874,13 @@ export default function QuotationWizard() {
                         emails: emails.map((e) => e.trim()).filter(Boolean),
                         phone: snap.phone.trim(),
                         address: snap.address.trim(),
+                        officeAddress: officeAddress.trim() || undefined,
+                        description: description.trim() || undefined,
                         currency,
+                        status: clientStatus,
+                        teamMembers: teamMembers.map((m) => ({ name: m.name.trim(), email: m.email.trim(), phone: m.phone.trim() || undefined, designation: m.designation.trim() || undefined })),
+                        assignedServices,
+                        assignedTelemarketer: telemarketer || undefined,
                     } as never).unwrap();
                     setClientId(c._id);
                 } catch (err) {
@@ -691,7 +909,7 @@ export default function QuotationWizard() {
         const bp = resolveBlueprint(svc, p);
 
         setPkgId(p._id);
-        setAddonsOn([]);
+        setAddonsOn((cur) => cur.filter((x) => x.startsWith("custom-")));
         setCustomPrice(0);
         setUnit({ qty: 1, rate: p.price ?? 0 });
         setFeatures(p.features.map((f) => ({ text: f.name, on: true, id: f._id, group: f.group })));
@@ -814,7 +1032,9 @@ export default function QuotationWizard() {
             cancelNotice && `cancellation requires ${cancelNotice} days' written notice`,
         ].filter(Boolean);
         const keyTerms = [
-            ...(uiRev || devRev
+            ...(flow !== "project"
+                ? uiRev ? [`Revisions included: ${uiRev}${pos(extraRevFee) ? ` (additional rounds ${extraRevFee} per round)` : ""}.`] : []
+                : uiRev || devRev
                 ? [
                       `${uiRev ? `UI/UX revisions included: ${uiRev}${pos(extraRevFee) ? ` (additional rounds ${extraRevFee} per round)` : ""}` : ""}${uiRev && devRev ? "; " : ""}${devRev ? `development revisions included: ${devRev}${pos(devRevFee) ? ` (additional rounds ${devRevFee} per round)` : ""}` : ""}.`,
                   ]
@@ -832,7 +1052,6 @@ export default function QuotationWizard() {
                     ? msg("Ownership", ownershipCustom)
                     : "",
             hasRecurringLine && recurringBits.length ? `Recurring services: ${recurringBits.join("; ")}.` : "",
-            ...(methods.length ? [`Accepted payment methods: ${methods.join(", ")}.`] : []),
             ...(milestones[0] ? [`Advance payment: ${milestones[0].percentage}% to start the project.`] : []),
             ...generalTerms.filter((t) => t.trim()),
         ].filter(Boolean);
@@ -1007,9 +1226,11 @@ export default function QuotationWizard() {
                         <div key={i} className="flex gap-2">
                             <Input type="email" className="h-10" placeholder="name@company.com" value={em} onChange={(e) => setEmails(emails.map((x, j) => (j === i ? e.target.value : x)))} />
                             {emails.length > 1 && (
-                                <Button type="button" variant="outline" size="icon" className="size-10 shrink-0" aria-label="Remove email" onClick={() => setEmails(emails.filter((_, j) => j !== i))}>
-                                    <IconTrash className="size-4" />
-                                </Button>
+                                <Tip label="Remove email">
+                                    <Button type="button" variant="outline" size="icon" className="size-10 shrink-0" aria-label="Remove email" onClick={() => setEmails(emails.filter((_, j) => j !== i))}>
+                                        <IconTrash className="size-4" />
+                                    </Button>
+                                </Tip>
                             )}
                         </div>
                     ))}
@@ -1030,9 +1251,70 @@ export default function QuotationWizard() {
                     </Select>
                 </Field>
 
-                <Field label="Billing Address" required className="md:col-span-2">
+                <Field label="Billing Address" required>
                     <Textarea rows={3} className="resize-none" placeholder="House, road, area, city, postal code" value={snap.address} onChange={(e) => setSnap({ ...snap, address: e.target.value })} />
                 </Field>
+
+                {clientMode === "new" && (
+                    <>
+                        <Field label="Office Address">
+                            <Textarea rows={3} className="resize-none" placeholder="Suite, building, business park" value={officeAddress} onChange={(e) => setOfficeAddress(e.target.value)} />
+                        </Field>
+                        <Field label="Status">
+                            <Select value={clientStatus} onValueChange={(v) => setClientStatus(v as "active" | "inactive")}>
+                                <SelectTrigger className="h-10 w-full"><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="active">Active</SelectItem>
+                                    <SelectItem value="inactive">Inactive</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </Field>
+                        <Field label="Telemarketer">
+                            <Combobox
+                                options={telemarketerOptions}
+                                value={telemarketer}
+                                onChange={setTelemarketer}
+                                placeholder="Hand over to a telemarketer…"
+                                searchPlaceholder="Search by name or email…"
+                                emptyText="No telemarketer found"
+                                className="h-10"
+                            />
+                        </Field>
+                        <Field label="Assigned Services" className="md:col-span-2">
+                            <MultiSelect options={serviceOptions} selected={assignedServices} onChange={setAssignedServices} placeholder="Select services…" />
+                        </Field>
+                        <Field label="Client Description" className="md:col-span-2">
+                            <Textarea rows={2} className="resize-none" placeholder="Notes about this client" value={description} onChange={(e) => setDescription(e.target.value)} />
+                        </Field>
+                        <div className="space-y-3 md:col-span-2">
+                            <div className="flex items-center justify-between">
+                                <Label className="text-xs font-medium">Team Members</Label>
+                                <Button type="button" variant="outline" size="sm" onClick={() => setTeamMembers([...teamMembers, { name: "", email: "", phone: "", designation: "" }])}>
+                                    <IconPlus className="size-3.5" /> Add member
+                                </Button>
+                            </div>
+                            {teamMembers.map((m, i) => (
+                                <div key={i} className="grid gap-2 rounded-lg border p-3 md:grid-cols-[1fr_1fr_1fr_1fr_auto]">
+                                    {(["name", "email", "phone", "designation"] as const).map((k) => (
+                                        <Input
+                                            key={k}
+                                            className="h-10"
+                                            type={k === "email" ? "email" : "text"}
+                                            placeholder={k === "name" ? "Name *" : k === "email" ? "Email *" : k === "phone" ? "Phone" : "Designation"}
+                                            value={m[k]}
+                                            onChange={(e) => setTeamMembers(teamMembers.map((x, j) => (j === i ? { ...x, [k]: e.target.value } : x)))}
+                                        />
+                                    ))}
+                                    <Tip label="Remove member">
+                                        <Button type="button" variant="outline" size="icon" className="size-10" aria-label="Remove member" onClick={() => setTeamMembers(teamMembers.filter((_, j) => j !== i))}>
+                                            <IconTrash className="size-4" />
+                                        </Button>
+                                    </Tip>
+                                </div>
+                            ))}
+                        </div>
+                    </>
+                )}
             </div>
         </section>
     );
@@ -1040,9 +1322,16 @@ export default function QuotationWizard() {
     const hasPlatforms = (service?.platforms.length ?? 0) > 0;
     const showPackages = !!service && (!hasPlatforms || !!platformId);
     const pkgStageNo = hasPlatforms ? 3 : 2;
-    const goDetails = () => {
-        setStage("details");
-        requestAnimationFrame(() => document.getElementById("sec-features")?.scrollIntoView({ behavior: "smooth" }));
+    const toggleStage = (st: Stage) => setStage(stage === st ? null : st);
+    const goStage = (st: Stage) => {
+        setStage(st);
+        requestAnimationFrame(() => document.getElementById(`sec-${st}`)?.scrollIntoView({ behavior: "smooth", block: "start" }));
+    };
+    const importFeatures = (incoming: CheckItem[]) => {
+        const have = new Set(features.map((f) => `${depthOf(f)}|${f.text.trim().toLowerCase()}`));
+        const fresh = incoming.filter((f) => !have.has(`${depthOf(f)}|${f.text.trim().toLowerCase()}`));
+        edit("features", setFeatures)([...features, ...fresh]);
+        toast.success(`${fresh.length} feature${fresh.length === 1 ? "" : "s"} imported${incoming.length - fresh.length ? ` (${incoming.length - fresh.length} duplicate${incoming.length - fresh.length === 1 ? "" : "s"} skipped)` : ""}`);
     };
     const servicesStep = (
         <div className="min-w-0 space-y-4">
@@ -1052,8 +1341,8 @@ export default function QuotationWizard() {
                 hint="Choose the service you want to include in this quotation."
                 open={stage === "service"}
                 done={!!service}
-                onOpen={() => setStage("service")}
-                summary={service ? <span className="font-medium text-foreground">{service.name}</span> : null}
+                onToggle={() => toggleStage("service")}
+                summary={service ? <span className="font-medium text-foreground">{service.name}</span> : undefined}
             >
                 {catalogLoading && <p className="text-sm text-muted-foreground">Loading services…</p>}
                 {!catalogLoading && tree.length === 0 && (
@@ -1096,8 +1385,8 @@ export default function QuotationWizard() {
                     hint="Choose the technology stack for your project."
                     open={stage === "platform"}
                     done={!!platformId}
-                    onOpen={() => setStage("platform")}
-                    summary={<span className="font-medium text-foreground">{platform}</span>}
+                    onToggle={() => toggleStage("platform")}
+                    summary={platform ? <span className="font-medium text-foreground">{platform}</span> : undefined}
                 >
                     <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-4">
                         {service.platforms.map((p) => {
@@ -1141,10 +1430,10 @@ export default function QuotationWizard() {
                     hint={isUnit ? "Choose what you are quoting, then set quantity and rate." : "Choose a package or go with custom build."}
                     open={stage === "package"}
                     done={!!pkg}
-                    onOpen={() => setStage("package")}
-                    summary={pkg ? <span><span className="font-medium text-foreground">{pkg.name}</span> · {priceText(pkg, cur)}</span> : null}
+                    onToggle={() => toggleStage("package")}
+                    summary={pkg ? <span><span className="font-medium text-foreground">{pkg.name}</span> · {priceText(pkg, cur)}</span> : undefined}
                     footer={
-                        <Button type="button" disabled={!pkg} onClick={goDetails}>
+                        <Button type="button" disabled={!pkg} onClick={() => goStage("features")}>
                             Continue to features <IconArrowRight className="size-4" />
                         </Button>
                     }
@@ -1217,142 +1506,198 @@ export default function QuotationWizard() {
             )}
 
             {service && pkg && (
-                <StageCard
-                    n={pkgStageNo + 1}
-                    title="Features & Add-ons"
-                    hint="Edit the included features and pick optional add-ons."
-                    open={stage === "details"}
-                    done
-                    onOpen={goDetails}
-                    summary={<span>{features.filter((f) => f.on).length} features · {chosenAddons.length} add-ons</span>}
-                >
-                    <div className={cn("grid items-start gap-4", addonList.length > 0 && "lg:grid-cols-2")}>
-                        <Panel
-                            id="sec-features"
-                            icon={IconSettings}
+                <>
+                    <div id="sec-features" className="scroll-mt-4">
+                        <StageCard
+                            n={pkgStageNo + 1}
                             title="Included Features"
-                            hint="Edit, add or remove features for this quotation."
-                            right={
-                                <Button type="button" variant="outline" size="sm" className="h-7 text-primary" onClick={() => selectPackage(pkg, true)}>
-                                    Reset to Package
+                            hint="Name each feature. Use the arrows to reorder and the indent buttons to nest sub-features."
+                            open={stage === "features"}
+                            done={features.some((f) => f.on)}
+                            onToggle={() => toggleStage("features")}
+                            summary={`${features.filter((f) => f.on).length} features included`}
+                            actions={
+                                <>
+                                    <IconBtn label="Bulk import (paste JSON)" onClick={() => setBulkOpen(true)}><IconClipboardText className="size-[18px]" /></IconBtn>
+                                    <IconBtn label="Restore package defaults" onClick={() => selectPackage(pkg, true)}><IconRestore className="size-[18px]" /></IconBtn>
+                                </>
+                            }
+                            footer={
+                                <Button type="button" onClick={() => goStage("addons")}>
+                                    Continue to add-ons <IconArrowRight className="size-4" />
                                 </Button>
                             }
                         >
                             <FeatureEditor items={features} onChange={edit("features", setFeatures)} />
-                        </Panel>
-                        {addonList.length > 0 && (
-                            <Panel fixed="h-[28rem]" id="sec-addons" icon={IconPlus} title="Optional Add-on Features" hint="Add features to enhance the package.">
-                                <ul className="divide-y">
-                                    {addonList.map((a) => (
-                                        <li key={a._id}>
-                                            <label className="flex cursor-pointer items-center gap-3 py-2 text-sm">
-                                                <Checkbox
-                                                    checked={addonsOn.includes(a._id)}
-                                                    onCheckedChange={(v) => setAddonsOn(v ? [...addonsOn, a._id] : addonsOn.filter((n) => n !== a._id))}
-                                                />
-                                                <span className="flex-1">{a.name}</span>
-                                                <span className="w-20 text-right font-medium">{money(a.price, cur)}</span>
-                                            </label>
-                                        </li>
-                                    ))}
-                                </ul>
-                            </Panel>
-                        )}
+                        </StageCard>
                     </div>
-                </StageCard>
+                    <div id="sec-addons" className="scroll-mt-4">
+                        <StageCard
+                            n={pkgStageNo + 2}
+                            title="Optional Add-ons"
+                            hint="Extra paid items on top of the package. Add your own if it is not in the catalog."
+                            open={stage === "addons"}
+                            done={chosenAddons.length > 0}
+                            onToggle={() => toggleStage("addons")}
+                            summary={chosenAddons.length ? `${chosenAddons.length} selected · ${money(chosenAddons.reduce((a, x) => a + x.price, 0), cur)}` : "None selected"}
+                        >
+                            {addonRows.length === 0 && <p className="mb-3 text-sm text-muted-foreground">No add-ons in the catalog for this package. Add your own below.</p>}
+                            <ul className="divide-y">
+                                {addonRows.map((a) => (
+                                    <li key={a._id}>
+                                        <label className="flex cursor-pointer items-center gap-3 py-2 text-sm">
+                                            <Checkbox
+                                                checked={addonsOn.includes(a._id)}
+                                                onCheckedChange={(v) => setAddonsOn(v ? [...addonsOn, a._id] : addonsOn.filter((n) => n !== a._id))}
+                                            />
+                                            <span className="flex-1">
+                                                {a.name}
+                                                {a.custom && <span className="ml-2 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">Custom</span>}
+                                            </span>
+                                            <span className="w-24 text-right font-medium">{money(a.price, cur)}</span>
+                                            {a.custom && (
+                                                <IconBtn
+                                                    label="Delete add-on"
+                                                    className="text-destructive/80 hover:text-destructive"
+                                                    onClick={() => {
+                                                        setCustomAddons(customAddons.filter((x) => x._id !== a._id));
+                                                        setAddonsOn(addonsOn.filter((n) => n !== a._id));
+                                                    }}
+                                                >
+                                                    <IconTrash className="size-4" />
+                                                </IconBtn>
+                                            )}
+                                        </label>
+                                    </li>
+                                ))}
+                            </ul>
+                            <div className="mt-3">
+                                <AddInline
+                                    label="Add Custom Add-on"
+                                    placeholder="Add-on name"
+                                    secondPlaceholder="Price"
+                                    onAdd={(name, price) => {
+                                        const id = `custom-${Date.now()}`;
+                                        setCustomAddons([...customAddons, { _id: id, name, price: Number(price) || 0, custom: true }]);
+                                        setAddonsOn([...addonsOn, id]);
+                                    }}
+                                />
+                            </div>
+                        </StageCard>
+                    </div>
+                </>
             )}
+            <BulkImportDialog open={bulkOpen} onOpenChange={setBulkOpen} onImport={importFeatures} />
         </div>
     );
 
     const durTotal = totalDuration(timeline);
-    const SCOPE_H = "h-[22rem]";
     const scopeText3 = {
         deliverables: flow === "retainer" ? ["Monthly Deliverables", "What is delivered every month."] : flow === "production" ? ["Deliverables per Item", "What the client receives for each product / video."] : ["Deliverables", "List the key deliverables for this project."],
         milestones: flow === "production" ? ["Production Workflow", "How the work moves from brief to delivery."] : ["Project Milestones & Timeline", "Define major milestones and estimated timeline."],
         exclusions: flow === "retainer" ? ["Not Included", "Clearly mention what is not included."] : ["Exclusions", "Clearly mention what is not included in this quotation."],
     };
-    const scopeHidden: string[] = flow === "retainer" ? ["milestones"] : [];
-    const scopeBlocks: { key: string; node: React.ReactNode }[] = [
+    const count = (n: number, one: string, many = `${one}s`) => (n ? `${n} ${n === 1 ? one : many}` : undefined);
+    const scopeSections: { key: string; title: string; hint: string; done: boolean; summary?: string; node: React.ReactNode }[] = [
         {
-            key: "milestones",
+            key: "overview",
+            title: "Project Overview",
+            hint: "Provide a brief overview of the project and its objectives.",
+            done: !!overview.trim(),
+            summary: title.trim() || overview.trim().slice(0, 90) || undefined,
             node: (
-                <Panel fixed={SCOPE_H} icon={IconCalendar} title={scopeText3.milestones[0]} hint={scopeText3.milestones[1]}>
-                    <MilestoneList items={timeline} onChange={edit("timeline", setTimeline)} />
-                    {durTotal && (
-                        <div className="mt-3 flex items-start gap-2 rounded-lg bg-primary/5 p-3">
-                            <IconClock className="mt-0.5 size-5 shrink-0 text-primary" />
-                            <div>
-                                <p className="text-xs font-semibold text-primary">Estimated Project Duration: {durTotal}</p>
-                                <p className="text-[11px] text-muted-foreground">Timeline may vary based on client feedback and content availability.</p>
-                            </div>
-                        </div>
-                    )}
-                </Panel>
+                <div className="max-w-3xl space-y-3">
+                    <Field label="Project Title" required>
+                        <Input value={title} onChange={(e) => { touch("title"); setTitle(e.target.value); }} placeholder={`${svcLabel || "Quotation"} — ${snap.companyName || clientName || "Client"}`} />
+                    </Field>
+                    <Field label="Project Overview" required>
+                        <Textarea rows={6} maxLength={1000} className="resize-none" value={overview} onChange={(e) => { touch("overview"); setOverview(e.target.value); }} placeholder="Describe the project…" />
+                        <p className="text-right text-[11px] text-muted-foreground">{overview.length}/1000</p>
+                    </Field>
+                </div>
             ),
         },
         {
+            key: "deliverables",
+            title: scopeText3.deliverables[0],
+            hint: scopeText3.deliverables[1],
+            done: deliverables.some((d) => d.trim()),
+            summary: count(deliverables.filter((d) => d.trim()).length, "deliverable"),
+            node: <div className="max-w-3xl"><TextList items={deliverables} onChange={edit("deliverables", setDeliverables)} addLabel="Add Deliverable" /></div>,
+        },
+        ...(flow === "retainer"
+            ? []
+            : [
+                  {
+                      key: "milestones",
+                      title: scopeText3.milestones[0],
+                      hint: scopeText3.milestones[1],
+                      done: timeline.some((t) => t.title.trim()),
+                      summary: count(timeline.filter((t) => t.title.trim()).length, "milestone") && `${count(timeline.filter((t) => t.title.trim()).length, "milestone")}${durTotal ? ` · ${durTotal}` : ""}`,
+                      node: (
+                          <div className="max-w-3xl">
+                              <MilestoneList items={timeline} onChange={edit("timeline", setTimeline)} />
+                              {durTotal && (
+                                  <div className="mt-3 flex items-start gap-2 rounded-lg bg-primary/5 p-3">
+                                      <IconClock className="mt-0.5 size-5 shrink-0 text-primary" />
+                                      <div>
+                                          <p className="text-xs font-semibold text-primary">Estimated Project Duration: {durTotal}</p>
+                                          <p className="text-[11px] text-muted-foreground">Timeline may vary based on client feedback and content availability.</p>
+                                      </div>
+                                  </div>
+                              )}
+                          </div>
+                      ),
+                  },
+              ]),
+        {
             key: "clientResp",
-            node: (
-                <Panel fixed={SCOPE_H} icon={IconUser} title="Client Responsibilities" hint="What we expect from the client during the project.">
-                    <CheckList items={clientResp} onChange={edit("clientResp", setClientResp)} addLabel="Add responsibility…" />
-                </Panel>
-            ),
+            title: "Client Responsibilities",
+            hint: "What we expect from the client during the project.",
+            done: clientResp.some((c) => c.on),
+            summary: count(clientResp.filter((c) => c.on).length, "item"),
+            node: <div className="max-w-3xl"><CheckList items={clientResp} onChange={edit("clientResp", setClientResp)} addLabel="Add responsibility…" /></div>,
         },
         {
             key: "exclusions",
-            node: (
-                <Panel fixed={SCOPE_H} icon={IconX} title={scopeText3.exclusions[0]} hint={scopeText3.exclusions[1]}>
-                    <CheckList items={exclusions} onChange={edit("exclusions", setExclusions)} addLabel="Add exclusion…" tone="danger" />
-                </Panel>
-            ),
+            title: scopeText3.exclusions[0],
+            hint: scopeText3.exclusions[1],
+            done: exclusions.some((e) => e.on),
+            summary: count(exclusions.filter((e) => e.on).length, "item"),
+            node: <div className="max-w-3xl"><CheckList items={exclusions} onChange={edit("exclusions", setExclusions)} addLabel="Add exclusion…" tone="danger" /></div>,
         },
-    ].filter((b) => !scopeHidden.includes(b.key));
+    ];
 
     const scopeStep = (
-        <div className="space-y-4">
-            <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
-                <div className="grid gap-4 lg:grid-cols-2">
-                    <Panel fixed={SCOPE_H} icon={IconFileText} title="Project Overview" hint="Provide a brief overview of the project and its objectives.">
-                        <div className="space-y-3">
-                            <Field label="Project Title" required>
-                                <Input value={title} onChange={(e) => { touch("title"); setTitle(e.target.value); }} placeholder={`${svcLabel || "Quotation"} — ${snap.companyName || clientName || "Client"}`} />
-                            </Field>
-                            <Field label="Project Overview" required>
-                                <Textarea rows={6} maxLength={1000} className="resize-none" value={overview} onChange={(e) => { touch("overview"); setOverview(e.target.value); }} placeholder="Describe the project…" />
-                                <p className="text-right text-[11px] text-muted-foreground">{overview.length}/1000</p>
-                            </Field>
-                        </div>
-                    </Panel>
-                    <Panel fixed={SCOPE_H} icon={IconBox} title={scopeText3.deliverables[0]} hint={scopeText3.deliverables[1]}>
-                        <TextList items={deliverables} onChange={edit("deliverables", setDeliverables)} addLabel="Add Deliverable" />
-                    </Panel>
-                </div>
-                <Panel plain icon={IconFileText} title="Quotation Summary" right={<button type="button" onClick={() => go(0)} className="text-xs font-medium text-primary hover:underline">Edit client</button>}>
-                    <div className="mb-4 flex items-center gap-3">
-                        <span className="flex size-14 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-lg font-bold text-primary">
-                            {(snap.companyName || clientName || "?").trim().slice(0, 3).toUpperCase()}
-                        </span>
-                        <div className="min-w-0">
-                            <p className="truncate font-semibold leading-tight">{snap.companyName || clientName || "—"}</p>
-                            <p className="line-clamp-2 text-xs text-muted-foreground">{snap.address || "—"}</p>
-                        </div>
-                    </div>
-                    <dl className="space-y-2 text-xs">
-                        <Row k="Quotation No" v="Auto-generated on save" />
-                        <Row k="Date" v={date} />
-                        <Row k="Valid Until" v={validUntil} />
-                        <Row k="Client Contact" v={snap.contactName || "—"} />
-                        <Row k="Email" v={emails.find((e) => e.trim()) || "—"} />
-                        <Row k="Phone" v={snap.phone || "—"} />
-                    </dl>
-                </Panel>
-            </div>
-
-            <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
-                {scopeBlocks.map((b) => (
-                    <div key={b.key} className="min-w-0">{b.node}</div>
-                ))}
-            </div>
+        <div className="mx-auto max-w-4xl space-y-4">
+            {scopeSections.map((sec, i) => {
+                const next = scopeSections[i + 1];
+                return (
+                    <StageCard
+                        key={sec.key}
+                        n={i + 1}
+                        title={sec.title}
+                        hint={sec.hint}
+                        open={scopeStage === sec.key}
+                        done={sec.done}
+                        summary={sec.summary}
+                        onToggle={() => setScopeStage(scopeStage === sec.key ? null : sec.key)}
+                        footer={
+                            next ? (
+                                <Button type="button" onClick={() => setScopeStage(next.key)}>
+                                    Next: {next.title} <IconArrowRight className="size-4" />
+                                </Button>
+                            ) : (
+                                <Button type="button" onClick={() => go(3)}>
+                                    Continue to Pricing <IconArrowRight className="size-4" />
+                                </Button>
+                            )
+                        }
+                    >
+                        {sec.node}
+                    </StageCard>
+                );
+            })}
         </div>
     );
 
@@ -1367,8 +1712,9 @@ export default function QuotationWizard() {
     const itemsSubtotal = pkgRows.reduce((a, r) => a + r.price * r.qty, 0) + lines.reduce((a, l) => a + (l.billing === "one-time" ? lineAmt(l) : 0), 0);
     const validDays = Math.max(0, Math.round(((parseISO(validUntil)?.getTime() ?? 0) - (parseISO(date)?.getTime() ?? 0)) / 86400000));
     const recYearEq = recurringMonthly * 12 + recurringYearly;
-    const thCls = "border-b bg-muted/50 px-2 py-2 text-left text-xs font-semibold";
 
+    const taxIsCustom = customTax || !TAX_OPTIONS.some((t) => Number(t.value) === taxPct);
+    const cycleText = (c: string) => (c === "one-time" ? "One-time" : c.replace("per-", "Per "));
     const pricingStep = (
         <div className="space-y-4">
             {flow !== "project" && (pkg?.notes?.length ?? 0) > 0 && (
@@ -1379,106 +1725,96 @@ export default function QuotationWizard() {
             )}
             <Panel
                 icon={IconReceipt}
-                title="Pricing & Line Items"
-                hint="Configure your service pricing, quantities, discounts and additional charges."
+                title="Items & Pricing"
+                hint="Your package and add-ons are listed first. Add anything extra as its own line."
                 right={
-                    <div className="grid grid-cols-2 gap-3">
-                        <Field label="Validity Period">
-                            <DatePicker value={validUntil} onChange={edit("validUntil", setValidUntil)} min={date} className="h-9" />
-                            <p className="text-[11px] text-muted-foreground">Valid for {validDays} days.</p>
-                        </Field>
-                        <Field label="Tax / VAT">
-                            <Select value={String(taxPct)} onValueChange={(v) => setTaxPct(Number(v))}>
-                                <SelectTrigger className="h-9 w-full"><SelectValue /></SelectTrigger>
-                                <SelectContent>
-                                    {TAX_OPTIONS.map((t) => (
-                                        <SelectItem key={t.value} value={t.value}>{t.label} <span className="text-muted-foreground">{t.sub}</span></SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </Field>
+                    <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground">VAT / Tax</span>
+                        <Select
+                            value={taxIsCustom ? "custom" : String(taxPct)}
+                            onValueChange={(v) => {
+                                if (v === "custom") setCustomTax(true);
+                                else {
+                                    setCustomTax(false);
+                                    setTaxPct(Number(v));
+                                }
+                            }}
+                        >
+                            <SelectTrigger className="h-9 w-[150px]"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                                {TAX_OPTIONS.map((t) => (
+                                    <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                                ))}
+                                <SelectItem value="custom">Custom…</SelectItem>
+                            </SelectContent>
+                        </Select>
+                        {taxIsCustom && (
+                            <div className="relative w-24">
+                                <Input className="h-9 pr-6" type="number" min={0} max={100} step="0.01" value={taxPct} onChange={(e) => setTaxPct(Math.min(100, Math.max(0, Number(e.target.value) || 0)))} aria-label="Custom tax percent" />
+                                <span className="absolute right-2 top-2 text-xs text-muted-foreground">%</span>
+                            </div>
+                        )}
                     </div>
                 }
             >
-                <div className="overflow-x-auto rounded-lg border">
-                    <table className="w-full min-w-[900px] text-sm">
-                        <thead>
-                            <tr>
-                                <th className={cn(thCls, "w-10")}>#</th>
-                                <th className={thCls}>Item / Service</th>
-                                <th className={thCls}>Description</th>
-                                <th className={cn(thCls, "w-20")}>Qty</th>
-                                <th className={cn(thCls, "w-32")}>Unit Price ({cur})</th>
-                                <th className={cn(thCls, "w-24")}>Discount</th>
-                                <th className={cn(thCls, "w-28")}>Billing</th>
-                                <th className={cn(thCls, "w-28 text-right")}>Amount ({cur})</th>
-                                <th className={cn(thCls, "w-20 text-center")}>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {pkgRows.map((r, i) => (
-                                <tr key={`pkg-${i}`} className="border-b align-middle bg-muted/20">
-                                    <td className="px-2 py-2 text-muted-foreground">{i + 1}</td>
-                                    <td className="px-2 py-2 font-medium">{r.title}</td>
-                                    <td className="px-2 py-2 text-xs text-muted-foreground">{r.desc}</td>
-                                    <td className="px-2 py-2">{r.qty}</td>
-                                    <td className="px-2 py-2">{r.price.toLocaleString("en-US")}</td>
-                                    <td className="px-2 py-2 text-muted-foreground">—</td>
-                                    <td className="px-2 py-2 text-xs text-muted-foreground">{r.cycle === "one-time" ? "One-time" : r.cycle.replace("per-", "")}</td>
-                                    <td className="px-2 py-2 text-right font-medium">{(r.price * r.qty).toLocaleString("en-US")}</td>
-                                    <td className="px-2 py-2 text-center">
-                                        <button type="button" aria-label="Edit on Services step" onClick={() => go(1)} className="text-muted-foreground hover:text-primary"><IconPencil className="size-4" /></button>
-                                    </td>
-                                </tr>
-                            ))}
-                            {lines.map((l, i) => {
-                                const key = `l${i}`;
-                                const ed = editing === key;
-                                return (
-                                    <tr key={key} className="border-b align-middle last:border-0">
-                                        <td className="px-2 py-2 text-muted-foreground">{pkgRows.length + i + 1}</td>
-                                        <td className="px-2 py-2">{ed ? <Input className="h-9" value={l.title} onChange={(e) => setLine(i, { title: e.target.value })} placeholder="Item / service" /> : <span className="font-medium">{l.title || "—"}</span>}</td>
-                                        <td className="px-2 py-2">{ed ? <Input className="h-9" value={l.description} onChange={(e) => setLine(i, { description: e.target.value })} placeholder="Description" /> : <span className="text-xs text-muted-foreground">{l.description}</span>}</td>
-                                        <td className="px-2 py-2"><Input className="h-9 w-16 text-center" type="number" min={1} value={l.qty} onChange={(e) => setLine(i, { qty: Number(e.target.value) || 1 })} /></td>
-                                        <td className="px-2 py-2"><Input className="h-9 w-28" type="number" min={0} value={l.price} onChange={(e) => setLine(i, { price: Number(e.target.value) || 0 })} /></td>
-                                        <td className="px-2 py-2">
-                                            <Select value={String(l.discount)} onValueChange={(v) => setLine(i, { discount: Number(v) })}>
-                                                <SelectTrigger className="h-9 w-20"><SelectValue /></SelectTrigger>
-                                                <SelectContent>{DISCOUNTS.map((d) => <SelectItem key={d} value={String(d)}>{d}%</SelectItem>)}</SelectContent>
-                                            </Select>
-                                        </td>
-                                        <td className="px-2 py-2">
-                                            <Select value={l.billing} onValueChange={(v) => setLine(i, { billing: v as LineItem["billing"] })}>
-                                                <SelectTrigger className="h-9 w-24"><SelectValue /></SelectTrigger>
-                                                <SelectContent>
-                                                    <SelectItem value="one-time">One-time</SelectItem>
-                                                    <SelectItem value="monthly">Monthly</SelectItem>
-                                                    <SelectItem value="yearly">Yearly</SelectItem>
-                                                </SelectContent>
-                                            </Select>
-                                        </td>
-                                        <td className="px-2 py-2 text-right font-medium">{Math.round(lineAmt(l)).toLocaleString("en-US")}</td>
-                                        <td className="px-2 py-2">
-                                            <div className="flex items-center justify-center gap-2">
-                                                <button type="button" aria-label="Edit line" onClick={() => setEditing(ed ? null : key)} className="text-muted-foreground hover:text-primary"><IconPencil className="size-4" /></button>
-                                                <button type="button" aria-label="Remove line" onClick={() => setLines(lines.filter((_, j) => j !== i))} className="text-destructive/80 hover:text-destructive"><IconTrash className="size-4" /></button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                );
-                            })}
-                        </tbody>
-                    </table>
+                <div className="space-y-2">
+                    {pkgRows.map((r, i) => (
+                        <div key={`pkg-${i}`} className="flex items-center gap-3 rounded-lg border bg-muted/30 px-3 py-2.5">
+                            <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-background text-[11px] font-medium text-muted-foreground">{i + 1}</span>
+                            <div className="min-w-0 flex-1">
+                                <p className="truncate text-sm font-medium">{r.title}</p>
+                                {r.desc && <p className="truncate text-xs text-muted-foreground">{r.desc}</p>}
+                            </div>
+                            <span className="hidden text-xs text-muted-foreground sm:block">{r.qty > 1 ? `${r.qty} × ` : ""}{cycleText(r.cycle)}</span>
+                            <span className="w-28 text-right text-sm font-semibold">{money(r.price * r.qty, cur)}</span>
+                            <IconBtn label="Edit on Services step" onClick={() => go(1)}><IconPencil className="size-4" /></IconBtn>
+                        </div>
+                    ))}
+
+                    {lines.map((l, i) => (
+                        <div key={i} className="rounded-lg border p-3">
+                            <div className="grid gap-3 md:grid-cols-2">
+                                <Field label="Item / Service">
+                                    <Input className="h-9" value={l.title} onChange={(e) => setLine(i, { title: e.target.value })} placeholder="e.g. Logo design" />
+                                </Field>
+                                <Field label="Description (optional)">
+                                    <Input className="h-9" value={l.description} onChange={(e) => setLine(i, { description: e.target.value })} placeholder="Short note shown on the quotation" />
+                                </Field>
+                            </div>
+                            <div className="mt-3 grid grid-cols-2 items-end gap-3 md:grid-cols-[80px_minmax(0,1fr)_100px_120px_130px_auto]">
+                                <Field label="Qty"><Input className="h-9 text-center" type="number" min={1} value={l.qty} onChange={(e) => setLine(i, { qty: Number(e.target.value) || 1 })} /></Field>
+                                <Field label={`Unit price (${cur})`}><Input className="h-9" type="number" min={0} value={l.price} onChange={(e) => setLine(i, { price: Number(e.target.value) || 0 })} /></Field>
+                                <Field label="Discount">
+                                    <Select value={String(l.discount)} onValueChange={(v) => setLine(i, { discount: Number(v) })}>
+                                        <SelectTrigger className="h-9 w-full"><SelectValue /></SelectTrigger>
+                                        <SelectContent>{DISCOUNTS.map((d) => <SelectItem key={d} value={String(d)}>{d}%</SelectItem>)}</SelectContent>
+                                    </Select>
+                                </Field>
+                                <Field label="Billing">
+                                    <Select value={l.billing} onValueChange={(v) => setLine(i, { billing: v as LineItem["billing"] })}>
+                                        <SelectTrigger className="h-9 w-full"><SelectValue /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="one-time">One-time</SelectItem>
+                                            <SelectItem value="monthly">Monthly</SelectItem>
+                                            <SelectItem value="yearly">Yearly</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </Field>
+                                <Field label="Amount"><div className="flex h-9 items-center rounded-md bg-muted/50 px-3 text-sm font-semibold">{money(lineAmt(l), cur)}</div></Field>
+                                <IconBtn label="Remove line" className="mb-1 text-destructive/80 hover:text-destructive" onClick={() => setLines(lines.filter((_, j) => j !== i))}><IconTrash className="size-4" /></IconBtn>
+                            </div>
+                        </div>
+                    ))}
                 </div>
-                <Button type="button" variant="outline" size="sm" className="mt-3 w-full border-dashed bg-primary/5 text-primary" onClick={() => { setLines([...lines, { title: "", description: "", qty: 1, price: 0, discount: 0, billing: "one-time" }]); setEditing(`l${lines.length}`); }}>
-                    <IconPlus className="size-4" /> Add Another Item
+                <Button type="button" variant="outline" size="sm" className="mt-3 w-full border-dashed bg-primary/5 text-primary" onClick={() => setLines([...lines, { title: "", description: "", qty: 1, price: 0, discount: 0, billing: "one-time" }])}>
+                    <IconPlus className="size-4" /> Add Line Item
                 </Button>
             </Panel>
 
             <Panel
                 icon={IconDeviceFloppy}
-                title="Payment Terms & Schedule"
-                hint="Define how and when the client will make payments."
+                title="Payment Schedule"
+                hint="How much is due and when. The first milestone is the advance payment."
                 right={
                     <Select
                         value={presetKey}
@@ -1497,79 +1833,46 @@ export default function QuotationWizard() {
                     </Select>
                 }
             >
-                <div className="grid gap-5 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
-                    <div>
-                        <p className="mb-2 text-sm font-semibold">Payment Milestones</p>
-                        <div className="overflow-x-auto rounded-lg border">
-                            <table className="w-full min-w-[560px] text-sm">
-                                <thead>
-                                    <tr>
-                                        <th className={cn(thCls, "w-8")}>#</th>
-                                        <th className={thCls}>Milestone</th>
-                                        <th className={thCls}>Description</th>
-                                        <th className={cn(thCls, "w-24")}>Payment %</th>
-                                        <th className={cn(thCls, "w-24 text-right")}>Amount ({cur})</th>
-                                        <th className={cn(thCls, "w-40")}>Due Date</th>
-                                        <th className="w-8 border-b bg-muted/50" />
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {milestones.map((m, i) => (
-                                        <tr key={i} className="border-b align-middle last:border-0">
-                                            <td className="px-2 py-2 text-muted-foreground">{i + 1}</td>
-                                            <td className="px-2 py-2"><Input className="h-9" value={m.label} onChange={(e) => { setPresetKey("custom"); editMs(milestones.map((x, j) => (j === i ? { ...x, label: e.target.value } : x))); }} /></td>
-                                            <td className="px-2 py-2"><Input className="h-9" value={m.note} placeholder="When is it due?" onChange={(e) => editMs(milestones.map((x, j) => (j === i ? { ...x, note: e.target.value } : x)))} /></td>
-                                            <td className="px-2 py-2">
-                                                <div className="relative">
-                                                    <Input className="h-9 pr-6" type="number" min={0} max={100} value={m.percentage} onChange={(e) => { setPresetKey("custom"); editMs(milestones.map((x, j) => (j === i ? { ...x, percentage: Number(e.target.value) || 0 } : x))); }} />
-                                                    <span className="absolute right-2 top-2 text-xs text-muted-foreground">%</span>
-                                                </div>
-                                            </td>
-                                            <td className="px-2 py-2 text-right font-medium">{Math.round((grand * m.percentage) / 100).toLocaleString("en-US")}</td>
-                                            <td className="px-2 py-2"><DatePicker className="h-9 text-xs" value={m.due ?? ""} onChange={(v) => editMs(milestones.map((x, j) => (j === i ? { ...x, due: v } : x)))} /></td>
-                                            <td className="px-1">
-                                                <button type="button" aria-label="Remove milestone" onClick={() => { setPresetKey("custom"); editMs(milestones.filter((_, j) => j !== i)); }} className="text-destructive/80 hover:text-destructive"><IconTrash className="size-4" /></button>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                        <div className="mt-3 flex items-center justify-between">
-                            <Button type="button" variant="outline" size="sm" className="text-primary" onClick={() => { setPresetKey("custom"); editMs([...milestones, { label: "Milestone", percentage: 0, note: "", due: plusDaysISO(30 * milestones.length) }]); }}>
-                                <IconPlus className="size-4" /> Add Milestone
-                            </Button>
-                            <span className="text-sm">
-                                Total <span className={cn("ml-3 font-semibold", msTotal === 100 ? "text-emerald-600" : "text-destructive")}>{msTotal}%</span>
-                                <span className="ml-4 font-semibold">{Math.round((grand * msTotal) / 100).toLocaleString("en-US")}</span>
-                            </span>
-                        </div>
-                    </div>
-
-                    <div className="space-y-3 rounded-lg border p-4 text-sm">
-                        <p className="font-semibold">Payment Settings</p>
-                        <div>
-                            <Label className="text-xs">Payment Method(s)</Label>
-                            <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-2">
-                                {["Bank Transfer", "bKash", "Nagad", "Stripe (Card)"].map((mt) => (
-                                    <label key={mt} className="flex items-center gap-2 text-xs">
-                                        <Checkbox checked={methods.includes(mt)} onCheckedChange={(v) => setMethods(v ? [...methods, mt] : methods.filter((x) => x !== mt))} />
-                                        {mt}
-                                    </label>
-                                ))}
-                            </div>
-                        </div>
-                        <div className="grid grid-cols-[1fr_auto] items-center gap-3">
-                            <Label className="text-xs">Advance Payment</Label>
-                            <div className="flex items-center gap-2">
-                                <div className="relative w-20">
-                                    <Input className="h-9 pr-6" type="number" min={0} max={100} value={milestones[0]?.percentage ?? 0} disabled={!milestones[0]} onChange={(e) => { setPresetKey("custom"); editMs(milestones.map((x, j) => (j === 0 ? { ...x, percentage: Number(e.target.value) || 0 } : x))); }} />
+                <div className="space-y-2">
+                    {milestones.map((m, i) => (
+                        <div key={i} className="grid items-end gap-3 rounded-lg border p-3 md:grid-cols-[minmax(0,1.2fr)_minmax(0,1.6fr)_96px_120px_170px_auto]">
+                            <Field label={i === 0 ? "Milestone (advance)" : "Milestone"}>
+                                <Input className="h-9" value={m.label} onChange={(e) => { setPresetKey("custom"); editMs(milestones.map((x, j) => (j === i ? { ...x, label: e.target.value } : x))); }} />
+                            </Field>
+                            <Field label="When">
+                                <Input className="h-9" value={m.note} placeholder="e.g. Upon quotation acceptance" onChange={(e) => editMs(milestones.map((x, j) => (j === i ? { ...x, note: e.target.value } : x)))} />
+                            </Field>
+                            <Field label="Share">
+                                <div className="relative">
+                                    <Input className="h-9 pr-6" type="number" min={0} max={100} value={m.percentage} onChange={(e) => { setPresetKey("custom"); editMs(milestones.map((x, j) => (j === i ? { ...x, percentage: Number(e.target.value) || 0 } : x))); }} />
                                     <span className="absolute right-2 top-2 text-xs text-muted-foreground">%</span>
                                 </div>
-                                <Input className="h-9 w-28 bg-muted/50" readOnly value={Math.round((grand * (milestones[0]?.percentage ?? 0)) / 100).toLocaleString("en-US")} />
-                            </div>
+                            </Field>
+                            <Field label="Amount"><div className="flex h-9 items-center rounded-md bg-muted/50 px-3 text-sm font-semibold">{money((grand * m.percentage) / 100, cur)}</div></Field>
+                            <Field label="Due date">
+                                <DatePicker className="h-9 text-xs" value={m.due ?? ""} onChange={(v) => editMs(milestones.map((x, j) => (j === i ? { ...x, due: v } : x)))} />
+                            </Field>
+                            <IconBtn label="Remove milestone" className="mb-1 text-destructive/80 hover:text-destructive" onClick={() => { setPresetKey("custom"); editMs(milestones.filter((_, j) => j !== i)); }}><IconTrash className="size-4" /></IconBtn>
                         </div>
+                    ))}
+                </div>
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+                    <Button type="button" variant="outline" size="sm" className="text-primary" onClick={() => { setPresetKey("custom"); editMs([...milestones, { label: "Milestone", percentage: 0, note: "", due: plusDaysISO(30 * milestones.length) }]); }}>
+                        <IconPlus className="size-4" /> Add Milestone
+                    </Button>
+                    <span className="text-sm font-semibold">
+                        Total <span className={cn("ml-1", msTotal === 100 ? "text-emerald-600" : "text-destructive")}>{msTotal}%</span>
+                        <span className="ml-3">{money((grand * msTotal) / 100, cur)}</span>
+                    </span>
+                </div>
+                <div className="mt-3 space-y-1.5">
+                    <div className="h-2 overflow-hidden rounded-full bg-muted">
+                        <motion.div className={cn("h-full rounded-full", msTotal === 100 ? "bg-emerald-500" : msTotal > 100 ? "bg-destructive" : "bg-primary")} initial={false} animate={{ width: `${Math.min(100, msTotal)}%` }} transition={{ duration: 0.3 }} />
                     </div>
+                    <p className={cn("flex items-center gap-1.5 text-xs", msTotal === 100 ? "text-emerald-600" : "text-destructive")}>
+                        {msTotal === 100 ? <IconCircleCheck className="size-4" /> : <IconAlertCircle className="size-4" />}
+                        {msTotal === 100 ? "100% allocated" : msTotal < 100 ? `${100 - msTotal}% is still unallocated. Milestones must total 100%.` : `${msTotal - 100}% over. Milestones must total 100%.`}
+                    </p>
                 </div>
             </Panel>
         </div>
@@ -1624,7 +1927,6 @@ export default function QuotationWizard() {
         </aside>
     );
 
-    const TERMS_H = "h-[20rem]";
     const sel = (value: string, onChange: (v: string) => void, options: string[], suffix = "") => (
         <Select value={value} onValueChange={onChange}>
             <SelectTrigger className="h-9 w-full"><SelectValue placeholder="Not set" /></SelectTrigger>
@@ -1644,7 +1946,7 @@ export default function QuotationWizard() {
 
     const optsWith = (cur0: string, list: string[]) => (!cur0 || list.includes(cur0) ? list : [...list, cur0].sort((x, y) => Number(x) - Number(y)));
     const rev = (label: string, hint: string, value: string, onChange: (v: string) => void, opts: string[], fee: string, onFee: (v: string) => void, icon: typeof IconUser) => (
-        <Panel fixed={TERMS_H} icon={icon} title={label} hint={hint}>
+        <Panel collapsible icon={icon} title={label} hint={hint}>
             <div className="space-y-3">
                 {sel(value, onChange, opts, " Revisions")}
                 <div className="flex items-start gap-2 rounded-lg bg-primary/5 p-3 text-[11px] text-muted-foreground">
@@ -1677,7 +1979,7 @@ export default function QuotationWizard() {
         {
             key: "support",
             node: (
-                <Panel fixed={TERMS_H} icon={IconSettings} title="Support & Delivery" hint="Delivery estimate and free technical support after delivery.">
+                <Panel collapsible icon={IconSettings} title="Support & Delivery" hint="Delivery estimate and free technical support after delivery.">
                     <div className="space-y-3">
                         <Field label="Estimated Delivery">
                             <Input className="h-10" value={duration} placeholder="e.g. 4–6 weeks" onChange={(e) => { touch("duration"); setDuration(e.target.value); }} />
@@ -1711,7 +2013,7 @@ export default function QuotationWizard() {
             key: "inclusions",
             span: true,
             node: (
-                <Panel fixed={TERMS_H} icon={IconCircleCheck} title="Support Inclusions" hint="What is included in the technical support.">
+                <Panel collapsible icon={IconCircleCheck} title="Support Inclusions" hint="What is included in the technical support.">
                     <CheckList twoCol items={inclusions} onChange={edit("inclusions", setInclusions)} addLabel="Add custom support inclusion…" />
                 </Panel>
             ),
@@ -1720,7 +2022,7 @@ export default function QuotationWizard() {
             key: "domainHosting",
             node: (
                 <Panel
-                    fixed={TERMS_H}
+                    collapsible
                     icon={IconWorld}
                     title="Domain, Hosting & Inclusions"
                     hint="Renewal timers start from the order date."
@@ -1737,7 +2039,7 @@ export default function QuotationWizard() {
                                 <div className="flex items-center gap-2">
                                     <Input className="h-8 flex-1" value={it.label} placeholder="e.g. Domain" onChange={(e) => setInclItem(i, { label: e.target.value })} aria-label="Inclusion name" />
                                     <Switch checked={it.included} onCheckedChange={(v) => setInclItem(i, { included: v })} aria-label={`${it.label || "Inclusion"} included`} />
-                                    <button type="button" aria-label="Remove inclusion" onClick={() => edit("incl", setIncl)(incl.filter((_, j) => j !== i))} className="text-destructive/80 hover:text-destructive"><IconTrash className="size-4" /></button>
+                                    <Tip label="Remove inclusion"><button type="button" aria-label="Remove inclusion" onClick={() => edit("incl", setIncl)(incl.filter((_, j) => j !== i))} className="text-destructive/80 hover:text-destructive"><IconTrash className="size-4" /></button></Tip>
                                 </div>
                                 {it.included ? (
                                     <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-xs text-muted-foreground">
@@ -1764,17 +2066,23 @@ export default function QuotationWizard() {
         {
             key: "exclusions",
             node: (
-                <Panel fixed={TERMS_H} icon={IconX} title={flow === "production" ? "Exclusions & Additional Charges" : "Support Exclusions"} hint={flow === "production" ? "Not covered by the quoted rate." : "What is not included in the technical support."}>
+                <Panel collapsible icon={IconX} title={flow === "production" ? "Exclusions & Additional Charges" : "Support Exclusions"} hint={flow === "production" ? "Not covered by the quoted rate." : "What is not included in the technical support."}>
                     <CheckList items={supportExcl} onChange={edit("supportExcl", setSupportExcl)} addLabel="Add custom exclusion…" tone="danger" />
                 </Panel>
             ),
         },
-        { key: "uiRev", node: rev("UI/UX Revisions", "Number of design revisions included in this package.", uiRev, setUiRev, optsWith(uiRev, ["1", "2", "3", "5", "10"]), extraRevFee, setExtraRevFee, IconPencil) },
+        {
+            key: "uiRev",
+            node:
+                flow === "project"
+                    ? rev("UI/UX Revisions", "Number of design revisions included in this package.", uiRev, setUiRev, optsWith(uiRev, ["1", "2", "3", "5", "10"]), extraRevFee, setExtraRevFee, IconPencil)
+                    : rev("Revisions", "Number of revision rounds included in this order.", uiRev, setUiRev, optsWith(uiRev, ["1", "2", "3", "5", "10"]), extraRevFee, setExtraRevFee, IconPencil),
+        },
         { key: "devRev", node: rev("Development Revisions", "Number of development revisions included after delivery.", devRev, setDevRev, optsWith(devRev, ["1", "3", "5", "10"]), devRevFee, setDevRevFee, IconCode) },
         {
             key: "recurring",
             node: (
-                <Panel fixed={TERMS_H} icon={IconReceipt} title="Recurring Service Policy" hint="Applicable for recurring services (e.g., maintenance, SEO, hosting).">
+                <Panel collapsible icon={IconReceipt} title="Recurring Service Policy" hint="Applicable for recurring services (e.g., maintenance, SEO, hosting).">
                     <div className="space-y-3">
                         {toggle("Enable recurring billing after project completion", "billing")}
                         {toggle("Send automated invoice before each billing cycle", "invoice")}
@@ -1792,7 +2100,7 @@ export default function QuotationWizard() {
         {
             key: "extra",
             node: (
-                <Panel fixed={TERMS_H} icon={IconReceipt} title="Extra Feature Charges" hint="How additional features or change requests are charged.">
+                <Panel collapsible icon={IconReceipt} title="Extra Feature Charges" hint="How additional features or change requests are charged.">
                     <div className="space-y-3">
                         {radio("extra", extraCharge === "feature", () => setExtraCharge("feature"), (
                             <>
@@ -1819,7 +2127,7 @@ export default function QuotationWizard() {
         {
             key: "ownership",
             node: (
-                <Panel fixed={TERMS_H} icon={IconShieldCheck} title="Ownership & Intellectual Property" hint="Define the ownership rights after project completion.">
+                <Panel collapsible icon={IconShieldCheck} title="Ownership & Intellectual Property" hint="Define the ownership rights after project completion.">
                     <div className="space-y-3">
                         {radio("owner", ownership === "client", () => setOwnership("client"), "Full ownership transferred to client after final payment")}
                         {radio("owner", ownership === "portfolio", () => setOwnership("portfolio"), "Webbriks retains right to showcase in portfolio")}
@@ -1832,7 +2140,7 @@ export default function QuotationWizard() {
         {
             key: "general",
             node: (
-                <Panel fixed={TERMS_H} icon={IconFileText} title="General Terms & Conditions" hint="Additional terms and conditions for this quotation.">
+                <Panel collapsible icon={IconFileText} title="General Terms & Conditions" hint="Additional terms and conditions for this quotation.">
                     <TextList items={generalTerms} onChange={edit("generalTerms", setGeneralTerms)} addLabel="Add term" />
                 </Panel>
             ),
@@ -1840,9 +2148,9 @@ export default function QuotationWizard() {
     ].filter((b) => {
         const hide: string[] =
             flow === "retainer"
-                ? ["inclusions", "domainHosting", "exclusions"]
+                ? ["inclusions", "domainHosting", "exclusions", "devRev"]
                 : flow === "production"
-                  ? ["inclusions", "domainHosting", "recurring"]
+                  ? ["inclusions", "domainHosting", "recurring", "devRev"]
                   : [];
         if (hide.includes(b.key)) return false;
         if (b.key === "recurring") return showRecurring;
@@ -1850,9 +2158,9 @@ export default function QuotationWizard() {
     });
 
     const termsStep = (
-        <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
+        <div className="gap-4 lg:columns-2">
             {termsBlocks.map((b) => (
-                <div key={b.key} className={cn("min-w-0", b.span && "xl:col-span-2")}>{b.node}</div>
+                <div key={b.key} className="mb-4 min-w-0 break-inside-avoid">{b.node}</div>
             ))}
         </div>
     );
@@ -2025,13 +2333,15 @@ export default function QuotationWizard() {
                         <p className="text-xs text-muted-foreground">This is how the quotation will appear to your client.</p>
                     </div>
                     <div className="flex items-center gap-2">
-                        <Button type="button" variant="outline" size="icon" className="size-8" aria-label={expanded ? "Exit full screen" : "Full screen"} onClick={() => setExpanded(!expanded)}>
-                            {expanded ? <IconArrowsMinimize className="size-4" /> : <IconArrowsMaximize className="size-4" />}
-                        </Button>
+                        <Tip label={expanded ? "Exit full screen" : "Full screen"}>
+                            <Button type="button" variant="outline" size="icon" className="size-8" aria-label={expanded ? "Exit full screen" : "Full screen"} onClick={() => setExpanded(!expanded)}>
+                                {expanded ? <IconArrowsMinimize className="size-4" /> : <IconArrowsMaximize className="size-4" />}
+                            </Button>
+                        </Tip>
                         <div className="flex items-center rounded-md border">
-                            <Button type="button" variant="ghost" size="icon" className="size-8" aria-label="Zoom out" disabled={zoom <= 30} onClick={() => { setAutoFit(false); setZoom(zoom - 10); }}><IconMinus className="size-4" /></Button>
+                            <Tip label="Zoom out"><Button type="button" variant="ghost" size="icon" className="size-8" aria-label="Zoom out" disabled={zoom <= 30} onClick={() => { setAutoFit(false); setZoom(zoom - 10); }}><IconMinus className="size-4" /></Button></Tip>
                             <span className="w-12 text-center text-xs">{zoom}%</span>
-                            <Button type="button" variant="ghost" size="icon" className="size-8" aria-label="Zoom in" disabled={zoom >= 150} onClick={() => { setAutoFit(false); setZoom(zoom + 10); }}><IconPlus className="size-4" /></Button>
+                            <Tip label="Zoom in"><Button type="button" variant="ghost" size="icon" className="size-8" aria-label="Zoom in" disabled={zoom >= 150} onClick={() => { setAutoFit(false); setZoom(zoom + 10); }}><IconPlus className="size-4" /></Button></Tip>
                         </div>
                         <Button type="button" variant="ghost" size="sm" className="h-8" onClick={() => { setAutoFit(true); fitZoom(); }}>Fit</Button>
                         <Button type="button" variant="ghost" size="sm" className="h-8" disabled={pdfBusy} onClick={() => printDoc(docNow())}>Print</Button>
@@ -2055,7 +2365,7 @@ export default function QuotationWizard() {
     const bodies = [clientStep, servicesStep, scopeStep, pricingStep, termsStep, previewStep];
 
     return (
-        <div className={"space-y-5 pb-24"}>
+        <div className="space-y-5 pb-36">
             <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                     <h1 className="text-2xl font-bold tracking-tight">Create New Quotation</h1>
@@ -2084,7 +2394,13 @@ export default function QuotationWizard() {
             <Stepper step={step} maxStep={maxStep} onGo={go} />
 
             <div className={cn("grid items-start gap-5", step !== 5 && step !== 0 && step !== 2 && (step === 1 ? "xl:grid-cols-[minmax(0,1fr)_340px]" : "xl:grid-cols-[minmax(0,1fr)_300px]"))}>
-                <div className="min-w-0">{bodies[step]}</div>
+                <div className="min-w-0">
+                    <AnimatePresence mode="wait" initial={false}>
+                        <motion.div key={step} initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2 }}>
+                            {bodies[step]}
+                        </motion.div>
+                    </AnimatePresence>
+                </div>
 
                 {step === 1 && (
                     <aside className="min-w-0 space-y-4 xl:sticky xl:top-4">
@@ -2117,7 +2433,7 @@ export default function QuotationWizard() {
                                         <div className="border-t pt-3">
                                             <div className="mb-2 flex items-center justify-between">
                                                 <p className="text-xs font-semibold">Included Features ({features.filter((f) => f.on).length})</p>
-                                                <Button type="button" variant="outline" size="sm" className="h-6 px-2 text-[11px] text-primary" onClick={goDetails}>Edit</Button>
+                                                <Button type="button" variant="outline" size="sm" className="h-6 px-2 text-[11px] text-primary" onClick={() => goStage("features")}>Edit</Button>
                                             </div>
                                             <ul className="space-y-1.5 text-xs">
                                                 {features.filter((f) => f.on).slice(0, 5).map((f) => (
@@ -2131,7 +2447,7 @@ export default function QuotationWizard() {
                                         <div className="border-t pt-3">
                                             <div className="mb-2 flex items-center justify-between">
                                                 <p className="text-xs font-semibold">Add-on Features ({chosenAddons.length})</p>
-                                                <Button type="button" variant="outline" size="sm" className="h-6 px-2 text-[11px] text-primary" onClick={goDetails}>Edit</Button>
+                                                <Button type="button" variant="outline" size="sm" className="h-6 px-2 text-[11px] text-primary" onClick={() => goStage("addons")}>Edit</Button>
                                             </div>
                                             <ul className="space-y-1.5 text-xs">
                                                 {chosenAddons.map((a) => (
@@ -2188,8 +2504,13 @@ export default function QuotationWizard() {
                 )}
             </div>
 
-            <div className="fixed inset-x-0 bottom-0 z-20 border-t bg-background/95 px-4 py-3 backdrop-blur md:left-[var(--sidebar-width,0px)]">
-                <div className="mx-auto flex max-w-[1600px] items-center justify-between gap-3">
+            <div className="pointer-events-none fixed inset-x-0 bottom-4 z-20 flex justify-center px-4 md:left-[var(--sidebar-width,0px)]">
+                <motion.div
+                    initial={{ y: 28, opacity: 0 }}
+                    animate={{ y: 0, opacity: 1 }}
+                    transition={{ type: "spring", stiffness: 260, damping: 24 }}
+                    className="pointer-events-auto flex flex-wrap items-center justify-center gap-2 rounded-2xl border bg-background/90 p-2 shadow-xl backdrop-blur"
+                >
                     <Button type="button" variant="outline" onClick={() => (step === 0 ? router.push("/quotations") : go(step - 1))}>
                         <IconArrowLeft className="size-4" /> {step === 0 ? "Back to Quotations" : `Previous: ${STEPS[step - 1].title}`}
                     </Button>
@@ -2198,16 +2519,16 @@ export default function QuotationWizard() {
                             {creatingClient ? "Creating client…" : `Continue to ${STEPS[step + 1].title}`} <IconArrowRight className="size-4" />
                         </Button>
                     ) : (
-                        <div className="flex flex-wrap items-center gap-2">
+                        <>
                             <Button type="button" variant="outline" disabled={pdfBusy || saving} onClick={downloadPdf}>
                                 <IconDownload className="size-4" /> {pdfBusy ? "Preparing…" : "Download PDF"}
                             </Button>
                             <Button type="button" disabled={saving || sending || !ready} onClick={openSend}>
                                 <IconSend className="size-4" /> Send to Client
                             </Button>
-                        </div>
+                        </>
                     )}
-                </div>
+                </motion.div>
             </div>
 
             {pdfStage}
@@ -2238,40 +2559,101 @@ function Row({ k, v }: { k: string; v: string }) {
     );
 }
 
-/** Feature checklist with per-row edit / delete and an inline "Add Custom Feature" (Cancel / Add). */
+/** Feature outline: name only, nested main → sub → sub-sub, with move up / down and indent / outdent. */
 function FeatureEditor({ items, onChange }: { items: CheckItem[]; onChange: (n: CheckItem[]) => void }) {
     const [editing, setEditing] = useState<number | null>(null);
+    const counters = [0, 0, 0];
+    const labels = items.map((it) => {
+        const d = depthOf(it);
+        counters[d]++;
+        for (let k = d + 1; k < 3; k++) counters[k] = 0;
+        return counters.slice(0, d + 1).join(".");
+    });
+
+    const siblingBefore = (i: number) => {
+        const d = depthOf(items[i]);
+        for (let k = i - 1; k >= 0; k--) {
+            if (depthOf(items[k]) < d) return -1;
+            if (depthOf(items[k]) === d) return k;
+        }
+        return -1;
+    };
+    const moveUp = (i: number) => {
+        const p = siblingBefore(i);
+        if (p < 0) return;
+        const j = blockEnd(items, i);
+        onChange([...items.slice(0, p), ...items.slice(i, j), ...items.slice(p, i), ...items.slice(j)]);
+    };
+    const hasNext = (i: number) => {
+        const j = blockEnd(items, i);
+        return j < items.length && depthOf(items[j]) === depthOf(items[i]);
+    };
+    const moveDown = (i: number) => {
+        if (!hasNext(i)) return;
+        const j = blockEnd(items, i);
+        const k = blockEnd(items, j);
+        onChange([...items.slice(0, i), ...items.slice(j, k), ...items.slice(i, j), ...items.slice(k)]);
+    };
+    const shift = (i: number, by: 1 | -1) => {
+        const j = blockEnd(items, i);
+        onChange(items.map((x, k) => (k >= i && k < j ? { ...x, depth: depthOf(x) + by } : x)));
+    };
+    const canIndent = (i: number) => {
+        if (i === 0) return false;
+        const j = blockEnd(items, i);
+        const deepest = Math.max(...items.slice(i, j).map(depthOf));
+        return depthOf(items[i - 1]) >= depthOf(items[i]) && deepest < 2;
+    };
+    const toggleBlock = (i: number, on: boolean) => {
+        const j = blockEnd(items, i);
+        onChange(items.map((x, k) => (k >= i && k < j ? { ...x, on } : x)));
+    };
+    const remove = (i: number) => {
+        const j = blockEnd(items, i);
+        onChange([...items.slice(0, i), ...items.slice(j)]);
+    };
+
     return (
         // the p-1 inside the -mx-1 viewport leaves room for focus rings, so they are never clipped
         <ScrollArea className="-mx-1 h-[26rem]">
-            <div className="space-y-1 p-1 pr-4">
-                {items.map((it, i) => (
-                    <div key={i}>
-                        {it.group && it.group !== items[i - 1]?.group && (
-                            <p className="px-1 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground first:pt-0">{it.group}</p>
-                        )}
-                        <div className="flex items-center gap-2.5 rounded-md px-1 py-1.5 hover:bg-muted/50">
-                            <IconGripVertical className="size-4 shrink-0 text-muted-foreground/60" />
-                            <Checkbox checked={it.on} onCheckedChange={(v) => onChange(items.map((x, j) => (j === i ? { ...x, on: !!v } : x)))} />
-                            {editing === i ? (
-                                <Input
-                                    autoFocus
-                                    className="h-8 flex-1"
-                                    value={it.text}
-                                    onChange={(e) => onChange(items.map((x, j) => (j === i ? { ...x, text: e.target.value } : x)))}
-                                    onBlur={() => setEditing(null)}
-                                    onKeyDown={(e) => (e.key === "Enter" || e.key === "Escape") && setEditing(null)}
-                                />
-                            ) : (
-                                <span className={cn("flex-1 text-sm", !it.on && "text-muted-foreground line-through")}>{it.text}</span>
+            <div className="space-y-0.5 p-1 pr-4">
+                {items.length === 0 && <p className="py-2 text-sm text-muted-foreground">No features yet. Add one below, or use bulk import.</p>}
+                {items.map((it, i) => {
+                    const d = depthOf(it);
+                    return (
+                        <div key={i}>
+                            {it.group && it.group !== items[i - 1]?.group && (
+                                <p className="px-1 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground first:pt-0">{it.group}</p>
                             )}
-                            <button type="button" aria-label="Edit feature" onClick={() => setEditing(i)} className="text-muted-foreground hover:text-primary"><IconPencil className="size-4" /></button>
-                            <button type="button" aria-label="Remove feature" onClick={() => onChange(items.filter((_, j) => j !== i))} className="text-destructive/80 hover:text-destructive"><IconTrash className="size-4" /></button>
+                            <div className="flex items-center gap-1.5 rounded-md py-1 pr-1 hover:bg-muted/50" style={{ paddingLeft: 4 + d * 20 }}>
+                                <Checkbox checked={it.on} onCheckedChange={(v) => toggleBlock(i, !!v)} />
+                                <span className="w-9 shrink-0 text-[11px] tabular-nums text-muted-foreground">{labels[i]}</span>
+                                {editing === i ? (
+                                    <Input
+                                        autoFocus
+                                        className="h-8 flex-1"
+                                        value={it.text}
+                                        onChange={(e) => onChange(items.map((x, j) => (j === i ? { ...x, text: e.target.value } : x)))}
+                                        onBlur={() => setEditing(null)}
+                                        onKeyDown={(e) => (e.key === "Enter" || e.key === "Escape") && setEditing(null)}
+                                    />
+                                ) : (
+                                    <span className={cn("min-w-0 flex-1 truncate text-sm", d === 0 && "font-medium", !it.on && "text-muted-foreground line-through")} title={it.text}>{it.text}</span>
+                                )}
+                                <div className="flex shrink-0 items-center">
+                                    <IconBtn label="Move up" disabled={siblingBefore(i) < 0} onClick={() => moveUp(i)}><IconArrowUp className="size-4" /></IconBtn>
+                                    <IconBtn label="Move down" disabled={!hasNext(i)} onClick={() => moveDown(i)}><IconArrowDown className="size-4" /></IconBtn>
+                                    <IconBtn label="Make sub-feature" disabled={!canIndent(i)} onClick={() => shift(i, 1)}><IconIndentIncrease className="size-4" /></IconBtn>
+                                    <IconBtn label="Make main feature" disabled={d === 0} onClick={() => shift(i, -1)}><IconIndentDecrease className="size-4" /></IconBtn>
+                                    <IconBtn label="Edit" onClick={() => setEditing(i)} className="hover:text-primary"><IconPencil className="size-4" /></IconBtn>
+                                    <IconBtn label="Delete" onClick={() => remove(i)} className="text-destructive/80 hover:text-destructive"><IconTrash className="size-4" /></IconBtn>
+                                </div>
+                            </div>
                         </div>
-                    </div>
-                ))}
+                    );
+                })}
                 <div className="pt-2">
-                    <AddInline label="Add Custom Feature" placeholder="Feature name…" onAdd={(text) => onChange([...items, { text, on: true }])} />
+                    <AddInline label="Add Feature" placeholder="Feature name…" onAdd={(text) => onChange([...items, { text, on: true, depth: 0 }])} />
                 </div>
             </div>
         </ScrollArea>

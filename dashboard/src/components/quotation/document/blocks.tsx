@@ -64,6 +64,25 @@ function pairRows(id: string, items: string[]): Block[] {
     }));
 }
 
+/** Nested feature list. Items carry their depth as 2-space indentation (same encoding the legacy builder wrote). */
+function treeRows(id: string, items: string[]): Block[] {
+    let main = 0;
+    return items.map((raw, i) => {
+        const level = Math.min(Math.floor((raw.match(/^\s*/)?.[0] ?? "").replace(/\t/g, "    ").length / 2), 2);
+        if (level === 0) main++;
+        return {
+            id: `${id}-${i}`,
+            h: 0,
+            node: (
+                <div className="qd-item" style={{ marginLeft: level * 22 }}>
+                    <span className="qd-no">{level === 0 ? pad2(main) : level === 1 ? "–" : "·"}</span>
+                    <span className="qd-txt" style={level === 0 ? { fontWeight: 600 } : undefined}>{raw.trim()}</span>
+                </div>
+            ),
+        };
+    });
+}
+
 /** One full-width row per item so long lists and clauses flow across pages without clipping. */
 function listRows(id: string, items: string[], marker: (i: number) => ReactNode): Block[] {
     return items.map((t, i) => ({
@@ -203,7 +222,7 @@ export function buildBlocks(d: QuotationDocInput): Block[] {
             const items = (s.scopeItems ?? []).filter(Boolean);
             if (items.length) {
                 blocks.push(subhead(`ft-${si}-t`, services.length > 1 ? `Features & capabilities — ${s.category.replace("-", " ")}` : "Features & capabilities", `${items.length} items`));
-                blocks.push(...pairRows(`ft-${si}`, items));
+                blocks.push(...(items.some((t) => /^\s/.test(t)) ? treeRows : pairRows)(`ft-${si}`, items));
             }
         });
         if (deliverables.length) {
