@@ -45,6 +45,7 @@ export interface WhatsAppConversation {
     phone: string;
     status: 'bot' | 'escalated' | 'resolved';
     aiEnabled: boolean;
+    aiResumeAt: string | null; // AI switches itself back on at this time
     lastMessage: string;
     lastMessageDirection: 'inbound' | 'outbound' | null;
     lastMessageStatus: WhatsAppMessageStatus | null;
@@ -311,7 +312,10 @@ export const whatsappApi = baseApi.injectEndpoints({
                 const patch = dispatch(
                     whatsappApi.util.updateQueryData('getWhatsAppConversations', undefined, (draft) => {
                         const c = draft.find((x) => x.id === conversationId);
-                        if (c) c.aiEnabled = aiEnabled;
+                        if (c) {
+                            c.aiEnabled = aiEnabled;
+                            c.aiResumeAt = null;
+                        }
                     }),
                 );
                 queryFulfilled.catch(patch.undo);

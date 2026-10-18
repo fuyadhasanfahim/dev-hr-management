@@ -47,6 +47,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
+import { AiResumeCountdown } from '@/components/messages/ai-resume-countdown';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
@@ -983,6 +984,11 @@ export function MessagesView({ conversationId }: { conversationId?: string }) {
                                             }
                                         />
                                     </label>
+                                    {!selected.aiEnabled && selected.aiResumeAt && (
+                                        <div className="mr-2">
+                                            <AiResumeCountdown resumeAt={selected.aiResumeAt} />
+                                        </div>
+                                    )}
                                     <Button
                                         variant="ghost"
                                         size="icon"

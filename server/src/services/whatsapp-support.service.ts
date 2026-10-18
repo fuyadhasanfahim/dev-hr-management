@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import WhatsAppConversationModel, {
+    AI_RESUME_MS,
     WhatsAppConversationStatus,
     type IWhatsAppAssignee,
 } from '../models/whatsapp-conversation.model.js';
@@ -112,6 +113,7 @@ export interface ConversationSummary {
     phone: string;
     status: string;
     aiEnabled: boolean;
+    aiResumeAt: string | null;
     lastMessage: string;
     lastMessageDirection: WhatsAppMessageDirection | null;
     lastMessageStatus: WhatsAppMessageStatus | null;
@@ -190,6 +192,7 @@ async function listConversations(): Promise<ConversationSummary[]> {
             phone: c.customerPhone,
             status: c.status,
             aiEnabled: c.aiEnabled,
+            aiResumeAt: !c.aiEnabled && c.aiResumeAt ? c.aiResumeAt.toISOString() : null,
             lastMessage: lastMessage ? (lastMessage.deletedAt ? '🚫 This message was deleted' : previewText(lastMessage)) : '',
             lastMessageDirection: lastMessage?.direction ?? null,
             lastMessageStatus: lastMessage?.status ?? null,
@@ -339,11 +342,12 @@ async function sendAgentMessage(conversationId: string, body: string, agent: Age
 
 // Replying means the agent has read everything so far, and that the bot
 // should stay quiet on this chat from now on.
-function touchAfterAgentReply(conversation: { lastMessageAt: Date; lastReadAt: Date; aiEnabled: boolean }) {
+function touchAfterAgentReply(conversation: { lastMessageAt: Date; lastReadAt: Date; aiEnabled: boolean; aiResumeAt?: Date | null }) {
     const now = new Date();
     conversation.lastMessageAt = now;
     conversation.lastReadAt = now;
     conversation.aiEnabled = false;
+    conversation.aiResumeAt = new Date(now.getTime() + AI_RESUME_MS);
 }
 
 // Mime types WhatsApp accepts per message type; anything else goes as a document.
@@ -445,6 +449,7 @@ async function setAiEnabled(conversationId: string, aiEnabled: boolean, agent: A
     if (!conversation) throw new InboxError('Conversation not found', 404);
     assertCanAct(conversation.assignedTo, agent);
     conversation.aiEnabled = aiEnabled;
+    conversation.aiResumeAt = null;
     if (aiEnabled) {
         if (conversation.status === WhatsAppConversationStatus.ESCALATED) conversation.status = WhatsAppConversationStatus.BOT;
         conversation.assignedTo = null;
@@ -474,6 +479,7 @@ async function setAssignment(conversationId: string, action: 'claim' | 'release'
         conversation.assignedTo = { id: agent.id, name: agent.name };
         if (takingOver) conversation.assignedAt = new Date();
         conversation.aiEnabled = false; // A human owns it now.
+        conversation.aiResumeAt = null;
     } else {
         conversation.assignedTo = null;
         conversation.assignedAt = null;

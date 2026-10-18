@@ -1,5 +1,8 @@
 import { Schema, model, Document, Types } from 'mongoose';
 
+// After an agent's last reply, AI comes back on by itself once this long passes.
+export const AI_RESUME_MS = 5 * 60 * 1000;
+
 export enum WhatsAppConversationStatus {
     BOT       = 'bot',
     ESCALATED = 'escalated',
@@ -18,6 +21,7 @@ export interface IWhatsAppConversation extends Document {
     customerName?: string;
     status: WhatsAppConversationStatus;
     aiEnabled: boolean;
+    aiResumeAt?: Date | null; // When set, AI switches itself back on at this time (agent went quiet).
     linkedTicketId?: Types.ObjectId; // Ref: Ticket — set once escalated
     assignedTo?: IWhatsAppAssignee | null;
     assignedAt?: Date | null;
@@ -47,6 +51,11 @@ const whatsAppConversationSchema = new Schema<IWhatsAppConversation>(
         aiEnabled: {
             type: Boolean,
             default: true,
+        },
+        aiResumeAt: {
+            type: Date,
+            default: null,
+            index: true,
         },
         linkedTicketId: {
             type: Schema.Types.ObjectId,

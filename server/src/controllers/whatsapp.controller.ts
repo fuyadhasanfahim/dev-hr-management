@@ -3,7 +3,7 @@ import envConfig from '../config/env.config.js';
 import { logger } from '../lib/logger.js';
 import whatsappService from '../services/whatsapp.service.js';
 import whatsappAiService from '../services/whatsapp-ai.service.js';
-import { WhatsAppConversationStatus } from '../models/whatsapp-conversation.model.js';
+import { AI_RESUME_MS, WhatsAppConversationStatus, type IWhatsAppConversation } from '../models/whatsapp-conversation.model.js';
 import WhatsAppMessageModel, {
     WhatsAppMessageDirection,
     WhatsAppMessageSender,
@@ -181,6 +181,7 @@ async function handleEcho(echo: EchoMessage) {
     conversation.lastMessageAt = new Date();
     conversation.lastReadAt = conversation.lastMessageAt;
     conversation.aiEnabled = false;
+    conversation.aiResumeAt = new Date(Date.now() + AI_RESUME_MS);
     await conversation.save();
     notifyAgents('whatsapp:new_message', { conversationId: conversation._id.toString() });
 }
@@ -219,12 +220,22 @@ async function handleIncomingMessage(fromPhone: string, content: InboundContent,
     if (process.env.WHATSAPP_AI_DISABLED === "1" || !conversation.aiEnabled || conversation.status !== WhatsAppConversationStatus.BOT) return;
     if (content.type !== WhatsAppMessageType.TEXT) return;
 
+    await answerWithAi(conversation, fromPhone, body, whatsappMsgId);
+}
+
+// Also used by the auto-resume sweep to answer a customer message that went unanswered while AI was paused.
+export async function answerWithAi(
+    conversation: IWhatsAppConversation,
+    fromPhone: string,
+    body: string,
+    excludeMsgId?: string,
+) {
     // The 20 most recent turns before this message (oldest-first), so a long chat
     // keeps its latest context. The message being answered is passed separately.
     const priorMessages = await WhatsAppMessageModel.find({
         conversationId: conversation._id,
         body: { $ne: '' },
-        whatsappMsgId: { $ne: whatsappMsgId },
+        ...(excludeMsgId ? { whatsappMsgId: { $ne: excludeMsgId } } : {}),
         type: WhatsAppMessageType.TEXT,
         deletedAt: { $exists: false },
     })

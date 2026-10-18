@@ -10,6 +10,7 @@ import { logger } from "./lib/logger.js";
 import { initSentry } from "./lib/sentry.js";
 import { createGracefulShutdown } from "./lib/gracefulShutdown.js";
 import { initPermissionCacheSync } from "./lib/permissions.js";
+import { startWhatsAppAiResume } from "./services/whatsapp-ai-resume.js";
 import { startWhatsAppSendWorker } from "./services/whatsapp-send.queue.js";
 
 import { cleanupDuplicateOverviewInDB } from './utils/cleanupDuplicateOverview.js';
@@ -43,6 +44,7 @@ async function Server() {
         schedulerService.startAllSchedulers();
 
         const whatsappSendWorker = startWhatsAppSendWorker();
+        const aiResume = startWhatsAppAiResume();
 
         // Graceful shutdown: stop accepting new connections, let in-flight
         // requests finish, close the DB connection, then exit — bounded by
@@ -55,6 +57,7 @@ async function Server() {
                 // Phase 1) so no new background work starts against a DB
                 // connection that's about to close, then close the connection.
                 await schedulerService.stopAllSchedulers();
+                aiResume.stop();
                 await whatsappSendWorker.close();
                 await mongoose.connection.close();
             },
