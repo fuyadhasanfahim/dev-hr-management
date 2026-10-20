@@ -3,6 +3,7 @@ import AIChatController from '../controllers/ai-chat.controller.js';
 import { requireUnifiedAuth, optionalUnifiedAuth } from './support.route.js';
 import { validateRequest } from '../middlewares/validateRequest.js';
 import { CreateTicketFromAIValidation } from '../validators/ticket.validator.js';
+import { isAiActive } from '../services/ai-settings.service.js';
 import { aiChatLimiter, generalPublicLimiter } from '../middlewares/rate-limit.middleware.js';
 
 const router = express.Router();
@@ -12,6 +13,11 @@ router.post('/chat', aiChatLimiter, AIChatController.chat);
 
 // Public endpoint — get info about Web Briks services
 router.get('/info', generalPublicLimiter, AIChatController.getInfo);
+
+// Public — lets the widget know whether the AI is on, to offer live support instead when it is not
+router.get('/status', generalPublicLimiter, async (_req, res) => {
+    res.status(200).json({ success: true, available: await isAiActive('web_chat') });
+});
 
 // Optional auth — verified guests/clients are attributed via their session; an
 // unverified visitor may instead supply name + email in the body.

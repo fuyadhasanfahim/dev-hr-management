@@ -34,6 +34,7 @@ import { earningRoute } from "./earning.route.js";
 import { meetingRoute } from "./meeting.route.js";
 import { leadRoute } from "./lead.route.js";
 import { leadSettingRoute } from "./lead-setting.route.js";
+import { aiSettingsRoute } from "./ai-settings.route.js";
 import { TaskRoutes } from "./task.route.js";
 import { SupportRoutes } from "./support.route.js";
 import { WhatsAppRoutes } from "./whatsapp.route.js";
@@ -185,6 +186,10 @@ const moduleRoutes = [
     {
         path: "/leads",
         route: leadRoute,
+    },
+    {
+        path: "/ai-settings",
+        route: aiSettingsRoute,
     },
     {
         path: "/lead-settings",

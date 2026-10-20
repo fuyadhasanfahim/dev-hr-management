@@ -6,11 +6,14 @@ import WhatsAppMessageModel, {
 } from '../models/whatsapp-message.model.js';
 import { answerWithAi } from '../controllers/whatsapp.controller.js';
 import { notifyAgents } from '../socket/support.namespace.js';
+import { isAiActive, isAutoResumeEnabled } from './ai-settings.service.js';
 import { logger } from '../lib/logger.js';
 
 // Turns AI back on for chats whose agent went quiet (aiResumeAt passed), and
 // answers the customer's last message if nobody replied to it meanwhile.
 async function sweep() {
+    // Auto-resume switched off on the AI control page: chats stay as the agent left them.
+    if (!(await isAutoResumeEnabled())) return;
     const due = await WhatsAppConversationModel.find({
         aiEnabled: false,
         aiResumeAt: { $ne: null, $lte: new Date() },
@@ -28,7 +31,7 @@ async function sweep() {
 
             const last = await WhatsAppMessageModel.findOne({ conversationId: conversation._id }).sort({ createdAt: -1 });
             if (
-                process.env.WHATSAPP_AI_DISABLED !== '1' &&
+                (await isAiActive('whatsapp')) &&
                 last?.direction === WhatsAppMessageDirection.INBOUND &&
                 last.sender === WhatsAppMessageSender.CUSTOMER &&
                 last.type === WhatsAppMessageType.TEXT &&

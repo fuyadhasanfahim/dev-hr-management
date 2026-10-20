@@ -53,6 +53,7 @@ export const apiSlice = createApi({
         "Task",
         "Consultation",
         "MyPermissions",
+        "AiSettings",
         "Role",
         "Catalog",
         "PhotoOrder",

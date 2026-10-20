@@ -3,7 +3,8 @@ import envConfig from '../config/env.config.js';
 import { logger } from '../lib/logger.js';
 import whatsappService from '../services/whatsapp.service.js';
 import whatsappAiService from '../services/whatsapp-ai.service.js';
-import { AI_RESUME_MS, WhatsAppConversationStatus, type IWhatsAppConversation } from '../models/whatsapp-conversation.model.js';
+import { agentReplyPolicy, isAiActive } from '../services/ai-settings.service.js';
+import { WhatsAppConversationStatus, type IWhatsAppConversation } from '../models/whatsapp-conversation.model.js';
 import WhatsAppMessageModel, {
     WhatsAppMessageDirection,
     WhatsAppMessageSender,
@@ -180,8 +181,11 @@ async function handleEcho(echo: EchoMessage) {
     // A human answered from the phone: the bot stays quiet from here on.
     conversation.lastMessageAt = new Date();
     conversation.lastReadAt = conversation.lastMessageAt;
-    conversation.aiEnabled = false;
-    conversation.aiResumeAt = new Date(Date.now() + AI_RESUME_MS);
+    const policy = await agentReplyPolicy();
+    if (policy.pause) {
+        conversation.aiEnabled = false;
+        conversation.aiResumeAt = policy.resumeAt;
+    }
     await conversation.save();
     notifyAgents('whatsapp:new_message', { conversationId: conversation._id.toString() });
 }
@@ -217,8 +221,11 @@ async function handleIncomingMessage(fromPhone: string, content: InboundContent,
     // AI off (agent already handling it manually via the app) or already
     // escalated to a human ticket — the bot stays quiet either way.
     // The AI only reads text — media and call events wait for a human.
-    if (process.env.WHATSAPP_AI_DISABLED === "1" || !conversation.aiEnabled || conversation.status !== WhatsAppConversationStatus.BOT) return;
+    if (!conversation.aiEnabled || conversation.status !== WhatsAppConversationStatus.BOT) return;
     if (content.type !== WhatsAppMessageType.TEXT) return;
+
+    // Admin AI controls (off / schedule / per-feature switch) — see ai-settings.service.
+    if (!(await isAiActive('whatsapp'))) return;
 
     await answerWithAi(conversation, fromPhone, body, whatsappMsgId);
 }

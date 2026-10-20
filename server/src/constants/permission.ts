@@ -195,6 +195,12 @@ export const PERMISSION_GROUPS = {
         // manage — take over / reassign a chat another agent is handling
         actions: ['access', 'manage'],
     },
+    ai: {
+        label: 'AI Controls',
+        // read   — see the AI control page
+        // manage — turn AIs on/off, schedules and auto-resume
+        actions: ['read', 'manage'],
+    },
     outbox: {
         label: 'Outbox / Event Log',
         actions: ['read', 'replay'],

@@ -6,6 +6,7 @@ import supportTicketService from '../services/support-ticket.service.js';
 import aiConversationService from '../services/ai-conversation.service.js';
 import guestAuthService from '../services/guest-auth.service.js';
 import { notifyNewSession, notifyAgents } from '../socket/support.namespace.js';
+import { isAiActive } from '../services/ai-settings.service.js';
 import { logger } from '../lib/logger.js';
 
 async function chat(req: Request, res: Response) {
@@ -14,6 +15,16 @@ async function chat(req: Request, res: Response) {
 
         if (!message || typeof message !== 'string') {
             return res.status(400).json({ success: false, message: 'Message is required' });
+        }
+
+        // Admin AI controls: when the website AI is off, tell the widget to hand over to a human.
+        if (!(await isAiActive('web_chat'))) {
+            return res.status(503).json({
+                success: false,
+                retryable: false,
+                aiDisabled: true,
+                message: 'Our AI assistant is offline right now. Please connect to live support or leave us a message.',
+            });
         }
 
         const chatHistory = Array.isArray(history) ? history : [];

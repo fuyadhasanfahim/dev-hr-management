@@ -6,7 +6,6 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import WhatsAppConversationModel, {
-    AI_RESUME_MS,
     WhatsAppConversationStatus,
     type IWhatsAppAssignee,
 } from '../models/whatsapp-conversation.model.js';
@@ -22,6 +21,7 @@ import WhatsAppMessageModel, {
     WhatsAppMessageType,
     type IWhatsAppMedia,
 } from '../models/whatsapp-message.model.js';
+import { agentReplyPolicy } from './ai-settings.service.js';
 import { enqueueWhatsAppSend } from './whatsapp-send.queue.js';
 import whatsappService from './whatsapp.service.js';
 import { notifyAgents } from '../socket/support.namespace.js';
@@ -331,7 +331,7 @@ async function sendAgentMessage(conversationId: string, body: string, agent: Age
         clientId,
     });
 
-    touchAfterAgentReply(conversation);
+    await touchAfterAgentReply(conversation);
     await conversation.save();
 
     await enqueueWhatsAppSend(_id.toString());
@@ -342,12 +342,15 @@ async function sendAgentMessage(conversationId: string, body: string, agent: Age
 
 // Replying means the agent has read everything so far, and that the bot
 // should stay quiet on this chat from now on.
-function touchAfterAgentReply(conversation: { lastMessageAt: Date; lastReadAt: Date; aiEnabled: boolean; aiResumeAt?: Date | null }) {
+async function touchAfterAgentReply(conversation: { lastMessageAt: Date; lastReadAt: Date; aiEnabled: boolean; aiResumeAt?: Date | null }) {
     const now = new Date();
     conversation.lastMessageAt = now;
     conversation.lastReadAt = now;
-    conversation.aiEnabled = false;
-    conversation.aiResumeAt = new Date(now.getTime() + AI_RESUME_MS);
+    const policy = await agentReplyPolicy(now);
+    if (policy.pause) {
+        conversation.aiEnabled = false;
+        conversation.aiResumeAt = policy.resumeAt;
+    }
 }
 
 // Mime types WhatsApp accepts per message type; anything else goes as a document.
@@ -412,7 +415,7 @@ async function sendAgentMedia(
         clientId: options.clientId,
     });
 
-    touchAfterAgentReply(conversation);
+    await touchAfterAgentReply(conversation);
     await conversation.save();
 
     await enqueueWhatsAppSend(_id.toString());

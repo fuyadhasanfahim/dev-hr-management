@@ -1,8 +1,5 @@
 import { Schema, model, Document, Types } from 'mongoose';
 
-// After an agent's last reply, AI comes back on by itself once this long passes.
-export const AI_RESUME_MS = 5 * 60 * 1000;
-
 export enum WhatsAppConversationStatus {
     BOT       = 'bot',
     ESCALATED = 'escalated',

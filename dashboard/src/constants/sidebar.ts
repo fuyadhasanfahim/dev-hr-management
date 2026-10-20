@@ -26,6 +26,7 @@ import {
     IconHeadset,
     IconCategory,
     IconPhotoEdit,
+    IconRobot,
 } from "@tabler/icons-react";
 
 
@@ -267,6 +268,18 @@ export const sidebarGroups: SidebarGroup[] = [
                 url: "/roles",
                 permission: 'role.read',
                 icon: IconShieldLock,
+                access: [Role.SUPER_ADMIN, Role.ADMIN],
+            },
+        ],
+    },
+    {
+        groupLabel: "Settings",
+        items: [
+            {
+                title: "AI Controls",
+                url: "/settings/ai",
+                permission: 'ai.read',
+                icon: IconRobot,
                 access: [Role.SUPER_ADMIN, Role.ADMIN],
             },
         ],

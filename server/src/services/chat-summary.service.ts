@@ -3,6 +3,7 @@ import ChatSessionModel from '../models/chat-session.model.js';
 import ChatMessageModel from '../models/chat-message.model.js';
 import { sendMail } from '../lib/nodemailer.js';
 import envConfig from '../config/env.config.js';
+import { isAiActive } from './ai-settings.service.js';
 import { logger } from '../lib/logger.js';
 
 const SUMMARY_SYSTEM_PROMPT =
@@ -76,6 +77,7 @@ interface TranscriptMessage {
 export async function generateChatSummary(transcript: string): Promise<string> {
     try {
         if (!transcript.trim()) return 'Summary unavailable.';
+        if (!(await isAiActive('chat_summary'))) return 'Summary unavailable.';
 
         const genAI = getAI();
         const chat = genAI.chats.create({
