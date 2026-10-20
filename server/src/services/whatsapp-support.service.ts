@@ -446,7 +446,7 @@ async function retryMessage(conversationId: string, messageId: string): Promise<
 // An agent reply switches AI off; this is how they hand the chat back. Turning
 // it on also returns an escalated chat to bot mode, since the webhook only lets
 // the AI answer conversations in that state (the linked ticket stays open).
-// Handing a chat back to the AI also releases it, so the bot owns it again.
+// AI on/off never changes who is assigned: that follows who has the chat open.
 async function setAiEnabled(conversationId: string, aiEnabled: boolean, agent: Agent): Promise<void> {
     const conversation = await WhatsAppConversationModel.findById(conversationId);
     if (!conversation) throw new InboxError('Conversation not found', 404);
@@ -455,8 +455,6 @@ async function setAiEnabled(conversationId: string, aiEnabled: boolean, agent: A
     conversation.aiResumeAt = null;
     if (aiEnabled) {
         if (conversation.status === WhatsAppConversationStatus.ESCALATED) conversation.status = WhatsAppConversationStatus.BOT;
-        conversation.assignedTo = null;
-        conversation.assignedAt = null;
     }
     await conversation.save();
     notifyAgents('whatsapp:conversation_updated', { conversationId });

@@ -7,6 +7,8 @@ import { addToChatQueue, removeFromChatQueue } from '../services/redis-queue.ser
 import { logger } from '../lib/logger.js';
 import { Types } from 'mongoose';
 import { hasPermission } from '../lib/permissions.js';
+import WhatsAppConversationModel from '../models/whatsapp-conversation.model.js';
+import { claimConversation } from '../services/whatsapp-support.service.js';
 
 let supportNamespaceRef: Namespace | null = null;
 
@@ -293,7 +295,48 @@ export function registerSupportNamespace(io: Server) {
             }
         });
 
+        // ── WhatsApp chat presence ──────────────────────────────────────────
+        // Opening a chat assigns it to the agent (AI on or off makes no difference);
+        // leaving it — switching chat, leaving the page, closing the tab, losing the
+        // connection — frees it again. Another agent already on the chat stays the
+        // owner and this one just reads.
+        const isAgent = user.role !== 'Guest' && user.role !== 'client' && hasPermission(user.permissions, 'support.access');
+
+        const leaveWhatsAppChat = async () => {
+            const conversationId: string | undefined = socket.data.waViewing;
+            if (!conversationId) return;
+            socket.data.waViewing = undefined;
+            try {
+                // Same agent still has it open in another tab: keep it assigned.
+                for (const other of supportNamespace.sockets.values()) {
+                    if (other.id !== socket.id && other.data.waViewing === conversationId && other.data.waAgentId === user.id) return;
+                }
+                const freed = await WhatsAppConversationModel.updateOne(
+                    { _id: conversationId, 'assignedTo.id': user.id },
+                    { $set: { assignedTo: null, assignedAt: null } },
+                );
+                if (freed.modifiedCount) supportNamespace.to('agents_presence').emit('whatsapp:conversation_updated', { conversationId });
+            } catch (err: any) {
+                logger.error(`[Support Socket] whatsapp leave failed: ${err.message}`);
+            }
+        };
+
+        socket.on('whatsapp:enter', async ({ conversationId }: { conversationId?: string }) => {
+            if (!isAgent || !conversationId || !Types.ObjectId.isValid(conversationId)) return;
+            await leaveWhatsAppChat();
+            socket.data.waViewing = conversationId;
+            socket.data.waAgentId = user.id;
+            try {
+                await claimConversation(conversationId, { id: user.id, name: user.name, canManage: false });
+            } catch {
+                // Someone else is handling it: read-only for this agent.
+            }
+        });
+
+        socket.on('whatsapp:leave', () => void leaveWhatsAppChat());
+
         socket.on('disconnect', () => {
+            void leaveWhatsAppChat();
             logger.info(`[Support Socket] Socket disconnected: ${socket.id}`);
             try {
                 const sid = socket.data.joinedSessionId;

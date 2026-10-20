@@ -24,8 +24,6 @@ async function sweep() {
         try {
             conversation.aiEnabled = true;
             conversation.aiResumeAt = null;
-            conversation.assignedTo = null;
-            conversation.assignedAt = null;
             await conversation.save();
             notifyAgents('whatsapp:conversation_updated', { conversationId: conversation._id.toString() });
 

@@ -13,6 +13,7 @@ import {
 } from 'react';
 import { useRouter } from 'next/navigation';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { connectSocket } from '@/lib/socket';
 import { useGetAiStatusQuery } from '@/store/api/aiSettingsApi';
 import { useDispatch } from 'react-redux';
 import { AnimatePresence, MotionConfig, motion } from 'motion/react';
@@ -626,6 +627,19 @@ export function MessagesView({ conversationId }: { conversationId?: string }) {
             return matchesQuery && matchesFilter;
         });
     }, [conversations, search, filter, agent.id]);
+
+    // Having a chat open = being assigned to it; leaving frees it (the server also frees it if the tab closes).
+    useEffect(() => {
+        if (!selectedId) return;
+        const socket = connectSocket();
+        const enter = () => socket.emit('whatsapp:enter', { conversationId: selectedId });
+        if (socket.connected) enter();
+        socket.on('connect', enter);
+        return () => {
+            socket.off('connect', enter);
+            socket.emit('whatsapp:leave');
+        };
+    }, [selectedId]);
 
     const selected = conversations.find((c) => c.id === selectedId) ?? null;
 
