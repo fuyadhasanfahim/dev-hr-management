@@ -8,10 +8,12 @@ import {
     CalendarCheck,
     Inbox,
     LayoutDashboard,
+    Bot,
     Library,
     MessageCircle,
     MessageSquare,
     Search,
+    Settings,
     Target,
     Ticket,
     TrendingUp,
@@ -74,6 +76,11 @@ const NAV_GROUPS: NavGroup[] = [
         groupLabel: 'Resources',
         icon: Library,
         items: [{ title: 'Knowledge Base', url: '/knowledge-base', icon: BookOpen }],
+    },
+    {
+        groupLabel: 'Settings',
+        icon: Settings,
+        items: [{ title: 'AI Controls', url: '/ai-controls', icon: Bot, permission: 'ai.read' }],
     },
 ];
 

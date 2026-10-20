@@ -13,6 +13,7 @@ import {
 } from 'react';
 import { useRouter } from 'next/navigation';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { useGetAiStatusQuery } from '@/store/api/aiSettingsApi';
 import { useDispatch } from 'react-redux';
 import { AnimatePresence, MotionConfig, motion } from 'motion/react';
 import {
@@ -591,6 +592,8 @@ export function MessagesView({ conversationId }: { conversationId?: string }) {
     const { call, startCall } = useCall();
     const agent = useSupportAgent();
     const isMobile = useIsMobile();
+    const { data: aiStatus } = useGetAiStatusQuery(undefined, { pollingInterval: 60_000 });
+    const aiPaused = aiStatus && !aiStatus.whatsapp.active;
     const [infoOpen, setInfoOpen] = useState(false);
     const [lightbox, setLightbox] = useState<{ items: WhatsAppMessage[]; index: number; key: number } | null>(null);
 
@@ -804,6 +807,12 @@ export function MessagesView({ conversationId }: { conversationId?: string }) {
                 >
                     <div className="px-4 pt-4 pb-3 space-y-3">
                         <h1 className="text-lg font-semibold pl-10 md:pl-0">Messages</h1>
+                        {aiPaused && (
+                            <p className="flex items-center gap-2 rounded-lg bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
+                                <Bot className="size-3.5 shrink-0" />
+                                AI replies are off right now — new messages wait for your team.
+                            </p>
+                        )}
                         <div className="relative">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
                             <Input
