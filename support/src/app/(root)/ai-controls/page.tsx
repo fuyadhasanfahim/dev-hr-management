@@ -107,7 +107,7 @@ export default function AiControlsPage() {
     const { can } = usePermissions();
     const canManage = can('ai.manage');
 
-    const { data, isLoading, isError, refetch } = useGetAiSettingsQuery(undefined, { pollingInterval: 30_000 });
+    const { data, isLoading, isError, error, refetch } = useGetAiSettingsQuery(undefined, { pollingInterval: 30_000 });
     const [update, { isLoading: saving }] = useUpdateAiSettingsMutation();
 
     const [dialogOpen, setDialogOpen] = useState(false);
@@ -190,10 +190,19 @@ export default function AiControlsPage() {
     if (isError) {
         return (
             <div className="mx-auto flex max-w-3xl flex-col items-center gap-3 p-10 text-center">
-                <p className="text-sm text-muted-foreground">Couldn’t load the AI controls.</p>
-                <Button variant="outline" onClick={() => refetch()}>
-                    Try again
-                </Button>
+                {(error as { status?: number } | undefined)?.status === 403 ? (
+                    <>
+                        <p className="text-sm font-medium">You don’t have access to AI Controls.</p>
+                        <p className="max-w-sm text-sm text-muted-foreground">Ask a super admin to give your role the “AI Controls” permission (Roles &amp; Permissions).</p>
+                    </>
+                ) : (
+                    <>
+                        <p className="text-sm text-muted-foreground">Couldn’t load the AI controls.</p>
+                        <Button variant="outline" onClick={() => refetch()}>
+                            Try again
+                        </Button>
+                    </>
+                )}
             </div>
         );
     }

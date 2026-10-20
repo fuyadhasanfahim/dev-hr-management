@@ -575,7 +575,7 @@ function ThreadMessages({
 // WhatsApp's cap for video/audio (and our server's upload limit).
 const MAX_UPLOAD_BYTES = 16 * 1024 * 1024;
 
-const FILTERS = ['all', 'unread', 'assigned', 'unassigned'] as const;
+const FILTERS = ['all', 'unread', 'mine', 'unassigned'] as const;
 type Filter = (typeof FILTERS)[number];
 
 export function MessagesView({ conversationId }: { conversationId?: string }) {
@@ -620,7 +620,7 @@ export function MessagesView({ conversationId }: { conversationId?: string }) {
             const matchesFilter =
                 filter === 'all' ||
                 (filter === 'unread' && c.unreadCount > 0) ||
-                (filter === 'assigned' && c.assignedTo?.id === agent.id) ||
+                (filter === 'mine' && c.assignedTo?.id === agent.id) ||
                 (filter === 'unassigned' && !c.assignedTo);
             return matchesQuery && matchesFilter;
         });
