@@ -149,7 +149,7 @@ app.use(
         // AI chat public endpoints (chat and info)
         const isPublicAIChatRoute =
             (req.method === "POST" && req.path === "/ai-chat/chat") ||
-            (req.method === "GET" && req.path === "/ai-chat/info");
+            (req.method === "GET" && (req.path === "/ai-chat/info" || req.path === "/ai-chat/status"));
 
         if (
             isPublicInvitationRoute ||
