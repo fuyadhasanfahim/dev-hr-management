@@ -139,7 +139,7 @@ export function ReceiptTable({ receipts, isLoading, onAddPayment, onVoid }: Rece
                     <span className="text-sm text-foreground truncate max-w-[160px]">
                       {r.projectTitle}
                     </span>
-                    <Badge variant="secondary" className="w-fit text-[9px] font-medium px-1.5 py-0">
+                    <Badge variant="secondary" className="w-fit text-[10px] font-medium px-1.5 py-0">
                       {getCategoryConfig(r.category).label}
                     </Badge>
                   </div>

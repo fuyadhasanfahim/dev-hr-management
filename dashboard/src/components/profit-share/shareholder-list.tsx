@@ -125,12 +125,12 @@ export default function ShareholderList() {
                     <Progress value={totalPercentage} className="h-2" />
                     <p className="text-sm text-muted-foreground">
                         {totalPercentage < 100 ? (
-                            <span className="text-amber-600">
+                            <span className="text-amber-600 dark:text-amber-400">
                                 {remainingPercentage.toFixed(2)}% remaining to
                                 allocate
                             </span>
                         ) : (
-                            <span className="text-green-600">
+                            <span className="text-green-600 dark:text-green-400">
                                 Fully allocated
                             </span>
                         )}

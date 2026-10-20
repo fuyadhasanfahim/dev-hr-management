@@ -166,7 +166,7 @@ export function LeadSettingsDialog({ open, onOpenChange }: LeadSettingsDialogPro
                     className="flex items-center justify-between p-3 bg-card border border-border rounded-lg shadow-sm group hover:border-border transition-colors"
                   >
                     <div className="flex items-center gap-3">
-                      <GripVertical className="h-4 w-4 text-muted-foreground/50" />
+                      <GripVertical className="h-4 w-4 text-muted-foreground/75" />
                       {activeTab === "STATUS" ? (
                         <Badge
                           variant="outline"

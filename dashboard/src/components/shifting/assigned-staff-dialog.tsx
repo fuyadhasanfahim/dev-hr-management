@@ -85,7 +85,7 @@ export default function AssignedStaffDialog({
                         </div>
                     ) : staffs.length === 0 ? (
                         <div className="flex flex-col items-center justify-center h-full text-center p-6 text-muted-foreground">
-                            <Users className="h-12 w-12 mb-3 text-muted-foreground/50" />
+                            <Users className="h-12 w-12 mb-3 text-muted-foreground/75" />
                             <p className="font-medium">No staff assigned</p>
                             <p className="text-sm text-balance mt-1">
                                 There are currently no active staff members

@@ -321,7 +321,7 @@ export default function BalancesClient() {
                                                 </TableCell>
                                                 <TableCell>{staff.staffId}</TableCell>
                                                 <TableCell className="capitalize">{staff.designation}</TableCell>
-                                                <TableCell className="text-right font-bold text-blue-600">৳{staff.balance?.toLocaleString() || 0}</TableCell>
+                                                <TableCell className="text-right font-bold text-blue-600 dark:text-blue-400">৳{staff.balance?.toLocaleString() || 0}</TableCell>
                                                 <TableCell className="text-right">
                                                     <WithdrawDialog staff={staff} onWithdraw={handleWithdraw} />
                                                 </TableCell>
@@ -440,7 +440,7 @@ function WithdrawDialog({ staff, onWithdraw }: { staff: any, onWithdraw: any }) 
                 <div className="grid gap-4 py-4">
                     <div className="grid grid-cols-4 items-center gap-4">
                         <Label className="text-right">Available</Label>
-                        <div className="col-span-3 font-bold text-blue-600">৳{staff.balance?.toLocaleString()}</div>
+                        <div className="col-span-3 font-bold text-blue-600 dark:text-blue-400">৳{staff.balance?.toLocaleString()}</div>
                     </div>
                     <div className="grid grid-cols-4 items-center gap-4">
                         <Label htmlFor="amount" className="text-right">Amount (৳)</Label>

@@ -190,7 +190,7 @@ export const PERMISSION_GROUPS = {
     },
     support: {
         label: 'Support Inbox (WhatsApp)',
-        // access — see the WhatsApp inbox, get its notifications + calls, and
+        // access — see the WhatsApp inbox, get its notifications, and
         //          reply to chats that are unassigned or assigned to you
         // manage — take over / reassign a chat another agent is handling
         actions: ['access', 'manage'],

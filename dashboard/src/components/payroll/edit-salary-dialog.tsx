@@ -378,8 +378,8 @@ export default function EditSalaryDialog({
                                 className={cn(
                                     "text-right font-mono font-semibold",
                                     pendingMismatch.details.difference > 0
-                                        ? "text-green-600"
-                                        : "text-red-600",
+                                        ? "text-green-600 dark:text-green-400"
+                                        : "text-red-600 dark:text-red-400",
                                 )}
                             >
                                 {pendingMismatch.details.difference > 0

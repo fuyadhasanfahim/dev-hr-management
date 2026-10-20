@@ -514,7 +514,7 @@ export default function LeaveApplyPage() {
                                                             'h-5 w-5',
                                                             leaveType ===
                                                                 'annual'
-                                                                ? 'text-blue-600'
+                                                                ? 'text-blue-600 dark:text-blue-400'
                                                                 : 'text-muted-foreground',
                                                         )}
                                                     />
@@ -555,7 +555,7 @@ export default function LeaveApplyPage() {
                                                         className={cn(
                                                             'h-5 w-5',
                                                             leaveType === 'sick'
-                                                                ? 'text-orange-600'
+                                                                ? 'text-orange-600 dark:text-orange-400'
                                                                 : 'text-muted-foreground',
                                                         )}
                                                     />
@@ -693,7 +693,7 @@ export default function LeaveApplyPage() {
                                             {selectedFile ? (
                                                 <div className="flex items-center gap-3">
                                                     <div className="p-3 bg-green-100 dark:bg-green-900/30 rounded-full">
-                                                        <FileCheck className="h-6 w-6 text-green-600" />
+                                                        <FileCheck className="h-6 w-6 text-green-600 dark:text-green-400" />
                                                     </div>
                                                     <div className="text-left">
                                                         <p className="font-medium">

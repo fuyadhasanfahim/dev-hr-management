@@ -33,7 +33,7 @@ export default function BulkReviewDialog({
             <DialogContent className="sm:max-w-[500px]">
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2 text-xl">
-                        <AlertTriangle className="h-5 w-5 text-yellow-600" />
+                        <AlertTriangle className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />
                         Confirm Bulk Payment
                     </DialogTitle>
                     <DialogDescription className="pt-2">

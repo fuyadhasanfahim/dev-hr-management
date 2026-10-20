@@ -1843,7 +1843,7 @@ export default function LiveChatPage() {
                                                 </span>
                                                 <Badge
                                                     variant="secondary"
-                                                    className="text-[9px] px-1.5 py-0 h-4"
+                                                    className="text-[10px] px-1.5 py-0 h-4"
                                                 >
                                                     {meeting.durationMinutes}m
                                                 </Badge>

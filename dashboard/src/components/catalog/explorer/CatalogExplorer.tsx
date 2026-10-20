@@ -131,7 +131,7 @@ function CoverageChips({ graph, pkg }: { graph: CatalogGraph; pkg: CatalogPackag
         <span className="flex shrink-0 items-center gap-0.5">
             {coverage(graph, pkg).map((c) => (
                 <Tip key={c.k} label={`${c.label}: ${c.ok ? 'added' : 'missing'}`}>
-                    <span className={cn('flex size-[18px] items-center justify-center rounded text-[10px] font-semibold', c.ok ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground/60')}>{c.k}</span>
+                    <span className={cn('flex size-[18px] items-center justify-center rounded text-[10px] font-semibold', c.ok ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground/75')}>{c.k}</span>
                 </Tip>
             ))}
         </span>

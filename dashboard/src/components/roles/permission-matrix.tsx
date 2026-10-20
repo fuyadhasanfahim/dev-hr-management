@@ -172,7 +172,7 @@ export function PermissionMatrix({
                                     </button>
                                     {(hasWildcard || state === 'all') &&
                                         !isSuperuser && (
-                                            <Badge className="ml-auto text-[9px]">
+                                            <Badge className="ml-auto text-[10px]">
                                                 {group.resource}.*
                                             </Badge>
                                         )}
@@ -228,7 +228,7 @@ export function PermissionMatrix({
                                                     'flex h-6 w-10 shrink-0 items-center justify-center rounded-md border transition-colors',
                                                     checked
                                                         ? 'border-emerald-500/30 bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
-                                                        : 'text-muted-foreground/60 hover:bg-muted hover:text-foreground',
+                                                        : 'text-muted-foreground/75 hover:bg-muted hover:text-foreground',
                                                     groupDisabled &&
                                                         'cursor-not-allowed opacity-40 hover:bg-transparent',
                                                 )}

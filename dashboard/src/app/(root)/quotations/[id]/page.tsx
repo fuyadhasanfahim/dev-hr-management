@@ -211,7 +211,7 @@ function DisplayFeatureNode({
                     )}
                 </div>
                 {feature.price && Number(feature.price) > 0 && (
-                    <span className="font-extrabold text-xs text-[#4E12D4] dark:text-purple-400 shrink-0 ml-auto bg-[#4E12D4]/10 dark:bg-purple-400/10 px-3 py-1 rounded-xl border border-[#4E12D4]/20">
+                    <span className="font-extrabold text-xs text-primary dark:text-purple-400 shrink-0 ml-auto bg-primary/10 dark:bg-purple-400/10 px-3 py-1 rounded-xl border border-primary/20">
                         {currency}
                         {Number(feature.price).toLocaleString('en-IN')}
                     </span>
@@ -404,7 +404,7 @@ export default function ViewQuotationPage() {
     if (isLoading) {
         return (
             <div className="flex h-full items-center justify-center">
-                <Loader2 className="w-8 h-8 animate-spin text-teal-600" />
+                <Loader2 className="w-8 h-8 animate-spin text-teal-600 dark:text-teal-400" />
             </div>
         );
     }
@@ -495,9 +495,9 @@ export default function ViewQuotationPage() {
             };
         }
         return {
-            bg: 'bg-[#4E12D4]/10 dark:bg-[#4E12D4]/20',
-            text: 'text-[#4E12D4]',
-            border: 'border-[#4E12D4]/30',
+            bg: 'bg-primary/10 dark:bg-primary/20',
+            text: 'text-primary',
+            border: 'border-primary/30',
             icon: <Layers className="w-5 h-5 stroke-[2.5]" />,
             gradient: 'from-[#4E12D4]/5 to-transparent',
         };
@@ -722,7 +722,7 @@ export default function ViewQuotationPage() {
                         <div className="p-6 space-y-6">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-4 rounded-2xl bg-slate-50/80 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800">
                                 <div className="space-y-1">
-                                    <div className="text-[10px] font-extrabold uppercase tracking-wider text-[#4E12D4]">
+                                    <div className="text-[10px] font-extrabold uppercase tracking-wider text-primary">
                                         Client Contact
                                     </div>
                                     <div className="text-base font-bold text-slate-900 dark:text-white">
@@ -837,7 +837,7 @@ export default function ViewQuotationPage() {
                                                             <span className="font-bold text-slate-900 dark:text-white">{svc.quantity}</span>
                                                             <span className="text-slate-500 text-xs ml-2">({currency}{svc.rate}/unit)</span>
                                                         </div>
-                                                        <div className="font-extrabold text-[#4E12D4] dark:text-purple-400">
+                                                        <div className="font-extrabold text-primary dark:text-purple-400">
                                                             {currency}{(svc.quantity * svc.rate).toLocaleString('en-IN')}
                                                         </div>
                                                     </div>
@@ -992,10 +992,10 @@ export default function ViewQuotationPage() {
 
                     {/* Prerequisites: Client Needs to Provide */}
                     {data.clientRequirements && data.clientRequirements.length > 0 && (
-                    <div className="rounded-3xl border border-[#4E12D4]/20 dark:border-[#4E12D4]/40 bg-white/80 dark:bg-slate-900/60 shadow-sm overflow-hidden backdrop-blur-xl transition-all duration-300 hover:shadow-md">
-                        <div className="p-5 border-b border-[#4E12D4]/10 dark:border-[#4E12D4]/30 bg-gradient-to-r from-[#4E12D4]/5 to-transparent flex items-center justify-between gap-4">
+                    <div className="rounded-3xl border border-primary/20 dark:border-primary/40 bg-white/80 dark:bg-slate-900/60 shadow-sm overflow-hidden backdrop-blur-xl transition-all duration-300 hover:shadow-md">
+                        <div className="p-5 border-b border-primary/10 dark:border-primary/30 bg-gradient-to-r from-[#4E12D4]/5 to-transparent flex items-center justify-between gap-4">
                             <div className="flex items-center gap-3.5">
-                                <div className="w-11 h-11 rounded-2xl bg-[#4E12D4]/10 text-[#4E12D4] flex items-center justify-center border border-[#4E12D4]/20 shadow-sm">
+                                <div className="w-11 h-11 rounded-2xl bg-primary/10 text-primary flex items-center justify-center border border-primary/20 shadow-sm">
                                     <Check className="w-5 h-5 stroke-[2.5]" />
                                 </div>
                                 <div>
@@ -1005,7 +1005,7 @@ export default function ViewQuotationPage() {
                                     <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Prerequisites and required assets from client</p>
                                 </div>
                             </div>
-                            <Badge variant="outline" className="rounded-full px-3 py-1 text-xs font-bold text-[#4E12D4] border-[#4E12D4]/30 bg-[#4E12D4]/10">
+                            <Badge variant="outline" className="rounded-full px-3 py-1 text-xs font-bold text-primary border-primary/30 bg-primary/10">
                                 {data.clientRequirements.length} Requirements
                             </Badge>
                         </div>
@@ -1013,7 +1013,7 @@ export default function ViewQuotationPage() {
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
                                 {data.clientRequirements.map((item: string, idx: number) => (
                                     <div key={idx} className="flex items-start gap-3 p-3.5 rounded-2xl bg-slate-50/80 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800/80 transition-all duration-200 hover:bg-slate-100/80 dark:hover:bg-slate-800/70 hover:border-slate-200/80">
-                                        <span className="w-6 h-6 rounded-xl bg-[#4E12D4]/10 text-[#4E12D4] font-bold text-xs flex items-center justify-center shrink-0 mt-0.5 border border-[#4E12D4]/20">
+                                        <span className="w-6 h-6 rounded-xl bg-primary/10 text-primary font-bold text-xs flex items-center justify-center shrink-0 mt-0.5 border border-primary/20">
                                             ✓
                                         </span>
                                         <span className="text-sm font-medium text-slate-700 dark:text-slate-300 leading-snug">
@@ -1032,7 +1032,7 @@ export default function ViewQuotationPage() {
                         {showTech && (
                         <div className="rounded-3xl border border-slate-200/80 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 shadow-sm overflow-hidden backdrop-blur-xl">
                             <div className="p-5 border-b border-slate-100 dark:border-slate-800/80 bg-gradient-to-r from-[#4E12D4]/5 to-transparent flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-2xl bg-[#4E12D4]/10 text-[#4E12D4] flex items-center justify-center border border-[#4E12D4]/20 shadow-sm">
+                                <div className="w-10 h-10 rounded-2xl bg-primary/10 text-primary flex items-center justify-center border border-primary/20 shadow-sm">
                                     <Cpu className="w-5 h-5 stroke-[2.5]" />
                                 </div>
                                 <div>
@@ -1069,7 +1069,7 @@ export default function ViewQuotationPage() {
                         {showWorkflow && (
                         <div className="rounded-3xl border border-slate-200/80 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 shadow-sm overflow-hidden backdrop-blur-xl">
                             <div className="p-5 border-b border-slate-100 dark:border-slate-800/80 bg-gradient-to-r from-[#4E12D4]/5 to-transparent flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-2xl bg-[#4E12D4]/10 text-[#4E12D4] flex items-center justify-center border border-[#4E12D4]/20 shadow-sm">
+                                <div className="w-10 h-10 rounded-2xl bg-primary/10 text-primary flex items-center justify-center border border-primary/20 shadow-sm">
                                     <Activity className="w-5 h-5 stroke-[2.5]" />
                                 </div>
                                 <div>
@@ -1087,7 +1087,7 @@ export default function ViewQuotationPage() {
                                                 key={idx}
                                                 className="flex items-start gap-3.5 p-3 rounded-2xl bg-slate-50/80 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800/80"
                                             >
-                                                <div className="mt-0.5 h-6 w-6 rounded-xl bg-[#4E12D4]/10 border border-[#4E12D4]/20 flex items-center justify-center text-xs font-extrabold text-[#4E12D4] shrink-0">
+                                                <div className="mt-0.5 h-6 w-6 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-xs font-extrabold text-primary shrink-0">
                                                     {idx + 1}
                                                 </div>
                                                 <div className="text-sm font-medium text-slate-700 dark:text-slate-300 leading-snug pt-0.5">
@@ -1113,7 +1113,7 @@ export default function ViewQuotationPage() {
                     {/* Value Card */}
                     <div className="rounded-3xl border border-slate-200/80 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 shadow-sm overflow-hidden backdrop-blur-xl">
                         <div className="p-5 border-b border-slate-100 dark:border-slate-800/80 bg-gradient-to-r from-[#4E12D4]/5 to-transparent flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-2xl bg-[#4E12D4]/10 text-[#4E12D4] flex items-center justify-center border border-[#4E12D4]/20 shadow-sm">
+                            <div className="w-10 h-10 rounded-2xl bg-primary/10 text-primary flex items-center justify-center border border-primary/20 shadow-sm">
                                 <ReceiptText className="w-5 h-5 stroke-[2.5]" />
                             </div>
                             <div>
@@ -1124,13 +1124,13 @@ export default function ViewQuotationPage() {
                             </div>
                         </div>
                         <div className="p-6 space-y-5">
-                            <div className="p-5 bg-gradient-to-br from-[#4E12D4]/10 via-[#C850FA]/10 to-transparent rounded-2xl border border-[#4E12D4]/20 text-center relative overflow-hidden shadow-inner">
+                            <div className="p-5 bg-gradient-to-br from-[#4E12D4]/10 via-[#C850FA]/10 to-transparent rounded-2xl border border-primary/20 text-center relative overflow-hidden shadow-inner">
                                 <span className="text-slate-600 dark:text-slate-300 text-xs font-bold uppercase tracking-wider">
                                     Grand Total Investment
                                 </span>
                                 <h2
                                     className={cn(
-                                        'text-4xl font-black text-[#4E12D4] dark:text-[#C850FA] mt-1.5 tracking-tight',
+                                        'text-4xl font-black text-primary dark:text-[#C850FA] mt-1.5 tracking-tight',
                                         !canSeeFinancials && 'blur-[4px] opacity-50 select-none'
                                     )}
                                 >
@@ -1208,7 +1208,7 @@ export default function ViewQuotationPage() {
                                             </span>
                                             <span
                                                 className={cn(
-                                                    'font-bold text-[#4E12D4] dark:text-[#C850FA]',
+                                                    'font-bold text-primary dark:text-[#C850FA]',
                                                     !canSeeFinancials && 'blur-[3px] select-none opacity-60'
                                                 )}
                                             >
@@ -1240,12 +1240,12 @@ export default function ViewQuotationPage() {
                         <div className="rounded-3xl border border-purple-500/20 dark:border-purple-500/30 bg-gradient-to-br from-purple-500/5 via-indigo-500/5 to-transparent shadow-sm overflow-hidden backdrop-blur-xl">
                             <div className="p-4 border-b border-purple-500/15 bg-gradient-to-r from-purple-500/10 to-transparent flex items-center justify-between">
                                 <div className="flex items-center gap-2.5">
-                                    <Briefcase className="h-4 w-4 text-[#4E12D4] dark:text-[#C850FA] stroke-[2.5]" />
+                                    <Briefcase className="h-4 w-4 text-primary dark:text-[#C850FA] stroke-[2.5]" />
                                     <h4 className="text-sm font-bold tracking-tight text-slate-900 dark:text-white">
                                         Payment Milestones
                                     </h4>
                                 </div>
-                                <span className="text-[10px] font-extrabold text-[#4E12D4] bg-white dark:bg-slate-800 px-2.5 py-0.5 rounded-full border border-purple-500/20 shadow-2xs">
+                                <span className="text-[10px] font-extrabold text-primary bg-white dark:bg-slate-800 px-2.5 py-0.5 rounded-full border border-purple-500/20 shadow-2xs">
                                     {data.paymentMilestones.length} {data.paymentMilestones.length === 1 ? 'Term' : 'Milestones'}
                                 </span>
                             </div>
@@ -1261,7 +1261,7 @@ export default function ViewQuotationPage() {
                                             </span>
                                         </div>
                                         {m.percentage > 0 && (
-                                            <span className="text-xs font-extrabold font-mono text-[#4E12D4] dark:text-[#C850FA] bg-[#4E12D4]/10 dark:bg-[#C850FA]/15 px-2.5 py-1 rounded-xl shrink-0">
+                                            <span className="text-xs font-extrabold font-mono text-primary dark:text-[#C850FA] bg-primary/10 dark:bg-[#C850FA]/15 px-2.5 py-1 rounded-xl shrink-0">
                                                 {m.percentage}%
                                             </span>
                                         )}

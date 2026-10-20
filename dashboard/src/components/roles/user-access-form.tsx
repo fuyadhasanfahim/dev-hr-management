@@ -66,7 +66,7 @@ function TriToggle({
                 'flex h-6 w-7 items-center justify-center transition-colors',
                 value === mode
                     ? activeCls
-                    : 'text-muted-foreground/60 hover:bg-muted hover:text-foreground',
+                    : 'text-muted-foreground/75 hover:bg-muted hover:text-foreground',
                 disabled && 'cursor-not-allowed opacity-30 hover:bg-transparent',
             )}
         >

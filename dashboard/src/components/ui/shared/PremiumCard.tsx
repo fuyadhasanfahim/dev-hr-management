@@ -19,7 +19,7 @@ export const PremiumCard: React.FC<PremiumCardProps> = ({
 }) => {
   const accentThemes = {
     purple: {
-      border: "border-[#4E12D4]/20 dark:border-[#4E12D4]/30",
+      border: "border-primary/20 dark:border-primary/30",
       topGlow: "from-[#4E12D4]/15 via-[#4E12D4]/5 to-transparent",
     },
     violet: {

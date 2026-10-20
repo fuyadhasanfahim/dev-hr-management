@@ -152,7 +152,7 @@ export default function TeamMemberTaskDetailsPage() {
                     <ArrowLeft className="h-3.5 w-3.5" /> Back to Team Workload
                 </Link>
                 <div className="flex flex-col items-center justify-center py-20 text-center gap-2 bg-card border border-dashed rounded-lg">
-                    <UserRound className="h-8 w-8 text-muted-foreground/50" />
+                    <UserRound className="h-8 w-8 text-muted-foreground/75" />
                     <p className="text-sm font-medium text-muted-foreground">Team member not found.</p>
                 </div>
             </div>

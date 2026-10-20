@@ -160,7 +160,7 @@ export function LeadDetailsDialog({ leadId, onClose }: { leadId: string | null; 
                                 <div className="flex flex-wrap items-center gap-2 pr-8">
                                     <DialogTitle className="text-xl">{lead.name || lead.phone}</DialogTitle>
                                     <StatusBadge status={lead.status} />
-                                    {lead.isConverted && <Badge className="border-amber-200 bg-amber-100 text-amber-700">Converted</Badge>}
+                                    {lead.isConverted && <Badge className="border-amber-200 bg-amber-100 text-amber-700 dark:text-amber-300 dark:bg-amber-500/15 dark:border-amber-500/30">Converted</Badge>}
                                     {lead.origin === 'whatsapp' && (
                                         <Badge variant="outline" className="border-emerald-500/40 text-emerald-600 dark:text-emerald-400">
                                             WhatsApp
@@ -270,9 +270,9 @@ export function LeadDetailsDialog({ leadId, onClose }: { leadId: string | null; 
                                                             {act.activityType === 'CREATED' ? (
                                                                 <User className="size-3 text-primary" />
                                                             ) : act.activityType === 'CONVERTED' ? (
-                                                                <UserCheck className="size-3 text-amber-600" />
+                                                                <UserCheck className="size-3 text-amber-600 dark:text-amber-400" />
                                                             ) : act.activityType === 'STATUS_CHANGE' ? (
-                                                                <Activity className="size-3 text-blue-600" />
+                                                                <Activity className="size-3 text-blue-600 dark:text-blue-400" />
                                                             ) : act.activityType === 'UPDATED' ? (
                                                                 <Pencil className="size-3 text-muted-foreground" />
                                                             ) : (

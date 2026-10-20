@@ -312,7 +312,7 @@ export default function PayrollPage() {
                             <Wallet className="h-4 w-4 text-muted-foreground" />
                         </CardHeader>
                         <CardContent>
-                            <div className="text-2xl font-bold text-green-600">৳{displayPaid.toLocaleString()}</div>
+                            <div className="text-2xl font-bold text-green-600 dark:text-green-400">৳{displayPaid.toLocaleString()}</div>
                             <div className="mt-4 flex flex-col gap-2">
                                 <div className="flex justify-between text-[10px] font-bold">
                                     <span>Allocation Progress</span>
@@ -330,7 +330,7 @@ export default function PayrollPage() {
                             <Clock className="h-4 w-4 text-muted-foreground" />
                         </CardHeader>
                         <CardContent>
-                            <div className="text-2xl font-bold text-amber-600">৳{displayPending.toLocaleString()}</div>
+                            <div className="text-2xl font-bold text-amber-600 dark:text-amber-400">৳{displayPending.toLocaleString()}</div>
                             <p className="text-xs text-muted-foreground mt-1">Outstanding liability</p>
                         </CardContent>
                     </Card>
@@ -352,7 +352,7 @@ export default function PayrollPage() {
             {/* Main Content Area Simplified */}
             <Card className="shadow-sm border-none bg-card">
                 {isLocked && (
-                    <div className="flex items-center gap-3 px-6 py-3 bg-amber-50 text-amber-800 border-b border-amber-100">
+                    <div className="flex items-center gap-3 px-6 py-3 bg-amber-50 text-amber-800 border-b border-amber-100 dark:text-amber-300 dark:bg-amber-500/15 dark:border-amber-500/30">
                         <Lock className="h-4 w-4" />
                         <div className="flex-1">
                             <p className="text-sm font-semibold">Payroll Archived</p>
@@ -362,7 +362,7 @@ export default function PayrollPage() {
                             <Button
                                 size="sm"
                                 variant="outline"
-                                className="h-8 border-amber-200 hover:bg-amber-100"
+                                className="h-8 border-amber-200 hover:bg-amber-100 dark:border-amber-500/30"
                                 onClick={handleToggleLock}
                                 disabled={isUnlocking}
                             >

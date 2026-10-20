@@ -213,12 +213,6 @@ router.patch('/whatsapp/conversations/:id/ai', requireUnifiedAuth, supportAccess
 router.post('/whatsapp/conversations/:id/read', requireUnifiedAuth, supportAccess, WhatsAppSupportController.markRead);
 router.post('/whatsapp/conversations/:id/media', requireUnifiedAuth, supportAccess, whatsappUpload.single('file'), WhatsAppSupportController.sendMedia);
 router.get('/whatsapp/media/:mediaId', requireUnifiedAuth, supportAccess, WhatsAppSupportController.getMedia);
-// Calling API — the agent's browser does WebRTC with Meta; these relay the SDP.
-router.post('/whatsapp/conversations/:id/call', requireUnifiedAuth, supportAccess, WhatsAppSupportController.startCall);
-router.post('/whatsapp/conversations/:id/call-permission', requireUnifiedAuth, supportAccess, WhatsAppSupportController.requestCallPermission);
-router.post('/whatsapp/calls/:callId/accept', requireUnifiedAuth, supportAccess, WhatsAppSupportController.acceptCall);
-router.post('/whatsapp/calls/:callId/reject', requireUnifiedAuth, supportAccess, WhatsAppSupportController.rejectCall);
-router.post('/whatsapp/calls/:callId/end', requireUnifiedAuth, supportAccess, WhatsAppSupportController.endCall);
 // Assignment (one agent per chat), internal notes and the customer info panel.
 router.post('/whatsapp/conversations/:id/assignment', requireUnifiedAuth, supportAccess, WhatsAppSupportController.setAssignment);
 router.get('/whatsapp/conversations/:id/details', requireUnifiedAuth, supportAccess, WhatsAppSupportController.getDetails);

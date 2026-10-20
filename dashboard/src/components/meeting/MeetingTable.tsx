@@ -307,7 +307,7 @@ function MeetingRow({ meeting }: { meeting: Meeting }) {
                         <div className="flex items-center gap-2 mt-0.5">
                             <p className="text-xs text-muted-foreground">{client.clientId}</p>
                             {client.currency === 'BDT' && (
-                                <Badge variant="outline" className="h-4 px-1 text-[9px] font-normal text-orange-700 border-orange-300 bg-orange-50/60 dark:bg-orange-950/20 dark:border-orange-900/50 flex items-center gap-0.5">
+                                <Badge variant="outline" className="h-4 px-1 text-[10px] font-normal text-orange-700 border-orange-300 bg-orange-50/60 dark:bg-orange-950/20 dark:border-orange-900/50 flex items-center gap-0.5 dark:text-orange-300">
                                     <Phone className="h-2.5 w-2.5" />
                                     SMS
                                 </Badge>
@@ -343,7 +343,7 @@ function MeetingRow({ meeting }: { meeting: Meeting }) {
                         href={meeting.googleMeetLink}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 text-sm text-teal-600 hover:text-teal-700 hover:underline"
+                        className="inline-flex items-center gap-1.5 text-sm text-teal-600 hover:text-teal-700 hover:underline dark:text-teal-400"
                     >
                         <Video className="h-3.5 w-3.5" />
                         Join Meet
@@ -369,7 +369,7 @@ function MeetingRow({ meeting }: { meeting: Meeting }) {
                         <DialogContent className="max-w-lg">
                             <DialogHeader>
                                 <DialogTitle className="flex items-center gap-2">
-                                    <Video className="h-5 w-5 text-teal-600" />
+                                    <Video className="h-5 w-5 text-teal-600 dark:text-teal-400" />
                                     Meeting Details
                                 </DialogTitle>
                                 <DialogDescription>
@@ -418,7 +418,7 @@ function MeetingRow({ meeting }: { meeting: Meeting }) {
                                             href={meeting.googleMeetLink}
                                             target="_blank"
                                             rel="noreferrer"
-                                            className="col-span-2 text-sm text-teal-600 hover:underline break-all flex items-center gap-1"
+                                            className="col-span-2 text-sm text-teal-600 hover:underline break-all flex items-center gap-1 dark:text-teal-400"
                                         >
                                             {meeting.googleMeetLink}
                                             <ExternalLink className="h-3 w-3" />
@@ -522,7 +522,7 @@ function MeetingRow({ meeting }: { meeting: Meeting }) {
                             <form onSubmit={handleEditSubmit} className="flex flex-col h-full gap-0">
                                 <DialogHeader className="px-6 pt-5 pb-4 shrink-0 border-b border-border">
                                     <DialogTitle className="flex items-center gap-2 text-xl font-semibold">
-                                        <Edit className="h-5 w-5 text-teal-600" />
+                                        <Edit className="h-5 w-5 text-teal-600 dark:text-teal-400" />
                                         Edit Meeting
                                     </DialogTitle>
                                     <DialogDescription>
@@ -868,7 +868,7 @@ export function ScheduleMeetingDialog({ clients }: { clients: ClientOption[] }) 
                 <form onSubmit={handleSubmit} className="flex flex-col h-full gap-0">
                     <DialogHeader className="px-6 pt-5 pb-4 shrink-0 border-b border-border">
                         <DialogTitle className="flex items-center gap-2 text-xl font-semibold">
-                            <Video className="h-5 w-5 text-teal-600" />
+                            <Video className="h-5 w-5 text-teal-600 dark:text-teal-400" />
                             Schedule New Meeting
                         </DialogTitle>
                         <DialogDescription>
@@ -905,7 +905,7 @@ export function ScheduleMeetingDialog({ clients }: { clients: ClientOption[] }) 
                                 </Select>
                                 <div className="flex items-center gap-2 flex-wrap mt-1">
                                     {selectedClient?.emails?.map((email) => (
-                                        <Badge key={email} variant="secondary" className="text-teal-600 border-teal-500/30 bg-teal-500/10">
+                                        <Badge key={email} variant="secondary" className="text-teal-600 border-teal-500/30 bg-teal-500/10 dark:text-teal-400">
                                             {email}
                                         </Badge>
                                     ))}

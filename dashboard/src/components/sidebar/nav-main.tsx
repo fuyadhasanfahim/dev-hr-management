@@ -148,7 +148,7 @@ export function NavMain() {
             {/* Search Input */}
             <SidebarGroup className="py-0 px-3">
                 <div className="relative flex items-center">
-                    <Search className="absolute left-2.5 size-4 text-sidebar-foreground/50 pointer-events-none" />
+                    <Search className="absolute left-2.5 size-4 text-sidebar-foreground/70 pointer-events-none" />
                     <SidebarInput
                         type="text"
                         placeholder="Search navigation..."
@@ -159,7 +159,7 @@ export function NavMain() {
                     {searchQuery && (
                         <button
                             onClick={() => setSearchQuery("")}
-                            className="absolute right-2.5 p-0.5 rounded-full hover:bg-sidebar-accent text-sidebar-foreground/50 hover:text-sidebar-foreground transition-colors"
+                            className="absolute right-2.5 p-0.5 rounded-full hover:bg-sidebar-accent text-sidebar-foreground/70 hover:text-sidebar-foreground transition-colors"
                             aria-label="Clear search"
                         >
                             <X className="size-3.5" />
@@ -171,7 +171,7 @@ export function NavMain() {
             {/* Accordion Categories */}
             <SidebarGroup className="py-0">
                 {filteredGroups.length === 0 ? (
-                    <div className="px-3 py-4 text-xs text-center text-sidebar-foreground/40 font-medium">
+                    <div className="px-3 py-4 text-xs text-center text-sidebar-foreground/70 font-medium">
                         No matching items
                     </div>
                 ) : (
@@ -187,7 +187,7 @@ export function NavMain() {
                                 value={group.groupLabel}
                                 className="border-none"
                             >
-                                <AccordionTrigger className="hover:no-underline py-1 px-3 text-[10px] font-bold text-sidebar-foreground/55 hover:text-sidebar-foreground transition-colors uppercase tracking-wider rounded-md hover:bg-sidebar-accent/30 [&[data-state=open]>svg]:rotate-180">
+                                <AccordionTrigger className="hover:no-underline py-1 px-3 text-[10px] font-bold text-sidebar-foreground/70 hover:text-sidebar-foreground transition-colors uppercase tracking-wider rounded-md hover:bg-sidebar-accent/30 [&[data-state=open]>svg]:rotate-180">
                                     <span className="flex items-center gap-2">
                                         {group.groupLabel}
                                     </span>

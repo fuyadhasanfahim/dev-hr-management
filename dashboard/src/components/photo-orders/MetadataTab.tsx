@@ -143,7 +143,7 @@ function MetaSection<T extends { _id: string; name: string; isActive: boolean }>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                         <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction className="bg-destructive text-white hover:bg-destructive/90" onClick={() => deleting && void attempt(() => onDelete(deleting), `${noun} deleted`, `Failed to delete the ${noun}`)}>Delete</AlertDialogAction>
+                        <AlertDialogAction className="bg-rose-600 text-white hover:bg-rose-700" onClick={() => deleting && void attempt(() => onDelete(deleting), `${noun} deleted`, `Failed to delete the ${noun}`)}>Delete</AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>

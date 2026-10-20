@@ -188,13 +188,13 @@ export function OrderTasksTab({ order, canManage }: OrderTasksTabProps) {
     const getStatusVariant = (status: string) => {
         switch (status) {
             case 'completed':
-                return 'bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 border-emerald-200/50';
+                return 'bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 border-emerald-200/50 dark:text-emerald-400';
             case 'under_review':
-                return 'bg-amber-500/10 text-amber-600 hover:bg-amber-500/20 border-amber-200/50';
+                return 'bg-amber-500/10 text-amber-600 hover:bg-amber-500/20 border-amber-200/50 dark:text-amber-400';
             case 'in_progress':
-                return 'bg-blue-500/10 text-blue-600 hover:bg-blue-500/20 border-blue-200/50';
+                return 'bg-blue-500/10 text-blue-600 hover:bg-blue-500/20 border-blue-200/50 dark:text-blue-400';
             case 'rejected':
-                return 'bg-rose-500/10 text-rose-600 hover:bg-rose-500/20 border-rose-200/50';
+                return 'bg-rose-500/10 text-rose-600 hover:bg-rose-500/20 border-rose-200/50 dark:text-rose-400';
             default:
                 return 'bg-slate-100 text-slate-600 border-slate-200';
         }
@@ -205,9 +205,9 @@ export function OrderTasksTab({ order, canManage }: OrderTasksTabProps) {
             case 'urgent':
                 return 'bg-red-500 text-white border-transparent dark:bg-red-600';
             case 'high':
-                return 'bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-900/30 dark:text-orange-300';
+                return 'bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-900/30 dark:text-orange-300 dark:border-orange-500/30';
             case 'medium':
-                return 'bg-blue-50 text-blue-700 border-blue-100';
+                return 'bg-blue-50 text-blue-700 border-blue-100 dark:text-blue-300 dark:bg-blue-500/15 dark:border-blue-500/30';
             default:
                 return 'bg-slate-50 text-slate-500 border-slate-200';
         }
@@ -304,7 +304,7 @@ export function OrderTasksTab({ order, canManage }: OrderTasksTabProps) {
                                     Project Phase Sync
                                 </CardTitle>
                             </div>
-                            <div className="text-2xl font-black text-indigo-600 flex items-baseline">
+                            <div className="text-2xl font-black text-indigo-600 flex items-baseline dark:text-indigo-400">
                                 {completionPct}<span className="text-xs opacity-60 ml-0.5">%</span>
                             </div>
                         </CardHeader>
@@ -318,7 +318,7 @@ export function OrderTasksTab({ order, canManage }: OrderTasksTabProps) {
                                 />
                             </div>
                             <div className="flex justify-between text-[10px] font-bold uppercase tracking-wider mt-2.5 text-muted-foreground/80">
-                                <span className="flex items-center gap-1.5 text-emerald-600">
+                                <span className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400">
                                     <div className="h-1.5 w-1.5 bg-emerald-500 rounded-full" />
                                     {completedTasks} Secured
                                 </span>
@@ -441,10 +441,10 @@ export function OrderTasksTab({ order, canManage }: OrderTasksTabProps) {
                                                             {/* Visual Status Node */}
                                                             <div className={cn(
                                                                 "h-9 w-9 rounded-full flex items-center justify-center border-2 flex-shrink-0 shadow-sm group-data-[state=open]:scale-110 transition-transform duration-300",
-                                                                task.status === 'completed' ? "bg-emerald-500/10 border-emerald-500 text-emerald-600" : 
+                                                                task.status === 'completed' ? "bg-emerald-500/10 border-emerald-500 text-emerald-600 dark:text-emerald-400" : 
                                                                 task.status === 'in_progress' ? "bg-blue-500/10 border-blue-500 text-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.2)]" :
-                                                                task.status === 'rejected' ? "bg-rose-500/10 border-rose-500 text-rose-600" :
-                                                                task.status === 'under_review' ? "bg-amber-500/10 border-amber-500 text-amber-600" : 
+                                                                task.status === 'rejected' ? "bg-rose-500/10 border-rose-500 text-rose-600 dark:text-rose-400" :
+                                                                task.status === 'under_review' ? "bg-amber-500/10 border-amber-500 text-amber-600 dark:text-amber-400" : 
                                                                 "bg-slate-100 border-slate-300 text-slate-400"
                                                             )}>
                                                                 {getStatusIcon(task.status)}
@@ -457,13 +457,13 @@ export function OrderTasksTab({ order, canManage }: OrderTasksTabProps) {
                                                                         <span className="font-black text-[15px] tracking-tight text-foreground group-hover:text-primary transition-colors">
                                                                             {task.title}
                                                                         </span>
-                                                                        <Badge variant="outline" className={cn("font-bold text-[9px] h-5 leading-none px-2 uppercase tracking-wider", getPriorityStyles(task.priority))}>
+                                                                        <Badge variant="outline" className={cn("font-bold text-[10px] h-5 leading-none px-2 uppercase tracking-wider", getPriorityStyles(task.priority))}>
                                                                             {task.priority}
                                                                         </Badge>
                                                                     </div>
                                                                     <span className={cn("text-xs font-bold mt-1 capitalize", 
-                                                                        task.status === 'completed' ? "text-emerald-600" : 
-                                                                        task.status === 'in_progress' ? "text-blue-600" :
+                                                                        task.status === 'completed' ? "text-emerald-600 dark:text-emerald-400" : 
+                                                                        task.status === 'in_progress' ? "text-blue-600 dark:text-blue-400" :
                                                                         "text-muted-foreground"
                                                                     )}>
                                                                         {task.status.replace('_', ' ')}
@@ -474,7 +474,7 @@ export function OrderTasksTab({ order, canManage }: OrderTasksTabProps) {
                                                                 <div className="hidden md:flex items-center gap-2.5">
                                                                     <Avatar className="h-7 w-7 border ring-2 ring-background ring-offset-1 ring-offset-muted/20">
                                                                         <AvatarImage src={task.assignedTo?.userId?.image} />
-                                                                        <AvatarFallback className="bg-muted text-[9px] font-black">
+                                                                        <AvatarFallback className="bg-muted text-[10px] font-black">
                                                                             {(task.assignedTo?.userId?.name || '?').substring(0, 2).toUpperCase()}
                                                                         </AvatarFallback>
                                                                     </Avatar>
@@ -493,14 +493,14 @@ export function OrderTasksTab({ order, canManage }: OrderTasksTabProps) {
                                                                         Expires
                                                                     </span>
                                                                     <span className={cn("text-xs font-bold mt-0.5", 
-                                                                        new Date(task.dueDate) < new Date() && task.status !== 'completed' ? "text-rose-600" : "text-foreground"
+                                                                        new Date(task.dueDate) < new Date() && task.status !== 'completed' ? "text-rose-600 dark:text-rose-400" : "text-foreground"
                                                                     )}>
                                                                         {formatDistanceToNow(new Date(task.dueDate), { addSuffix: true })}
                                                                     </span>
                                                                 </div>
                                                             </div>
                                                             
-                                                            <ChevronRight className="h-5 w-5 text-muted-foreground/50 group-data-[state=open]:rotate-90 transition-transform duration-300 shrink-0 mr-1" />
+                                                            <ChevronRight className="h-5 w-5 text-muted-foreground/75 group-data-[state=open]:rotate-90 transition-transform duration-300 shrink-0 mr-1" />
                                                         </div>
                                                     </AccordionTrigger>
 
@@ -586,7 +586,7 @@ export function OrderTasksTab({ order, canManage }: OrderTasksTabProps) {
                                                                                 <Button size="sm" className="flex-1 font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-md gap-1.5 h-9" onClick={() => handleReview(task._id, 'approve')}>
                                                                                     <CheckCircle2 className="h-3.5 w-3.5" /> Pass
                                                                                 </Button>
-                                                                                <Button size="sm" variant="outline" className="flex-1 font-bold text-rose-600 border-rose-200 hover:bg-rose-50 shadow-sm gap-1.5 h-9" onClick={() => handleReview(task._id, 'reject')}>
+                                                                                <Button size="sm" variant="outline" className="flex-1 font-bold text-rose-600 border-rose-200 hover:bg-rose-50 shadow-sm gap-1.5 h-9 dark:text-rose-400 dark:border-rose-500/30" onClick={() => handleReview(task._id, 'reject')}>
                                                                                     <XCircle className="h-3.5 w-3.5" /> Fail
                                                                                 </Button>
                                                                             </div>
@@ -598,7 +598,7 @@ export function OrderTasksTab({ order, canManage }: OrderTasksTabProps) {
                                                                                  <Button variant="outline" size="sm" onClick={() => setEditTaskData(task)} className="flex-1 text-xs font-bold gap-1.5 hover:border-indigo-300 hover:text-indigo-700 transition-colors">
                                                                                     <Edit3 className="h-3 w-3" /> Edit
                                                                                 </Button>
-                                                                                <Button variant="outline" size="sm" onClick={() => handleDelete(task._id)} className="flex-1 text-xs font-bold text-rose-600 border-rose-100 hover:bg-rose-50 transition-colors">
+                                                                                <Button variant="outline" size="sm" onClick={() => handleDelete(task._id)} className="flex-1 text-xs font-bold text-rose-600 border-rose-100 hover:bg-rose-50 transition-colors dark:text-rose-400 dark:border-rose-500/30">
                                                                                     <Trash2 className="h-3 w-3" /> Wipe
                                                                                 </Button>
                                                                             </div>
@@ -640,7 +640,7 @@ export function OrderTasksTab({ order, canManage }: OrderTasksTabProps) {
                     <div className="absolute top-0 left-0 w-full h-1.5 bg-amber-500" />
                     <DialogHeader className="pt-2">
                         <DialogTitle className="flex items-center gap-2.5 text-xl font-black text-foreground tracking-tight">
-                            <div className="p-1.5 bg-amber-100 text-amber-600 rounded">
+                            <div className="p-1.5 bg-amber-100 text-amber-600 rounded dark:text-amber-400 dark:bg-amber-500/15">
                                 <Send className="h-5 w-5" />
                             </div>
                             Logistical Delivery

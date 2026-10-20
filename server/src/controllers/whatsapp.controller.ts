@@ -15,7 +15,6 @@ import WhatsAppMessageModel, {
 import { isValidMetaSignature } from '../lib/whatsapp-signature.js';
 import { parseEcho, parseIncoming, senderId, type EchoMessage, type HistoryThread, type IncomingMessage, type InboundContent } from '../lib/whatsapp-inbound.js';
 import whatsappSupportService, { findOrCreateConversation, previewText } from '../services/whatsapp-support.service.js';
-import { handleCallEvent, handleCallStatus, type CallEvent, type CallStatus } from '../services/whatsapp-call.service.js';
 import { notifyMessageStatus } from '../services/whatsapp-send.queue.js';
 import { createTicket } from '../services/support-ticket.service.js';
 import { TicketSource } from '../models/ticket.model.js';
@@ -92,14 +91,10 @@ export function receiveWebhook(req: Request, res: Response) {
                     .applyContactNames([sync.contact])
                     .catch((err) => logger.error(`Failed to apply WhatsApp contact name: ${err.message}`));
             }
-            for (const call of (value.calls ?? []) as CallEvent[]) {
-                void handleCallEvent(call, contactName).catch(
-                    (err) => logger.error(`Failed to handle WhatsApp call ${call.id}: ${err.message}`),
-                );
-            }
-            for (const status of (value.statuses ?? []) as (StatusUpdate | CallStatus)[]) {
-                const handled = status.type === 'call' ? handleCallStatus(status as CallStatus) : handleStatusUpdate(status as StatusUpdate);
-                void handled.catch(
+            // Calling isn't supported (WhatsApp coexistence): call events and call statuses are ignored.
+            for (const status of (value.statuses ?? []) as (StatusUpdate & { type?: string })[]) {
+                if (status.type === 'call') continue;
+                void handleStatusUpdate(status).catch(
                     (err) => logger.error(`Failed to handle WhatsApp status for ${status.id}: ${err.message}`),
                 );
             }

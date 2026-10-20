@@ -2,7 +2,6 @@ import type { Request, Response } from 'express';
 import { Readable } from 'node:stream';
 import { logger } from '../lib/logger.js';
 import whatsappSupportService, { InboxError, type Agent } from '../services/whatsapp-support.service.js';
-import whatsappCallService from '../services/whatsapp-call.service.js';
 import { userCan } from '../middlewares/require-permission.js';
 
 // The signed-in agent, as the inbox services see them.
@@ -150,60 +149,6 @@ async function getMedia(req: Request, res: Response) {
     }
 }
 
-function sendCallError(res: Response, err: any) {
-    logger.error(`WhatsApp call action failed: ${err.message}`);
-    return sendError(res, err, 502);
-}
-
-async function startCall(req: Request, res: Response) {
-    try {
-        const { sdp } = req.body ?? {};
-        if (typeof sdp !== 'string' || !sdp) return res.status(400).json({ success: false, message: 'sdp is required' });
-        const callId = await whatsappCallService.startCall(req.params.id!, sdp, agentOf(req));
-        return res.status(201).json({ success: true, data: { callId } });
-    } catch (err: any) {
-        return sendCallError(res, err);
-    }
-}
-
-async function acceptCall(req: Request, res: Response) {
-    try {
-        const { sdp } = req.body ?? {};
-        if (typeof sdp !== 'string' || !sdp) return res.status(400).json({ success: false, message: 'sdp is required' });
-        await whatsappCallService.acceptCall(req.params.callId!, sdp, agentOf(req));
-        return res.status(200).json({ success: true });
-    } catch (err: any) {
-        return sendCallError(res, err);
-    }
-}
-
-async function rejectCall(req: Request, res: Response) {
-    try {
-        await whatsappCallService.rejectCall(req.params.callId!);
-        return res.status(200).json({ success: true });
-    } catch (err: any) {
-        return sendCallError(res, err);
-    }
-}
-
-async function endCall(req: Request, res: Response) {
-    try {
-        await whatsappCallService.endCall(req.params.callId!);
-        return res.status(200).json({ success: true });
-    } catch (err: any) {
-        return sendCallError(res, err);
-    }
-}
-
-async function requestCallPermission(req: Request, res: Response) {
-    try {
-        await whatsappCallService.requestCallPermission(req.params.id!);
-        return res.status(200).json({ success: true });
-    } catch (err: any) {
-        return sendCallError(res, err);
-    }
-}
-
 // body: { action: 'claim' | 'release' }
 async function setAssignment(req: Request, res: Response) {
     try {
@@ -271,9 +216,4 @@ export default {
     deleteMessage,
     setAiEnabled,
     markRead,
-    startCall,
-    acceptCall,
-    rejectCall,
-    endCall,
-    requestCallPermission,
 };

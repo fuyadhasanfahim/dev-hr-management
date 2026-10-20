@@ -129,7 +129,7 @@ export function BlueprintEditor({ value, onChange, scope }: { value: Blueprint |
                     <Button type="button" variant="outline" size="sm" onClick={() => set({ paymentMilestones: [...ms, { label: '', percentage: 0, note: '' }] })}>
                         <IconPlus className="size-3.5" /> Add milestone
                     </Button>
-                    {ms.length > 0 && <span className={msTotal === 100 ? 'text-xs text-emerald-600' : 'text-xs text-destructive'}>Total {msTotal}%</span>}
+                    {ms.length > 0 && <span className={msTotal === 100 ? 'text-xs text-emerald-600 dark:text-emerald-400' : 'text-xs text-destructive'}>Total {msTotal}%</span>}
                 </div>
             </Block>
 

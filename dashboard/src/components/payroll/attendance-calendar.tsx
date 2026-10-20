@@ -49,7 +49,7 @@ const STATUS_CONFIG: Record<
   { bg: string; text: string; label: string; icon?: React.ReactNode }
 > = {
   present: { bg: "bg-green-500", text: "text-white", label: "Present" },
-  late: { bg: "bg-yellow-400", text: "text-yellow-900", label: "Late" },
+  late: { bg: "bg-yellow-400", text: "text-yellow-900 dark:text-yellow-300", label: "Late" },
   absent: { bg: "bg-red-500", text: "text-white", label: "Absent" },
   half_day: { bg: "bg-orange-400", text: "text-white", label: "Half Day" },
   early_exit: { bg: "bg-green-400", text: "text-white", label: "Early Exit" },
@@ -59,12 +59,12 @@ const STATUS_CONFIG: Record<
   off_day: { bg: "bg-muted", text: "text-muted-foreground", label: "Off Day" },
   unemployed: {
     bg: "bg-muted/50",
-    text: "text-muted-foreground/50",
+    text: "text-muted-foreground/75",
     label: "N/A",
   },
   future: {
     bg: "bg-muted/30",
-    text: "text-muted-foreground/40",
+    text: "text-muted-foreground/75",
     label: "Upcoming",
   },
 };

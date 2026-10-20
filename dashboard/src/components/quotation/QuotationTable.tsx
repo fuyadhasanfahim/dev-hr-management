@@ -142,7 +142,7 @@ export function QuotationTable({
                       {q.quotationNumber}
                     </span>
                     {isSuperseded && (
-                      <Badge variant="outline" className="text-[10px] h-4 px-1 font-bold text-amber-600 border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-900/50">
+                      <Badge variant="outline" className="text-[10px] h-4 px-1 font-bold text-amber-600 border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-900/50 dark:text-amber-400">
                         OLD
                       </Badge>
                     )}

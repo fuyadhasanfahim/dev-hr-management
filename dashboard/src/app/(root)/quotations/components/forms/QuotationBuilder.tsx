@@ -2138,7 +2138,7 @@ Requirements for AI:
                             <Button
                                 size="sm"
                                 variant="outline"
-                                className="h-8 gap-1.5 text-xs text-blue-600 border-blue-200 hover:bg-blue-50 dark:hover:bg-blue-950/40"
+                                className="h-8 gap-1.5 text-xs text-blue-600 border-blue-200 hover:bg-blue-50 dark:hover:bg-blue-950/40 dark:text-blue-400 dark:border-blue-500/30"
                                 title="Copy AI Model Structure"
                                 onClick={handleCopyWebDevAIStructure}
                             >
@@ -2148,7 +2148,7 @@ Requirements for AI:
                             <Button
                                 size="sm"
                                 variant="outline"
-                                className="h-8 gap-1.5 text-xs text-amber-600 border-amber-200 hover:bg-amber-50 dark:hover:bg-amber-950/40"
+                                className="h-8 gap-1.5 text-xs text-amber-600 border-amber-200 hover:bg-amber-50 dark:hover:bg-amber-950/40 dark:text-amber-400 dark:border-amber-500/30"
                                 title="Duplicate Service"
                                 onClick={handleDuplicateWebDev}
                             >
@@ -2657,7 +2657,7 @@ Requirements for AI:
                             <Button
                                 size="sm"
                                 variant="outline"
-                                className="h-8 text-xs text-blue-600 border-blue-200 hover:bg-blue-50 dark:hover:bg-blue-950/40"
+                                className="h-8 text-xs text-blue-600 border-blue-200 hover:bg-blue-50 dark:hover:bg-blue-950/40 dark:text-blue-400 dark:border-blue-500/30"
                                 onClick={handleCopyMarketingStructure}
                                 title="Copy AI Prompt Structure"
                             >
@@ -2667,7 +2667,7 @@ Requirements for AI:
                             <Button
                                 size="sm"
                                 variant="outline"
-                                className="h-8 text-xs text-emerald-600 border-emerald-200 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
+                                className="h-8 text-xs text-emerald-600 border-emerald-200 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-500/30"
                                 onClick={handleDuplicateMarketing}
                                 title="Duplicate Features"
                             >
@@ -3624,7 +3624,7 @@ function QuotationSummary({
                 <div className="space-y-2.5">
                     <div className="flex justify-between items-center text-sm font-semibold">
                         <span>Total Setup / One-time</span>
-                        <span className="text-[#4E12D4] font-bold font-mono">
+                        <span className="text-primary font-bold font-mono">
                             {currencySymbol}
                             {totalOneTime.toLocaleString("en-IN")}
                         </span>
@@ -3633,7 +3633,7 @@ function QuotationSummary({
                     {totalRecurring > 0 && (
                         <div className="flex justify-between items-center text-sm font-semibold">
                             <span>Total Recurring / Mo</span>
-                            <span className="text-purple-600 font-bold font-mono">
+                            <span className="text-purple-600 font-bold font-mono dark:text-purple-400">
                                 {currencySymbol}
                                 {totalRecurring.toLocaleString("en-IN")}
                                 /mo
@@ -3700,7 +3700,7 @@ function QuotationSummary({
                     {totalRecurring > 0 && (
                         <div className="flex justify-between items-center text-sm font-semibold border-t border-slate-100 dark:border-slate-800/60 pt-2 mt-2">
                             <span className="text-muted-foreground">Total Recurring</span>
-                            <span className="font-mono font-bold text-[#4E12D4] dark:text-[#C850FA]">
+                            <span className="font-mono font-bold text-primary dark:text-[#C850FA]">
                                 {currencySymbol}
                                 {totalRecurring.toLocaleString("en-IN")}
                             </span>
@@ -4383,8 +4383,8 @@ function PaymentTermsSection() {
                             className={cn(
                                 "w-fit font-mono font-bold text-xs px-3 py-1 border",
                                 totalPercentage === 100
-                                    ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/30"
-                                    : "bg-rose-500/10 text-rose-600 border-rose-500/30"
+                                    ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/30 dark:text-emerald-400"
+                                    : "bg-rose-500/10 text-rose-600 border-rose-500/30 dark:text-rose-400"
                             )}
                         >
                             Total: {totalPercentage}%
@@ -4512,7 +4512,7 @@ function PaymentTermsSection() {
                             ) : (
                                 <div className="flex items-center justify-between w-full">
                                     <div className="flex items-center gap-3">
-                                        <span className="flex size-6 items-center justify-center rounded-md bg-purple-500/10 text-purple-600 text-xs font-bold">
+                                        <span className="flex size-6 items-center justify-center rounded-md bg-purple-500/10 text-purple-600 text-xs font-bold dark:text-purple-400">
                                             {index + 1}
                                         </span>
                                         <span className="font-semibold text-foreground text-xs">{m.label}</span>

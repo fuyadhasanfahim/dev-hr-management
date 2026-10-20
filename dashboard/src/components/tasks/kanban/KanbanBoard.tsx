@@ -163,7 +163,7 @@ function TaskCardContent({
                             )}
                             {task.status !== 'completed' && (
                                 <DropdownMenuItem onClick={() => onQuickStatusMove(task, 'completed')}>
-                                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" /> Mark as Completed
+                                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" /> Mark as Completed
                                 </DropdownMenuItem>
                             )}
                             {task.status !== 'in_progress' && task.status !== 'completed' && (
@@ -179,7 +179,7 @@ function TaskCardContent({
                             {task.status === 'under_review' && canManage && (
                                 <>
                                     <DropdownMenuItem onClick={() => onReview(task._id, 'approve')}>
-                                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" /> Approve
+                                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" /> Approve
                                     </DropdownMenuItem>
                                     <DropdownMenuItem onClick={() => onReview(task._id, 'reject')} variant="destructive">
                                         <XCircle className="h-3.5 w-3.5" /> Reject
@@ -215,7 +215,7 @@ function TaskCardContent({
             <div className="pt-1.5 border-t flex items-center justify-between text-[11px]">
                 <div className="flex items-center gap-1.5 min-w-0">
                     <Avatar className="h-5 w-5 shrink-0">
-                        <AvatarFallback className="text-[8px] font-bold bg-muted">
+                        <AvatarFallback className="text-[10px] font-bold bg-muted">
                             {assigneeName.substring(0, 2).toUpperCase()}
                         </AvatarFallback>
                     </Avatar>

@@ -229,14 +229,14 @@ function FeatureItemRow({
                         <div className="flex items-center gap-1.5 flex-wrap">
                             <Badge
                                 variant={node.isSubFeature ? "outline" : "secondary"}
-                                className="text-[9px] font-extrabold uppercase px-1.5 py-0 tracking-wider"
+                                className="text-[10px] font-extrabold uppercase px-1.5 py-0 tracking-wider"
                             >
                                 {node.isSubFeature ? "Sub-Feature" : "Main Feature"}
                             </Badge>
                             {isAlreadyAssigned && (
                                 <Badge 
                                     variant="outline" 
-                                    className="text-[9px] font-semibold px-1.5 py-0 bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30 flex items-center gap-1"
+                                    className="text-[10px] font-semibold px-1.5 py-0 bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30 flex items-center gap-1"
                                 >
                                     🔒 Assigned ({assignInfo.assignedStaffName})
                                 </Badge>

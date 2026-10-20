@@ -1,6 +1,6 @@
 import { io, type Socket } from 'socket.io-client';
 
-// The support inbox's live events (WhatsApp messages + calls) live on the
+// The support inbox's live events (WhatsApp messages) live on the
 // server's `/support` namespace — separate from the dashboard's main socket.
 const SERVER_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:5000';
 

@@ -75,7 +75,7 @@ export function RecentActivities({ activities }: RecentActivitiesProps) {
                         <span className="text-xs font-bold text-foreground truncate">
                           {userName}
                         </span>
-                        <Badge variant="outline" className="text-[9px] px-1 py-0 capitalize">
+                        <Badge variant="outline" className="text-[10px] px-1 py-0 capitalize">
                           {activity.type}
                         </Badge>
                       </div>

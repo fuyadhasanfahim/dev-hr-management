@@ -23,7 +23,7 @@ export const PremiumBadge: React.FC<PremiumBadgeProps> = ({
   };
 
   const variantStyles = {
-    purple: "bg-[#4E12D4]/10 text-[#4E12D4] dark:text-purple-300 border border-[#4E12D4]/25 shadow-2xs",
+    purple: "bg-primary/10 text-primary dark:text-purple-300 border border-primary/25 shadow-2xs",
     violet: "bg-[#1E0078]/10 text-[#1E0078] dark:text-indigo-300 border border-[#1E0078]/25 shadow-2xs",
     magenta: "bg-[#C850FA]/10 text-[#C850FA] dark:text-pink-300 border border-[#C850FA]/25 shadow-2xs",
     red: "bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20 shadow-2xs",

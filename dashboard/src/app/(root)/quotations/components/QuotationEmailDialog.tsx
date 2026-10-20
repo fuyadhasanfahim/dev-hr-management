@@ -449,7 +449,7 @@ function EmailRow({
                 checked={checked}
                 onChange={onToggle}
                 disabled={disabled}
-                className="mt-0.5 h-4 w-4 shrink-0 rounded border-input bg-background text-teal-600 focus:ring-teal-500 disabled:cursor-not-allowed"
+                className="mt-0.5 h-4 w-4 shrink-0 rounded border-input bg-background text-teal-600 focus:ring-teal-500 disabled:cursor-not-allowed dark:text-teal-400"
             />
             <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2 flex-wrap">
@@ -517,9 +517,9 @@ function ResultsView({
                             ].join(" ")}
                         >
                             {ok ? (
-                                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+                                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
                             ) : (
-                                <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-600" />
+                                <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-600 dark:text-red-400" />
                             )}
                             <div className="min-w-0 flex-1">
                                 <div className="flex items-center gap-2 flex-wrap">

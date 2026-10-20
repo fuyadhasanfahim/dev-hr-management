@@ -186,7 +186,7 @@ export default function NoticeManagePage() {
                 </div>
             ) : notices.length === 0 ? (
                 <Card className="p-12 text-center">
-                    <Megaphone className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
+                    <Megaphone className="h-12 w-12 mx-auto text-muted-foreground/75 mb-4" />
                     <h3 className="text-lg font-medium">No notices yet</h3>
                     <p className="text-muted-foreground text-sm mt-1">
                         Create your first notice to get started

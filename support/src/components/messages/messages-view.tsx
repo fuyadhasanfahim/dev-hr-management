@@ -13,7 +13,6 @@ import {
 } from 'react';
 import { useRouter } from 'next/navigation';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { connectSocket } from '@/lib/socket';
 import { useGetAiStatusQuery } from '@/store/api/aiSettingsApi';
 import { useDispatch } from 'react-redux';
 import { AnimatePresence, MotionConfig, motion } from 'motion/react';
@@ -31,7 +30,6 @@ import {
     MessageCircle,
     Info,
     Lock,
-    Phone,
     PhoneIncoming,
     PhoneMissed,
     PhoneOutgoing,
@@ -41,6 +39,8 @@ import {
     Smile,
     Trash2,
     Upload,
+    UserCheck,
+    UserMinus,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { EmojiPicker, EmojiPickerContent, EmojiPickerFooter, EmojiPickerSearch } from '@/components/ui/emoji-picker';
@@ -55,7 +55,6 @@ import { AiResumeCountdown } from '@/components/messages/ai-resume-countdown';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
-import { useCall } from '@/components/messages/call-provider';
 import {
     AttachMenu,
     AttachmentTray,
@@ -576,7 +575,7 @@ function ThreadMessages({
 // WhatsApp's cap for video/audio (and our server's upload limit).
 const MAX_UPLOAD_BYTES = 16 * 1024 * 1024;
 
-const FILTERS = ['all', 'unread', 'mine', 'unassigned'] as const;
+const FILTERS = ['all', 'unread', 'assigned', 'unassigned'] as const;
 type Filter = (typeof FILTERS)[number];
 
 export function MessagesView({ conversationId }: { conversationId?: string }) {
@@ -590,7 +589,6 @@ export function MessagesView({ conversationId }: { conversationId?: string }) {
     const [pending, setPending] = useState<PendingAttachment[]>([]);
     const [dragging, setDragging] = useState(false);
     const recorder = useVoiceRecorder();
-    const { call, startCall } = useCall();
     const agent = useSupportAgent();
     const isMobile = useIsMobile();
     const { data: aiStatus } = useGetAiStatusQuery(undefined, { pollingInterval: 60_000 });
@@ -622,24 +620,11 @@ export function MessagesView({ conversationId }: { conversationId?: string }) {
             const matchesFilter =
                 filter === 'all' ||
                 (filter === 'unread' && c.unreadCount > 0) ||
-                (filter === 'mine' && c.assignedTo?.id === agent.id) ||
+                (filter === 'assigned' && c.assignedTo?.id === agent.id) ||
                 (filter === 'unassigned' && !c.assignedTo);
             return matchesQuery && matchesFilter;
         });
     }, [conversations, search, filter, agent.id]);
-
-    // Having a chat open = being assigned to it; leaving frees it (the server also frees it if the tab closes).
-    useEffect(() => {
-        if (!selectedId) return;
-        const socket = connectSocket();
-        const enter = () => socket.emit('whatsapp:enter', { conversationId: selectedId });
-        if (socket.connected) enter();
-        socket.on('connect', enter);
-        return () => {
-            socket.off('connect', enter);
-            socket.emit('whatsapp:leave');
-        };
-    }, [selectedId]);
 
     const selected = conversations.find((c) => c.id === selectedId) ?? null;
 
@@ -913,7 +898,7 @@ export function MessagesView({ conversationId }: { conversationId?: string }) {
                                                             transition={bubbleSpring}
                                                             className="shrink-0"
                                                         >
-                                                            <Badge className="h-5 min-w-5 justify-center px-1.5 bg-destructive text-white tabular-nums">
+                                                            <Badge className="h-5 min-w-5 justify-center px-1.5 bg-rose-600 text-white tabular-nums">
                                                                 {c.unreadCount > 99 ? '99+' : c.unreadCount}
                                                             </Badge>
                                                         </motion.span>
@@ -1030,29 +1015,32 @@ export function MessagesView({ conversationId }: { conversationId?: string }) {
                                             <AiResumeCountdown resumeAt={selected.aiResumeAt} />
                                         </div>
                                     )}
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className="size-8"
-                                        aria-label="WhatsApp voice call"
-                                        title="WhatsApp voice call"
-                                        disabled={!!call || (lockedByOther && !agent.canManage)}
-                                        onClick={() => startCall({ id: selected.id, name: selected.name })}
-                                    >
-                                        <Phone className="size-4" />
-                                    </Button>
-                                    {assignee?.id === agent.id && (
+                                    {assignee?.id === agent.id ? (
                                         <Button
-                                            variant="ghost"
+                                            variant="outline"
                                             size="sm"
-                                            className="hidden h-8 text-xs text-muted-foreground sm:inline-flex"
+                                            className="h-8 gap-1.5 px-2 text-xs sm:px-3"
                                             disabled={assigning}
                                             onClick={() => handleAssignment('release')}
-                                            title="Let a teammate pick this chat up"
+                                            aria-label="Release chat"
+                                            title="Let a teammate pick this chat up. You stay assigned until you release it."
                                         >
-                                            Release
+                                            <UserMinus className="size-3.5" />
+                                            <span className="hidden sm:inline">Release</span>
                                         </Button>
-                                    )}
+                                    ) : !assignee ? (
+                                        <Button
+                                            size="sm"
+                                            className="h-8 gap-1.5 px-2 text-xs sm:px-3"
+                                            disabled={assigning}
+                                            onClick={() => handleAssignment('claim')}
+                                            aria-label="Assign this chat to yourself"
+                                            title="Assign this chat to yourself. It stays yours until you release it."
+                                        >
+                                            <UserCheck className="size-3.5" />
+                                            <span className="hidden sm:inline">Assign to me</span>
+                                        </Button>
+                                    ) : null}
                                     <Button
                                         variant={infoOpen ? 'secondary' : 'ghost'}
                                         size="icon"

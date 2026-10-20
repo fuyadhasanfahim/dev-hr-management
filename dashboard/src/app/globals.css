@@ -96,7 +96,7 @@
   --destructive: #f43f5e;
   --destructive-foreground: #ffffff;
   --border: #2e3b52;
-  --input: #2e3b52;
+  --input: #5b6b85; /* form-field outlines: 3.5:1 on the page, 3.1:1 on cards (WCAG 1.4.11) */
   --ring: #8b5cf6;
 
   --chart-1: #8b5cf6;

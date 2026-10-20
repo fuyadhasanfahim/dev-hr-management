@@ -80,21 +80,21 @@ export function PaymentHistoryTab({
                     variant: "default" as const,
                     icon: CheckCircle2,
                     className:
-                        "bg-emerald-500/15 text-emerald-700 hover:bg-emerald-500/25 border-emerald-200",
+                        "bg-emerald-500/15 text-emerald-700 hover:bg-emerald-500/25 border-emerald-200 dark:text-emerald-300 dark:border-emerald-500/30",
                 };
             case "partial_paid":
                 return {
                     variant: "secondary" as const,
                     icon: Clock,
                     className:
-                        "bg-blue-500/15 text-blue-700 hover:bg-blue-500/25 border-blue-200",
+                        "bg-blue-500/15 text-blue-700 hover:bg-blue-500/25 border-blue-200 dark:text-blue-300 dark:border-blue-500/30",
                 };
             case "pending":
                 return {
                     variant: "secondary" as const,
                     icon: Clock,
                     className:
-                        "bg-amber-500/15 text-amber-700 hover:bg-amber-500/25 border-amber-200",
+                        "bg-amber-500/15 text-amber-700 hover:bg-amber-500/25 border-amber-200 dark:text-amber-300 dark:border-amber-500/30",
                 };
             default:
                 return {

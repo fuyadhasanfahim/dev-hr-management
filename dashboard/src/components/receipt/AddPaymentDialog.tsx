@@ -238,12 +238,12 @@ export function AddPaymentDialog({
                   </div>
                 </div>
                 <div className="flex items-center gap-3 mt-1.5">
-                  <span className="flex items-center gap-1 text-[9px] font-bold text-slate-400">
+                  <span className="flex items-center gap-1 text-[10px] font-bold text-slate-400">
                     <span className="h-1.5 w-2.5 rounded-full bg-emerald-500 inline-block" />
                     Already paid
                   </span>
                   {todayAmt > 0 && (
-                    <span className="flex items-center gap-1 text-[9px] font-bold text-slate-400">
+                    <span className="flex items-center gap-1 text-[10px] font-bold text-slate-400">
                       <span className="h-1.5 w-2.5 rounded-full bg-brand-accent/70 inline-block" />
                       This payment
                     </span>

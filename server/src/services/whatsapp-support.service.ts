@@ -481,8 +481,6 @@ async function setAssignment(conversationId: string, action: 'claim' | 'release'
         const takingOver = conversation.assignedTo?.id !== agent.id;
         conversation.assignedTo = { id: agent.id, name: agent.name };
         if (takingOver) conversation.assignedAt = new Date();
-        conversation.aiEnabled = false; // A human owns it now.
-        conversation.aiResumeAt = null;
     } else {
         conversation.assignedTo = null;
         conversation.assignedAt = null;

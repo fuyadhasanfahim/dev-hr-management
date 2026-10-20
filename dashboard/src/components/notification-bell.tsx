@@ -51,12 +51,12 @@ const NotificationItem = ({ notification }: { notification: ApiNotification }) =
 
     const getTypeColor = (type: string) => {
         switch (type) {
-            case 'overtime': return 'text-orange-600';
-            case 'shift': return 'text-blue-600';
-            case 'leave': return 'text-green-600';
-            case 'attendance': return 'text-purple-600';
+            case 'overtime': return 'text-orange-600 dark:text-orange-400';
+            case 'shift': return 'text-blue-600 dark:text-blue-400';
+            case 'leave': return 'text-green-600 dark:text-green-400';
+            case 'attendance': return 'text-purple-600 dark:text-purple-400';
             case 'announcement': return 'text-gray-600';
-            case 'earning': return 'text-emerald-600';
+            case 'earning': return 'text-emerald-600 dark:text-emerald-400';
             default: return 'text-gray-600';
         }
     };
@@ -99,7 +99,7 @@ const NotificationItem = ({ notification }: { notification: ApiNotification }) =
                             {format(new Date(notification.createdAt), 'MMM dd, hh:mm aa')}
                         </span>
                         {notification.actionLabel && (
-                            <span className="text-xs text-blue-600 font-medium">
+                            <span className="text-xs text-blue-600 font-medium dark:text-blue-400">
                                 {notification.actionLabel} →
                             </span>
                         )}

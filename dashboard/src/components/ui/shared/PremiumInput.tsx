@@ -26,7 +26,7 @@ export const PremiumInput = React.forwardRef<HTMLInputElement, PremiumInputProps
         )}
         <div className="relative flex items-center group">
           {leftIcon && (
-            <div className="absolute left-4 text-[#4E12D4] dark:text-[#C850FA] pointer-events-none flex items-center transition-colors">
+            <div className="absolute left-4 text-primary dark:text-[#C850FA] pointer-events-none flex items-center transition-colors">
               {leftIcon}
             </div>
           )}

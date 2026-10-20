@@ -206,7 +206,7 @@ export function WorkloadTable({ members, allMembers }: WorkloadTableProps) {
     if (members.length === 0) {
         return (
             <div className="flex flex-col items-center justify-center py-16 text-center gap-2 bg-card border border-dashed rounded-lg">
-                <UserRound className="h-8 w-8 text-muted-foreground/50" />
+                <UserRound className="h-8 w-8 text-muted-foreground/75" />
                 <p className="text-sm font-medium text-muted-foreground">No team members match the current filters.</p>
             </div>
         );

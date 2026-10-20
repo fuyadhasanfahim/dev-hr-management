@@ -1741,7 +1741,7 @@ export default function QuotationWizard() {
                         <IconPlus className="size-4" /> Add Milestone
                     </Button>
                     <span className="text-sm font-semibold">
-                        Total <span className={cn("ml-1", msTotal === 100 ? "text-emerald-600" : "text-destructive")}>{msTotal}%</span>
+                        Total <span className={cn("ml-1", msTotal === 100 ? "text-emerald-600 dark:text-emerald-400" : "text-destructive")}>{msTotal}%</span>
                         <span className="ml-3">{money((grand * msTotal) / 100, cur)}</span>
                     </span>
                 </div>
@@ -1749,7 +1749,7 @@ export default function QuotationWizard() {
                     <div className="h-2 overflow-hidden rounded-full bg-muted">
                         <motion.div className={cn("h-full rounded-full", msTotal === 100 ? "bg-emerald-500" : msTotal > 100 ? "bg-destructive" : "bg-primary")} initial={false} animate={{ width: `${Math.min(100, msTotal)}%` }} transition={{ duration: 0.3 }} />
                     </div>
-                    <p className={cn("flex items-center gap-1.5 text-xs", msTotal === 100 ? "text-emerald-600" : "text-destructive")}>
+                    <p className={cn("flex items-center gap-1.5 text-xs", msTotal === 100 ? "text-emerald-600 dark:text-emerald-400" : "text-destructive")}>
                         {msTotal === 100 ? <IconCircleCheck className="size-4" /> : <IconAlertCircle className="size-4" />}
                         {msTotal === 100 ? "100% allocated" : msTotal < 100 ? `${100 - msTotal}% is still unallocated. Milestones must total 100%.` : `${msTotal - 100}% over. Milestones must total 100%.`}
                     </p>
@@ -2098,7 +2098,7 @@ export default function QuotationWizard() {
                 title="Quotation Summary"
                 hint="Final details for developer handoff and client review."
                 right={
-                    <div className={cn("rounded-lg px-3 py-1.5 text-right", ready ? "bg-emerald-500/10 text-emerald-600" : "bg-amber-500/10 text-amber-600")}>
+                    <div className={cn("rounded-lg px-3 py-1.5 text-right", ready ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" : "bg-amber-500/10 text-amber-600 dark:text-amber-400")}>
                         <p className="text-xs font-semibold">{ready ? "Ready to Send" : "Incomplete"}</p>
                         <p className="text-[10px]">{ready ? "All sections completed" : "Some sections need attention"}</p>
                     </div>

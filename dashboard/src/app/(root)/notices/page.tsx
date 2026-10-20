@@ -101,7 +101,7 @@ export default function NoticesPage() {
                 </div>
             ) : notices.length === 0 ? (
                 <Card className="p-12 text-center">
-                    <Megaphone className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
+                    <Megaphone className="h-12 w-12 mx-auto text-muted-foreground/75 mb-4" />
                     <h3 className="text-lg font-medium">No notices yet</h3>
                     <p className="text-muted-foreground text-sm mt-1">
                         Check back later for company announcements
@@ -112,7 +112,7 @@ export default function NoticesPage() {
                     {notices.map((notice) => (
                         <Card
                             key={notice._id}
-                            className={`cursor-pointer transition-all hover:shadow-lg hover:border-primary/30 ${notice.isPinned ? 'border-amber-300 bg-amber-50/20' : ''
+                            className={`cursor-pointer transition-all hover:shadow-lg hover:border-primary/30 ${notice.isPinned ? 'border-amber-300 bg-amber-50/20 dark:border-amber-500/30' : ''
                                 }`}
                             onClick={() => handleNoticeClick(notice)}
                         >

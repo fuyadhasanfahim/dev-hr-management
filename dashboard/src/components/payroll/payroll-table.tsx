@@ -375,10 +375,10 @@ export default function PayrollTable({
                     <TableCell className="text-center">
                       {row.workDays}
                     </TableCell>
-                    <TableCell className="text-center text-green-600 font-medium">
+                    <TableCell className="text-center text-green-600 font-medium dark:text-green-400">
                       {row.present}
                     </TableCell>
-                    <TableCell className="text-center text-red-600 font-medium">
+                    <TableCell className="text-center text-red-600 font-medium dark:text-red-400">
                       {row.absent}
                     </TableCell>
                     <TableCell className="text-right font-mono text-xs">
@@ -389,7 +389,7 @@ export default function PayrollTable({
                         <span
                           className={cn(
                             "font-bold font-mono",
-                            hasAdjustment ? "text-blue-600" : "",
+                            hasAdjustment ? "text-blue-600 dark:text-blue-400" : "",
                           )}
                         >
                           {finalAmount}
@@ -481,7 +481,7 @@ export default function PayrollTable({
                             <div className="flex items-center ml-1">
                               <Badge
                                 variant="outline"
-                                className="h-6 px-1.5 text-[10px] gap-1 border-green-200 bg-green-50 text-green-700 font-semibold"
+                                className="h-6 px-1.5 text-[10px] gap-1 border-green-200 bg-green-50 text-green-700 font-semibold dark:text-green-300 dark:bg-green-500/15 dark:border-green-500/30"
                               >
                                 Paid
                               </Badge>
@@ -526,7 +526,7 @@ export default function PayrollTable({
                                     });
                                   }}
                                 >
-                                  <Banknote className="h-4 w-4 text-green-600" />
+                                  <Banknote className="h-4 w-4 text-green-600 dark:text-green-400" />
                                 </Button>
                               </TooltipTrigger>
                               <TooltipContent>Proceed to Pay</TooltipContent>

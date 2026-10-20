@@ -441,7 +441,7 @@ export default function AssignShift() {
                                     <AvatarImage
                                       src={staff?.user?.image as string}
                                     />
-                                    <AvatarFallback className="text-[8px] font-bold">
+                                    <AvatarFallback className="text-[10px] font-bold">
                                       {getInitials(staff?.user?.name || "U")}
                                     </AvatarFallback>
                                   </Avatar>

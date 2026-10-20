@@ -331,7 +331,7 @@ export default function NewReceiptPage() {
                 </CardHeader>
                 <CardContent className="space-y-4">
                   {isFullyPaid ? (
-                    <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
+                    <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800 dark:text-emerald-300 dark:bg-emerald-500/15 dark:border-emerald-500/30">
                       <CheckCircle2 className="h-4 w-4 shrink-0" />
                       This quotation is already fully paid. No further receipts
                       can be recorded.
@@ -480,7 +480,7 @@ export default function NewReceiptPage() {
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-muted-foreground">Already Paid</span>
-                    <span className="font-semibold text-emerald-600">
+                    <span className="font-semibold text-emerald-600 dark:text-emerald-400">
                       {formatMoney(summary.totalPaid, summary.quotation.currency)}
                     </span>
                   </div>
@@ -488,7 +488,7 @@ export default function NewReceiptPage() {
                   <div
                     className={`rounded-xl border p-4 ${
                       isFullyPaid
-                        ? "border-emerald-200 bg-emerald-50"
+                        ? "border-emerald-200 bg-emerald-50 dark:bg-emerald-500/15 dark:border-emerald-500/30"
                         : "border-primary/20 bg-primary/5"
                     }`}
                   >
@@ -497,7 +497,7 @@ export default function NewReceiptPage() {
                     </span>
                     <div
                       className={`text-2xl font-black tracking-tight mt-1 ${
-                        isFullyPaid ? "text-emerald-600" : "text-primary"
+                        isFullyPaid ? "text-emerald-600 dark:text-emerald-400" : "text-primary"
                       }`}
                     >
                       {isFullyPaid

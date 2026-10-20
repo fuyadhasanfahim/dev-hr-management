@@ -398,7 +398,7 @@ function OrderDialogs({ dialog, onClose, canMeta }: { dialog: Dialog; onClose: (
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                         <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction disabled={deleting} className="bg-destructive text-white hover:bg-destructive/90" onClick={(e) => { e.preventDefault(); void run(() => deleteOrder(order._id).unwrap(), "Order deleted", "Failed to delete the order"); }}>
+                        <AlertDialogAction disabled={deleting} className="bg-rose-600 text-white hover:bg-rose-700" onClick={(e) => { e.preventDefault(); void run(() => deleteOrder(order._id).unwrap(), "Order deleted", "Failed to delete the order"); }}>
                             {deleting && <Loader2 className="mr-2 size-4 animate-spin" />}Delete
                         </AlertDialogAction>
                     </AlertDialogFooter>

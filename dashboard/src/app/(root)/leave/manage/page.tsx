@@ -635,7 +635,7 @@ export default function LeaveManagePage() {
                                                                                     app,
                                                                                 )
                                                                             }
-                                                                            className="text-green-600 hover:text-green-700"
+                                                                            className="text-green-600 hover:text-green-700 dark:text-green-400"
                                                                         >
                                                                             <Check className="h-4 w-4" />
                                                                         </Button>
@@ -654,7 +654,7 @@ export default function LeaveManagePage() {
                                                                                     app,
                                                                                 )
                                                                             }
-                                                                            className="text-red-600 hover:text-red-700"
+                                                                            className="text-red-600 hover:text-red-700 dark:text-red-400"
                                                                         >
                                                                             <X className="h-4 w-4" />
                                                                         </Button>
@@ -678,7 +678,7 @@ export default function LeaveManagePage() {
                                                                                 app,
                                                                             )
                                                                         }
-                                                                        className="text-orange-600 hover:text-orange-700"
+                                                                        className="text-orange-600 hover:text-orange-700 dark:text-orange-400"
                                                                     >
                                                                         <RotateCcw className="h-4 w-4" />
                                                                     </Button>
@@ -783,7 +783,7 @@ export default function LeaveManagePage() {
                     <DialogHeader className="pb-4 border-b">
                         <div className="flex items-center gap-3">
                             <div className="p-3 bg-green-100 dark:bg-green-900/30 rounded-xl">
-                                <Check className="h-6 w-6 text-green-600" />
+                                <Check className="h-6 w-6 text-green-600 dark:text-green-400" />
                             </div>
                             <div>
                                 <DialogTitle className="text-xl">
@@ -1356,7 +1356,7 @@ export default function LeaveManagePage() {
                                         <span className="text-sm font-medium">
                                             Days to Revoke:
                                         </span>
-                                        <span className="font-bold text-red-600">
+                                        <span className="font-bold text-red-600 dark:text-red-400">
                                             {datesToRevoke.length} day(s)
                                         </span>
                                     </div>
@@ -1552,7 +1552,7 @@ export default function LeaveManagePage() {
                                                                 <Badge
                                                                     key={date}
                                                                     variant="secondary"
-                                                                    className="text-xs bg-blue-100 text-blue-800"
+                                                                    className="text-xs bg-blue-100 text-blue-800 dark:text-blue-300 dark:bg-blue-500/15"
                                                                 >
                                                                     {format(
                                                                         new Date(
@@ -1658,7 +1658,7 @@ export default function LeaveManagePage() {
                                                             className="flex items-center justify-between p-3 bg-muted rounded-lg"
                                                         >
                                                             <div className="flex items-center gap-2">
-                                                                <FileText className="h-5 w-5 text-blue-600" />
+                                                                <FileText className="h-5 w-5 text-blue-600 dark:text-blue-400" />
                                                                 <div>
                                                                     <p className="font-medium text-sm">
                                                                         {doc.fileName ||

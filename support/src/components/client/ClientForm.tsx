@@ -209,7 +209,7 @@ export function ClientForm({
                 {/* Basic Info Section */}
                 <section className="space-y-6">
                     <div className="flex items-center gap-3 border-b border-slate-100 dark:border-slate-800/80 pb-2">
-                        <User className="h-5 w-5 text-teal-600" />
+                        <User className="h-5 w-5 text-teal-600 dark:text-teal-400" />
                         <h3 className="font-semibold text-slate-900 dark:text-slate-100 text-lg">Basic Information</h3>
                     </div>
                     <ClientBasicInfo
@@ -221,7 +221,7 @@ export function ClientForm({
                 {/* Team Members Section */}
                 <section className="space-y-6">
                     <div className="flex items-center gap-3 border-b border-slate-100 dark:border-slate-800/80 pb-2">
-                        <Users className="h-5 w-5 text-teal-600" />
+                        <Users className="h-5 w-5 text-teal-600 dark:text-teal-400" />
                         <h3 className="font-semibold text-slate-900 dark:text-slate-100 text-lg">Team Members</h3>
                     </div>
                     <ClientTeamSection 
@@ -233,7 +233,7 @@ export function ClientForm({
                 {/* Service Assignment Section */}
                 <section className="space-y-6">
                     <div className="flex items-center gap-3 border-b border-slate-100 dark:border-slate-800/80 pb-2">
-                        <Briefcase className="h-5 w-5 text-teal-600" />
+                        <Briefcase className="h-5 w-5 text-teal-600 dark:text-teal-400" />
                         <h3 className="font-semibold text-slate-900 dark:text-slate-100 text-lg">Service Assignment</h3>
                     </div>
                     <ClientServiceSection 
@@ -245,7 +245,7 @@ export function ClientForm({
                 {/* Additional Details Section */}
                 <section className="space-y-6">
                     <div className="flex items-center gap-3 border-b border-slate-100 dark:border-slate-800/80 pb-2">
-                        <FileText className="h-5 w-5 text-teal-600" />
+                        <FileText className="h-5 w-5 text-teal-600 dark:text-teal-400" />
                         <h3 className="font-semibold text-slate-900 dark:text-slate-100 text-lg">Additional Details</h3>
                     </div>
                     <ClientAdditionalDetails 

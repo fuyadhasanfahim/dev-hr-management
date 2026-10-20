@@ -53,7 +53,7 @@ export default function LeadDetailsPage() {
     <Suspense
       fallback={
         <div className="flex h-[400px] items-center justify-center">
-          <Loader className="h-8 w-8 animate-spin text-teal-600" />
+          <Loader className="h-8 w-8 animate-spin text-teal-600 dark:text-teal-400" />
         </div>
       }
     >
@@ -98,7 +98,7 @@ function LeadDetailsContent() {
   if (isLoading) {
     return (
       <div className="flex h-[400px] items-center justify-center">
-        <Loader className="h-8 w-8 animate-spin text-teal-600" />
+        <Loader className="h-8 w-8 animate-spin text-teal-600 dark:text-teal-400" />
       </div>
     );
   }
@@ -206,11 +206,11 @@ function LeadDetailsContent() {
               </Badge>
             )}
             {lead.isConverted && (
-              <Badge className="bg-amber-100 text-amber-700 border-amber-200">
+              <Badge className="bg-amber-100 text-amber-700 border-amber-200 dark:text-amber-300 dark:bg-amber-500/15 dark:border-amber-500/30">
                 Converted
               </Badge>
             )}
-            {isFetching && <Loader className="h-4 w-4 animate-spin text-teal-600" />}
+            {isFetching && <Loader className="h-4 w-4 animate-spin text-teal-600 dark:text-teal-400" />}
           </div>
           <p className="text-sm text-muted-foreground mt-1">
             Added on {format(new Date(lead.createdAt), "MMM dd, yyyy")}
@@ -222,7 +222,7 @@ function LeadDetailsContent() {
             variant="outline"
             className="border-slate-200"
           >
-            <MessageSquarePlus className="h-4 w-4 text-blue-600" />
+            <MessageSquarePlus className="h-4 w-4 text-blue-600 dark:text-blue-400" />
             Log Activity
           </Button>
           {!lead.isConverted && (
@@ -248,7 +248,7 @@ function LeadDetailsContent() {
             </CardHeader>
             <CardContent className="pt-4 space-y-4 text-sm">
               <div className="flex items-start gap-3">
-                <Phone className="h-4 w-4 text-muted-foreground/60 mt-0.5" />
+                <Phone className="h-4 w-4 text-muted-foreground/75 mt-0.5" />
                 <div>
                   <p className="font-medium text-foreground">{lead.phone}</p>
                   <p className="text-muted-foreground">Phone</p>
@@ -256,7 +256,7 @@ function LeadDetailsContent() {
               </div>
               {lead.email && (
                 <div className="flex items-start gap-3">
-                  <Mail className="h-4 w-4 text-muted-foreground/60 mt-0.5" />
+                  <Mail className="h-4 w-4 text-muted-foreground/75 mt-0.5" />
                   <div>
                     <p className="font-medium text-foreground">{lead.email}</p>
                     <p className="text-muted-foreground">Email</p>
@@ -265,14 +265,14 @@ function LeadDetailsContent() {
               )}
               {lead.website && (
                 <div className="flex items-start gap-3">
-                  <Globe className="h-4 w-4 text-muted-foreground/60 mt-0.5" />
+                  <Globe className="h-4 w-4 text-muted-foreground/75 mt-0.5" />
                   <div>
                     <p className="font-medium text-foreground">
                       <a
                         href={lead.website.startsWith("http") ? lead.website : `https://${lead.website}`}
                         target="_blank"
                         rel="noreferrer"
-                        className="text-teal-600 hover:underline"
+                        className="text-teal-600 hover:underline dark:text-teal-400"
                       >
                         {lead.website}
                       </a>
@@ -333,11 +333,11 @@ function LeadDetailsContent() {
                   >
                     <div className="flex items-center justify-center w-10 h-10 rounded-full border-4 border-background bg-muted text-muted-foreground shadow shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 z-10">
                       {act.activityType === "CREATED" ? (
-                        <User className="h-4 w-4 text-teal-600" />
+                        <User className="h-4 w-4 text-teal-600 dark:text-teal-400" />
                       ) : act.activityType === "STATUS_CHANGE" ? (
-                        <Activity className="h-4 w-4 text-blue-600" />
+                        <Activity className="h-4 w-4 text-blue-600 dark:text-blue-400" />
                       ) : act.activityType === "CONVERTED" ? (
-                        <UserCheck className="h-4 w-4 text-amber-600" />
+                        <UserCheck className="h-4 w-4 text-amber-600 dark:text-amber-400" />
                       ) : (
                         <MessageSquarePlus className="h-4 w-4 text-muted-foreground" />
                       )}
@@ -369,7 +369,7 @@ function LeadDetailsContent() {
                       )}
 
                       {act.nextActionType && act.nextActionDate && (
-                        <p className="text-xs text-teal-700 mt-2 flex items-center gap-1 bg-teal-50 inline-flex px-2 py-1 rounded">
+                        <p className="text-xs text-teal-700 mt-2 flex items-center gap-1 bg-teal-50 inline-flex px-2 py-1 rounded dark:text-teal-300 dark:bg-teal-500/15">
                           <Calendar className="h-3 w-3" />
                           Set {act.nextActionType.name} for {format(new Date(act.nextActionDate), "MMM dd, yyyy")}
                         </p>

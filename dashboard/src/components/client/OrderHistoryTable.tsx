@@ -102,7 +102,7 @@ export function OrderHistoryTable({ orders, isLoading, currency = "USD" }: Order
                                     <div className="flex flex-col gap-1">
                                         <span className="text-slate-900 dark:text-slate-100">{order.quotationSnapshot?.templateName || order.quotationSnapshot?.details?.title || order.orderNumber}</span>
                                         <div className="flex items-center gap-2">
-                                            <Badge variant="outline" className={`text-[9px] h-4 uppercase ${ORDER_PRIORITY_COLORS[order.priority]}`}>
+                                            <Badge variant="outline" className={`text-[10px] h-4 uppercase ${ORDER_PRIORITY_COLORS[order.priority]}`}>
                                                 {ORDER_PRIORITY_LABELS[order.priority]}
                                             </Badge>
                                         </div>

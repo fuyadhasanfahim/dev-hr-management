@@ -272,14 +272,14 @@ function FeatureItemRow({
                         <div className="flex items-center gap-1.5 flex-wrap">
                             <Badge
                                 variant={node.isSubFeature ? "outline" : "secondary"}
-                                className="text-[9px] font-extrabold uppercase px-1.5 py-0 tracking-wider"
+                                className="text-[10px] font-extrabold uppercase px-1.5 py-0 tracking-wider"
                             >
                                 {node.isSubFeature ? "Sub-Feature" : "Main Feature"}
                             </Badge>
                             {isAlreadyAssigned && (
                                 <Badge 
                                     variant="outline" 
-                                    className="text-[9px] font-semibold px-1.5 py-0 bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30 flex items-center gap-1"
+                                    className="text-[10px] font-semibold px-1.5 py-0 bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30 flex items-center gap-1"
                                 >
                                     🔒 Assigned ({assignInfo.assignedStaffName})
                                 </Badge>
@@ -689,10 +689,10 @@ export function AssignTaskModal({
                                                     <Badge 
                                                         variant="outline" 
                                                         className={cn(
-                                                            "text-[9px] font-bold px-1.5 py-0 shrink-0",
+                                                            "text-[10px] font-bold px-1.5 py-0 shrink-0",
                                                             activeCount === 0 
-                                                                ? "bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400"
-                                                                : "bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-950/40 dark:text-blue-400"
+                                                                ? "bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-500/30"
+                                                                : "bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-950/40 dark:text-blue-400 dark:border-blue-500/30"
                                                         )}
                                                     >
                                                         {activeCount === 0 ? "Free" : `${activeCount} Active`}

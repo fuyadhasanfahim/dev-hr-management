@@ -89,7 +89,7 @@ const ALL_GROUP_LABELS = NAV_GROUPS.map((g) => g.groupLabel);
 // Solid red count pill — reads as "needs attention" on any item, including the active purple one.
 function CountBadge({ count }: { count: number }) {
     return (
-        <SidebarMenuBadge className="bg-destructive text-white tabular-nums peer-hover/menu-button:text-white peer-data-active/menu-button:text-white">
+        <SidebarMenuBadge className="bg-rose-600 text-white tabular-nums peer-hover/menu-button:text-white peer-data-active/menu-button:text-white">
             {count > 99 ? '99+' : count}
         </SidebarMenuBadge>
     );
@@ -163,7 +163,7 @@ export function NavMain() {
         <div className="flex flex-col gap-3 py-2">
             <SidebarGroup className="py-0 px-3">
                 <div className="relative flex items-center">
-                    <Search className="absolute left-2.5 size-4 text-sidebar-foreground/50 pointer-events-none" />
+                    <Search className="absolute left-2.5 size-4 text-sidebar-foreground/70 pointer-events-none" />
                     <SidebarInput
                         type="text"
                         placeholder="Search navigation..."
@@ -174,7 +174,7 @@ export function NavMain() {
                     {searchQuery && (
                         <button
                             onClick={() => setSearchQuery('')}
-                            className="absolute right-2.5 p-0.5 rounded-full hover:bg-sidebar-accent text-sidebar-foreground/50 hover:text-sidebar-foreground transition-colors"
+                            className="absolute right-2.5 p-0.5 rounded-full hover:bg-sidebar-accent text-sidebar-foreground/70 hover:text-sidebar-foreground transition-colors"
                             aria-label="Clear search"
                         >
                             <X className="size-3.5" />
@@ -185,7 +185,7 @@ export function NavMain() {
 
             <SidebarGroup className="py-0">
                 {filteredGroups.length === 0 ? (
-                    <div className="px-3 py-4 text-xs text-center text-sidebar-foreground/40 font-medium">
+                    <div className="px-3 py-4 text-xs text-center text-sidebar-foreground/70 font-medium">
                         No matching items
                     </div>
                 ) : (
@@ -201,7 +201,7 @@ export function NavMain() {
                                 value={group.groupLabel}
                                 className="border-none bg-transparent data-open:bg-transparent"
                             >
-                                <AccordionTrigger className="no-underline hover:no-underline py-1 px-3 text-[10px] font-bold text-sidebar-foreground/55 hover:text-sidebar-foreground transition-colors uppercase tracking-wider [&[data-state=open]>svg]:rotate-180">
+                                <AccordionTrigger className="no-underline hover:no-underline py-1 px-3 text-[10px] font-bold text-sidebar-foreground/70 hover:text-sidebar-foreground transition-colors uppercase tracking-wider [&[data-state=open]>svg]:rotate-180">
                                     <span className="flex items-center gap-2">
                                         <group.icon className="size-3.5" />
                                         {group.groupLabel}

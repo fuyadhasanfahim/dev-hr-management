@@ -98,7 +98,7 @@ const statusOptions = [
     {
         value: "all",
         label: "All Status",
-        color: "text-green-600",
+        color: "text-green-600 dark:text-green-400",
         dot: "bg-slate-500",
         tabActive:
             "bg-slate-500/15 border-slate-500/40 text-slate-700 dark:text-slate-300",
@@ -107,7 +107,7 @@ const statusOptions = [
     {
         value: "present",
         label: "Present",
-        color: "text-green-600",
+        color: "text-green-600 dark:text-green-400",
         dot: "bg-emerald-500",
         tabActive:
             "bg-green-500/15 border-green-500/40 text-green-700 dark:text-green-300",
@@ -116,7 +116,7 @@ const statusOptions = [
     {
         value: "absent",
         label: "Absent",
-        color: "text-red-600",
+        color: "text-red-600 dark:text-red-400",
         dot: "bg-red-500",
         tabActive:
             "bg-red-500/15 border-red-500/40 text-red-700 dark:text-red-300",
@@ -125,7 +125,7 @@ const statusOptions = [
     {
         value: "late",
         label: "Late",
-        color: "text-yellow-600",
+        color: "text-yellow-600 dark:text-yellow-400",
         dot: "bg-amber-500",
         tabActive:
             "bg-yellow-500/15 border-yellow-500/40 text-yellow-700 dark:text-yellow-300",
@@ -134,7 +134,7 @@ const statusOptions = [
     {
         value: "half_day",
         label: "Half Day",
-        color: "text-orange-600",
+        color: "text-orange-600 dark:text-orange-400",
         dot: "bg-orange-500",
         tabActive:
             "bg-orange-500/15 border-orange-500/40 text-orange-700 dark:text-orange-300",
@@ -143,7 +143,7 @@ const statusOptions = [
     {
         value: "early_exit",
         label: "Early Exit",
-        color: "text-purple-600",
+        color: "text-purple-600 dark:text-purple-400",
         dot: "bg-purple-500",
         tabActive:
             "bg-purple-500/15 border-purple-500/40 text-purple-700 dark:text-purple-300",
@@ -152,7 +152,7 @@ const statusOptions = [
     {
         value: "on_leave",
         label: "On Leave",
-        color: "text-blue-600",
+        color: "text-blue-600 dark:text-blue-400",
         dot: "bg-blue-500",
         tabActive:
             "bg-blue-500/15 border-blue-500/40 text-blue-700 dark:text-blue-300",
@@ -170,7 +170,7 @@ const statusOptions = [
     {
         value: "holiday",
         label: "Holiday",
-        color: "text-pink-600",
+        color: "text-pink-600 dark:text-pink-400",
         dot: "bg-pink-500",
         tabActive:
             "bg-pink-500/15 border-pink-500/40 text-pink-700 dark:text-pink-300",
@@ -1119,11 +1119,11 @@ export default function AttendancePage() {
                                                                     "capitalize font-medium shadow-none",
                                                                     staff.status ===
                                                                         "active"
-                                                                        ? "text-green-600"
+                                                                        ? "text-green-600 dark:text-green-400"
                                                                         : staff.status ===
                                                                             "inactive"
-                                                                          ? "text-yellow-600"
-                                                                          : "text-red-600",
+                                                                          ? "text-yellow-600 dark:text-yellow-400"
+                                                                          : "text-red-600 dark:text-red-400",
                                                                 )}
                                                             >
                                                                 {staff.status ||

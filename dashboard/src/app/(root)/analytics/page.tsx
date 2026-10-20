@@ -190,7 +190,7 @@ export default function FinanceAnalyticsPage() {
                                 }
                                 className="flex gap-2 cursor-pointer"
                             >
-                                <FileSpreadsheet className="h-4 w-4 text-green-600" />
+                                <FileSpreadsheet className="h-4 w-4 text-green-600 dark:text-green-400" />
                                 Excel Format
                             </DropdownMenuItem>
                             <DropdownMenuItem
@@ -203,7 +203,7 @@ export default function FinanceAnalyticsPage() {
                                 }
                                 className="flex gap-2 cursor-pointer"
                             >
-                                <FileText className="h-4 w-4 text-red-600" />
+                                <FileText className="h-4 w-4 text-red-600 dark:text-red-400" />
                                 PDF Format
                             </DropdownMenuItem>
                         </DropdownMenuContent>
@@ -256,10 +256,10 @@ export default function FinanceAnalyticsPage() {
                         <CardTitle className="text-sm font-medium">
                             Total Earnings
                         </CardTitle>
-                        <DollarSign className="h-4 w-4 text-green-600" />
+                        <DollarSign className="h-4 w-4 text-green-600 dark:text-green-400" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold text-green-600">
+                        <div className="text-2xl font-bold text-green-600 dark:text-green-400">
                             {formatCurrency(summary.totalEarnings)}
                         </div>
                         <p className="text-xs text-muted-foreground">
@@ -273,10 +273,10 @@ export default function FinanceAnalyticsPage() {
                         <CardTitle className="text-sm font-medium">
                             Total Expenses
                         </CardTitle>
-                        <Receipt className="h-4 w-4 text-red-600" />
+                        <Receipt className="h-4 w-4 text-red-600 dark:text-red-400" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold text-red-600">
+                        <div className="text-2xl font-bold text-red-600 dark:text-red-400">
                             {formatCurrency(summary.totalExpenses)}
                         </div>
                         <p className="text-xs text-muted-foreground">
@@ -291,17 +291,17 @@ export default function FinanceAnalyticsPage() {
                             Net Profit
                         </CardTitle>
                         {summary.totalProfit >= 0 ? (
-                            <TrendingUp className="h-4 w-4 text-blue-600" />
+                            <TrendingUp className="h-4 w-4 text-blue-600 dark:text-blue-400" />
                         ) : (
-                            <TrendingDown className="h-4 w-4 text-red-600" />
+                            <TrendingDown className="h-4 w-4 text-red-600 dark:text-red-400" />
                         )}
                     </CardHeader>
                     <CardContent>
                         <div
                             className={`text-2xl font-bold ${
                                 summary.totalProfit >= 0
-                                    ? 'text-blue-600'
-                                    : 'text-red-600'
+                                    ? 'text-blue-600 dark:text-blue-400'
+                                    : 'text-red-600 dark:text-red-400'
                             }`}
                         >
                             {formatCurrency(summary.totalProfit)}
@@ -317,10 +317,10 @@ export default function FinanceAnalyticsPage() {
                         <CardTitle className="text-sm font-medium">
                             Unpaid Revenue
                         </CardTitle>
-                        <Wallet className="h-4 w-4 text-orange-600" />
+                        <Wallet className="h-4 w-4 text-orange-600 dark:text-orange-400" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold text-orange-600 space-y-1">
+                        <div className="text-2xl font-bold text-orange-600 space-y-1 dark:text-orange-400">
                             {summary.unpaidByCurrency &&
                             summary.unpaidByCurrency.length > 0 ? (
                                 summary.unpaidByCurrency.map((item, index) => (
@@ -347,10 +347,10 @@ export default function FinanceAnalyticsPage() {
                         <CardTitle className="text-sm font-medium">
                             Shared Amount
                         </CardTitle>
-                        <Package className="h-4 w-4 text-purple-600" />
+                        <Package className="h-4 w-4 text-purple-600 dark:text-purple-400" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold text-purple-600">
+                        <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">
                             {formatCurrency(summary.totalShared || 0)}
                         </div>
                         <p className="text-xs text-muted-foreground">
@@ -364,7 +364,7 @@ export default function FinanceAnalyticsPage() {
                         <CardTitle className="text-sm font-medium">
                             Final Amount
                         </CardTitle>
-                        <TrendingUp className="h-4 w-4 text-emerald-600" />
+                        <TrendingUp className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
                     </CardHeader>
                     <CardContent>
                         <div

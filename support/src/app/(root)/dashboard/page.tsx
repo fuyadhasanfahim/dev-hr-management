@@ -135,7 +135,7 @@ export default function DashboardPage() {
                                         </Avatar>
                                         <div className="flex-1 min-w-0 space-y-0.5">
                                             <div className="flex items-center gap-1.5">
-                                                <Badge variant="outline" className="text-[9px] px-1 py-0 capitalize">
+                                                <Badge variant="outline" className="text-[10px] px-1 py-0 capitalize">
                                                     {meta.label}
                                                 </Badge>
                                             </div>

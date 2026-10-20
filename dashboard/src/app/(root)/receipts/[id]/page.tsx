@@ -172,7 +172,7 @@ export default function ReceiptDetailsPage() {
               ) : (
                 <Badge
                   variant="outline"
-                  className="text-emerald-700 border-emerald-200 bg-emerald-50"
+                  className="text-emerald-700 border-emerald-200 bg-emerald-50 dark:text-emerald-300 dark:bg-emerald-500/15 dark:border-emerald-500/30"
                 >
                   Issued
                 </Badge>
@@ -209,7 +209,7 @@ export default function ReceiptDetailsPage() {
       </div>
 
       {isVoid && receipt.voidReason && (
-        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800 dark:text-red-300 dark:bg-red-500/15 dark:border-red-500/30">
           <span className="font-semibold">Voided:</span> {receipt.voidReason}
         </div>
       )}
@@ -305,7 +305,7 @@ export default function ReceiptDetailsPage() {
                               {isPaymentVoid ? (
                                 <Badge variant="destructive" className="text-[10px] px-1.5 py-0">Void</Badge>
                               ) : (
-                                <Badge variant="outline" className="text-emerald-700 border-emerald-200 bg-emerald-50 text-[10px] px-1.5 py-0">Active</Badge>
+                                <Badge variant="outline" className="text-emerald-700 border-emerald-200 bg-emerald-50 text-[10px] px-1.5 py-0 dark:text-emerald-300 dark:bg-emerald-500/15 dark:border-emerald-500/30">Active</Badge>
                               )}
                               {isPaymentVoid && p.voidReason && (
                                 <span className="block text-[10px] text-red-500 mt-0.5 max-w-[150px] truncate" title={p.voidReason}>
@@ -355,7 +355,7 @@ export default function ReceiptDetailsPage() {
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground">Total Collected</span>
-                <span className="font-bold text-emerald-600">
+                <span className="font-bold text-emerald-600 dark:text-emerald-400">
                   {money(totalPaid)}
                 </span>
               </div>
@@ -377,7 +377,7 @@ export default function ReceiptDetailsPage() {
 
               <div
                 className={`rounded-xl border p-4 ${
-                  isFullyPaid ? "border-emerald-200 bg-emerald-50" : "border-primary/20 bg-primary/5"
+                  isFullyPaid ? "border-emerald-200 bg-emerald-50 dark:bg-emerald-500/15 dark:border-emerald-500/30" : "border-primary/20 bg-primary/5"
                 }`}
               >
                 <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
@@ -385,7 +385,7 @@ export default function ReceiptDetailsPage() {
                 </span>
                 <div
                   className={`text-3xl font-black tracking-tight mt-1 ${
-                    isFullyPaid ? "text-emerald-600" : "text-primary"
+                    isFullyPaid ? "text-emerald-600 dark:text-emerald-400" : "text-primary"
                   }`}
                 >
                   {isFullyPaid ? "Paid in Full" : money(remaining)}
@@ -434,7 +434,7 @@ export default function ReceiptDetailsPage() {
                 handleVoid();
               }}
               disabled={isVoiding}
-              className="bg-destructive text-white hover:bg-destructive/90"
+              className="bg-rose-600 text-white hover:bg-rose-700"
             >
               {isVoiding ? (
                 <>
@@ -475,7 +475,7 @@ export default function ReceiptDetailsPage() {
                 handleVoidPayment();
               }}
               disabled={isVoidingPayment}
-              className="bg-destructive text-white hover:bg-destructive/90"
+              className="bg-rose-600 text-white hover:bg-rose-700"
             >
               {isVoidingPayment ? (
                 <>

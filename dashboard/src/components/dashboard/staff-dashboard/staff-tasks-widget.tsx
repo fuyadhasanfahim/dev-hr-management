@@ -125,7 +125,7 @@ export function StaffTasksWidget() {
 
                                         <div className="flex items-center justify-between text-[10px] font-medium text-muted-foreground">
                                             <div className="flex items-center gap-1.5 truncate">
-                                                <span className="font-bold text-[9px] text-foreground/60 uppercase">
+                                                <span className="font-bold text-[10px] text-foreground/60 uppercase">
                                                     #
                                                     {task.orderId
                                                         ?.orderNumber || "N/A"}
@@ -144,7 +144,7 @@ export function StaffTasksWidget() {
                                                     "under_review" && (
                                                     <Badge
                                                         variant="outline"
-                                                        className="bg-amber-100/50 text-amber-700 border-amber-200 dark:bg-amber-900/20 dark:text-amber-300 text-[9px] font-bold h-4 px-1.5"
+                                                        className="bg-amber-100/50 text-amber-700 border-amber-200 dark:bg-amber-900/20 dark:text-amber-300 text-[10px] font-bold h-4 px-1.5 dark:border-amber-500/30"
                                                     >
                                                         Review
                                                     </Badge>
@@ -152,7 +152,7 @@ export function StaffTasksWidget() {
                                                 {isOverdue && (
                                                     <Badge
                                                         variant="destructive"
-                                                        className="h-4 px-1.5 text-[9px] font-bold uppercase"
+                                                        className="h-4 px-1.5 text-[10px] font-bold uppercase"
                                                     >
                                                         LATE
                                                     </Badge>

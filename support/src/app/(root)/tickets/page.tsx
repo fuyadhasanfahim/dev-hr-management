@@ -430,7 +430,7 @@ function ChatTranscript({ raw }: { raw: string }) {
             >
                 <MessageSquare className="size-3.5 shrink-0" />
                 Chat transcript
-                <span className="text-[10px] text-muted-foreground/60">
+                <span className="text-[10px] text-muted-foreground/75">
                     {lines.length} message{lines.length === 1 ? '' : 's'}
                 </span>
                 <ChevronDown
@@ -837,7 +837,7 @@ export default function TicketsPage() {
                                                     {ticketUser?.name ?? 'Guest'}
                                                 </span>
                                                 {ticketUser?.isGuest && (
-                                                    <span className="inline-flex items-center gap-0.5 rounded-full bg-muted px-1.5 py-0.5 text-[9px] font-medium text-muted-foreground">
+                                                    <span className="inline-flex items-center gap-0.5 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
                                                         <UserIcon className="size-2.5" />
                                                         Guest
                                                     </span>

@@ -163,8 +163,8 @@ export default function OrderDetailsPage() {
         return (
             <div className="container mx-auto p-6 text-center mt-20">
                 <div className="flex flex-col items-center justify-center space-y-4">
-                    <div className="p-4 bg-red-100 rounded-full">
-                        <AlertCircle className="h-12 w-12 text-red-600" />
+                    <div className="p-4 bg-red-100 rounded-full dark:bg-red-500/15">
+                        <AlertCircle className="h-12 w-12 text-red-600 dark:text-red-400" />
                     </div>
                     <h1 className="text-2xl font-bold">Order Not Found</h1>
                     <p className="text-muted-foreground max-w-md">
@@ -186,10 +186,10 @@ export default function OrderDetailsPage() {
 
     const getStatusColor = (status: string) => {
         switch (status?.toLowerCase()) {
-            case "pending": return "bg-yellow-100 text-yellow-800 border-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-400";
-            case "active": return "bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-900/30 dark:text-blue-400";
-            case "completed": return "bg-green-100 text-green-800 border-green-200 dark:bg-green-900/30 dark:text-green-400";
-            case "cancelled": return "bg-red-100 text-red-800 border-red-200 dark:bg-red-900/30 dark:text-red-400";
+            case "pending": return "bg-yellow-100 text-yellow-800 border-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-400 dark:border-yellow-500/30";
+            case "active": return "bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-500/30";
+            case "completed": return "bg-green-100 text-green-800 border-green-200 dark:bg-green-900/30 dark:text-green-400 dark:border-green-500/30";
+            case "cancelled": return "bg-red-100 text-red-800 border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-500/30";
             default: return "bg-gray-100 text-gray-800 border-gray-200 dark:bg-gray-800 dark:text-gray-400";
         }
     };
@@ -450,7 +450,7 @@ export default function OrderDetailsPage() {
                                             <span className="font-bold">{order.quotationSnapshot?.currency || "৳"}{(order.quotationSnapshot.totals.subtotal || 0).toLocaleString()}</span>
                                         </div>
                                         {order.quotationSnapshot.totals.discountAmount > 0 && (
-                                            <div className="flex justify-between items-center text-xs py-1 border-b border-dashed text-emerald-600">
+                                            <div className="flex justify-between items-center text-xs py-1 border-b border-dashed text-emerald-600 dark:text-emerald-400">
                                                 <span>Discount</span>
                                                 <span className="font-bold">-{order.quotationSnapshot?.currency || "৳"}{order.quotationSnapshot.totals.discountAmount.toLocaleString()}</span>
                                             </div>
@@ -511,9 +511,9 @@ export default function OrderDetailsPage() {
                                     className={cn(
                                         "capitalize font-bold text-[10px]",
                                         order.priority === "urgent" &&
-                                            "border-red-300 text-red-600",
+                                            "border-red-300 text-red-600 dark:text-red-400 dark:border-red-500/30",
                                         order.priority === "high" &&
-                                            "border-orange-300 text-orange-600",
+                                            "border-orange-300 text-orange-600 dark:text-orange-400 dark:border-orange-500/30",
                                     )}
                                 >
                                     {order.priority || "medium"}

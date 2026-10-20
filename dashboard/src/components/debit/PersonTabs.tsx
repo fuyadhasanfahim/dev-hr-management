@@ -151,7 +151,7 @@ export function PersonTabs() {
                 <TabsContent value="debits" className="space-y-4">
                     {debits.length === 0 ? (
                         <div className="flex flex-col items-center justify-center py-16 text-center">
-                            <ArrowLeftRight className="h-12 w-12 text-muted-foreground/50 mb-4" />
+                            <ArrowLeftRight className="h-12 w-12 text-muted-foreground/75 mb-4" />
                             <h3 className="text-lg font-medium">No debits yet</h3>
                             <p className="text-muted-foreground text-sm mt-1">
                                 Add a debit to get started
@@ -307,7 +307,7 @@ export function PersonTabs() {
                 <TabsContent value="persons" className="space-y-4">
                     {persons.length === 0 ? (
                         <div className="flex flex-col items-center justify-center py-16 text-center">
-                            <Users className="h-12 w-12 text-muted-foreground/50 mb-4" />
+                            <Users className="h-12 w-12 text-muted-foreground/75 mb-4" />
                             <h3 className="text-lg font-medium">No persons added</h3>
                             <p className="text-muted-foreground text-sm mt-1">
                                 Add a person to track their debits

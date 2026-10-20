@@ -295,7 +295,7 @@ function ConsultationRow({ consultation }: { consultation: Consultation }) {
                         href={meeting.googleMeetLink}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="flex items-center gap-1 mt-1 text-[11px] font-medium text-teal-600 hover:text-teal-700 hover:underline"
+                        className="flex items-center gap-1 mt-1 text-[11px] font-medium text-teal-600 hover:text-teal-700 hover:underline dark:text-teal-400"
                     >
                         <Video className="h-3 w-3" />
                         Join Meet
@@ -399,7 +399,7 @@ function ConsultationRow({ consultation }: { consultation: Consultation }) {
                             {meeting?.googleMeetLink && (
                                 <div className="grid grid-cols-3 gap-2 border-b pb-3 border-border/50">
                                     <span className="text-sm text-muted-foreground">Meet Link:</span>
-                                    <a href={meeting.googleMeetLink} target="_blank" rel="noreferrer" className="col-span-2 text-sm text-teal-600 hover:underline break-all flex items-center gap-1">
+                                    <a href={meeting.googleMeetLink} target="_blank" rel="noreferrer" className="col-span-2 text-sm text-teal-600 hover:underline break-all flex items-center gap-1 dark:text-teal-400">
                                         {meeting.googleMeetLink} <ExternalLink className="h-3 w-3" />
                                     </a>
                                 </div>
@@ -430,7 +430,7 @@ function ConsultationRow({ consultation }: { consultation: Consultation }) {
                     <form onSubmit={handleSchedule} className="flex flex-col">
                         <DialogHeader className="px-6 pt-5 pb-4 border-b">
                             <DialogTitle className="flex items-center gap-2 text-xl font-semibold">
-                                <CalendarPlus className="h-5 w-5 text-teal-600" />
+                                <CalendarPlus className="h-5 w-5 text-teal-600 dark:text-teal-400" />
                                 Schedule Consultation
                             </DialogTitle>
                             <DialogDescription>

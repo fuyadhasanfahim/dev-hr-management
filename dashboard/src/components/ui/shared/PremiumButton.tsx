@@ -36,13 +36,13 @@ export const PremiumButton: React.FC<PremiumButtonProps> = ({
     primary:
       "bg-[#1E0078] hover:bg-[#1E0078]/90 text-white shadow-sm border border-[#1E0078] focus:ring-[#1E0078]",
     purple:
-      "bg-gradient-to-r from-[#4E12D4] to-[#1E0078] hover:from-[#4E12D4]/90 hover:to-[#1E0078]/90 text-white shadow-sm shadow-[#4E12D4]/25 border border-[#4E12D4]/30 focus:ring-[#4E12D4]",
+      "bg-gradient-to-r from-[#4E12D4] to-[#1E0078] hover:from-[#4E12D4]/90 hover:to-[#1E0078]/90 text-white shadow-sm shadow-[#4E12D4]/25 border border-primary/30 focus:ring-[#4E12D4]",
     magenta:
       "bg-gradient-to-r from-[#C850FA] to-[#4E12D4] hover:from-[#C850FA]/90 hover:to-[#4E12D4]/90 text-white shadow-sm shadow-[#C850FA]/25 border border-[#C850FA]/30 focus:ring-[#C850FA]",
     outline:
-      "bg-white/60 dark:bg-slate-900/60 hover:bg-[#4E12D4]/5 text-slate-800 dark:text-slate-100 hover:text-[#4E12D4] dark:hover:text-[#C850FA] border border-slate-300/80 dark:border-slate-700/80 hover:border-[#4E12D4]/40 focus:ring-[#4E12D4] backdrop-blur-sm",
+      "bg-white/60 dark:bg-slate-900/60 hover:bg-primary/5 text-slate-800 dark:text-slate-100 hover:text-primary dark:hover:text-[#C850FA] border border-slate-300/80 dark:border-slate-700/80 hover:border-primary/40 focus:ring-[#4E12D4] backdrop-blur-sm",
     ghost:
-      "bg-transparent hover:bg-[#4E12D4]/10 text-slate-600 dark:text-slate-400 hover:text-[#4E12D4] dark:hover:text-[#C850FA] focus:ring-[#4E12D4]",
+      "bg-transparent hover:bg-primary/10 text-slate-600 dark:text-slate-400 hover:text-primary dark:hover:text-[#C850FA] focus:ring-[#4E12D4]",
     danger:
       "bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white shadow-sm shadow-red-500/20 border border-red-500/30 focus:ring-red-500",
   };

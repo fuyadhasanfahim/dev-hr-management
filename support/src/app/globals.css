@@ -97,12 +97,12 @@
   --destructive: #f43f5e;
   --destructive-foreground: #ffffff;
   --border: #2e3b52;
-  --input: #2e3b52;
-  --ring: #4E12D4;
+  --input: #5b6b85; /* form-field outlines: 3.5:1 on the page, 3.1:1 on cards (WCAG 1.4.11) */
+  --ring: #8b5cf6;
 
-  --chart-1: #4E12D4;
+  --chart-1: #8b5cf6;
   --chart-2: #C850FA;
-  --chart-3: #1E0078;
+  --chart-3: #6d4fe0;
   --chart-4: #a855f7;
   --chart-5: #ec4899;
 
@@ -113,7 +113,10 @@
   --sidebar-accent: #1e293b;
   --sidebar-accent-foreground: #ffffff;
   --sidebar-border: #2e3b52;
-  --sidebar-ring: #4E12D4;
+  --sidebar-ring: #8b5cf6;
+
+  /* Text/icons in the brand colour: #4E12D4 is only 2.1:1 on the dark page, so they use this lighter tint (fills keep the brand colour). */
+  --primary-text: #a78bfa;
 
   --radius: 0.625rem;
 
@@ -217,4 +220,11 @@
 
 @utility premium-glass-card {
   @apply rounded-3xl border border-slate-200/75 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 backdrop-blur-xl transition-all duration-300;
+}
+
+/* Dark mode: brand-coloured text and icons use the lighter tint above so they stay readable. */
+@layer utilities {
+  .dark .text-primary { color: var(--primary-text); }
+  .dark .text-primary\/80 { color: color-mix(in oklab, var(--primary-text) 80%, transparent); }
+  .dark .hover\:text-primary:hover { color: var(--primary-text); }
 }

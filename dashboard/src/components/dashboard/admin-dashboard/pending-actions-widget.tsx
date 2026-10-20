@@ -152,7 +152,7 @@ export function PendingActionsWidget() {
                     <Button
                       size="sm"
                       variant="outline"
-                      className="h-8 px-2.5 text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40 border-rose-200 dark:border-rose-900/50"
+                      className="h-8 px-2.5 text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40 border-rose-200 dark:border-rose-900/50 dark:text-rose-400"
                       onClick={() => handleReject(leave._id)}
                       disabled={isWorking}
                     >

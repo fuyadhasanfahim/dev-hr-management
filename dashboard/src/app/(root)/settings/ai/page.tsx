@@ -219,7 +219,7 @@ export default function AiControlsPage() {
                 <CardContent className="space-y-4 pt-6">
                     <div className="flex flex-wrap items-center justify-between gap-4">
                         <div className="flex items-center gap-3">
-                            <span className={cn('flex size-11 items-center justify-center rounded-full', settings?.masterMode === 'off' ? 'bg-rose-500/10 text-rose-600' : 'bg-emerald-500/10 text-emerald-600')}>
+                            <span className={cn('flex size-11 items-center justify-center rounded-full', settings?.masterMode === 'off' ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400' : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400')}>
                                 <Power className="size-5" />
                             </span>
                             <div>
