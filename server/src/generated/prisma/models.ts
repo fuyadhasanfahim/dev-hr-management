@@ -10,4 +10,6 @@
  */
 export type * from './models/KnowledgeChunk.js'
 export type * from './models/KnowledgeGap.js'
+export type * from './models/AiExample.js'
+export type * from './models/AiReplyLog.js'
 export type * from './commonInputTypes.js'

@@ -41,3 +41,46 @@ model KnowledgeGap {
 
   @@map("knowledge_gaps")
 }
+
+// What the AI learns from: staff-written replies (qa), corrections of its own
+// replies (correction) and real agent replies (agent). Only approved rows with
+// an embedding are retrieved. Raw SQL access (vector column).
+model AiExample {
+  id            String                       @id @default(uuid())
+  kind          String
+  question      String
+  context       String?
+  answer        String
+  badAnswer     String?
+  embedding     Unsupported("vector(1536)")?
+  approved      Boolean                      @default(false)
+  sourceKey     String?                      @unique
+  agentName     String?
+  createdByName String?
+  createdAt     DateTime                     @default(now())
+  updatedAt     DateTime                     @default(now()) @updatedAt
+
+  @@index([kind, approved])
+  @@map("ai_examples")
+}
+
+// Every reply the AI sent, kept so staff can review and correct it.
+model AiReplyLog {
+  id              String   @id @default(uuid())
+  channel         String   @default("whatsapp")
+  conversationId  String?
+  customerName    String?
+  customerMessage String
+  context         String?
+  aiReply         String
+  escalated       Boolean  @default(false)
+  topScore        Float?
+  sources         String?
+  status          String   @default("ok")
+  correctionId    String?
+  createdAt       DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([status])
+  @@map("ai_reply_logs")
+}

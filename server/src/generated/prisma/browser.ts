@@ -27,3 +27,13 @@ export type KnowledgeChunk = Prisma.KnowledgeChunkModel
  * 
  */
 export type KnowledgeGap = Prisma.KnowledgeGapModel
+/**
+ * Model AiExample
+ * 
+ */
+export type AiExample = Prisma.AiExampleModel
+/**
+ * Model AiReplyLog
+ * 
+ */
+export type AiReplyLog = Prisma.AiReplyLogModel

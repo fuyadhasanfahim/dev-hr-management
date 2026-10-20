@@ -22,6 +22,7 @@ import WhatsAppMessageModel, {
     type IWhatsAppMedia,
 } from '../models/whatsapp-message.model.js';
 import { agentReplyPolicy } from './ai-settings.service.js';
+import aiLearning from './ai-learning.service.js';
 import { enqueueWhatsAppSend } from './whatsapp-send.queue.js';
 import whatsappService from './whatsapp.service.js';
 import { notifyAgents } from '../socket/support.namespace.js';
@@ -333,6 +334,7 @@ async function sendAgentMessage(conversationId: string, body: string, agent: Age
 
     await touchAfterAgentReply(conversation);
     await conversation.save();
+    void aiLearning.captureAgentReply(conversation._id, body, agent.name);
 
     await enqueueWhatsAppSend(_id.toString());
     notifyAgents('whatsapp:new_message', { conversationId });

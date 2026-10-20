@@ -20,3 +20,14 @@ export const KB_SUGGESTED_CATEGORIES = [
 
 export const isInstructions = (category?: string | null) =>
     category?.trim().toLowerCase() === KB_INSTRUCTIONS_CATEGORY.toLowerCase();
+
+export function ago(iso: string): string {
+    const min = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
+    if (min < 1) return 'just now';
+    if (min < 60) return `${min}m ago`;
+    if (min < 1440) return `${Math.floor(min / 60)}h ago`;
+    return `${Math.floor(min / 1440)}d ago`;
+}
+
+// Mirrors EXAMPLE_MAX_CHARS on the server.
+export const EXAMPLE_MAX_CHARS = 1500;

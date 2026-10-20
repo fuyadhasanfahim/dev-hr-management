@@ -40,6 +40,9 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { RepliesPanel } from '@/components/knowledge-base/replies-panel';
+import { TaughtPanel } from '@/components/knowledge-base/taught-panel';
+import { HumanRepliesPanel } from '@/components/knowledge-base/human-replies-panel';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { CharCounter } from '@/components/knowledge-base/char-counter';
 import { GapsPanel } from '@/components/knowledge-base/gaps-panel';
@@ -298,6 +301,9 @@ export default function KnowledgeBasePage() {
                         Unanswered questions
                         {gaps.length > 0 && <Badge variant="secondary" className="h-4 px-1.5 text-[10px]">{gaps.length}</Badge>}
                     </TabsTrigger>
+                    <TabsTrigger value="replies">AI replies</TabsTrigger>
+                    <TabsTrigger value="taught">Taught replies</TabsTrigger>
+                    <TabsTrigger value="human">Human replies</TabsTrigger>
                     <TabsTrigger value="test">Test the AI</TabsTrigger>
                 </TabsList>
 
@@ -503,6 +509,18 @@ export default function KnowledgeBasePage() {
 
                 <TabsContent value="gaps">
                     <GapsPanel onAnswer={(q) => openAddDialog(q)} />
+                </TabsContent>
+
+                <TabsContent value="replies">
+                    <RepliesPanel />
+                </TabsContent>
+
+                <TabsContent value="taught">
+                    <TaughtPanel />
+                </TabsContent>
+
+                <TabsContent value="human">
+                    <HumanRepliesPanel />
                 </TabsContent>
 
                 <TabsContent value="test">

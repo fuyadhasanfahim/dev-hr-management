@@ -2,6 +2,7 @@ import express from 'express';
 import SupportController from '../controllers/support.controller.js';
 import MeetingController from '../controllers/meeting.controller.js';
 import KnowledgeBaseController from '../controllers/knowledge-base.controller.js';
+import AiLearningController from '../controllers/ai-learning.controller.js';
 import WhatsAppSupportController from '../controllers/whatsapp-support.controller.js';
 import { requireAuth, restrictTo } from '../middlewares/auth.middleware.js';
 import { requirePermission } from '../middlewares/require-permission.js';
@@ -190,6 +191,16 @@ router.delete('/knowledge-base/:id', requireUnifiedAuth, restrictTo('admin', 'su
 router.post('/knowledge-base/test', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), KnowledgeBaseController.testAnswer);
 router.get('/knowledge-base/gaps', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), KnowledgeBaseController.listGaps);
 router.delete('/knowledge-base/gaps/:id', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), KnowledgeBaseController.deleteGap);
+
+// What the AI learns from: its own replies (review + correct), staff-written replies, and real agent replies.
+router.post('/knowledge-base/gaps/:id/answer', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), AiLearningController.answerGap);
+router.get('/knowledge-base/replies', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), AiLearningController.listReplies);
+router.post('/knowledge-base/replies/:id/correct', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), AiLearningController.correctReply);
+router.get('/knowledge-base/examples', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), AiLearningController.listExamples);
+router.post('/knowledge-base/examples', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), AiLearningController.createExample);
+router.post('/knowledge-base/examples/style-guide', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), AiLearningController.styleGuide);
+router.patch('/knowledge-base/examples/:id', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), AiLearningController.updateExample);
+router.delete('/knowledge-base/examples/:id', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), AiLearningController.deleteExample);
 
 // WhatsApp inbox — agent-facing view over the Cloud API webhook pipeline (see whatsapp.route.ts).
 router.get('/whatsapp/conversations', requireUnifiedAuth, supportAccess, WhatsAppSupportController.listConversations);

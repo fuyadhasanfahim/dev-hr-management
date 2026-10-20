@@ -4,6 +4,7 @@ import { logger } from '../lib/logger.js';
 import whatsappService from '../services/whatsapp.service.js';
 import whatsappAiService from '../services/whatsapp-ai.service.js';
 import { agentReplyPolicy, isAiActive } from '../services/ai-settings.service.js';
+import aiLearning from '../services/ai-learning.service.js';
 import { WhatsAppConversationStatus, type IWhatsAppConversation } from '../models/whatsapp-conversation.model.js';
 import WhatsAppMessageModel, {
     WhatsAppMessageDirection,
@@ -186,6 +187,9 @@ async function handleEcho(echo: EchoMessage) {
         conversation.aiEnabled = false;
         conversation.aiResumeAt = policy.resumeAt;
     }
+    if (parsed.content.type === WhatsAppMessageType.TEXT) {
+        void aiLearning.captureAgentReply(conversation._id, parsed.content.body ?? '', 'Phone app');
+    }
     await conversation.save();
     notifyAgents('whatsapp:new_message', { conversationId: conversation._id.toString() });
 }
@@ -265,6 +269,21 @@ export async function answerWithAi(
         status: WhatsAppMessageStatus.SENT,
     });
     notifyAgents('whatsapp:new_message', { conversationId: conversation._id.toString() });
+
+    // Kept for review: staff can read every AI reply and correct the ones that missed.
+    void aiLearning.logReply({
+        conversationId: conversation._id.toString(),
+        customerName: conversation.customerName,
+        customerMessage: body,
+        context: history
+            .slice(-6)
+            .map((m) => `${m.role === 'user' ? 'Customer' : 'Team'}: ${m.content.replace(/\s+/g, ' ').slice(0, 400)}`)
+            .join('\n'),
+        aiReply: ai.reply,
+        escalated: ai.escalate,
+        topScore: ai.matches[0]?.score,
+        sources: ai.matches.map((m) => (m.source ? `[${m.source}] ` : '') + m.text.slice(0, 120)),
+    });
 
     if (ai.escalate) {
         const transcript = [...history, { role: 'user' as const, content: body }]

@@ -52,7 +52,9 @@ export const AnyNull = runtime.AnyNull
 
 export const ModelName = {
   KnowledgeChunk: 'KnowledgeChunk',
-  KnowledgeGap: 'KnowledgeGap'
+  KnowledgeGap: 'KnowledgeGap',
+  AiExample: 'AiExample',
+  AiReplyLog: 'AiReplyLog'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -95,6 +97,43 @@ export const KnowledgeGapScalarFieldEnum = {
 } as const
 
 export type KnowledgeGapScalarFieldEnum = (typeof KnowledgeGapScalarFieldEnum)[keyof typeof KnowledgeGapScalarFieldEnum]
+
+
+export const AiExampleScalarFieldEnum = {
+  id: 'id',
+  kind: 'kind',
+  question: 'question',
+  context: 'context',
+  answer: 'answer',
+  badAnswer: 'badAnswer',
+  approved: 'approved',
+  sourceKey: 'sourceKey',
+  agentName: 'agentName',
+  createdByName: 'createdByName',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type AiExampleScalarFieldEnum = (typeof AiExampleScalarFieldEnum)[keyof typeof AiExampleScalarFieldEnum]
+
+
+export const AiReplyLogScalarFieldEnum = {
+  id: 'id',
+  channel: 'channel',
+  conversationId: 'conversationId',
+  customerName: 'customerName',
+  customerMessage: 'customerMessage',
+  context: 'context',
+  aiReply: 'aiReply',
+  escalated: 'escalated',
+  topScore: 'topScore',
+  sources: 'sources',
+  status: 'status',
+  correctionId: 'correctionId',
+  createdAt: 'createdAt'
+} as const
+
+export type AiReplyLogScalarFieldEnum = (typeof AiReplyLogScalarFieldEnum)[keyof typeof AiReplyLogScalarFieldEnum]
 
 
 export const SortOrder = {

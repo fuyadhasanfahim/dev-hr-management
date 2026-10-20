@@ -2,6 +2,9 @@ import envConfig from '../config/env.config.js';
 import knowledgeBaseService, { type KnowledgeMatch } from './knowledge-base.service.js';
 import { embed } from '../lib/openai-embeddings.js';
 import { logger } from '../lib/logger.js';
+import { openaiFetch } from '../lib/openai-chat.js';
+import aiLearning, { formatExamples, type ExamplesForPrompt } from './ai-learning.service.js';
+import { getCatalogContext } from './ai-catalog-context.js';
 
 const SYSTEM_PROMPT = `You are Mira, the virtual assistant of Webbriks (a digital agency), replying to customers on WhatsApp. Be friendly and concise (2-4 short sentences).
 
@@ -39,8 +42,14 @@ The CONTEXT is the only source of truth. If an earlier assistant message in this
 
 Be polite and respectful at all times (use the respectful "apni" form of address, thank the customer, never sound dismissive or robotic). Politeness never changes the language rule above: Bengali/Banglish customers always get Bengali script, English customers get English.
 
-When the customer has no budget or no clear idea: don't escalate. Briefly present the entry-level option from the CONTEXT with its price, say it can be tailored, and ask one question about their business.
-When the customer asks about a service in general ("e-commerce website somporke janan", "marketing cost koto?"): give the packages and prices from the CONTEXT, tailored to what you know, and ask one question.
+SALES PLAYBOOK — every enquiry is a lead you are guiding, step by step, like a good consultant. Never dump prices or whole package lists up front.
+1. DISCOVER first. When someone names a service ("ecommerce website lagbe", "I need an app"), do not quote yet. Ask ONE short question that narrows it down: what they sell or do, and whether they already have something decided. For a website/app, offer the real options from the CATALOG/CONTEXT as a short choice (e.g. Shopify, Laravel, or custom-coded React/Next.js) and ask which direction they lean toward, or whether they'd like your suggestion.
+2. FEATURES second. Once they pick a direction, say briefly what that option includes at our end (the main features from the CATALOG), tied to what they told you. Then ask what they specifically need (product count, payment methods, delivery, multi-language, admin panel...).
+3. MATCH third. Take everything they said they need and compare it with the CATALOG packages for that service/platform. Name the ONE package that covers most of it, say in plain words why ("you mentioned X, Y, Z — all of those are already in our Starter"), and mention only the one or two extras that would need a higher package or an add-on.
+4. PRICE last. Give the price of that matched package from the CATALOG only at this step. EXCEPTION: if the customer asks the price directly, answer honestly with the starting price of the matching package(s) in one line and immediately continue with the next discovery question — never dodge a direct price question.
+5. NEXT STEP. After the price, move the lead forward: offer a quick call/meeting, a detailed quotation, or ask about timeline/budget. Keep a warm lead warm — always end with one forward-moving question, never a dead end like "let me know if you need anything".
+Use the customer's own words and goals in every answer. If they change topic, restart at step 1 for the new topic. Never contradict the CATALOG or CONTEXT; the CATALOG is the source for package names, inclusions and prices.
+When the customer has no budget or no clear idea: don't escalate. Briefly suggest the entry-level package from the CATALOG for what they described, say it can be tailored, and ask one question about their business.
 
 Escalate ONLY when the customer explicitly asks for a human or manager, is upset or complaining, or wants a price negotiation/discount, or needs something only a person can do (custom quote sign-off, payment disputes, account-specific actions). Escalating closes the chat to the bot, so never escalate just because the CONTEXT lacks an answer, the service is unlisted (e.g. WordPress, mobile apps), or the message is vague, short, mistyped or Banglish — answer from the CONTEXT, say the team will confirm the rest, and ask one clarifying question. When you do escalate, the "reply" must still be a warm, specific message (e.g. thank them, say a team member will follow up shortly and what it will be about); never leave it empty.
 
@@ -54,22 +63,6 @@ const FALLBACK_REPLY =
 interface ChatTurn {
     role: 'user' | 'assistant';
     content: string;
-}
-
-async function openaiFetch(path: string, body: unknown) {
-    const res = await fetch(`https://api.openai.com/v1/${path}`, {
-        method: 'POST',
-        headers: {
-            Authorization: `Bearer ${envConfig.openai_api_key}`,
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(body),
-    });
-    const data: any = await res.json();
-    if (!res.ok) {
-        throw new Error(`OpenAI ${path} failed: ${res.status} ${JSON.stringify(data)}`);
-    }
-    return data;
 }
 
 // The knowledge base is English, and embeddings match Bengali-script queries poorly
@@ -114,6 +107,7 @@ export interface WhatsAppAIResult {
     escalate: boolean;
     escalateReason?: string;
     matches: KnowledgeMatch[]; // what the AI read from the knowledge base
+    taughtCount: number; // staff-taught replies / corrections that were applied
 }
 
 export async function processWhatsAppMessage(
@@ -126,12 +120,22 @@ export async function processWhatsAppMessage(
     }
 
     let matches: KnowledgeMatch[] = [];
+    let examples: ExamplesForPrompt = { taught: [], style: [] };
     try {
         const queryEmbedding = await embed(await toRetrievalQuery(message, history));
-        matches = await knowledgeBaseService.retrieve(queryEmbedding);
+        [matches, examples] = await Promise.all([
+            knowledgeBaseService.retrieve(queryEmbedding),
+            aiLearning.retrieve(queryEmbedding).catch((err: any) => {
+                logger.error(`WhatsApp AI could not load learned replies: ${err.message}`);
+                return examples;
+            }),
+        ]);
     } catch (err: any) {
         logger.error(`WhatsApp AI retrieval failed, answering without context: ${err.message}`);
     }
+
+    // Live package catalog — mentions in this chat decide which service/platform is shown in full.
+    const catalog = await getCatalogContext([message, ...history.slice(-8).map((t) => t.content)].join('\n'));
 
     let rules = '';
     try {
@@ -144,7 +148,12 @@ export async function processWhatsAppMessage(
     const system = [
         SYSTEM_PROMPT,
         rules && `STAFF RULES (always follow these; they override the style guidance above):\n${rules}`,
+        examples.taught.length &&
+            `TAUGHT REPLIES (written or corrected by our staff for questions like this one. Follow their facts, decisions and wording closely, adapted to this chat. If two disagree, the LAST one is the newest and wins):\n${formatExamples(examples.taught)}`,
+        examples.style.length &&
+            `HOW OUR HUMAN TEAM TALKS (real replies from our agents to similar messages — copy their tone, rhythm and way of asking, not their facts):\n${formatExamples(examples.style)}`,
         options.customerName && `The customer's WhatsApp profile name is "${options.customerName}".`,
+        catalog && `CATALOG (our live packages, BDT; the source for package names, inclusions and prices):\n${catalog}`,
         `CONTEXT:\n${context || '(nothing in the knowledge base matches this message)'}`,
     ]
         .filter(Boolean)
@@ -180,6 +189,7 @@ export async function processWhatsAppMessage(
         escalate: Boolean(parsed.escalate),
         escalateReason: parsed.escalateReason,
         matches,
+        taughtCount: examples.taught.length,
     };
 
     // Feed the "unanswered questions" list: the AI handed off, or the knowledge base had nothing close.

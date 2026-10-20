@@ -18,3 +18,12 @@ export const KB_MAX_INSTRUCTIONS = 8;
 export const KB_RETRIEVE_K = 6;
 export const KB_MIN_SCORE = 0.2; // below this an entry is noise and is dropped
 export const KB_LOW_CONFIDENCE = 0.35; // best match below this = the KB probably can't answer it
+
+// Learned replies (staff-written, corrections, real agent replies). A taught reply must be a close
+// match to be followed; style examples are only a tone guide so they can be looser.
+// ponytail: uncalibrated starting points, like the thresholds above.
+export const EXAMPLE_TAUGHT_K = 4;
+export const EXAMPLE_TAUGHT_MIN_SCORE = 0.55;
+export const EXAMPLE_STYLE_K = 3;
+export const EXAMPLE_STYLE_MIN_SCORE = 0.4;
+export const EXAMPLE_MAX_CHARS = 1500;
