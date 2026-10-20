@@ -35,6 +35,7 @@ import {
     Image as ImageIcon,
     ExternalLink,
     Building2,
+    ArrowLeft,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -411,7 +412,7 @@ function MessageBubble({ message, isOwn, isFirstInGroup }: MessageBubbleProps) {
                 ))}
             <div
                 className={cn(
-                    'max-w-[70%] space-y-1',
+                    'max-w-[85%] md:max-w-[70%] space-y-1',
                     isOwn ? 'items-end' : 'items-start',
                 )}
             >
@@ -1223,6 +1224,11 @@ export default function LiveChatPage() {
         [router, searchParams],
     );
 
+    const handleBack = useCallback(() => {
+        setSelectedSession(null);
+        router.replace('/live-chat', { scroll: false });
+    }, [router]);
+
     const handleClaim = useCallback(
         async (session: ChatSession) => {
             const result = await claimSession(session.sessionId);
@@ -1450,10 +1456,16 @@ export default function LiveChatPage() {
     return (
         <div className="flex h-full overflow-hidden bg-background">
             {/* ── Session list ──────────────────────────────────────────────── */}
-            <aside className="w-[320px] shrink-0 flex flex-col border-r overflow-hidden">
+            <aside
+                className={cn(
+                    'w-full md:w-[320px] shrink-0 flex-col border-r overflow-hidden',
+                    // Phone: list and chat are separate screens.
+                    selectedSession ? 'hidden md:flex' : 'flex',
+                )}
+            >
                 {/* Header */}
                 <div className="px-4 pt-4 pb-3 space-y-3">
-                    <h1 className="text-lg font-semibold">Live Chat</h1>
+                    <h1 className="text-lg font-semibold pl-10 md:pl-0">Live Chat</h1>
                     <div className="relative">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
                         <Input
@@ -1598,7 +1610,12 @@ export default function LiveChatPage() {
             </aside>
 
             {/* ── Chat window ───────────────────────────────────────────────── */}
-            <div className="flex flex-1 flex-col overflow-hidden min-h-0">
+            <div
+                className={cn(
+                    'flex-1 flex-col overflow-hidden min-h-0',
+                    selectedSession ? 'flex' : 'hidden md:flex',
+                )}
+            >
                 {!selectedSession ? (
                     <div className="flex flex-1 flex-col items-center justify-center gap-4 text-center px-6">
                         <div className="size-16 rounded-2xl bg-muted flex items-center justify-center">
@@ -1619,10 +1636,19 @@ export default function LiveChatPage() {
                         {/* Header */}
                         <div className="shrink-0 border-b bg-background">
                             {/* Top row: user info + actions */}
-                            <div className="flex items-center justify-between px-5 h-14 gap-3">
-                                <div className="flex items-center gap-3 min-w-0">
+                            <div className="flex items-center justify-between pl-14 pr-2 md:px-5 h-14 gap-2 md:gap-3">
+                                <div className="flex items-center gap-1 md:gap-3 min-w-0">
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="size-9 shrink-0 md:hidden"
+                                        aria-label="Back to chats"
+                                        onClick={handleBack}
+                                    >
+                                        <ArrowLeft className="size-5" />
+                                    </Button>
                                     <div className="relative">
-                                        <Avatar className="size-10 shrink-0">
+                                        <Avatar className="size-10 shrink-0 hidden sm:flex">
                                             <AvatarFallback className="text-sm bg-primary/10 text-primary font-semibold">
                                                 {sessionUser?.name
                                                     .charAt(0)
@@ -1700,7 +1726,7 @@ export default function LiveChatPage() {
                                 </div>
 
                                 {/* Action buttons */}
-                                <div className="flex items-center gap-1.5 shrink-0">
+                                <div className="flex items-center gap-1 md:gap-1.5 shrink-0">
                                     {canClaim && (
                                         <Button
                                             size="sm"
@@ -1715,7 +1741,7 @@ export default function LiveChatPage() {
                                             ) : (
                                                 <UserCheck className="size-3.5" />
                                             )}
-                                            Claim
+                                            <span className="hidden lg:inline">Claim</span>
                                         </Button>
                                     )}
                                     {selectedSession.status === 'active' &&
@@ -1732,7 +1758,7 @@ export default function LiveChatPage() {
                                                     className="gap-1.5"
                                                 >
                                                     <CalendarIcon className="size-3.5" />
-                                                    Meeting
+                                                    <span className="hidden lg:inline">Meeting</span>
                                                 </Button>
                                                 <Button
                                                     size="sm"
@@ -1745,7 +1771,7 @@ export default function LiveChatPage() {
                                                     className="gap-1.5"
                                                 >
                                                     <UserPlus className="size-3.5" />
-                                                    Reassign
+                                                    <span className="hidden lg:inline">Reassign</span>
                                                 </Button>
                                                 <Button
                                                     size="sm"
@@ -1759,7 +1785,7 @@ export default function LiveChatPage() {
                                                     ) : (
                                                         <Ticket className="size-3.5" />
                                                     )}
-                                                    To Ticket
+                                                    <span className="hidden lg:inline">To Ticket</span>
                                                 </Button>
                                                 <Separator
                                                     orientation="vertical"
@@ -1777,7 +1803,7 @@ export default function LiveChatPage() {
                                                     ) : (
                                                         <X className="size-3.5" />
                                                     )}
-                                                    Close
+                                                    <span className="hidden lg:inline">Close</span>
                                                 </Button>
                                             </>
                                         )}
@@ -1786,7 +1812,7 @@ export default function LiveChatPage() {
 
                             {/* Scheduled meetings strip */}
                             {clientMeetings.length > 0 && (
-                                <div className="px-5 py-2 border-t border-border/50 bg-muted/30">
+                                <div className="px-3 md:px-5 py-2 border-t border-border/50 bg-muted/30">
                                     <div className="flex items-center gap-2 flex-wrap">
                                         <div className="flex items-center gap-1.5 text-xs text-muted-foreground shrink-0">
                                             <CalendarIcon className="size-3.5" />
@@ -1843,7 +1869,7 @@ export default function LiveChatPage() {
 
                         {/* Messages */}
                         <div className="flex-1 min-h-0 overflow-y-auto">
-                            <div className="px-5 py-5">
+                            <div className="px-3 md:px-5 py-4 md:py-5">
                                 {messages.length === 0 && (
                                     <div className="flex justify-center py-12">
                                         <p className="text-sm text-muted-foreground">
@@ -1897,7 +1923,7 @@ export default function LiveChatPage() {
 
                         {/* Input */}
                         {!sessionEnded && (
-                            <div className="px-5 py-4 border-t shrink-0 bg-background">
+                            <div className="px-3 md:px-5 py-3 md:py-4 border-t shrink-0 bg-background pb-[max(0.75rem,env(safe-area-inset-bottom))]">
                                 {canClaim ? (
                                     <div className="flex items-center justify-center py-3">
                                         <p className="text-sm text-muted-foreground/70 italic">

@@ -12,11 +12,13 @@ import {
     type KeyboardEvent,
 } from 'react';
 import { useRouter } from 'next/navigation';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { useDispatch } from 'react-redux';
 import { AnimatePresence, MotionConfig, motion } from 'motion/react';
 import {
     AlertCircle,
     Bot,
+    ArrowLeft,
     Check,
     CheckCheck,
     ChevronDown,
@@ -443,7 +445,7 @@ function ThreadMessages({
                                 )}
                                 <div
                                     className={cn(
-                                        'group/bubble relative max-w-[70%] text-sm leading-relaxed break-words shadow-sm transition-opacity',
+                                        'group/bubble relative max-w-[85%] md:max-w-[70%] text-sm leading-relaxed break-words shadow-sm transition-opacity',
                                         hasMedia ? 'p-1' : 'px-3 py-1.5',
                                         bubbleCorners(isMe, isFirstInRun, isLastInRun),
                                         isMe ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground',
@@ -588,6 +590,7 @@ export function MessagesView({ conversationId }: { conversationId?: string }) {
     const recorder = useVoiceRecorder();
     const { call, startCall } = useCall();
     const agent = useSupportAgent();
+    const isMobile = useIsMobile();
     const [infoOpen, setInfoOpen] = useState(false);
     const [lightbox, setLightbox] = useState<{ items: WhatsAppMessage[]; index: number; key: number } | null>(null);
 
@@ -790,11 +793,17 @@ export function MessagesView({ conversationId }: { conversationId?: string }) {
         // Pinned to the viewport (minus the layout's p-2), so the thread and the
         // chat list scroll inside their own panels instead of growing the page.
         <MotionConfig reducedMotion="user">
-            <div className="flex h-[calc(100svh-1rem)] overflow-hidden rounded-2xl border bg-sidebar">
+            <div className="flex h-[calc(100dvh-1rem)] overflow-hidden rounded-2xl border bg-sidebar">
                 {/* ── Conversation list ─────────────────────────────────────────── */}
-                <aside className="w-[320px] shrink-0 flex flex-col border-r overflow-hidden">
+                <aside
+                    className={cn(
+                        'w-full md:w-[320px] shrink-0 flex-col border-r overflow-hidden',
+                        // Phone: list and thread are separate screens.
+                        selectedId ? 'hidden md:flex' : 'flex',
+                    )}
+                >
                     <div className="px-4 pt-4 pb-3 space-y-3">
-                        <h1 className="text-lg font-semibold">Messages</h1>
+                        <h1 className="text-lg font-semibold pl-10 md:pl-0">Messages</h1>
                         <div className="relative">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
                             <Input
@@ -898,7 +907,7 @@ export function MessagesView({ conversationId }: { conversationId?: string }) {
 
                 {/* ── Thread ─────────────────────────────────────────────────────── */}
                 <div
-                    className="relative flex-1 flex flex-col min-w-0"
+                    className={cn('relative flex-1 flex-col min-w-0', selectedId ? 'flex' : 'hidden md:flex')}
                     onDragOver={(e: DragEvent) => {
                         if (!selected || !e.dataTransfer.types.includes('Files')) return;
                         e.preventDefault();
@@ -937,8 +946,17 @@ export function MessagesView({ conversationId }: { conversationId?: string }) {
                         </div>
                     ) : (
                         <>
-                            <div className="flex items-center justify-between gap-3 px-4 h-16 shrink-0 border-b bg-sidebar">
-                                <div className="flex items-center gap-3 min-w-0">
+                            <div className="flex items-center justify-between gap-2 pl-14 pr-2 md:px-4 h-16 shrink-0 border-b bg-sidebar">
+                                <div className="flex items-center gap-1 md:gap-3 min-w-0">
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="size-9 shrink-0 md:hidden"
+                                        aria-label="Back to chats"
+                                        onClick={() => router.push('/messages')}
+                                    >
+                                        <ArrowLeft className="size-5" />
+                                    </Button>
                                     <button
                                         type="button"
                                         onClick={() => setInfoOpen(true)}
@@ -962,7 +980,7 @@ export function MessagesView({ conversationId }: { conversationId?: string }) {
                                 </div>
                                 <div className="flex items-center gap-1 shrink-0">
                                     <label
-                                        className="mr-2 flex cursor-pointer items-center gap-2 rounded-full border px-3 py-1 text-xs"
+                                        className="md:mr-2 flex cursor-pointer items-center gap-2 rounded-full border px-2 md:px-3 py-1 text-xs"
                                         title={
                                             selected.aiEnabled
                                                 ? 'AI answers new messages automatically. Replying yourself turns it off.'
@@ -970,7 +988,7 @@ export function MessagesView({ conversationId }: { conversationId?: string }) {
                                         }
                                     >
                                         <Bot className={cn('size-3.5', selected.aiEnabled ? 'text-primary' : 'text-muted-foreground')} />
-                                        AI auto-reply
+                                        <span className="hidden lg:inline">AI auto-reply</span>
                                         <Switch
                                             size="sm"
                                             checked={selected.aiEnabled}
@@ -985,7 +1003,7 @@ export function MessagesView({ conversationId }: { conversationId?: string }) {
                                         />
                                     </label>
                                     {!selected.aiEnabled && selected.aiResumeAt && (
-                                        <div className="mr-2">
+                                        <div className="mr-2 hidden sm:block">
                                             <AiResumeCountdown resumeAt={selected.aiResumeAt} />
                                         </div>
                                     )}
@@ -1004,7 +1022,7 @@ export function MessagesView({ conversationId }: { conversationId?: string }) {
                                         <Button
                                             variant="ghost"
                                             size="sm"
-                                            className="h-8 text-xs text-muted-foreground"
+                                            className="hidden h-8 text-xs text-muted-foreground sm:inline-flex"
                                             disabled={assigning}
                                             onClick={() => handleAssignment('release')}
                                             title="Let a teammate pick this chat up"
@@ -1070,7 +1088,7 @@ export function MessagesView({ conversationId }: { conversationId?: string }) {
                             ) : (
                             <>
                             <AttachmentTray items={pending} onRemove={removeAttachment} />
-                            <form onSubmit={handleSend} className="flex items-end gap-2 px-3 py-3 shrink-0">
+                            <form onSubmit={handleSend} className="flex items-end gap-1.5 md:gap-2 px-2 md:px-3 py-2 md:py-3 shrink-0 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
                                 {recorder.recording ? (
                                     <>
                                         <Button
@@ -1123,7 +1141,7 @@ export function MessagesView({ conversationId }: { conversationId?: string }) {
                                             onPaste={handlePaste}
                                             placeholder={pending.length ? 'Add a caption' : 'Type a message'}
                                             className="min-h-10 max-h-36 overflow-y-auto py-2.5 leading-5"
-                                            autoFocus
+                                            autoFocus={!isMobile}
                                         />
                                     </>
                                 )}
@@ -1159,8 +1177,12 @@ export function MessagesView({ conversationId }: { conversationId?: string }) {
                             key={selected.id}
                             conversation={selected}
                             messages={messages}
-                            onJump={jumpTo}
+                            onJump={(k) => {
+                                if (isMobile) setInfoOpen(false);
+                                jumpTo(k);
+                            }}
                             onClose={() => setInfoOpen(false)}
+                            fullScreen={isMobile}
                         />
                     )}
                 </AnimatePresence>

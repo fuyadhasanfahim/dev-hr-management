@@ -259,7 +259,9 @@ export function ConversationInfoPanel({
     messages,
     onJump,
     onClose,
+    fullScreen = false,
 }: {
+    fullScreen?: boolean;
     conversation: WhatsAppConversation;
     messages: WhatsAppMessage[];
     onJump: (key: string) => void;
@@ -269,14 +271,14 @@ export function ConversationInfoPanel({
 
     return (
         <motion.aside
-            initial={{ width: 0, opacity: 0 }}
-            animate={{ width: 340, opacity: 1 }}
-            exit={{ width: 0, opacity: 0 }}
+            initial={fullScreen ? { x: '100%' } : { width: 0, opacity: 0 }}
+            animate={fullScreen ? { x: 0 } : { width: 340, opacity: 1 }}
+            exit={fullScreen ? { x: '100%' } : { width: 0, opacity: 0 }}
             transition={{ type: 'spring', stiffness: 380, damping: 38 }}
-            className="shrink-0 overflow-hidden border-l bg-sidebar"
+            className={cn('overflow-hidden border-l bg-sidebar', fullScreen ? 'fixed inset-0 z-40 border-l-0' : 'shrink-0')}
             aria-label="Conversation info"
         >
-            <div className="flex h-full w-[340px] flex-col">
+            <div className={cn('flex h-full flex-col', fullScreen ? 'w-full' : 'w-[340px]')}>
                 <div className="flex h-16 shrink-0 items-center justify-between border-b px-4">
                     <p className="text-sm font-semibold">Contact info</p>
                     <Button variant="ghost" size="icon" className="size-8" onClick={onClose} aria-label="Close contact info">
