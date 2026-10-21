@@ -57,7 +57,7 @@ export interface ResolvedPaymentToken {
     currency: string;
 }
 
-function resolveOrderTotals(order: Record<string, any>): { grandTotal: number; currency: string } {
+export function resolveOrderTotals(order: Record<string, any>): { grandTotal: number; currency: string } {
     const snap = order.quotationSnapshot || {};
     // Recompute from the snapshot's own services so a stale/zero `snap.totals`
     // (price left in scopeItems text, a later quotation fix, etc.) doesn't

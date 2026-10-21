@@ -102,6 +102,37 @@ ${data.payUrl ? `<p style="margin:20px 0"><a href="${esc(data.payUrl)}" style="b
     });
 };
 
+interface SendPaymentReminderData {
+    to: string[];
+    clientName: string;
+    orderNumber: string;
+    kind: 'due' | 'recurring';
+    title: string;
+    amountFormatted: string;
+    cycle?: 'monthly' | 'yearly';
+    payUrl?: string;
+}
+
+/** Payment reminder to a client: unpaid order balance (with Pay now link) or a monthly/yearly charge. */
+const sendPaymentReminderEmail = async (data: SendPaymentReminderData) => {
+    const esc = (v: string) => v.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
+    const isDue = data.kind === 'due';
+    const subject = isDue
+        ? `Payment reminder - Order ${data.orderNumber}`
+        : `${data.cycle === 'yearly' ? 'Yearly' : 'Monthly'} payment reminder - ${data.title}`;
+    const line = isDue
+        ? `This is a friendly reminder that <strong>${esc(data.amountFormatted)}</strong> is still due for order <strong>${esc(data.orderNumber)}</strong>.`
+        : `This is a friendly reminder that your ${data.cycle === 'yearly' ? 'yearly' : 'monthly'} charge for <strong>${esc(data.title)}</strong> (order ${esc(data.orderNumber)}) of <strong>${esc(data.amountFormatted)}</strong> is due.`;
+    const html = `<div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;color:#1c1c22;line-height:1.55">
+<h2 style="margin:0 0 12px">Payment reminder</h2>
+<p>Hi ${esc(data.clientName)},</p>
+<p>${line}</p>
+${data.payUrl ? `<p style="margin:20px 0"><a href="${esc(data.payUrl)}" style="background:#4f46e5;color:#fff;padding:11px 22px;border-radius:6px;text-decoration:none;font-weight:600">Pay now</a></p>` : ''}
+<p>If you have already paid, please ignore this email. For any questions, just reply to this email.</p>
+<p style="color:#6b6b76;font-size:13px">WebBriks</p></div>`;
+    return transporter.sendMail({ from: 'Billing | WebBriks', to: data.to, subject, html });
+};
+
 interface SendPinResetData {
     to: string;
     staffName: string;
@@ -696,6 +727,7 @@ export default {
     sendSupportOtpEmail,
     sendConsultationScheduledEmail,
     sendTaskNotificationEmail,
+    sendPaymentReminderEmail,
 };
 
 

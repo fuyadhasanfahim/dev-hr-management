@@ -21,6 +21,7 @@ export const SYSTEM_ROLE_PERMISSIONS: Record<Role, readonly string[]> = {
         'photoOrder.*',
         'quotation.*',
         'receipt.*',
+        'paymentReminder.*',
         'client.*',
         'lead.*',
         'leadSetting.*',

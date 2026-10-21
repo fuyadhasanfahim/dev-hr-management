@@ -15,7 +15,8 @@ const createNotification = async (data: {
         | "shift"
         | "announcement"
         | "earning"
-        | "task";
+        | "task"
+        | "payment";
     priority?: "low" | "medium" | "high" | "urgent";
     resourceType?:
 

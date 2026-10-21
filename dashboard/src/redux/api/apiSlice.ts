@@ -47,6 +47,7 @@ export const apiSlice = createApi({
         "PendingPolicy",
         "Quotation",
         "Receipt",
+        "PaymentReminder",
         "Meeting",
         "Lead",
         "LeadSetting",

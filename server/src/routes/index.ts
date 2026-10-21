@@ -29,6 +29,7 @@ import { policyRoute } from "./policy.route.js";
 import { quotationRoute } from "./quotation.route.js";
 import { photoOrderRoute } from "./photo-order.route.js";
 import { receiptRoute } from "./receipt.route.js";
+import { paymentReminderRoute } from "./payment-reminder.route.js";
 import { paymentRoute } from "./payment.route.js";
 import { earningRoute } from "./earning.route.js";
 import { meetingRoute } from "./meeting.route.js";
@@ -167,6 +168,10 @@ const moduleRoutes = [
         route: photoOrderRoute,
     },
 
+    {
+        path: "/payment-reminders",
+        route: paymentReminderRoute,
+    },
     {
         path: "/receipts",
         route: receiptRoute,

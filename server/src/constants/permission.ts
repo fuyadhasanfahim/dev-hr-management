@@ -60,6 +60,10 @@ export const PERMISSION_GROUPS = {
         label: 'Receipts',
         actions: ['read', 'create', 'update', 'delete'],
     },
+    paymentReminder: {
+        label: 'Payment Reminders',
+        actions: ['read', 'manage'],
+    },
     client: {
         label: 'Clients',
         actions: ['read', 'create', 'update', 'delete'],

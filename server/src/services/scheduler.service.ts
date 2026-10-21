@@ -6,6 +6,7 @@ import StaffModel from '../models/staff.model.js';
 import notificationService from './notification.service.js';
 import analyticsService from './analytics.service.js';
 import meetingService from './meeting.service.js';
+import paymentReminderService from './payment-reminder.service.js';
 import { sendBulkSMS } from '../utils/sms.util.js';
 import ChatSessionModel, { ChatSessionStatus } from '../models/chat-session.model.js';
 import { convertChatToTicket } from './live-chat.service.js';
@@ -571,6 +572,9 @@ function startAllSchedulers() {
         ) {
             processMonthlyFinanceSMSReport().catch(console.error);
         }
+
+        // Client payment reminders (due balance + monthly/yearly) — claims anything whose sendAt has passed
+        paymentReminderService.processDueReminders().catch(console.error);
 
         // Meeting reminders — every minute check
         meetingService.processMeetingReminders().catch(console.error);

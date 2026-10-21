@@ -178,6 +178,13 @@ export const sidebarGroups: SidebarGroup[] = [
                 access: [Role.SUPER_ADMIN, Role.ADMIN, Role.TEAM_LEADER],
             },
             {
+                title: "Payment Reminders",
+                url: "/payment-reminders",
+                permission: 'paymentReminder.read',
+                icon: IconCash,
+                access: [Role.SUPER_ADMIN, Role.ADMIN],
+            },
+            {
                 title: "Meetings",
                 url: "/meetings",
                 permission: 'meeting.read',

@@ -457,6 +457,14 @@ async function transitionStatus(
         note: note || `Status updated to ${newStatus}`,
     });
 
+    // Completed → ask admins when to remind the client about the due balance / recurring charges.
+    if (newStatus === OrderStatus.COMPLETED) {
+        const { default: paymentReminderService } = await import('./payment-reminder.service.js');
+        await paymentReminderService
+            .createForCompletedOrder(orderId)
+            .catch((err: unknown) => logger.error({ err, orderId }, 'payment_reminder.create_failed'));
+    }
+
     // [NEW] Asset Unlocking Side Effect for manual transitions
     // If staff manually moves to delivered/completed, ensure assets are unlocked
     if (newStatus === OrderStatus.DELIVERED || newStatus === OrderStatus.COMPLETED) {

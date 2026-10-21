@@ -12,7 +12,8 @@ export interface INotification {
         | "announcement"
         | "earning"
         | "task"
-        | "support";
+        | "support"
+        | "payment";
     priority: "low" | "medium" | "high" | "urgent";
     resourceType?:
         | "overtime"
@@ -22,7 +23,8 @@ export interface INotification {
         | "shift"
         | "earning"
         | "task"
-        | "support";
+        | "support"
+        | "payment";
     resourceId?: Types.ObjectId;
     actionUrl?: string;
     actionLabel?: string;
@@ -62,6 +64,7 @@ const notificationSchema = new Schema<INotification>(
                 "earning",
                 "task",
                 "support",
+                "payment",
             ],
             required: true,
             index: true,
@@ -82,6 +85,7 @@ const notificationSchema = new Schema<INotification>(
                 "earning",
                 "task",
                 "support",
+                "payment",
             ],
         },
         resourceId: {
