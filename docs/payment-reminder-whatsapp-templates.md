@@ -6,7 +6,7 @@ Category: **Utility**. Language: **English** (code `en`).
 ## 1. Due payment — name: `payment_due_reminder`
 
 ```
-Hello {{1}}, this is a reminder from WebBriks that {{2}} is still due for order {{3}}. You can pay securely here: {{4}}. If you have already paid, please ignore this message.
+Hello {{1}}, this is a reminder from Web Briks that {{2}} is still due for order {{3}}. You can pay securely here: {{4}}. If you have already paid, please ignore this message.
 ```
 
 | Var | Filled with | Sample for Meta |
@@ -29,6 +29,10 @@ Hello {{1}}, your {{2}} payment for {{3}} of {{4}} is due (order {{5}}). If you 
 | {{3}} | charge title | Hostinger VPS KVM1 |
 | {{4}} | amount | BDT 10,500 |
 | {{5}} | order number | ORD-2026-00010 |
+
+## Status
+
+Submitted to Meta under the Web Briks business (number +880 1353-047595) and pending review: `payment_due_reminder`, `recurring_payment_reminder`.
 
 ## Turning it on
 
