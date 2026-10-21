@@ -18,29 +18,29 @@ import { useGetAllShiftsQuery } from "@/redux/features/shift/shiftApi";
 import { useGetStaffsQuery } from "@/redux/features/staff/staffApi";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { IconPlus, IconX } from "@tabler/icons-react";
-import { useState, useMemo, useCallback, useRef } from "react";
+import { useState, useCallback } from "react";
 import { useForm, useWatch, Controller } from "react-hook-form";
 import z from "zod";
 import { DatePicker } from "../shared/DatePicker";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "../ui/select";
+import { Combobox } from "../ui/combobox";
 import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
 import { Badge } from "../ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import IStaff from "@/types/staff.type";
 import { IShift } from "@/types/shift.type";
 import { toast } from "sonner";
 import { useAssignShiftMutation } from "@/redux/features/shiftAssignment/shiftAssignmentApi";
 import { usePermissions } from "@/hooks/use-permissions";
-import { useDebounce } from "@/hooks/use-debounce";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
 import { cn } from "@/lib/utils";
-import { Check, ChevronsUpDown, Loader2, Search, X } from "lucide-react";
+import { ChevronsUpDown, Loader2 } from "lucide-react";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "../ui/command";
 import { Checkbox } from "../ui/checkbox";
 
 const shiftAssignSchema = z.object({
@@ -62,9 +62,6 @@ export default function AssignShift() {
   const { can } = usePermissions();
   const [open, setOpen] = useState(false);
   const [staffSelectOpen, setStaffSelectOpen] = useState(false);
-  const [staffSearchTerm, setStaffSearchTerm] = useState("");
-  const debouncedSearch = useDebounce(staffSearchTerm, 300);
-  const searchInputRef = useRef<HTMLInputElement>(null);
 
   const {
     data: staffsData,
@@ -104,25 +101,6 @@ export default function AssignShift() {
     (isShiftsLoading && !shiftsData);
 
   const canCreate = session && session.user.role !== Role.STAFF;
-
-  const filteredStaffs = useMemo(() => {
-    const allStaffs: IStaff[] = staffsData?.staffs || [];
-    if (!debouncedSearch.trim()) return allStaffs;
-
-    const query = debouncedSearch.toLowerCase();
-    return allStaffs.filter((staff) => {
-      const name = staff.user?.name?.toLowerCase() || "";
-      const sid = staff.staffId?.toLowerCase() || "";
-      const designation = staff.designation?.toLowerCase() || "";
-      const email = staff.user?.email?.toLowerCase() || "";
-      return (
-        name.includes(query) ||
-        sid.includes(query) ||
-        designation.includes(query) ||
-        email.includes(query)
-      );
-    });
-  }, [staffsData?.staffs, debouncedSearch]);
 
   const getStaffById = useCallback(
     (id: string): IStaff | undefined => {
@@ -167,7 +145,6 @@ export default function AssignShift() {
       open={open}
       onOpenChange={(isOpen) => {
         if (!isOpen) {
-          setStaffSearchTerm("");
           form.reset();
         }
         setOpen(isOpen);
@@ -201,27 +178,23 @@ export default function AssignShift() {
               {/* Shift Selection */}
               <div className="grid gap-3">
                 <Label className="font-semibold">Shift Selection *</Label>
-                <Select
+                <Combobox
                   value={shiftId}
-                  onValueChange={(v) => form.setValue("shiftId", v)}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select shift" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {shiftsData?.shifts
-                      ?.filter((s: IShift) => s.isActive)
-                      .map((shift: IShift) => (
-                        <SelectItem
-                          key={shift._id}
-                          value={shift._id}
-                          className="font-medium"
-                        >
-                          {shift.name} ({shift.startTime} - {shift.endTime})
-                        </SelectItem>
-                      ))}
-                  </SelectContent>
-                </Select>
+                  onChange={(v) =>
+                    form.setValue("shiftId", v, { shouldValidate: true })
+                  }
+                  isLoading={isShiftsLoading}
+                  placeholder="Select shift"
+                  searchPlaceholder="Search shift..."
+                  emptyText="No shift found."
+                  options={(shiftsData?.shifts || [])
+                    .filter((s: IShift) => s.isActive)
+                    .map((shift: IShift) => ({
+                      value: shift._id,
+                      label: shift.name,
+                      description: `${shift.startTime} - ${shift.endTime}`,
+                    }))}
+                />
                 {form.formState.errors.shiftId && (
                   <p className="text-sm text-destructive font-medium">
                     {form.formState.errors.shiftId.message}
@@ -264,19 +237,13 @@ export default function AssignShift() {
 
                     return (
                       <div className="space-y-3">
-                        <Popover
-                          open={staffSelectOpen}
-                          onOpenChange={(isOpen) => {
-                            setStaffSelectOpen(isOpen);
-                            if (!isOpen) setStaffSearchTerm("");
-                          }}
-                        >
+                        <Popover open={staffSelectOpen} onOpenChange={setStaffSelectOpen} modal>
                           <PopoverTrigger asChild>
                             <Button
                               variant="outline"
                               role="combobox"
                               aria-expanded={staffSelectOpen}
-                              className="w-full justify-between h-10 text-left font-normal border-muted-foreground/30"
+                              className="w-full justify-between h-10 text-left font-normal"
                             >
                               <span
                                 className={cn(
@@ -289,112 +256,57 @@ export default function AssignShift() {
                                   ? "Select staff members..."
                                   : `${field.value.length} staff selected`}
                               </span>
-                              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                              {isStaffsLoading ? (
+                                <Loader2 className="ml-2 h-4 w-4 shrink-0 animate-spin opacity-50" />
+                              ) : (
+                                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                              )}
                             </Button>
                           </PopoverTrigger>
 
                           <PopoverContent
-                            className="p-0 border-none shadow-xl"
+                            className="w-[var(--radix-popover-trigger-width)] p-0"
                             align="start"
-                            style={{
-                              width: "var(--radix-popover-trigger-width)",
-                            }}
                           >
-                            <div className="flex items-center gap-2 border-b px-3 py-2 bg-muted/30">
-                              <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
-                              <input
-                                ref={searchInputRef}
-                                type="text"
-                                className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground py-1"
-                                placeholder="Search name, ID, or designation..."
-                                value={staffSearchTerm}
-                                onChange={(e) =>
-                                  setStaffSearchTerm(e.target.value)
-                                }
-                              />
-                              {staffSearchTerm && (
-                                <button
-                                  type="button"
-                                  onClick={() => setStaffSearchTerm("")}
-                                  className="text-muted-foreground hover:text-foreground transition-colors"
-                                >
-                                  <X className="h-3.5 w-3.5" />
-                                </button>
-                              )}
-                            </div>
-
-                            <ScrollArea className="h-72 w-full p-1 bg-background border-t">
-                              {isStaffsLoading ? (
-                                <div className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground">
-                                  <Loader2 className="h-4 w-4 animate-spin" />
-                                  Loading staff...
-                                </div>
-                              ) : filteredStaffs.length === 0 ? (
-                                <div className="py-8 text-center text-sm text-muted-foreground">
-                                  {debouncedSearch
-                                    ? `No results for "${debouncedSearch}"`
-                                    : "No staff available"}
-                                </div>
-                              ) : (
-                                <>
-                                  {!debouncedSearch && (
-                                    <div
-                                      role="button"
-                                      tabIndex={0}
-                                      onClick={toggleAll}
-                                      onKeyDown={(e) => {
-                                        if (
-                                          e.key === "Enter" ||
-                                          e.key === " "
-                                        ) {
-                                          e.preventDefault();
-                                          toggleAll();
-                                        }
-                                      }}
-                                      className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm hover:bg-accent transition-all mb-1 cursor-pointer"
-                                    >
-                                      <Checkbox
-                                        checked={isAllSelected}
-                                        className="rounded-sm pointer-events-none"
-                                      />
-                                      <span className="font-semibold">
-                                        Select All
-                                      </span>
-                                      <span className="ml-auto text-[10px] bg-muted px-1.5 py-0.5 rounded-full font-bold">
-                                        {allStaffIds.length}
-                                      </span>
-                                    </div>
-                                  )}
-
-                                  {filteredStaffs.map((staff) => {
-                                    const isSelected = field.value.includes(
-                                      staff._id,
-                                    );
-                                    return (
-                                      <div
+                            <Command>
+                              <CommandInput placeholder="Search name, ID, or designation..." />
+                              <CommandList className="max-h-72">
+                                <CommandEmpty>No staff found.</CommandEmpty>
+                                <CommandGroup>
+                                  <CommandItem
+                                    value="__select_all__"
+                                    keywords={["select all"]}
+                                    onSelect={toggleAll}
+                                  >
+                                    <Checkbox
+                                      checked={isAllSelected}
+                                      className="pointer-events-none"
+                                    />
+                                    <span className="font-semibold">
+                                      Select All
+                                    </span>
+                                    <span className="ml-auto text-[10px] bg-muted px-1.5 py-0.5 rounded-full font-bold">
+                                      {allStaffIds.length}
+                                    </span>
+                                  </CommandItem>
+                                  {(staffsData?.staffs || []).map(
+                                    (staff: IStaff) => (
+                                      <CommandItem
                                         key={staff._id}
-                                        role="button"
-                                        tabIndex={0}
-                                        onClick={() => toggleStaff(staff._id)}
-                                        onKeyDown={(e) => {
-                                          if (
-                                            e.key === "Enter" ||
-                                            e.key === " "
-                                          ) {
-                                            e.preventDefault();
-                                            toggleStaff(staff._id);
-                                          }
-                                        }}
-                                        className={cn(
-                                          "flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm transition-all mb-0.5 cursor-pointer",
-                                          isSelected
-                                            ? "bg-primary/5 text-primary!"
-                                            : "hover:bg-accent",
-                                        )}
+                                        value={staff._id}
+                                        keywords={[
+                                          staff.user?.name || "",
+                                          staff.staffId || "",
+                                          staff.designation || "",
+                                          staff.user?.email || "",
+                                        ]}
+                                        onSelect={() => toggleStaff(staff._id)}
                                       >
                                         <Checkbox
-                                          checked={isSelected}
-                                          className="rounded-sm pointer-events-none"
+                                          checked={field.value.includes(
+                                            staff._id,
+                                          )}
+                                          className="pointer-events-none"
                                         />
                                         <Avatar className="h-8 w-8 border border-muted">
                                           <AvatarImage
@@ -406,7 +318,7 @@ export default function AssignShift() {
                                             )}
                                           </AvatarFallback>
                                         </Avatar>
-                                        <div className="flex flex-col items-start min-w-0 overflow-hidden">
+                                        <div className="flex flex-col min-w-0">
                                           <span className="truncate font-medium leading-none mb-1">
                                             {staff.user?.name}
                                           </span>
@@ -415,15 +327,12 @@ export default function AssignShift() {
                                             {staff.designation}
                                           </span>
                                         </div>
-                                        {isSelected && (
-                                          <Check className="ml-auto h-4 w-4 text-primary shrink-0" />
-                                        )}
-                                      </div>
-                                    );
-                                  })}
-                                </>
-                              )}
-                            </ScrollArea>
+                                      </CommandItem>
+                                    ),
+                                  )}
+                                </CommandGroup>
+                              </CommandList>
+                            </Command>
                           </PopoverContent>
                         </Popover>
 
