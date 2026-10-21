@@ -5,6 +5,7 @@ import { FloatingNoticePopup } from '@/components/notice/FloatingNoticePopup';
 import { ProfileCompletionDialog } from '@/components/account/profile-completion-dialog';
 import { SupportLive } from '@/components/support/support-live';
 import { ReminderPromptDialog } from '@/components/payment-reminders/reminder-prompt-dialog';
+import { ReminderHeadsUpDialog } from '@/components/payment-reminders/reminder-heads-up-dialog';
 
 export default function Layout({ children }: { children: React.ReactNode }) {
     return (
@@ -29,6 +30,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <ProfileCompletionDialog />
             <SupportLive />
             <ReminderPromptDialog />
+            <ReminderHeadsUpDialog />
         </SidebarProvider>
     );
 }

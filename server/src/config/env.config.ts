@@ -152,6 +152,10 @@ const envConfig = {
     meta_webhook_verify_token: process.env.META_WEBHOOK_VERIFY_TOKEN || '',
     meta_access_token: process.env.META_ACCESS_TOKEN || '',
     whatsapp_phone_number_id: process.env.WHATSAPP_PHONE_NUMBER_ID || '',
+    /** Approved Meta template names for client payment reminders. Unset → that WhatsApp reminder is skipped. */
+    wa_template_payment_due: process.env.WA_TEMPLATE_PAYMENT_DUE || '',
+    wa_template_payment_recurring: process.env.WA_TEMPLATE_PAYMENT_RECURRING || '',
+    wa_template_language: process.env.WA_TEMPLATE_LANGUAGE || 'en',
 
     // OpenAI — WhatsApp AI auto-reply (phase 2)
     openai_api_key: process.env.OPENAI_API_KEY || '',

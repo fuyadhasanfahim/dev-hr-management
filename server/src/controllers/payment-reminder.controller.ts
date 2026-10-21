@@ -39,11 +39,20 @@ const action = wrap(async (req, res) => {
         res.status(404).json({ success: false, message: 'Unknown action' });
         return;
     }
-    res.json({ success: true, data: await PaymentReminderService.act(id(req), a) });
+    res.json({ success: true, data: await PaymentReminderService.act(id(req), a, req.body || {}) });
+});
+
+const headsUp = wrap(async (_req, res) => {
+    res.json({ success: true, data: await PaymentReminderService.headsUp() });
+});
+
+const headsUpSeen = wrap(async (req, res) => {
+    await PaymentReminderService.markHeadsUpSeen((req.body?.ids as string[]) || []);
+    res.json({ success: true });
 });
 
 const sync = wrap(async (_req, res) => {
     res.json({ success: true, data: { created: await PaymentReminderService.syncCompletedOrders() } });
 });
 
-export default { list, pending, prompted, scheduleMany, reschedule, action, sync };
+export default { list, pending, prompted, headsUp, headsUpSeen, scheduleMany, reschedule, action, sync };

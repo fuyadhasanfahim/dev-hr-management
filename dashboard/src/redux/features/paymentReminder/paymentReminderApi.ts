@@ -25,6 +25,7 @@ export interface IPaymentReminder {
   dueDate?: string;
   lastPaidAt?: string;
   paidCount?: number;
+  lastChannels?: string[];
   lastSentAt?: string;
   sentCount: number;
   lastError?: string;
@@ -34,6 +35,13 @@ export interface ScheduleItem {
   id: string;
   option: ScheduleOption;
   date?: string;
+}
+
+export interface PaidDetails {
+  amount?: number;
+  paidAt?: string;
+  method?: string;
+  note?: string;
 }
 
 export type ReminderAction =
@@ -81,13 +89,27 @@ export const paymentReminderApi = apiSlice.injectEndpoints({
       }),
       invalidatesTags: ["PaymentReminder"],
     }),
+    getHeadsUp: builder.query<IPaymentReminder[], void>({
+      query: () => "/payment-reminders/heads-up",
+      transformResponse: unwrap<IPaymentReminder[]>,
+      providesTags: ["PaymentReminder"],
+    }),
+    // No invalidation, same reason as markRemindersPrompted.
+    markHeadsUpSeen: builder.mutation<void, string[]>({
+      query: (ids) => ({
+        url: "/payment-reminders/heads-up/seen",
+        method: "POST",
+        body: { ids },
+      }),
+    }),
     reminderAction: builder.mutation<
       void,
-      { id: string; action: ReminderAction }
+      { id: string; action: ReminderAction; body?: PaidDetails }
     >({
-      query: ({ id, action }) => ({
+      query: ({ id, action, body }) => ({
         url: `/payment-reminders/${id}/${action}`,
         method: "POST",
+        ...(body ? { body } : {}),
       }),
       invalidatesTags: ["PaymentReminder"],
     }),
@@ -102,6 +124,8 @@ export const paymentReminderApi = apiSlice.injectEndpoints({
 export const {
   useGetRemindersQuery,
   useGetPendingRemindersQuery,
+  useGetHeadsUpQuery,
+  useMarkHeadsUpSeenMutation,
   useMarkRemindersPromptedMutation,
   useScheduleRemindersMutation,
   useRescheduleReminderMutation,

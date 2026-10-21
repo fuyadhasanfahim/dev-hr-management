@@ -41,6 +41,27 @@ export async function sendTextMessage(to: string, body: string): Promise<string>
     return data.messages?.[0]?.id;
 }
 
+/**
+ * Sends an approved template message (the only kind WhatsApp allows outside the 24h window).
+ * `params` fill the template body's {{1}}, {{2}}… in order.
+ */
+export async function sendTemplateMessage(to: string, name: string, language: string, params: string[]): Promise<string> {
+    const data = await graphPost(
+        messagesPath(),
+        {
+            ...target(to),
+            type: 'template',
+            template: {
+                name,
+                language: { code: language },
+                components: [{ type: 'body', parameters: params.map((text) => ({ type: 'text', text })) }],
+            },
+        },
+        'template send',
+    );
+    return data.messages?.[0]?.id;
+}
+
 export type OutboundMediaType = 'image' | 'video' | 'audio' | 'document' | 'sticker';
 
 /**
@@ -107,6 +128,7 @@ export async function markMessageRead(whatsappMsgId: string): Promise<void> {
 
 export default {
     sendTextMessage,
+    sendTemplateMessage,
     sendMediaMessage,
     uploadMedia,
     downloadMedia,

@@ -11,6 +11,7 @@ import { attachReceiptLedger } from './invoice-puppeteer-pdf.service.js';
 import { PaymentService, resolveOrderTotals } from './payment.service.js';
 import notificationService from './notification.service.js';
 import emailService from './email.service.js';
+import whatsappService from './whatsapp.service.js';
 import envConfig from '../config/env.config.js';
 import { logger } from '../lib/logger.js';
 
@@ -126,8 +127,21 @@ async function notifyAdmins(row: { orderNumber: string; clientName: string; amou
     }
 }
 
-/** Sends the reminder email now. Does not touch the schedule. */
-async function sendEmail(r: IPaymentReminder): Promise<{ amount: number; paid: boolean }> {
+/** Bangladeshi numbers (01XXXXXXXXX) → 8801XXXXXXXXX; anything else is passed through as digits. */
+export function toWhatsAppNumber(raw?: string | null): string | null {
+    const digits = String(raw ?? '').replace(/\D/g, '');
+    if (digits.length < 8) return null;
+    if (digits.startsWith('880')) return digits;
+    if (digits.startsWith('0') && digits.length === 11) return `88${digits}`;
+    return digits;
+}
+
+/**
+ * Sends the reminder now on every channel that is available: email (client's addresses) and
+ * WhatsApp (client's phone, only when an approved template is configured). Succeeds if at least
+ * one channel did; throws only when none could. Does not touch the schedule.
+ */
+async function deliver(r: IPaymentReminder): Promise<{ amount: number; paid: boolean; channels: string[]; warning?: string }> {
     const order = await OrderModel.findById(r.orderId).lean();
     if (!order) throw new AppError('Order not found', 404);
 
@@ -135,27 +149,57 @@ async function sendEmail(r: IPaymentReminder): Promise<{ amount: number; paid: b
     let payUrl: string | undefined;
     if (r.kind === 'due') {
         amount = (await getOrderDue(order)).balanceDue;
-        if (amount <= EPS) return { amount: 0, paid: true };
+        if (amount <= EPS) return { amount: 0, paid: true, channels: [] };
         const issued = await PaymentService.issueTokenForOrder(String(r.orderId));
         const portal = envConfig.payment_client_url.replace(/\/+$/, '');
         if (issued && portal) payUrl = `${portal}/payment/${encodeURIComponent(issued.token)}`;
     }
+    const amountFormatted = `${r.currency} ${amount.toLocaleString()}`;
 
-    const client: any = await ClientModel.findById(r.clientId).select('emails').lean();
+    const client: any = await ClientModel.findById(r.clientId).select('emails phone').lean();
     const to: string[] = client?.emails?.filter(Boolean) ?? [];
-    if (!to.length) throw new AppError('Client has no email address', 422);
+    const channels: string[] = [];
+    const problems: string[] = [];
 
-    await emailService.sendPaymentReminderEmail({
-        to,
-        clientName: r.clientName,
-        orderNumber: r.orderNumber,
-        kind: r.kind,
-        title: r.title,
-        amountFormatted: `${r.currency} ${amount.toLocaleString()}`,
-        ...(r.cycle ? { cycle: r.cycle } : {}),
-        ...(payUrl ? { payUrl } : {}),
-    });
-    return { amount, paid: false };
+    if (to.length) {
+        try {
+            await emailService.sendPaymentReminderEmail({
+                to,
+                clientName: r.clientName,
+                orderNumber: r.orderNumber,
+                kind: r.kind,
+                title: r.title,
+                amountFormatted,
+                ...(r.cycle ? { cycle: r.cycle } : {}),
+                ...(payUrl ? { payUrl } : {}),
+            });
+            channels.push('email');
+        } catch (e: any) {
+            problems.push(`Email: ${e?.message || 'failed'}`);
+        }
+    } else {
+        problems.push('Email: client has no email address');
+    }
+
+    const template = r.kind === 'due' ? envConfig.wa_template_payment_due : envConfig.wa_template_payment_recurring;
+    const phone = toWhatsAppNumber(client?.phone);
+    if (template && phone) {
+        // Template bodies: due → {{1}} name {{2}} amount {{3}} order {{4}} pay link
+        //                  recurring → {{1}} name {{2}} cycle {{3}} charge {{4}} amount {{5}} order
+        const params =
+            r.kind === 'due'
+                ? [r.clientName, amountFormatted, r.orderNumber, payUrl || 'please contact us']
+                : [r.clientName, r.cycle === 'yearly' ? 'yearly' : 'monthly', r.title, amountFormatted, r.orderNumber];
+        try {
+            await whatsappService.sendTemplateMessage(phone, template, envConfig.wa_template_language, params);
+            channels.push('whatsapp');
+        } catch (e: any) {
+            problems.push(`WhatsApp: ${e?.message || 'failed'}`);
+        }
+    }
+
+    if (!channels.length) throw new AppError(problems.join(' · ') || 'No channel available', 422);
+    return { amount, paid: false, channels, ...(problems.length ? { warning: problems.join(' · ') } : {}) };
 }
 
 /** Cron entry: claims every due reminder (lease-style, so overlapping ticks can't double-send) and emails it. */
@@ -187,7 +231,7 @@ async function runDueReminders(): Promise<void> {
                     await PaymentReminderModel.updateOne({ _id: doc._id }, { $set: { sendAt: new Date(Date.now() + DAY) } });
                     continue;
                 }
-                const { amount, paid } = await sendEmail(doc);
+                const { amount, paid, channels, warning } = await deliver(doc);
                 if (paid) {
                     await PaymentReminderModel.updateOne({ _id: doc._id }, { $set: { status: 'done' } });
                     continue;
@@ -197,7 +241,11 @@ async function runDueReminders(): Promise<void> {
                 const next = atSendHour(new Date(Date.now() + DUE_REPEAT_DAYS * DAY));
                 await PaymentReminderModel.updateOne(
                     { _id: doc._id },
-                    { $set: { sendAt: next, amount, lastSentAt: new Date() }, $unset: { lastError: '' }, $inc: { sentCount: 1 } },
+                    {
+                        $set: { sendAt: next, amount, lastSentAt: new Date(), lastChannels: channels, ...(warning ? { lastError: warning } : {}) },
+                        ...(warning ? {} : { $unset: { lastError: '' } }),
+                        $inc: { sentCount: 1 },
+                    },
                 );
             } catch (err: any) {
                 logger.error({ err, id: String(doc._id) }, 'payment_reminder.send_failed');
@@ -237,6 +285,22 @@ async function pending() {
         .lean();
 }
 
+/** Reminders going out within ~a day that the admin has not been warned about today — a last chance to catch a payment nobody recorded. */
+async function headsUp() {
+    const now = new Date();
+    return PaymentReminderModel.find({
+        status: 'scheduled',
+        sendAt: { $gt: now, $lte: new Date(now.getTime() + 30 * 60 * 60 * 1000) },
+        $or: [{ headsUpAt: { $exists: false } }, { headsUpAt: { $lt: getBDStartOfDay() } }],
+    })
+        .sort({ sendAt: 1 })
+        .lean();
+}
+
+async function markHeadsUpSeen(ids: string[]) {
+    await PaymentReminderModel.updateMany({ _id: { $in: ids } }, { $set: { headsUpAt: new Date() } });
+}
+
 async function markPrompted(ids: string[]) {
     await PaymentReminderModel.updateMany({ _id: { $in: ids }, status: 'awaiting_decision' }, { $set: { lastPromptedAt: new Date() } });
 }
@@ -254,7 +318,14 @@ async function schedule(id: string, option: ScheduleOption, date?: string) {
     return doc;
 }
 
-async function act(id: string, action: 'pause' | 'resume' | 'cancel' | 'send-now' | 'mark-paid') {
+export interface PaidDetails {
+    amount?: number;
+    paidAt?: string;
+    method?: string;
+    note?: string;
+}
+
+async function act(id: string, action: 'pause' | 'resume' | 'cancel' | 'send-now' | 'mark-paid', paid: PaidDetails = {}) {
     const doc = await PaymentReminderModel.findById(id);
     if (!doc || doc.status === 'done') throw new AppError('Reminder not found', 404);
     if (action === 'mark-paid') {
@@ -262,17 +333,28 @@ async function act(id: string, action: 'pause' | 'resume' | 'cancel' | 'send-now
         if (doc.kind !== 'recurring' || !doc.cycle || !doc.dueDate) {
             throw new AppError('Only a scheduled recurring charge can be marked paid', 409);
         }
-        doc.payments.push({ paidAt: new Date(), dueDate: doc.dueDate, amount: doc.amount });
+        const amount = paid.amount === undefined ? doc.amount : Number(paid.amount);
+        if (!Number.isFinite(amount) || amount <= 0) throw new AppError('Enter a valid amount', 400);
+        const paidAt = paid.paidAt ? new Date(paid.paidAt) : new Date();
+        if (Number.isNaN(paidAt.getTime()) || paidAt.getTime() > Date.now() + DAY) throw new AppError('Enter a valid payment date', 400);
+        doc.payments.push({
+            paidAt,
+            dueDate: doc.dueDate,
+            amount,
+            ...(paid.method ? { method: paid.method } : {}),
+            ...(paid.note ? { note: paid.note } : {}),
+        });
         doc.paidCount += 1;
-        doc.lastPaidAt = new Date();
+        doc.lastPaidAt = paidAt;
         doc.dueDate = addCycle(doc.dueDate, doc.cycle);
         if (doc.status === 'scheduled') doc.sendAt = atSendHour(doc.dueDate); // next cycle's reminder
     } else if (action === 'send-now') {
-        const { paid } = await sendEmail(doc);
+        const { paid, channels } = await deliver(doc);
         if (paid) doc.status = 'done';
         else {
             doc.lastSentAt = new Date();
             doc.sentCount += 1;
+            doc.lastChannels = channels;
         }
     } else if (action === 'pause') {
         if (doc.status !== 'scheduled') throw new AppError('Only scheduled reminders can be paused', 409);
@@ -296,4 +378,4 @@ async function syncCompletedOrders(): Promise<number> {
     return created;
 }
 
-export default { createForCompletedOrder, processDueReminders, list, pending, markPrompted, schedule, act, syncCompletedOrders };
+export default { createForCompletedOrder, processDueReminders, list, pending, markPrompted, headsUp, markHeadsUpSeen, schedule, act, syncCompletedOrders };

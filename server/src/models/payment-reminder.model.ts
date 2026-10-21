@@ -30,7 +30,11 @@ export interface IPaymentReminder extends Document {
     dueDate?: Date;
     lastPaidAt?: Date;
     paidCount: number;
-    payments: Array<{ paidAt: Date; dueDate: Date; amount: number }>;
+    payments: Array<{ paidAt: Date; dueDate: Date; amount: number; method?: string; note?: string }>;
+    /** Last time the pre-send "heads-up" dialog listed this row (limits it to once a day). */
+    headsUpAt?: Date;
+    /** Channels the last reminder actually went out on. */
+    lastChannels: string[];
     lastSentAt?: Date;
     sentCount: number;
     lastError?: string;
@@ -63,13 +67,15 @@ const paymentReminderSchema = new Schema<IPaymentReminder>(
         lastPaidAt: { type: Date },
         paidCount: { type: Number, default: 0 },
         payments: {
-            type: [{ paidAt: Date, dueDate: Date, amount: Number, _id: false }],
+            type: [{ paidAt: Date, dueDate: Date, amount: Number, method: String, note: String, _id: false }],
             default: [],
         },
         lastSentAt: { type: Date },
         sentCount: { type: Number, default: 0 },
         lastError: { type: String },
         lastPromptedAt: { type: Date },
+        headsUpAt: { type: Date },
+        lastChannels: { type: [String], default: [] },
     },
     { timestamps: true },
 );

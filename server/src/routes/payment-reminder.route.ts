@@ -6,6 +6,8 @@ const router: Router = Router();
 
 router.get('/', requirePermission('paymentReminder.read'), Ctrl.list);
 router.get('/pending', requirePermission('paymentReminder.manage'), Ctrl.pending);
+router.get('/heads-up', requirePermission('paymentReminder.manage'), Ctrl.headsUp);
+router.post('/heads-up/seen', requirePermission('paymentReminder.manage'), Ctrl.headsUpSeen);
 router.post('/prompted', requirePermission('paymentReminder.manage'), Ctrl.prompted);
 router.post('/schedule', requirePermission('paymentReminder.manage'), Ctrl.scheduleMany);
 router.post('/sync', requirePermission('paymentReminder.manage'), Ctrl.sync);

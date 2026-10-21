@@ -18,14 +18,17 @@ let Svc: typeof import('../payment-reminder.service.js').default;
 let Reminder: typeof import('../../models/payment-reminder.model.js').default;
 let Order: typeof import('../../models/order.model.js').default;
 let Notification: any;
+let envConfig: any;
+let wa: any;
+const waSent: any[] = [];
 
 const oid = () => new (mongoose.Types.ObjectId)();
 const BD10 = (d: Date) => new Date(new Date(`${d.toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' })}T10:00:00+06:00`));
 
-async function seedOrder(opts: { status?: string; paid?: number; total?: number; emails?: string[]; recurring?: any[]; n: string }) {
+async function seedOrder(opts: { status?: string; paid?: number; total?: number; emails?: string[]; phone?: string; recurring?: any[]; n: string }) {
     const clientId = oid();
     const groupId = `g-${opts.n}`;
-    await mongoose.connection.collection('clients').insertOne({ _id: clientId, name: `Client ${opts.n}`, emails: opts.emails ?? [`c${opts.n}@x.test`] });
+    await mongoose.connection.collection('clients').insertOne({ _id: clientId, name: `Client ${opts.n}`, emails: opts.emails ?? [`c${opts.n}@x.test`], ...(opts.phone ? { phone: opts.phone } : {}) });
     const orderId = oid();
     await mongoose.connection.collection('orders').insertOne({
         _id: orderId,
@@ -55,6 +58,9 @@ before(async () => {
     await mongoose.connect(URI!);
     const email = (await import('../email.service.js')).default as any;
     email.sendPaymentReminderEmail = async (d: unknown) => void sent.push(d);
+    envConfig = (await import('../../config/env.config.js')).default;
+    wa = (await import('../whatsapp.service.js')).default;
+    wa.sendTemplateMessage = async (...a: unknown[]) => void waSent.push(a);
     Svc = (await import('../payment-reminder.service.js')).default;
     Reminder = (await import('../../models/payment-reminder.model.js')).default;
     Order = (await import('../../models/order.model.js')).default;
@@ -247,4 +253,89 @@ test('send-now leaves the schedule alone; sync backfills without duplicates', { 
     assert.equal(sent.length, 1);
     assert.equal((await Reminder.findById(id))!.sendAt!.getTime(), at);
     assert.equal(await Svc.syncCompletedOrders(), 0);
+});
+
+test('mark-paid records details, validates amount and date', { skip }, async () => {
+    const { orderId } = await seedOrder({ n: '13', recurring: [{ title: 'Host', price: 2000, billingCycle: 'yearly' }] });
+    await Svc.createForCompletedOrder(orderId);
+    const id = String((await find(orderId, 'recurring', 'Host'))._id);
+    await Svc.schedule(id, '7d');
+    await assert.rejects(Svc.act(id, 'mark-paid', { amount: -5 }), /amount/i);
+    await assert.rejects(Svc.act(id, 'mark-paid', { paidAt: '2999-01-01' }), /date/i);
+    await Svc.act(id, 'mark-paid', { amount: 1800, method: 'bkash', note: 'TrxID 9X', paidAt: '2026-10-01' });
+    const r = (await Reminder.findById(id))!;
+    assert.equal(r.payments[0]!.amount, 1800);
+    assert.equal(r.payments[0]!.method, 'bkash');
+    assert.equal(r.lastPaidAt!.toISOString().slice(0, 10), '2026-10-01');
+});
+
+test('heads-up lists reminders going out within ~a day, once per day', { skip }, async () => {
+    const mk = async (n: string) => {
+        const { orderId } = await seedOrder({ n });
+        await Svc.createForCompletedOrder(orderId);
+        return String((await find(orderId, 'due'))._id);
+    };
+    const soon = await mk('14'), far = await mk('15'), held = await mk('16');
+    await Svc.schedule(soon, '7d'); await Svc.schedule(far, '7d'); await Svc.schedule(held, '7d');
+    await Reminder.updateOne({ _id: soon }, { $set: { sendAt: new Date(Date.now() + 5 * 36e5) } });
+    await Reminder.updateOne({ _id: held }, { $set: { sendAt: new Date(Date.now() + 5 * 36e5) } });
+    await Svc.act(held, 'pause');
+    const ids = (await Svc.headsUp()).map((r) => String(r._id));
+    assert.ok(ids.includes(soon));
+    assert.ok(!ids.includes(far), 'a week away is not listed');
+    assert.ok(!ids.includes(held), 'paused is not listed');
+    await Svc.markHeadsUpSeen([soon]);
+    assert.ok(!(await Svc.headsUp()).some((r) => String(r._id) === soon), 'not shown twice in a day');
+});
+
+test('whatsapp: skipped without a template; sent with one; email-less client reachable', { skip }, async () => {
+    const { toWhatsAppNumber } = await import('../payment-reminder.service.js');
+    assert.equal(toWhatsAppNumber('01712-345678'), '8801712345678');
+    assert.equal(toWhatsAppNumber('+880 1712 345678'), '8801712345678');
+    assert.equal(toWhatsAppNumber('+39 333 1234567'), '393331234567');
+    assert.equal(toWhatsAppNumber('123'), null);
+
+    const { orderId } = await seedOrder({ n: '17', phone: '01712345678' });
+    await Svc.createForCompletedOrder(orderId);
+    const id = String((await find(orderId, 'due'))._id);
+
+    waSent.length = 0; sent.length = 0; envConfig.wa_template_payment_due = '';
+    await Svc.act(id, 'send-now');
+    assert.equal(waSent.length, 0, 'no template → no WhatsApp');
+    assert.deepEqual((await Reminder.findById(id))!.lastChannels, ['email']);
+
+    envConfig.wa_template_payment_due = 'payment_due_reminder';
+    await Svc.act(id, 'send-now');
+    assert.equal(waSent.length, 1);
+    const [to, name, lang, params] = waSent[0];
+    assert.equal(to, '8801712345678');
+    assert.equal(name, 'payment_due_reminder');
+    assert.equal(lang, 'en');
+    assert.equal(params.length, 4);
+    assert.match(params[1], /60,000/);
+    assert.match(params[3], /^https:\/\/pay\.test\/payment\//);
+    assert.deepEqual((await Reminder.findById(id))!.lastChannels, ['email', 'whatsapp']);
+
+    // WhatsApp failing must not lose the email
+    wa.sendTemplateMessage = async () => { throw new Error('template not approved'); };
+    await Svc.schedule(id, 'instant');
+    await Svc.processDueReminders();
+    let r = (await Reminder.findById(id))!;
+    assert.deepEqual(r.lastChannels, ['email']);
+    assert.match(r.lastError!, /WhatsApp: template not approved/);
+
+    // client with only a phone
+    wa.sendTemplateMessage = async (...a: unknown[]) => void waSent.push(a);
+    const o2 = await seedOrder({ n: '18', emails: [], phone: '01812345678' });
+    await Svc.createForCompletedOrder(o2.orderId);
+    const id2 = String((await find(o2.orderId, 'due'))._id);
+    waSent.length = 0;
+    await Svc.act(id2, 'send-now');
+    assert.deepEqual((await Reminder.findById(id2))!.lastChannels, ['whatsapp']);
+
+    // no channel at all → clear error
+    const o3 = await seedOrder({ n: '19', emails: [] });
+    await Svc.createForCompletedOrder(o3.orderId);
+    await assert.rejects(Svc.act(String((await find(o3.orderId, 'due'))._id), 'send-now'), /no email/i);
+    envConfig.wa_template_payment_due = '';
 });

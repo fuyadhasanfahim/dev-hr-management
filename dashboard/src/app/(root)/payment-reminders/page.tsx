@@ -47,6 +47,7 @@ import {
   type ReminderKind,
   type ReminderStatus,
 } from "@/redux/features/paymentReminder/paymentReminderApi";
+import { MarkPaidDialog } from "@/components/payment-reminders/mark-paid-dialog";
 import {
   SchedulePicker,
   toScheduleItem,
@@ -103,6 +104,7 @@ function Row({ r, canManage }: { r: IPaymentReminder; canManage: boolean }) {
   const [act, { isLoading }] = useReminderActionMutation();
   const [reschedule] = useRescheduleReminderMutation();
   const [choice, setChoice] = useState<ScheduleChoice>();
+  const [paidOpen, setPaidOpen] = useState(false);
   const live = r.status !== "done";
 
   const run = (action: ReminderAction, ok: string) =>
@@ -163,7 +165,7 @@ function Row({ r, canManage }: { r: IPaymentReminder; canManage: boolean }) {
           {r.status === "scheduled" && r.sendAt
             ? format(new Date(r.sendAt), "dd MMM yyyy")
             : r.lastSentAt
-              ? `Last sent ${format(new Date(r.lastSentAt), "dd MMM")}`
+              ? `Last sent ${format(new Date(r.lastSentAt), "dd MMM")}${r.lastChannels?.length ? ` · ${r.lastChannels.join(", ")}` : ""}`
               : ""}
         </div>
       </TableCell>
@@ -192,7 +194,7 @@ function Row({ r, canManage }: { r: IPaymentReminder; canManage: boolean }) {
               <IconAction
                 label="Mark this cycle paid"
                 disabled={isLoading}
-                onClick={() => run("mark-paid", "Marked paid. Next cycle scheduled")}
+                onClick={() => setPaidOpen(true)}
               >
                 <CheckCircle2 className="size-4" />
               </IconAction>
@@ -234,6 +236,9 @@ function Row({ r, canManage }: { r: IPaymentReminder; canManage: boolean }) {
               </IconAction>
             )}
           </div>
+        )}
+        {paidOpen && (
+          <MarkPaidDialog reminder={r} open onOpenChange={setPaidOpen} />
         )}
       </TableCell>
     </TableRow>
