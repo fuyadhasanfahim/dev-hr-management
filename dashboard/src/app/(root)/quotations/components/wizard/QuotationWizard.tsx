@@ -72,6 +72,7 @@ import { FEATURE_PROMPT, depthOf, blockEnd, fixDepths, parseFeatureTree, Tip, Ic
 
 import { useGetServicesQuery } from "@/redux/features/service/serviceApi";
 import { useGetStaffsQuery } from "@/redux/features/staff/staffApi";
+import { useDebounce } from "@/hooks/use-debounce";
 import { useCreateClientMutation, useGetClientsQuery } from "@/redux/features/client/clientApi";
 import { useCreateQuotationMutation, useSendQuotationMutation, useUpdateQuotationMutation } from "@/redux/features/quotation/quotationApi";
 import { QuotationEmailDialog } from "../QuotationEmailDialog";
@@ -521,7 +522,17 @@ function Stepper({ step, maxStep, onGo }: { step: number; maxStep: number; onGo:
 
 export default function QuotationWizard() {
     const router = useRouter();
-    const { data: clientsData, isLoading: clientsLoading } = useGetClientsQuery({});
+    // The client list is searched on the server as you type — loading "all" is capped (default 10), which hid most clients.
+    const [clientSearch, setClientSearch] = useState("");
+    const debouncedClientSearch = useDebounce(clientSearch.trim(), 300);
+    const { data: clientsData, isFetching: clientsLoading } = useGetClientsQuery({
+        limit: 50,
+        sortBy: "name",
+        sortOrder: "asc",
+        ...(debouncedClientSearch ? { search: debouncedClientSearch } : {}),
+    });
+    // The picked client is kept here, so a later search that no longer lists them doesn't lose their details.
+    const [pickedClient, setPickedClient] = useState<Client | null>(null);
     const [createQuotation, { isLoading: creating }] = useCreateQuotationMutation();
     const [updateQuotation, { isLoading: updating }] = useUpdateQuotationMutation();
     const [sendQuotation, { isLoading: sending }] = useSendQuotationMutation();
@@ -856,6 +867,7 @@ export default function QuotationWizard() {
     const pickClient = (id: string) => {
         const c = clientsData?.clients?.find((x: Client) => x._id === id);
         if (!c) return;
+        setPickedClient(c);
         setClientId(id);
         setClientName(c.name || "");
         setSnap({
@@ -1081,6 +1093,8 @@ export default function QuotationWizard() {
                         value={clientId}
                         onChange={pickClient}
                         isLoading={clientsLoading}
+                        onSearchChange={setClientSearch}
+                        selectedLabel={pickedClient?._id === clientId ? pickedClient?.name : undefined}
                         placeholder="Choose a client from your list"
                         searchPlaceholder="Search client by name or email…"
                         emptyText="No client found"

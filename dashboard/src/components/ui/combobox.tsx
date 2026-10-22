@@ -32,6 +32,13 @@ export interface ComboboxProps {
   isLoading?: boolean;
   disabled?: boolean;
   className?: string;
+  /**
+   * Server-side search: called (as the user types) with the text so the caller can fetch matching options.
+   * Turns off the built-in filtering, because `options` is then already the filtered list.
+   */
+  onSearchChange?: (query: string) => void;
+  /** Label to show for `value` when it is not among `options` (e.g. a search moved it out of the list). */
+  selectedLabel?: string;
 }
 
 /** Generic searchable single-select built on the shadcn Command + Popover primitives. */
@@ -45,6 +52,8 @@ export function Combobox({
   isLoading = false,
   disabled = false,
   className,
+  onSearchChange,
+  selectedLabel,
 }: ComboboxProps) {
   const [open, setOpen] = React.useState(false);
   const selected = options.find((o) => o.value === value);
@@ -59,12 +68,12 @@ export function Combobox({
           disabled={disabled}
           className={cn(
             "w-full justify-between font-normal",
-            !selected && "text-muted-foreground",
+            !selected && !selectedLabel && "text-muted-foreground",
             className,
           )}
         >
           <span className="truncate">
-            {isLoading ? "Loading…" : selected ? selected.label : placeholder}
+            {isLoading && !selected && !selectedLabel ? "Loading…" : selected ? selected.label : selectedLabel || placeholder}
           </span>
           {isLoading ? (
             <Loader2 className="ml-2 h-4 w-4 shrink-0 animate-spin opacity-50" />
@@ -74,10 +83,10 @@ export function Combobox({
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-[var(--radix-popover-trigger-width)] min-w-[280px] p-0" align="start">
-        <Command>
-          <CommandInput placeholder={searchPlaceholder} />
+        <Command shouldFilter={!onSearchChange}>
+          <CommandInput placeholder={searchPlaceholder} onValueChange={onSearchChange} />
           <CommandList>
-            <CommandEmpty>{emptyText}</CommandEmpty>
+            <CommandEmpty>{isLoading ? "Searching…" : emptyText}</CommandEmpty>
             <CommandGroup>
               {options.map((option) => (
                 <CommandItem
