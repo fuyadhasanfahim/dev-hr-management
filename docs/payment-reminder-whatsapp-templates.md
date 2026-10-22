@@ -16,6 +16,23 @@ Hello {{1}}, this is a reminder from Web Briks that {{2}} is still due for order
 | {{3}} | order number | ORD-2026-00010 |
 | {{4}} | payment link | https://pay.example.com/payment/abc123 |
 
+## 1b. Due payment, no link (BDT) — name: `payment_due_reminder_no_link`
+
+BDT can't be paid through Stripe/PayPal, so a BDT due reminder carries no pay link.
+
+```
+Hello {{1}}, this is a reminder from Web Briks that {{2}} is still due for order {{3}}. Please contact us for payment details. If you have already paid, please ignore this message.
+```
+
+| Var | Filled with | Sample for Meta |
+| --- | --- | --- |
+| {{1}} | client name | Rahim |
+| {{2}} | amount | BDT 60,000 |
+| {{3}} | order number | ORD-2026-00010 |
+
+Set `WA_TEMPLATE_PAYMENT_DUE_NO_LINK=payment_due_reminder_no_link` once approved. Until then a BDT reminder uses
+the link template with a "please contact us for payment details" note in place of the link.
+
 ## 2. Recurring payment — name: `recurring_payment_reminder`
 
 ```
