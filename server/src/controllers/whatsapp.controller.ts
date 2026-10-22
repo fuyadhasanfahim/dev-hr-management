@@ -252,7 +252,10 @@ export async function answerWithAi(
         content: m.body,
     }));
 
-    const ai = await whatsappAiService.processWhatsAppMessage(body, history, { customerName: conversation.customerName });
+    const ai = await whatsappAiService.processWhatsAppMessage(body, history, {
+        customerName: conversation.customerName,
+        salesStage: conversation.salesStage ?? undefined,
+    });
 
     const sentId = await whatsappService.sendTextMessage(fromPhone, ai.reply);
     await WhatsAppMessageModel.create({
@@ -264,6 +267,19 @@ export async function answerWithAi(
         status: WhatsAppMessageStatus.SENT,
     });
     notifyAgents('whatsapp:new_message', { conversationId: conversation._id.toString() });
+
+    // Remember where the sales flow stands (and why) — a new history entry only when the stage actually changes.
+    // Never lets a bookkeeping failure break the reply that was already sent.
+    try {
+        conversation.salesStageReason = ai.stageReason;
+        if (conversation.salesStage !== ai.stage) {
+            conversation.salesStage = ai.stage;
+            conversation.salesStageHistory = [...(conversation.salesStageHistory ?? []), { stage: ai.stage, reason: ai.stageReason, at: new Date() }].slice(-30);
+        }
+        await conversation.save();
+    } catch (err: any) {
+        logger.error(`Could not save sales stage: ${err.message}`);
+    }
 
     // Kept for review: staff can read every AI reply and correct the ones that missed.
     void aiLearning.logReply({

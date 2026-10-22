@@ -1,4 +1,5 @@
 import { isPhoneId, parseHistoryThread, type HistoryThread } from '../lib/whatsapp-inbound.js';
+import { STAGE_LABEL, type SalesStage } from '../lib/sales-flow.js';
 import { Types } from 'mongoose';
 import { execFile } from 'node:child_process';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
@@ -572,6 +573,19 @@ async function getCustomerDetails(conversationId: string) {
         messageCount,
         conversationCount,
         linkedTicketId: conversation.linkedTicketId?.toString() ?? null,
+        sales: conversation.salesStage
+            ? {
+                  stage: conversation.salesStage,
+                  label: STAGE_LABEL[conversation.salesStage as SalesStage] ?? conversation.salesStage,
+                  reason: conversation.salesStageReason ?? '',
+                  history: (conversation.salesStageHistory ?? []).map((h: any) => ({
+                      stage: h.stage,
+                      label: STAGE_LABEL[h.stage as SalesStage] ?? h.stage,
+                      reason: h.reason ?? '',
+                      at: h.at?.toISOString?.() ?? null,
+                  })),
+              }
+            : null,
         client: client
             ? {
                   id: client._id.toString(),

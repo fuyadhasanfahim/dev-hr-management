@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import { notifyOrderStatus } from './order-notify.service.js';
 import mongoose, { Types } from 'mongoose';
 import OrderModel, {
     type IOrder,
@@ -386,6 +387,7 @@ async function createOrderFromQuotation(
             },
             'order.create_from_quotation.completed',
         );
+        void notifyOrderStatus(order._id, OrderStatus.PENDING);
         return order;
     } catch (err) {
         await session.abortTransaction();
@@ -456,6 +458,9 @@ async function transitionStatus(
         updatedAt: new Date(),
         note: note || `Status updated to ${newStatus}`,
     });
+
+    // Tell the client (SMS + WhatsApp + email). Fire-and-forget: never part of the status change.
+    void notifyOrderStatus(orderId, newStatus);
 
     // Completed → ask admins when to remind the client about the due balance / recurring charges.
     if (newStatus === OrderStatus.COMPLETED) {
@@ -535,6 +540,7 @@ async function unlockAssets(orderId: string): Promise<IOrder> {
         updatedAt: new Date(),
         note: 'Assets unlocked. Order moved to delivered status.',
     });
+    void notifyOrderStatus(orderId, OrderStatus.DELIVERED);
     return updated;
 }
 

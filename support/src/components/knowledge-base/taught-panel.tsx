@@ -8,6 +8,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
+import { PaginationBar } from '@/components/ui/pagination-bar';
+import { useClampPage } from '@/hooks/use-url-state';
+import type { ListProps } from './list-props';
 import { ago, EXAMPLE_MAX_CHARS } from '@/lib/knowledge-base';
 import {
     useCreateAiExampleMutation,
@@ -54,12 +57,14 @@ function Editor({ initial, onDone }: { initial?: AiExample; onDone: () => void }
 }
 
 // Replies staff wrote or corrected. The AI follows them whenever a customer says something similar.
-export function TaughtPanel() {
-    const { data: all = [], isLoading } = useGetAiExamplesQuery();
+export function TaughtPanel({ q, page, limit, onPage, onLimit }: Pick<ListProps, 'q' | 'page' | 'limit' | 'onPage' | 'onLimit'>) {
+    const { data, isLoading, isFetching } = useGetAiExamplesQuery({ kind: 'taught', page, limit, q });
+    const taught = data?.items ?? [];
+    const meta = data?.meta;
+    useClampPage(page, meta?.totalPages, onPage);
     const [remove, { isLoading: removing }] = useDeleteAiExampleMutation();
     const [adding, setAdding] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
-    const taught = all.filter((e) => e.kind !== 'agent');
 
     return (
         <div className="space-y-3">
@@ -76,7 +81,9 @@ export function TaughtPanel() {
             {isLoading ? (
                 <Skeleton className="h-32 w-full rounded-xl" />
             ) : taught.length === 0 && !adding ? (
-                <div className="rounded-lg border bg-sidebar py-12 text-center text-sm text-muted-foreground">Nothing taught yet.</div>
+                <div className="rounded-lg border bg-sidebar py-12 text-center text-sm text-muted-foreground">
+                    {q ? 'No taught replies match your search.' : 'Nothing taught yet.'}
+                </div>
             ) : (
                 <ul className="divide-y overflow-hidden rounded-lg border bg-sidebar">
                     {taught.map((e) =>
@@ -115,6 +122,9 @@ export function TaughtPanel() {
                         ),
                     )}
                 </ul>
+            )}
+            {meta && meta.total > 0 && (
+                <PaginationBar page={meta.page} limit={meta.limit} total={meta.total} totalPages={meta.totalPages} onPageChange={onPage} onLimitChange={onLimit} isLoading={isFetching} />
             )}
         </div>
     );

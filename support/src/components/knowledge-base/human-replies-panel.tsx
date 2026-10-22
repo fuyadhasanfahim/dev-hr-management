@@ -8,6 +8,9 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
+import { PaginationBar } from '@/components/ui/pagination-bar';
+import { useClampPage } from '@/hooks/use-url-state';
+import type { ListProps } from './list-props';
 import { ago, KB_INSTRUCTIONS_CATEGORY, KB_MAX_CHARS } from '@/lib/knowledge-base';
 import {
     useCreateKnowledgeChunkMutation,
@@ -21,16 +24,17 @@ const errMsg = (err: unknown) => (err as { data?: { message?: string } })?.data?
 
 // Replies our human agents sent, each next to the customer message it answered. Approve the good ones ("Teach AI")
 // and the AI copies how the team talks; the style guide distils the pattern into a rule.
-export function HumanRepliesPanel() {
-    const [view, setView] = useState<'new' | 'taught'>('new');
-    const { data: all = [], isLoading } = useGetAiExamplesQuery({ kind: 'agent' });
+export function HumanRepliesPanel({ q, page, limit, view: viewParam, onPage, onLimit, onView }: ListProps) {
+    const view: 'new' | 'taught' = viewParam === 'taught' ? 'taught' : 'new';
+    const { data, isLoading, isFetching } = useGetAiExamplesQuery({ kind: 'agent', approved: view === 'taught', page, limit, q });
+    const rows = data?.items ?? [];
+    const meta = data?.meta;
+    useClampPage(page, meta?.totalPages, onPage);
     const [update, { isLoading: updating }] = useUpdateAiExampleMutation();
     const [remove, { isLoading: removing }] = useDeleteAiExampleMutation();
     const [draft, { isLoading: drafting }] = useDraftStyleGuideMutation();
     const [saveRule, { isLoading: savingRule }] = useCreateKnowledgeChunkMutation();
     const [guide, setGuide] = useState<string | null>(null);
-
-    const rows = all.filter((e) => (view === 'new' ? !e.approved : e.approved));
 
     const makeGuide = async () => {
         try {
@@ -57,7 +61,7 @@ export function HumanRepliesPanel() {
                     continue a conversation. Only the ones you approve are used.
                 </p>
                 <div className="flex flex-wrap items-center gap-2">
-                    <Tabs value={view} onValueChange={(v) => setView(v as typeof view)}>
+                    <Tabs value={view} onValueChange={(v) => onView(v === 'new' ? '' : v)}>
                         <TabsList>
                             <TabsTrigger value="new">To review</TabsTrigger>
                             <TabsTrigger value="taught">Taught</TabsTrigger>
@@ -92,7 +96,7 @@ export function HumanRepliesPanel() {
                 <Skeleton className="h-40 w-full rounded-xl" />
             ) : rows.length === 0 ? (
                 <div className="rounded-lg border bg-sidebar py-12 text-center text-sm text-muted-foreground">
-                    {view === 'new' ? 'No new human replies to review. They appear here as your team answers customers.' : 'Nothing taught yet.'}
+                    {q ? 'No human replies match your search.' : view === 'new' ? 'No new human replies to review. They appear here as your team answers customers.' : 'Nothing taught yet.'}
                 </div>
             ) : (
                 <ul className="divide-y overflow-hidden rounded-lg border bg-sidebar">
@@ -133,6 +137,9 @@ export function HumanRepliesPanel() {
                         </li>
                     ))}
                 </ul>
+            )}
+            {meta && meta.total > 0 && (
+                <PaginationBar page={meta.page} limit={meta.limit} total={meta.total} totalPages={meta.totalPages} onPageChange={onPage} onLimitChange={onLimit} isLoading={isFetching} />
             )}
         </div>
     );

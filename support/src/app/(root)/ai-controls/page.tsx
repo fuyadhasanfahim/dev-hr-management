@@ -1,10 +1,13 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { Suspense, useMemo, useState } from 'react';
 import { format, formatDistanceToNowStrict } from 'date-fns';
 import { toast } from 'sonner';
 import { Bot, CalendarClock, Clock, Loader, Pencil, Plus, Power, Timer, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { PaginationBar } from '@/components/ui/pagination-bar';
+import { SearchInput } from '@/components/ui/search-input';
+import { readPaging, useClampPage, useUrlState } from '@/hooks/use-url-state';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
@@ -104,6 +107,19 @@ function describeSchedule(s: AiSchedule): string {
 }
 
 export default function AiControlsPage() {
+    return (
+        <Suspense fallback={<Skeleton className="m-6 h-64 rounded-xl" />}>
+            <AiControls />
+        </Suspense>
+    );
+}
+
+// Schedule search, page and page size live in the URL: ?q=night&page=2&limit=50
+function AiControls() {
+    const url = useUrlState({ limit: '20' });
+    const { page, limit } = readPaging(url.get);
+    const scheduleQuery = url.get('q');
+
     const { can } = usePermissions();
     const canManage = can('ai.manage');
 
@@ -132,6 +148,14 @@ export default function AiControlsPage() {
     };
 
     const schedules = useMemo(() => settings?.schedules ?? [], [settings?.schedules]);
+    const matching = useMemo(() => {
+        const q = scheduleQuery.toLowerCase();
+        if (!q) return schedules;
+        return schedules.filter((s) => `${s.label} ${describeSchedule(s)} ${s.action === 'off_during' ? 'turns ai off' : 'ai on only'}`.toLowerCase().includes(q));
+    }, [schedules, scheduleQuery]);
+    const totalPages = Math.max(1, Math.ceil(matching.length / limit));
+    const shown = matching.slice((page - 1) * limit, page * limit);
+    useClampPage(page, totalPages, (n) => url.set({ page: n }));
 
     const quickPause = (opt: (typeof QUICK_PAUSES)[number]) => {
         const start = new Date();
@@ -435,8 +459,13 @@ export default function AiControlsPage() {
                     ) : schedules.length === 0 ? (
                         <p className="py-6 text-center text-sm text-muted-foreground">No schedules yet. The AI follows only the switches above.</p>
                     ) : (
+                        <>
+                        <SearchInput value={scheduleQuery} placeholder="Search schedules…" onSearch={(q) => url.set({ q, page: null })} />
+                        {matching.length === 0 ? (
+                        <p className="py-6 text-center text-sm text-muted-foreground">No schedules match your search.</p>
+                        ) : (
                         <ul className="divide-y rounded-lg border">
-                            {schedules.map((s) => (
+                            {shown.map((s) => (
                                 <li key={s.id} className="flex flex-wrap items-center gap-3 px-3 py-3">
                                     <div className="min-w-0 flex-1">
                                         <div className="flex flex-wrap items-center gap-2">
@@ -469,6 +498,18 @@ export default function AiControlsPage() {
                                 </li>
                             ))}
                         </ul>
+                        )}
+                        {matching.length > 0 && (
+                            <PaginationBar
+                                page={page}
+                                limit={limit}
+                                total={matching.length}
+                                totalPages={totalPages}
+                                onPageChange={(n) => url.set({ page: n })}
+                                onLimitChange={(n) => url.set({ limit: n, page: null })}
+                            />
+                        )}
+                        </>
                     )}
                     {settings?.updatedBy && settings.updatedAt && (
                         <p className="text-xs text-muted-foreground">

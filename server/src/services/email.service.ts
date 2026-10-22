@@ -133,6 +133,29 @@ ${data.payUrl ? `<p style="margin:20px 0"><a href="${esc(data.payUrl)}" style="b
     return transporter.sendMail({ from: 'Billing | WebBriks', to: data.to, subject, html });
 };
 
+interface SendNotificationEmailData {
+    to: string | string[];
+    from?: string;
+    subject: string;
+    heading: string;
+    greeting: string;
+    body: string;
+    actionUrl?: string;
+    actionLabel?: string;
+}
+
+/** Short status email (order updates, attendance alerts): heading, a sentence or two, optional button. */
+const sendNotificationEmail = async (data: SendNotificationEmailData) => {
+    const esc = (v: string) => v.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
+    const html = `<div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;color:#1c1c22;line-height:1.55">
+<h2 style="margin:0 0 12px">${esc(data.heading)}</h2>
+<p>${esc(data.greeting)}</p>
+<p>${esc(data.body)}</p>
+${data.actionUrl ? `<p style="margin:20px 0"><a href="${esc(data.actionUrl)}" style="background:#4f46e5;color:#fff;padding:11px 22px;border-radius:6px;text-decoration:none;font-weight:600">${esc(data.actionLabel || 'Open')}</a></p>` : ''}
+<p style="color:#6b6b76;font-size:13px">WebBriks</p></div>`;
+    return transporter.sendMail({ from: data.from || 'WebBriks', to: data.to, subject: data.subject, html });
+};
+
 interface SendPinResetData {
     to: string;
     staffName: string;
@@ -728,6 +751,7 @@ export default {
     sendConsultationScheduledEmail,
     sendTaskNotificationEmail,
     sendPaymentReminderEmail,
+    sendNotificationEmail,
 };
 
 

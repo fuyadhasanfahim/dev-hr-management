@@ -7,6 +7,9 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
+import { PaginationBar } from '@/components/ui/pagination-bar';
+import { useClampPage } from '@/hooks/use-url-state';
+import type { ListProps } from './list-props';
 import { ago, EXAMPLE_MAX_CHARS } from '@/lib/knowledge-base';
 import {
     useAnswerKnowledgeGapMutation,
@@ -22,8 +25,11 @@ const REASON: Record<KnowledgeGap['reason'], string> = {
 
 // Real customer questions the AI struggled with, most-asked first. "Write reply" teaches the AI the exact
 // answer to give next time; "Add to knowledge" turns it into a general knowledge entry instead.
-export function GapsPanel({ onAnswer }: { onAnswer: (question: string) => void }) {
-    const { data: gaps = [], isLoading } = useGetKnowledgeGapsQuery();
+export function GapsPanel({ onAnswer, q, page, limit, onPage, onLimit }: Pick<ListProps, 'q' | 'page' | 'limit' | 'onPage' | 'onLimit'> & { onAnswer: (question: string) => void }) {
+    const { data, isLoading, isFetching } = useGetKnowledgeGapsQuery({ page, limit, q });
+    const gaps = data?.items ?? [];
+    const meta = data?.meta;
+    useClampPage(page, meta?.totalPages, onPage);
     const [dismiss, { isLoading: dismissing }] = useDeleteKnowledgeGapMutation();
     const [answer, { isLoading: saving }] = useAnswerKnowledgeGapMutation();
     const [openId, setOpenId] = useState<string | null>(null);
@@ -42,7 +48,9 @@ export function GapsPanel({ onAnswer }: { onAnswer: (question: string) => void }
 
     if (isLoading) return <Skeleton className="h-32 w-full rounded-xl" />;
     if (gaps.length === 0) {
-        return (
+        return q ? (
+            <div className="rounded-lg border bg-sidebar py-12 text-center text-sm text-muted-foreground">No unanswered questions match your search.</div>
+        ) : (
             <div className="flex flex-col items-center gap-2 rounded-lg border bg-sidebar py-12 text-center">
                 <CheckCircle2 className="size-6 text-emerald-500" />
                 <p className="text-sm font-medium">Nothing unanswered</p>
@@ -53,6 +61,7 @@ export function GapsPanel({ onAnswer }: { onAnswer: (question: string) => void }
         );
     }
     return (
+        <div className="space-y-3">
         <ul className="divide-y overflow-hidden rounded-lg border bg-sidebar">
             {gaps.map((g) => (
                 <li key={g.id} className="space-y-3 p-3">
@@ -118,5 +127,9 @@ export function GapsPanel({ onAnswer }: { onAnswer: (question: string) => void }
                 </li>
             ))}
         </ul>
+        {meta && (
+            <PaginationBar page={meta.page} limit={meta.limit} total={meta.total} totalPages={meta.totalPages} onPageChange={onPage} onLimitChange={onLimit} isLoading={isFetching} />
+        )}
+        </div>
     );
 }

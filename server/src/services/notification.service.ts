@@ -2,6 +2,11 @@ import NotificationModel from "../models/notification.model.js";
 import { Types } from "mongoose";
 import { emitToUser } from "../socket.js";
 import emailService from "./email.service.js";
+import { notifyStaffUser } from "./staff-notify.service.js";
+
+// Notification types a staff member also gets on their phone (SMS + WhatsApp) and inbox, not just in the bell.
+// Announcements and shift assignments already text their recipients from their own services.
+const EXTERNAL_TYPES = new Set(["attendance", "leave", "shift"]);
 
 // Create a notification for a single user
 const createNotification = async (data: {
@@ -31,6 +36,8 @@ const createNotification = async (data: {
     actionLabel?: string;
     createdBy?: Types.ObjectId | string;
     expiresAt?: Date;
+    /** Set false for notifications meant only for the in-app bell (e.g. copies sent to admins). */
+    external?: boolean;
 }) => {
     const payload: any = {
         userId: new Types.ObjectId(data.userId),
@@ -52,6 +59,18 @@ const createNotification = async (data: {
     const notification = await NotificationModel.create(payload);
     if (data.userId) {
         emitToUser(data.userId.toString(), "notification:new", notification);
+
+        // SMS + WhatsApp + email copy. Fire-and-forget and error-proof: the in-app notification above is
+        // already saved, and a failed message must never fail the action that created it.
+        if (data.external !== false && EXTERNAL_TYPES.has(data.type)) {
+            void notifyStaffUser(data.userId, {
+                title: data.title,
+                message: data.message,
+                event: `${data.type}.notification`,
+                ...(data.actionUrl ? { actionUrl: data.actionUrl } : {}),
+                ...(data.actionLabel ? { actionLabel: data.actionLabel } : {}),
+            });
+        }
 
         if (data.type === 'task') {
             import("../models/user.model.js").then(({ default: UserModel }) => {

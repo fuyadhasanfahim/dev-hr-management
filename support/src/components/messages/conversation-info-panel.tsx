@@ -341,6 +341,29 @@ export function ConversationInfoPanel({
                         )}
                     </Section>
 
+                    {details?.sales && (
+                        <>
+                            <Separator />
+                            <Section title="Sales stage">
+                                <div className="rounded-lg border bg-background/60 p-3">
+                                    <Badge variant="secondary">{details.sales.label}</Badge>
+                                    {details.sales.reason && <p className="mt-2 text-xs text-muted-foreground">{details.sales.reason}</p>}
+                                </div>
+                                {details.sales.history.length > 1 && (
+                                    <ol className="mt-2 space-y-2 border-l pl-3 text-xs">
+                                        {[...details.sales.history].reverse().map((h, i) => (
+                                            <li key={i}>
+                                                <p className="font-medium">{h.label}</p>
+                                                {h.reason && <p className="text-muted-foreground">{h.reason}</p>}
+                                                {h.at && <p className="text-[11px] text-muted-foreground/70">{formatDate(h.at)}</p>}
+                                            </li>
+                                        ))}
+                                    </ol>
+                                )}
+                            </Section>
+                        </>
+                    )}
+
                     {details && (details.client || details.lead) && (
                         <>
                             <Separator />

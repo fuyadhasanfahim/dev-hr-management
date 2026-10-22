@@ -49,6 +49,8 @@ export function TestPanel() {
                         <div className="flex items-center gap-2">
                             <h3 className="text-sm font-medium">AI reply</h3>
                             {data.escalate && <Badge variant="destructive">Would hand off to a human</Badge>}
+                            <Badge variant="outline">Stage: {data.stage}</Badge>
+                            <Badge variant="outline">{data.priceAllowed ? 'Price allowed' : 'Price withheld'}</Badge>
                         </div>
                         <p className="whitespace-pre-wrap text-sm">{data.reply}</p>
                         {data.escalate && data.escalateReason && (

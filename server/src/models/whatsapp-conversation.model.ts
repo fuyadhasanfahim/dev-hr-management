@@ -1,4 +1,5 @@
 import { Schema, model, Document, Types } from 'mongoose';
+import { SALES_STAGES, type SalesStage } from '../lib/sales-flow.js';
 
 export enum WhatsAppConversationStatus {
     BOT       = 'bot',
@@ -13,6 +14,13 @@ export interface IWhatsAppAssignee {
     name: string;
 }
 
+// One entry per change of sales stage: what the AI moved to, when, and why — so staff can follow the sale later.
+export interface ISalesStageEntry {
+    stage: SalesStage;
+    reason: string;
+    at: Date;
+}
+
 export interface IWhatsAppConversation extends Document {
     customerPhone: string;
     customerName?: string;
@@ -22,6 +30,9 @@ export interface IWhatsAppConversation extends Document {
     linkedTicketId?: Types.ObjectId; // Ref: Ticket — set once escalated
     assignedTo?: IWhatsAppAssignee | null;
     assignedAt?: Date | null;
+    salesStage?: SalesStage | null; // where the AI's sales flow stands (see lib/sales-flow.ts)
+    salesStageReason?: string;
+    salesStageHistory?: ISalesStageEntry[];
     lastMessageAt: Date;
     lastReadAt: Date; // Set when an agent opens the thread — messages after this are "unread".
     createdAt: Date;
@@ -65,6 +76,12 @@ const whatsAppConversationSchema = new Schema<IWhatsAppConversation>(
         assignedAt: {
             type: Date,
             default: null,
+        },
+        salesStage: { type: String, enum: [...SALES_STAGES], default: null },
+        salesStageReason: { type: String, default: '' },
+        salesStageHistory: {
+            type: [new Schema<ISalesStageEntry>({ stage: { type: String, enum: [...SALES_STAGES] }, reason: String, at: Date }, { _id: false })],
+            default: [],
         },
         lastMessageAt: {
             type: Date,

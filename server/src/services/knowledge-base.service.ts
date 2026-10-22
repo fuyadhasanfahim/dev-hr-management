@@ -1,7 +1,7 @@
 import { prisma } from '../lib/prisma.js';
 import { embed } from '../lib/openai-embeddings.js';
 import { entryProblem, formatContext, isLowConfidence } from '../lib/knowledge-base-utils.js';
-import { KB_INSTRUCTIONS_CATEGORY, KB_MAX_INSTRUCTIONS, KB_MIN_SCORE, KB_RETRIEVE_K } from '../constants/knowledge-base.js';
+import { KB_INSTRUCTIONS_CATEGORY, KB_MAX_CHARS, KB_MAX_INSTRUCTIONS, KB_MIN_SCORE, KB_RETRIEVE_K } from '../constants/knowledge-base.js';
 
 export interface KnowledgeChunkSummary {
     id: string;
@@ -39,12 +39,38 @@ function validate(text: string, source?: string) {
     if (problem) throw new KnowledgeBaseError(problem);
 }
 
-async function listChunks(): Promise<KnowledgeChunkSummary[]> {
-    return prisma.$queryRaw<KnowledgeChunkSummary[]>`
-        SELECT id, text, source, "createdByName", "createdAt"
-        FROM knowledge_chunks
-        ORDER BY "createdAt" DESC
-    `;
+async function listChunks(opts: { like: string | null; limit: number; offset: number }): Promise<{ items: KnowledgeChunkSummary[]; total: number }> {
+    const { like, limit, offset } = opts;
+    const [items, count] = await Promise.all([
+        prisma.$queryRaw<KnowledgeChunkSummary[]>`
+            SELECT id, text, source, "createdByName", "createdAt"
+            FROM knowledge_chunks
+            WHERE (${like}::text IS NULL OR text ILIKE ${like} OR coalesce(source, '') ILIKE ${like})
+            ORDER BY "createdAt" DESC
+            LIMIT ${limit} OFFSET ${offset}
+        `,
+        prisma.$queryRaw<{ n: bigint }[]>`
+            SELECT count(*) AS n FROM knowledge_chunks
+            WHERE (${like}::text IS NULL OR text ILIKE ${like} OR coalesce(source, '') ILIKE ${like})
+        `,
+    ]);
+    return { items, total: Number(count[0]?.n ?? 0) };
+}
+
+/** Numbers for the page header and tab badges — computed in the database, not from the loaded page. */
+async function chunkStats(): Promise<{ total: number; chars: number; over: number; rules: number; gaps: number }> {
+    const [c, g] = await Promise.all([
+        prisma.$queryRaw<{ total: bigint; chars: bigint; over: bigint; rules: bigint }[]>`
+            SELECT count(*) AS total,
+                   coalesce(sum(length(text)), 0) AS chars,
+                   count(*) FILTER (WHERE length(text) > ${KB_MAX_CHARS}) AS over,
+                   count(*) FILTER (WHERE lower(coalesce(source, '')) = ${KB_INSTRUCTIONS_CATEGORY.toLowerCase()}) AS rules
+            FROM knowledge_chunks
+        `,
+        prisma.$queryRaw<{ n: bigint }[]>`SELECT count(*) AS n FROM knowledge_gaps`,
+    ]);
+    const r = c[0];
+    return { total: Number(r?.total ?? 0), chars: Number(r?.chars ?? 0), over: Number(r?.over ?? 0), rules: Number(r?.rules ?? 0), gaps: Number(g[0]?.n ?? 0) };
 }
 
 async function createChunk(text: string, source?: string, createdByName?: string): Promise<KnowledgeChunkSummary> {
@@ -149,13 +175,21 @@ async function logGap(question: string, reason: 'escalated' | 'low_confidence', 
     }
 }
 
-async function listGaps(): Promise<KnowledgeGapSummary[]> {
-    return prisma.$queryRaw<KnowledgeGapSummary[]>`
-        SELECT id, question, reason, "topScore", count, "lastAskedAt"
-        FROM knowledge_gaps
-        ORDER BY count DESC, "lastAskedAt" DESC
-        LIMIT 100
-    `;
+async function listGaps(opts: { like: string | null; limit: number; offset: number }): Promise<{ items: KnowledgeGapSummary[]; total: number }> {
+    const { like, limit, offset } = opts;
+    const [items, count] = await Promise.all([
+        prisma.$queryRaw<KnowledgeGapSummary[]>`
+            SELECT id, question, reason, "topScore", count, "lastAskedAt"
+            FROM knowledge_gaps
+            WHERE (${like}::text IS NULL OR question ILIKE ${like})
+            ORDER BY count DESC, "lastAskedAt" DESC
+            LIMIT ${limit} OFFSET ${offset}
+        `,
+        prisma.$queryRaw<{ n: bigint }[]>`
+            SELECT count(*) AS n FROM knowledge_gaps WHERE (${like}::text IS NULL OR question ILIKE ${like})
+        `,
+    ]);
+    return { items, total: Number(count[0]?.n ?? 0) };
 }
 
 async function deleteGap(id: string): Promise<void> {
@@ -164,6 +198,7 @@ async function deleteGap(id: string): Promise<void> {
 
 export default {
     listChunks,
+    chunkStats,
     createChunk,
     updateChunk,
     deleteChunk,

@@ -80,18 +80,49 @@ async function logReply(entry: {
     }
 }
 
-async function listReplies(opts: { status?: string; limit?: number; offset?: number }): Promise<AiReplyLog[]> {
-    const limit = Math.min(Math.max(opts.limit ?? 50, 1), 200);
-    const offset = Math.max(opts.offset ?? 0, 0);
+async function listReplies(opts: { status?: string; like: string | null; limit: number; offset: number }): Promise<{ items: AiReplyLog[]; total: number }> {
+    const { like, limit, offset } = opts;
     const status = opts.status === 'corrected' || opts.status === 'ok' ? opts.status : null;
-    const rows = await prisma.$queryRaw<(Omit<AiReplyLog, 'sources'> & { sources: string | null })[]>`
-        SELECT id, "conversationId", "customerName", "customerMessage", context, "aiReply", escalated, "topScore", sources, status, "createdAt"
-        FROM ai_reply_logs
-        WHERE (${status}::text IS NULL OR status = ${status})
-        ORDER BY "createdAt" DESC
-        LIMIT ${limit} OFFSET ${offset}
-    `;
-    return rows.map((r) => ({ ...r, sources: r.sources ? JSON.parse(r.sources) : [] }));
+    const [rows, count] = await Promise.all([
+        prisma.$queryRaw<(Omit<AiReplyLog, 'sources'> & { sources: string | null })[]>`
+            SELECT id, "conversationId", "customerName", "customerMessage", context, "aiReply", escalated, "topScore", sources, status, "createdAt"
+            FROM ai_reply_logs
+            WHERE (${status}::text IS NULL OR status = ${status})
+              AND (${like}::text IS NULL OR "customerMessage" ILIKE ${like} OR "aiReply" ILIKE ${like} OR coalesce("customerName", '') ILIKE ${like})
+            ORDER BY "createdAt" DESC
+            LIMIT ${limit} OFFSET ${offset}
+        `,
+        prisma.$queryRaw<{ n: bigint }[]>`
+            SELECT count(*) AS n FROM ai_reply_logs
+            WHERE (${status}::text IS NULL OR status = ${status})
+              AND (${like}::text IS NULL OR "customerMessage" ILIKE ${like} OR "aiReply" ILIKE ${like} OR coalesce("customerName", '') ILIKE ${like})
+        `,
+    ]);
+    return { items: rows.map((r) => ({ ...r, sources: r.sources ? JSON.parse(r.sources) : [] })), total: Number(count[0]?.n ?? 0) };
+}
+
+/** Counts behind the AI-learning tabs: reply log by review state, staff-taught replies, human replies by approval. */
+async function learningStats() {
+    const [replies, examples] = await Promise.all([
+        prisma.$queryRaw<{ total: bigint; corrected: bigint }[]>`
+            SELECT count(*) AS total, count(*) FILTER (WHERE status = 'corrected') AS corrected FROM ai_reply_logs
+        `,
+        prisma.$queryRaw<{ taught: bigint; humanNew: bigint; humanTaught: bigint }[]>`
+            SELECT count(*) FILTER (WHERE kind <> 'agent') AS "taught",
+                   count(*) FILTER (WHERE kind = 'agent' AND NOT approved) AS "humanNew",
+                   count(*) FILTER (WHERE kind = 'agent' AND approved) AS "humanTaught"
+            FROM ai_examples
+        `,
+    ]);
+    const r = replies[0];
+    const e = examples[0];
+    return {
+        replies: Number(r?.total ?? 0),
+        repliesCorrected: Number(r?.corrected ?? 0),
+        taught: Number(e?.taught ?? 0),
+        humanNew: Number(e?.humanNew ?? 0),
+        humanTaught: Number(e?.humanTaught ?? 0),
+    };
 }
 
 /** Staff rewrote an AI reply: remember "when a customer says this, reply like that". Latest correction wins. */
@@ -167,16 +198,31 @@ async function createQa(question: string, answer: string, byName: string): Promi
     return createExample({ kind: 'qa', question, answer, approved: true, createdByName: byName });
 }
 
-async function listExamples(kind?: string, approved?: boolean): Promise<AiExample[]> {
-    const k = kind === 'qa' || kind === 'correction' || kind === 'agent' ? kind : null;
-    const a = typeof approved === 'boolean' ? approved : null;
-    return prisma.$queryRawUnsafe<AiExample[]>(
-        `SELECT ${COLUMNS} FROM ai_examples
-         WHERE ($1::text IS NULL OR kind = $1) AND ($2::boolean IS NULL OR approved = $2)
-         ORDER BY "createdAt" DESC LIMIT 300`,
-        k,
-        a,
-    );
+// kind 'taught' = everything staff wrote or corrected (qa + correction); the others filter by exact kind.
+async function listExamples(opts: {
+    kind?: string;
+    approved?: boolean;
+    like: string | null;
+    limit: number;
+    offset: number;
+}): Promise<{ items: AiExample[]; total: number }> {
+    const k = opts.kind === 'qa' || opts.kind === 'correction' || opts.kind === 'agent' || opts.kind === 'taught' ? opts.kind : null;
+    const a = typeof opts.approved === 'boolean' ? opts.approved : null;
+    const where = `($1::text IS NULL OR kind = $1 OR ($1 = 'taught' AND kind <> 'agent'))
+         AND ($2::boolean IS NULL OR approved = $2)
+         AND ($3::text IS NULL OR question ILIKE $3 OR answer ILIKE $3)`;
+    const [items, count] = await Promise.all([
+        prisma.$queryRawUnsafe<AiExample[]>(
+            `SELECT ${COLUMNS} FROM ai_examples WHERE ${where} ORDER BY "createdAt" DESC LIMIT $4 OFFSET $5`,
+            k,
+            a,
+            opts.like,
+            opts.limit,
+            opts.offset,
+        ),
+        prisma.$queryRawUnsafe<{ n: bigint }[]>(`SELECT count(*) AS n FROM ai_examples WHERE ${where}`, k, a, opts.like),
+    ]);
+    return { items, total: Number(count[0]?.n ?? 0) };
 }
 
 async function updateExample(id: string, patch: { question?: string; answer?: string; approved?: boolean }): Promise<AiExample> {
@@ -311,6 +357,7 @@ async function draftStyleGuide(): Promise<string> {
 export default {
     logReply,
     listReplies,
+    learningStats,
     correctReply,
     answerGap,
     createQa,

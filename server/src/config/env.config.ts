@@ -103,8 +103,9 @@ const envConfig = {
     cloudinary_secret: process.env.CLOUDINARY_API_SECRET!,
     cloudinary_upload_path: process.env.CLOUDINARY_UPLOAD_PATH!,
 
-    // SMS Configuration
+    // SMS Configuration (BulkSMSBD — same gateway the hardware-store app uses)
     sms_api_key: process.env.SMS_API_KEY,
+    sms_sender_id: process.env.SMS_SENDER_ID || '8809617626643',
     monthly_report_day: Number(process.env.MONTHLY_REPORT_DAY) || 10,
     monthly_report_hour: Number(process.env.MONTHLY_REPORT_HOUR) || 10,
     monthly_report_minute: Number(process.env.MONTHLY_REPORT_MINUTE) || 0,
@@ -156,6 +157,13 @@ const envConfig = {
     wa_template_payment_due: process.env.WA_TEMPLATE_PAYMENT_DUE || '',
     wa_template_payment_recurring: process.env.WA_TEMPLATE_PAYMENT_RECURRING || '',
     wa_template_language: process.env.WA_TEMPLATE_LANGUAGE || 'en',
+    /** Approved templates for order-status and staff alerts. Unset → WhatsApp falls back to free text inside the 24h window, else is skipped. */
+    wa_template_order_status: process.env.WA_TEMPLATE_ORDER_STATUS || '',
+    wa_template_staff_alert: process.env.WA_TEMPLATE_STAFF_ALERT || '',
+
+    // Order-status / staff-alert fan-out (SMS + WhatsApp + email). 'live' sends for real; 'dry' only logs what would go out.
+    // Default: live in production, dry everywhere else, so a dev database never texts real people by accident.
+    notify_mode: (process.env.NOTIFY_MODE || (process.env.NODE_ENV === 'production' ? 'live' : 'dry')) as 'live' | 'dry',
 
     // OpenAI — WhatsApp AI auto-reply (phase 2)
     openai_api_key: process.env.OPENAI_API_KEY || '',

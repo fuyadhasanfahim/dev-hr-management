@@ -18,6 +18,7 @@ export const sendBulkSMS = async (options: {
     const numbersArray = Array.isArray(number) ? number : number.split(",");
     const cleanNumbers = numbersArray
         .map((n) => n.trim().replace(/\D/g, "")) // Remove non-digit characters
+        .map((n) => (n.length === 11 && n.startsWith("01") ? "88" + n : n)) // BD local 01XXXXXXXXX -> 8801XXXXXXXXX
         .filter((n) => n.length >= 10) // Basic validation for BD numbers
         .join(",");
 
@@ -28,8 +29,9 @@ export const sendBulkSMS = async (options: {
 
     const smsData = {
         api_key: apiKey,
-        type: "text", // English text
-        senderid: "8809617626643", // Non-masking numeric ID as per reference
+        // "text" is plain English; anything else (Bengali, emoji) must be sent as "unicode" or it arrives garbled.
+        type: /[^\x00-\x7F]/.test(message) ? "unicode" : "text",
+        senderid: process.env.SMS_SENDER_ID || "8809617626643", // Non-masking numeric ID
         number: cleanNumbers,
         message: message,
     };

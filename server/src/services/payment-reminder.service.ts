@@ -14,6 +14,7 @@ import emailService from './email.service.js';
 import whatsappService from './whatsapp.service.js';
 import envConfig from '../config/env.config.js';
 import { logger } from '../lib/logger.js';
+import { toWhatsAppNumber } from '../utils/phone.util.js';
 
 const DAY = 24 * 60 * 60 * 1000;
 const SEND_HOUR_MS = 10 * 60 * 60 * 1000; // reminders go out at 10:00 Bangladesh time
@@ -127,14 +128,7 @@ async function notifyAdmins(row: { orderNumber: string; clientName: string; amou
     }
 }
 
-/** Bangladeshi numbers (01XXXXXXXXX) → 8801XXXXXXXXX; anything else is passed through as digits. */
-export function toWhatsAppNumber(raw?: string | null): string | null {
-    const digits = String(raw ?? '').replace(/\D/g, '');
-    if (digits.length < 8) return null;
-    if (digits.startsWith('880')) return digits;
-    if (digits.startsWith('0') && digits.length === 11) return `88${digits}`;
-    return digits;
-}
+export { toWhatsAppNumber };
 
 /**
  * Sends the reminder now on every channel that is available: email (client's addresses) and

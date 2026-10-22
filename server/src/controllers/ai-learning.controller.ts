@@ -1,6 +1,7 @@
 import type { Request, Response } from 'express';
 import aiLearning from '../services/ai-learning.service.js';
 import { KnowledgeBaseError } from '../services/knowledge-base.service.js';
+import { likePattern, pageMeta, parsePage } from '../utils/pagination.js';
 
 const fail = (res: Response, err: any) =>
     res.status(err instanceof KnowledgeBaseError ? 400 : 500).json({ success: false, message: err.message });
@@ -9,12 +10,14 @@ const str = (v: unknown) => (typeof v === 'string' ? v : '');
 
 async function listReplies(req: Request, res: Response) {
     try {
-        const data = await aiLearning.listReplies({
+        const p = parsePage(req.query);
+        const { items, total } = await aiLearning.listReplies({
             status: str(req.query.status),
-            limit: Number(req.query.limit) || undefined,
-            offset: Number(req.query.offset) || undefined,
+            like: likePattern(req.query.q),
+            limit: p.limit,
+            offset: p.offset,
         });
-        return res.status(200).json({ success: true, data });
+        return res.status(200).json({ success: true, data: items, meta: pageMeta(p, total) });
     } catch (err: any) {
         return fail(res, err);
     }
@@ -41,8 +44,15 @@ async function answerGap(req: Request, res: Response) {
 async function listExamples(req: Request, res: Response) {
     try {
         const approved = req.query.approved === 'true' ? true : req.query.approved === 'false' ? false : undefined;
-        const data = await aiLearning.listExamples(str(req.query.kind) || undefined, approved);
-        return res.status(200).json({ success: true, data });
+        const p = parsePage(req.query);
+        const { items, total } = await aiLearning.listExamples({
+            kind: str(req.query.kind) || undefined,
+            approved,
+            like: likePattern(req.query.q),
+            limit: p.limit,
+            offset: p.offset,
+        });
+        return res.status(200).json({ success: true, data: items, meta: pageMeta(p, total) });
     } catch (err: any) {
         return fail(res, err);
     }

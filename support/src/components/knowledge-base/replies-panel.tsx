@@ -8,6 +8,9 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
+import { PaginationBar } from '@/components/ui/pagination-bar';
+import { useClampPage } from '@/hooks/use-url-state';
+import type { ListProps } from './list-props';
 import { ago, EXAMPLE_MAX_CHARS } from '@/lib/knowledge-base';
 import { useCorrectAiReplyMutation, useGetAiRepliesQuery, type AiReply } from '@/store/api/knowledgeBaseApi';
 
@@ -102,9 +105,12 @@ function ReplyCard({ r }: { r: AiReply }) {
 }
 
 // Every reply the AI sent on WhatsApp, newest first. Correcting one teaches the AI the better reply.
-export function RepliesPanel() {
-    const [status, setStatus] = useState<'all' | 'ok' | 'corrected'>('all');
-    const { data: replies = [], isLoading } = useGetAiRepliesQuery(status === 'all' ? undefined : { status });
+export function RepliesPanel({ q, page, limit, view, onPage, onLimit, onView }: ListProps) {
+    const status = view === 'ok' || view === 'corrected' ? view : 'all';
+    const { data, isLoading, isFetching } = useGetAiRepliesQuery({ page, limit, q, status: status === 'all' ? undefined : status });
+    const replies = data?.items ?? [];
+    const meta = data?.meta;
+    useClampPage(page, meta?.totalPages, onPage);
 
     return (
         <div className="space-y-3">
@@ -113,7 +119,7 @@ export function RepliesPanel() {
                     Everything the AI replied to customers. If a reply was wrong or not how you&apos;d say it, correct it — the AI uses your version the next time
                     a similar message comes in, and the newest correction wins.
                 </p>
-                <Tabs value={status} onValueChange={(v) => setStatus(v as typeof status)}>
+                <Tabs value={status} onValueChange={(v) => onView(v === 'all' ? '' : v)}>
                     <TabsList>
                         <TabsTrigger value="all">All</TabsTrigger>
                         <TabsTrigger value="ok">Not reviewed</TabsTrigger>
@@ -124,13 +130,18 @@ export function RepliesPanel() {
             {isLoading ? (
                 <Skeleton className="h-40 w-full rounded-xl" />
             ) : replies.length === 0 ? (
-                <div className="rounded-lg border bg-sidebar py-12 text-center text-sm text-muted-foreground">No AI replies here yet.</div>
+                <div className="rounded-lg border bg-sidebar py-12 text-center text-sm text-muted-foreground">
+                    {q ? 'No AI replies match your search.' : 'No AI replies here yet.'}
+                </div>
             ) : (
                 <ul className="divide-y overflow-hidden rounded-lg border bg-sidebar">
                     {replies.map((r) => (
                         <ReplyCard key={r.id} r={r} />
                     ))}
                 </ul>
+            )}
+            {meta && meta.total > 0 && (
+                <PaginationBar page={meta.page} limit={meta.limit} total={meta.total} totalPages={meta.totalPages} onPageChange={onPage} onLimitChange={onLimit} isLoading={isFetching} />
             )}
         </div>
     );

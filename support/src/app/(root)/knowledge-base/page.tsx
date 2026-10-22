@@ -1,12 +1,8 @@
 'use client';
 
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { Suspense, useEffect, useState, type FormEvent } from 'react';
 import {
     BookOpen,
-    ChevronLeft,
-    ChevronRight,
-    ChevronsLeft,
-    ChevronsRight,
     Eye,
     Loader2,
     Pencil,
@@ -39,7 +35,9 @@ import {
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { PaginationBar } from '@/components/ui/pagination-bar';
+import { readPaging, useClampPage, useUrlState } from '@/hooks/use-url-state';
+import { SearchInput } from '@/components/ui/search-input';
 import { RepliesPanel } from '@/components/knowledge-base/replies-panel';
 import { TaughtPanel } from '@/components/knowledge-base/taught-panel';
 import { HumanRepliesPanel } from '@/components/knowledge-base/human-replies-panel';
@@ -58,15 +56,24 @@ import {
 } from '@/lib/knowledge-base';
 import {
     useGetKnowledgeChunksQuery,
-    useGetKnowledgeGapsQuery,
+    useGetKnowledgeStatsQuery,
     useCreateKnowledgeChunkMutation,
     useUpdateKnowledgeChunkMutation,
     useDeleteKnowledgeChunkMutation,
     type KnowledgeChunk,
 } from '@/store/api/knowledgeBaseApi';
 
-const PAGE_SIZE_OPTIONS = [20, 50, 100];
-const DEFAULT_PAGE_SIZE = 20;
+const TABS = ['entries', 'gaps', 'replies', 'taught', 'human', 'test'] as const;
+type Tab = (typeof TABS)[number];
+const SEARCHABLE: Tab[] = ['entries', 'gaps', 'replies', 'taught', 'human'];
+const SEARCH_PLACEHOLDER: Record<Tab, string> = {
+    entries: 'Search entries…',
+    gaps: 'Search questions…',
+    replies: 'Search replies or customers…',
+    taught: 'Search taught replies…',
+    human: 'Search human replies…',
+    test: '',
+};
 
 function relativeTime(iso: string): string {
     const diffMin = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
@@ -213,39 +220,44 @@ function ViewEntryDialog({ chunk, onOpenChange }: { chunk: KnowledgeChunk | null
 // ─── main page ──────────────────────────────────────────────────────────────
 
 export default function KnowledgeBasePage() {
-    const { data: chunks = [], isLoading } = useGetKnowledgeChunksQuery();
-    const { data: gaps = [] } = useGetKnowledgeGapsQuery();
+    return (
+        <Suspense fallback={<div className="p-6"><Skeleton className="h-64 w-full rounded-xl" /></div>}>
+            <KnowledgeBase />
+        </Suspense>
+    );
+}
+
+// Tab, search, page, page size and each tab's sub-filter all live in the URL:
+// /knowledge-base?tab=gaps&q=price&page=2&limit=50
+function KnowledgeBase() {
+    const url = useUrlState({ tab: 'entries', limit: '20' });
+    const tab: Tab = (TABS as readonly string[]).includes(url.get('tab')) ? (url.get('tab') as Tab) : 'entries';
+    const { page, limit } = readPaging(url.get);
+    const view = url.get('view');
+    const urlQ = url.get('q');
+
+    const setTab = (next: string) => url.set({ tab: next, q: null, page: null, view: null });
+    const setPage = (n: number) => url.set({ page: n });
+    const setLimit = (n: number) => url.set({ limit: n, page: null });
+    const setView = (v: string) => url.set({ view: v, page: null });
+
+    const { data: stats } = useGetKnowledgeStatsQuery();
+    const { data, isLoading, isFetching } = useGetKnowledgeChunksQuery({ page, limit, q: urlQ }, { skip: tab !== 'entries' });
     const [deleteChunk, { isLoading: isDeleting }] = useDeleteKnowledgeChunkMutation();
 
-    const [search, setSearch] = useState('');
-    const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
-    const [page, setPage] = useState(1);
     const [formOpen, setFormOpen] = useState(false);
     const [editing, setEditing] = useState<KnowledgeChunk | null>(null);
     const [viewing, setViewing] = useState<KnowledgeChunk | null>(null);
     const [deleting, setDeleting] = useState<KnowledgeChunk | null>(null);
     const [prefill, setPrefill] = useState<string | undefined>();
-    const [tab, setTab] = useState('entries');
 
-    const stats = useMemo(
-        () => ({
-            total: chunks.length,
-            chars: chunks.reduce((n, c) => n + c.text.length, 0),
-            over: chunks.filter((c) => c.text.length > KB_MAX_CHARS).length,
-            rules: chunks.filter((c) => isInstructions(c.source)).length,
-        }),
-        [chunks],
-    );
+    const pageItems = data?.items ?? [];
+    const meta = data?.meta;
+    useClampPage(page, tab === 'entries' ? meta?.totalPages : undefined, setPage);
 
-    const filtered = useMemo(() => {
-        const q = search.trim().toLowerCase();
-        if (!q) return chunks;
-        return chunks.filter((c) => c.text.toLowerCase().includes(q) || (c.source ?? '').toLowerCase().includes(q));
-    }, [chunks, search]);
-
-    const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
-    const currentPage = Math.min(page, totalPages);
-    const pageItems = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+    const gapCount = stats?.gaps ?? 0;
+    const badge = (n: number | undefined) =>
+        n ? <Badge variant="secondary" className="h-4 px-1.5 text-[10px] tabular-nums">{n.toLocaleString()}</Badge> : null;
 
     const openAddDialog = (question?: string) => {
         setEditing(null);
@@ -281,10 +293,10 @@ export default function KnowledgeBasePage() {
 
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                 {[
-                    { label: 'Entries', value: stats.total, hint: `${stats.rules}/${KB_MAX_INSTRUCTIONS} AI rules` },
-                    { label: 'Total characters', value: stats.chars.toLocaleString(), hint: `the AI reads the ${KB_RETRIEVE_K} best matches per message` },
-                    { label: 'Over the limit', value: stats.over, hint: `entries above ${KB_MAX_CHARS} characters`, warn: stats.over > 0 },
-                    { label: 'Unanswered questions', value: gaps.length, hint: 'waiting for an answer', warn: gaps.length > 0 },
+                    { label: 'Entries', value: stats?.total ?? '—', hint: `${stats?.rules ?? 0}/${KB_MAX_INSTRUCTIONS} AI rules` },
+                    { label: 'Total characters', value: stats ? stats.chars.toLocaleString() : '—', hint: `the AI reads the ${KB_RETRIEVE_K} best matches per message` },
+                    { label: 'Over the limit', value: stats?.over ?? '—', hint: `entries above ${KB_MAX_CHARS} characters`, warn: (stats?.over ?? 0) > 0 },
+                    { label: 'Unanswered questions', value: stats?.gaps ?? '—', hint: 'waiting for an answer', warn: gapCount > 0 },
                 ].map((c) => (
                     <div key={c.label} className="rounded-lg border bg-sidebar p-3">
                         <p className="text-xs text-muted-foreground">{c.label}</p>
@@ -295,32 +307,35 @@ export default function KnowledgeBasePage() {
             </div>
 
             <Tabs value={tab} onValueChange={setTab} className="gap-4">
-                <TabsList>
-                    <TabsTrigger value="entries">Entries</TabsTrigger>
+                <TabsList className="h-auto flex-wrap justify-start">
+                    <TabsTrigger value="entries" className="gap-1.5">
+                        Entries
+                        {badge(stats?.total)}
+                    </TabsTrigger>
                     <TabsTrigger value="gaps" className="gap-1.5">
                         Unanswered questions
-                        {gaps.length > 0 && <Badge variant="secondary" className="h-4 px-1.5 text-[10px]">{gaps.length}</Badge>}
+                        {badge(stats?.gaps)}
                     </TabsTrigger>
-                    <TabsTrigger value="replies">AI replies</TabsTrigger>
-                    <TabsTrigger value="taught">Taught replies</TabsTrigger>
-                    <TabsTrigger value="human">Human replies</TabsTrigger>
+                    <TabsTrigger value="replies" className="gap-1.5">
+                        AI replies
+                        {badge(stats?.replies)}
+                    </TabsTrigger>
+                    <TabsTrigger value="taught" className="gap-1.5">
+                        Taught replies
+                        {badge(stats?.taught)}
+                    </TabsTrigger>
+                    <TabsTrigger value="human" className="gap-1.5">
+                        Human replies
+                        {badge(stats?.humanNew)}
+                    </TabsTrigger>
                     <TabsTrigger value="test">Test the AI</TabsTrigger>
                 </TabsList>
 
-                <TabsContent value="entries" className="flex flex-col gap-6">
-            <div className="relative w-full max-w-xs">
-                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-                <Input
-                    value={search}
-                    onChange={(e) => {
-                        setSearch(e.target.value);
-                        setPage(1);
-                    }}
-                    placeholder="Search entries..."
-                    className="pl-8 h-9"
-                />
-            </div>
+                {SEARCHABLE.includes(tab) && (
+                    <SearchInput key={tab} value={urlQ} placeholder={SEARCH_PLACEHOLDER[tab]} onSearch={(q) => url.set({ q, page: null })} />
+                )}
 
+                <TabsContent value="entries" className="flex flex-col gap-6">
             {isLoading ? (
                 <div className="space-y-3">
                     {[...Array(3)].map((_, i) => (
@@ -349,7 +364,7 @@ export default function KnowledgeBasePage() {
                                                 <div className="size-12 rounded-full bg-muted flex items-center justify-center mb-3">
                                                     <BookOpen className="size-5 text-muted-foreground" />
                                                 </div>
-                                                {chunks.length === 0 ? (
+                                                {!urlQ && (stats?.total ?? 0) === 0 ? (
                                                     <>
                                                         <p className="text-sm font-medium text-foreground">No entries yet</p>
                                                         <p className="text-xs text-muted-foreground mt-1">
@@ -429,98 +444,36 @@ export default function KnowledgeBasePage() {
                         </Table>
                     </div>
 
-                    <div className="flex items-center justify-between px-1">
-                        <div className="flex items-center gap-2">
-                            <Label htmlFor="rows-per-page" className="text-sm font-medium text-muted-foreground">
-                                Rows per page
-                            </Label>
-                            <Select
-                                value={String(pageSize)}
-                                onValueChange={(value) => {
-                                    setPageSize(Number(value));
-                                    setPage(1);
-                                }}
-                            >
-                                <SelectTrigger size="sm" className="w-20" id="rows-per-page">
-                                    <SelectValue placeholder={pageSize} />
-                                </SelectTrigger>
-                                <SelectContent side="top">
-                                    {PAGE_SIZE_OPTIONS.map((size) => (
-                                        <SelectItem key={size} value={String(size)}>
-                                            {size}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-
-                        <div className="flex items-center gap-8">
-                            <div className="text-sm font-medium">
-                                Page {currentPage} of {totalPages}
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <Button
-                                    variant="outline"
-                                    className="size-8"
-                                    size="icon"
-                                    onClick={() => setPage(1)}
-                                    disabled={currentPage <= 1}
-                                >
-                                    <span className="sr-only">Go to first page</span>
-                                    <ChevronsLeft />
-                                </Button>
-                                <Button
-                                    variant="outline"
-                                    className="size-8"
-                                    size="icon"
-                                    onClick={() => setPage((p) => Math.max(1, p - 1))}
-                                    disabled={currentPage <= 1}
-                                >
-                                    <span className="sr-only">Go to previous page</span>
-                                    <ChevronLeft />
-                                </Button>
-                                <Button
-                                    variant="outline"
-                                    className="size-8"
-                                    size="icon"
-                                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                                    disabled={currentPage >= totalPages}
-                                >
-                                    <span className="sr-only">Go to next page</span>
-                                    <ChevronRight />
-                                </Button>
-                                <Button
-                                    variant="outline"
-                                    className="size-8"
-                                    size="icon"
-                                    onClick={() => setPage(totalPages)}
-                                    disabled={currentPage >= totalPages}
-                                >
-                                    <span className="sr-only">Go to last page</span>
-                                    <ChevronsRight />
-                                </Button>
-                            </div>
-                        </div>
-                    </div>
+                    {meta && meta.total > 0 && (
+                        <PaginationBar
+                            page={meta.page}
+                            limit={meta.limit}
+                            total={meta.total}
+                            totalPages={meta.totalPages}
+                            onPageChange={setPage}
+                            onLimitChange={setLimit}
+                            isLoading={isFetching}
+                        />
+                    )}
                 </>
             )}
 
                 </TabsContent>
 
                 <TabsContent value="gaps">
-                    <GapsPanel onAnswer={(q) => openAddDialog(q)} />
+                    <GapsPanel q={urlQ} page={page} limit={limit} onPage={setPage} onLimit={setLimit} onAnswer={(question) => openAddDialog(question)} />
                 </TabsContent>
 
                 <TabsContent value="replies">
-                    <RepliesPanel />
+                    <RepliesPanel q={urlQ} page={page} limit={limit} view={view} onPage={setPage} onLimit={setLimit} onView={setView} />
                 </TabsContent>
 
                 <TabsContent value="taught">
-                    <TaughtPanel />
+                    <TaughtPanel q={urlQ} page={page} limit={limit} onPage={setPage} onLimit={setLimit} />
                 </TabsContent>
 
                 <TabsContent value="human">
-                    <HumanRepliesPanel />
+                    <HumanRepliesPanel q={urlQ} page={page} limit={limit} view={view} onPage={setPage} onLimit={setLimit} onView={setView} />
                 </TabsContent>
 
                 <TabsContent value="test">

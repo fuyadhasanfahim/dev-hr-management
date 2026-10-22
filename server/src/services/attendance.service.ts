@@ -14,6 +14,29 @@ import {
   getBDWeekDay,
 } from "../utils/date.util.js";
 import auditService from "./audit.service.js";
+import notificationService from "./notification.service.js";
+
+// Staff are told (bell + SMS + WhatsApp + email) when their day is marked late, half-day or absent by someone else.
+// Fire-and-forget: a failed message must never fail the attendance update.
+function tellStaffAboutStatus(staffId: unknown, status: string, from: string, dateLabel: string) {
+  if (status === from || !["absent", "late", "half_day"].includes(status)) return;
+  const word = status === "half_day" ? "half day" : status;
+  void StaffModel.findById(staffId)
+    .select("userId")
+    .lean()
+    .then((staff) => {
+      if (!staff?.userId) return;
+      return notificationService.createNotification({
+        userId: staff.userId,
+        title: `Marked ${word.replace(/^./, (c) => c.toUpperCase())}`,
+        message: `Your attendance for ${dateLabel} has been marked ${word}. If this is a mistake, please contact HR.`,
+        type: "attendance",
+        priority: status === "absent" ? "high" : "medium",
+        resourceType: "attendance",
+      });
+    })
+    .catch((err: unknown) => console.error("[Attendance] status notification failed:", err));
+}
 
 function requireShiftTimes<T extends IShift>(
   shift: T,
@@ -202,6 +225,20 @@ const checkInInDB = async ({
   }
 
   await attendanceDay.save();
+
+  // Late / half-day check-in: tell the staff member (bell + SMS + WhatsApp + email). Never blocks the check-in.
+  if (attendanceDay.status === "late" || attendanceDay.status === "half_day") {
+    notificationService
+      .createNotification({
+        userId,
+        title: attendanceDay.status === "late" ? "Marked Late" : "Marked Half Day",
+        message: `You checked in ${attendanceDay.lateMinutes} minutes after your shift start (${shift.name}, ${shift.startTime}).`,
+        type: "attendance",
+        priority: "medium",
+        resourceType: "attendance",
+      })
+      .catch((err: unknown) => console.error("[CheckIn] late notification failed:", err));
+  }
 
   console.log(
     `[CheckIn] Success for user ${userId}. Time snapped to ${officialCheckInTime.toLocaleTimeString()}`,
@@ -707,6 +744,7 @@ async function updateAttendanceStatusInDB({
   }
 
   await attendanceDay.save();
+  tellStaffAboutStatus(attendanceDay.staffId, status, oldStatus, attendanceDay.date.toLocaleDateString("en-GB"));
 
   // Log audit trail
   await auditService.createLog({
@@ -834,6 +872,7 @@ async function bulkUpdateAttendanceStatusInDB({
     }
 
     await attendanceDay.save();
+    tellStaffAboutStatus(staffId, status, oldStatus, dayStart.toLocaleDateString("en-GB"));
 
     await auditService.createLog({
       userId: updatedBy,

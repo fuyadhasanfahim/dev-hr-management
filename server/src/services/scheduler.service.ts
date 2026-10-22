@@ -392,6 +392,7 @@ async function processLeaveExpiry() {
                         priority: 'medium',
                         resourceType: 'leave',
                         resourceId: leave._id,
+                        external: false,
                     });
                     notificationCount++;
                 }

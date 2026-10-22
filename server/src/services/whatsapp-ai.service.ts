@@ -5,6 +5,7 @@ import { logger } from '../lib/logger.js';
 import { openaiFetch } from '../lib/openai-chat.js';
 import aiLearning, { formatExamples, type ExamplesForPrompt } from './ai-learning.service.js';
 import { getCatalogContext } from './ai-catalog-context.js';
+import { leaksPrice, priceGate, stageBrief, isSalesStage, SALES_STAGES, type SalesStage } from '../lib/sales-flow.js';
 
 const SYSTEM_PROMPT = `You are Mira, the virtual assistant of Webbriks (a digital agency), replying to customers on WhatsApp. Be friendly and concise (2-4 short sentences).
 
@@ -42,20 +43,24 @@ The CONTEXT is the only source of truth. If an earlier assistant message in this
 
 Be polite and respectful at all times (use the respectful "apni" form of address, thank the customer, never sound dismissive or robotic). Politeness never changes the language rule above: Bengali/Banglish customers always get Bengali script, English customers get English.
 
-SALES PLAYBOOK — every enquiry is a lead you are guiding, step by step, like a good consultant. Never dump prices or whole package lists up front.
-1. DISCOVER first. When someone names a service ("ecommerce website lagbe", "I need an app"), do not quote yet. Ask ONE short question that narrows it down: what they sell or do, and whether they already have something decided. For a website/app, offer the real options from the CATALOG/CONTEXT as a short choice (e.g. Shopify, Laravel, or custom-coded React/Next.js) and ask which direction they lean toward, or whether they'd like your suggestion.
-2. FEATURES second. Once they pick a direction, say briefly what that option includes at our end (the main features from the CATALOG), tied to what they told you. Then ask what they specifically need (product count, payment methods, delivery, multi-language, admin panel...).
-3. MATCH third. Take everything they said they need and compare it with the CATALOG packages for that service/platform. Name the ONE package that covers most of it, say in plain words why ("you mentioned X, Y, Z — all of those are already in our Starter"), and mention only the one or two extras that would need a higher package or an add-on.
-4. PRICE last. Give the price of that matched package from the CATALOG only at this step. EXCEPTION: if the customer asks the price directly, answer honestly with the starting price of the matching package(s) in one line and immediately continue with the next discovery question — never dodge a direct price question.
-PRICE DISCIPLINE: in steps 1-3 do NOT mention any price, package price or "starts from" amount unless the customer asked for the price in that very message. Right after they choose a platform/direction, describe what we include (step 2) and ask what they need — no price yet. Price appears only in step 4 (or on a direct price question).
-5. NEXT STEP. After the price, move the lead forward: offer a quick call/meeting, a detailed quotation, or ask about timeline/budget. Keep a warm lead warm — always end with one forward-moving question, never a dead end like "let me know if you need anything".
-Use the customer's own words and goals in every answer. If they change topic, restart at step 1 for the new topic. Never contradict the CATALOG or CONTEXT; the CATALOG is the source for package names, inclusions and prices.
-When the customer has no budget or no clear idea: don't escalate. Briefly suggest the entry-level package from the CATALOG for what they described, say it can be tailored, and ask one question about their business.
+SALES FLOW — every enquiry is a lead you guide step by step, like a good consultant. The customer must ALWAYS see the options, the features and the extras BEFORE any price. Work out which step the chat is at from the whole conversation and the SALES STATE line below, do that step's job, and report it in "stage".
+1. discover — They name something ("website lagbe", "ecommerce chai"). Ask ONE short question to understand the need: what kind of website, what they sell or do, anything already decided. No platform list yet, no price.
+2. platform — Offer the real options from the CATALOG as a short choice. For a website that is Laravel, Shopify or custom-coded (Next.js / React), using only what the CATALOG lists for that service. Give each a one-line "best for" and ask which they lean toward, or offer to suggest one based on what they told you. No price.
+3. features — They picked a platform (or accepted your suggestion). Say what that platform's package includes at our end: 4-8 highlights from the CATALOG "includes", tied to their business, in flowing sentences (no bullet dump). If there are several packages, name them and say what each adds. Then ask what they specifically need. No price.
+4. extras — Ask whether they want anything beyond what is included. Mention the CATALOG "optional extras" that fit them (names only, no prices) and ask which they'd like, plus whether they need anything custom. Note their list. If they need nothing extra, move on.
+5. recap — Sum up in 2-3 sentences: the platform, the one package that covers most of their needs, and the extras they chose (and anything that needs a higher package or custom work). Then offer the price ("Shall I share the price for this?" / "এই প্যাকেজের দাম জানাবো?") unless they already asked for it.
+6. price — ONLY when PRICE ALLOWED is yes, and they asked for the price or agreed after the recap: give the matched package price from the CATALOG, the price of each chosen paid extra, and the total in one line. If a chosen extra has no price in the CATALOG, say the team will confirm that part. Never invent, round or discount.
+7. next_step — After the price, move the lead forward: offer a quick call/meeting or a detailed quotation and ask about timeline or when they want to start.
+other — greetings, thanks, support, off-topic.
+A customer who jumps ahead ("Shopify, 50 products, payment gateway, price?") has given you several steps at once: confirm what they said in one line, cover the missing steps in the same reply (platform/features/extras), and still do not state a price until PRICE ALLOWED is yes. If they ask the price too early, say in ONE friendly line that the price depends on the platform and features they choose, then carry on with the flow — never dodge silently, never quote. If they change topic or service, restart at step 1.
+Always end with ONE forward-moving question, never a dead end like "let me know if you need anything". Use the customer's own words and goals. Never contradict the CATALOG or CONTEXT; the CATALOG is the source for package names, inclusions, extras and prices.
+When the customer has no budget or no clear idea: don't escalate. Suggest the entry-level package from the CATALOG for what they described, say it can be tailored, and ask one question about their business — still following the steps above.
+In "stage" put the step THIS reply performs (discover, platform, features, extras, recap, price, next_step or other). In "stageReason" put ONE short English sentence saying why, naming what the customer said that led you there (for example: "Customer chose Shopify, so listing Shopify features before asking about extras").
 
 Escalate ONLY when the customer explicitly asks for a human or manager, is upset or complaining, or wants a price negotiation/discount, or needs something only a person can do (custom quote sign-off, payment disputes, account-specific actions). Escalating closes the chat to the bot, so never escalate just because the CONTEXT lacks an answer, the service is unlisted (e.g. WordPress, mobile apps), or the message is vague, short, mistyped or Banglish — answer from the CONTEXT, say the team will confirm the rest, and ask one clarifying question. When you do escalate, the "reply" must still be a warm, specific message (e.g. thank them, say a team member will follow up shortly and what it will be about); never leave it empty.
 
 Respond ONLY with valid JSON (no markdown, no code fences):
-{"reply":"your message","escalate":false,"escalateReason":""}`;
+{"reply":"your message","escalate":false,"escalateReason":"","stage":"discover","stageReason":"why this stage"}`;
 
 // Only used if the model returns an empty reply: still polite, and neutral about script.
 const FALLBACK_REPLY =
@@ -101,6 +106,8 @@ export interface WhatsAppAIOptions {
     customerName?: string;
     // false for staff test runs, so a test question doesn't show up as a real unanswered question.
     recordGaps?: boolean;
+    // Where the previous AI reply in this chat left the sales flow (kept on the conversation).
+    salesStage?: SalesStage;
 }
 
 export interface WhatsAppAIResult {
@@ -109,6 +116,9 @@ export interface WhatsAppAIResult {
     escalateReason?: string;
     matches: KnowledgeMatch[]; // what the AI read from the knowledge base
     taughtCount: number; // staff-taught replies / corrections that were applied
+    stage: SalesStage; // which step of the sales flow this reply performed
+    stageReason: string; // why, in one sentence — shown to staff
+    priceAllowed: boolean; // whether the price gate was open for this reply
 }
 
 export async function processWhatsAppMessage(
@@ -135,8 +145,12 @@ export async function processWhatsAppMessage(
         logger.error(`WhatsApp AI retrieval failed, answering without context: ${err.message}`);
     }
 
+    // The price gate: until platform, features and extras have been covered, the model is not even shown a price.
+    const gate = priceGate(options.salesStage, message, history);
+    if (!gate.allowed) matches = matches.filter((m) => !leaksPrice(m.text));
+
     // Live package catalog — mentions in this chat decide which service/platform is shown in full.
-    const catalog = await getCatalogContext([message, ...history.slice(-8).map((t) => t.content)].join('\n'));
+    const catalog = await getCatalogContext([message, ...history.slice(-8).map((t) => t.content)].join('\n'), { showPrices: gate.allowed });
 
     let rules = '';
     try {
@@ -153,20 +167,22 @@ export async function processWhatsAppMessage(
             `TAUGHT REPLIES (written or corrected by our staff for questions like this one. Follow their facts, decisions and wording closely, adapted to this chat. If two disagree, the LAST one is the newest and wins):\n${formatExamples(examples.taught)}`,
         examples.style.length &&
             `HOW OUR HUMAN TEAM TALKS (real replies from our agents to similar messages — copy their tone, rhythm and way of asking, not their facts):\n${formatExamples(examples.style)}`,
+        stageBrief(options.salesStage, gate),
         options.customerName && `The customer's WhatsApp profile name is "${options.customerName}".`,
-        catalog && `CATALOG (our live packages, BDT; the source for package names, inclusions and prices):\n${catalog}`,
+        catalog && `CATALOG (our live packages${gate.allowed ? ', BDT' : '; prices are hidden until the sales flow reaches the price step'}; the source for package names, inclusions${gate.allowed ? ', extras and prices' : ' and extras'}):\n${catalog}`,
         `CONTEXT:\n${context || '(nothing in the knowledge base matches this message)'}`,
     ]
         .filter(Boolean)
         .join('\n\n');
 
-    // The model occasionally returns an empty "reply"; one retry nearly always fixes it.
-    let parsed: any = {};
-    for (let attempt = 0; attempt < 2 && !parsed.reply?.trim(); attempt++) {
+    // The model occasionally returns an empty "reply"; one retry nearly always fixes it. While the price gate is
+    // closed a reply that still states an amount is rejected and regenerated (the prompt asks, this enforces).
+    const base = [{ role: 'system', content: system }, ...history.filter((t) => t.content !== FALLBACK_REPLY).slice(-10), { role: 'user', content: message }];
+    const ask = async (extra: { role: string; content: string }[] = []) => {
         const data = await openaiFetch('chat/completions', {
             model: envConfig.openai_chat_model,
             // Our own fallback notices carry no information and can derail the model, so keep them out of its view.
-            messages: [{ role: 'system', content: system }, ...history.filter((t) => t.content !== FALLBACK_REPLY).slice(-10), { role: 'user', content: message }],
+            messages: [...base, ...extra],
             // Strict schema: the model can no longer return {} without a reply.
             response_format: {
                 type: 'json_schema',
@@ -175,15 +191,47 @@ export async function processWhatsAppMessage(
                     strict: true,
                     schema: {
                         type: 'object',
-                        properties: { reply: { type: 'string' }, escalate: { type: 'boolean' }, escalateReason: { type: 'string' } },
-                        required: ['reply', 'escalate', 'escalateReason'],
+                        properties: {
+                            reply: { type: 'string' },
+                            escalate: { type: 'boolean' },
+                            escalateReason: { type: 'string' },
+                            stage: { type: 'string', enum: [...SALES_STAGES] },
+                            stageReason: { type: 'string' },
+                        },
+                        required: ['reply', 'escalate', 'escalateReason', 'stage', 'stageReason'],
                         additionalProperties: false,
                     },
                 },
             },
         });
-        parsed = JSON.parse(data.choices[0].message.content);
-        if (!parsed.reply?.trim()) logger.warn(`WhatsApp AI returned an empty reply (attempt ${attempt + 1}): ${JSON.stringify(parsed)}`);
+        return JSON.parse(data.choices[0].message.content);
+    };
+
+    let parsed: any = {};
+    let priceLeaked = false;
+    for (let attempt = 0; attempt < 3; attempt++) {
+        const retryNote =
+            priceLeaked &&
+            [{ role: 'system', content: 'Your previous draft stated a price or amount, which is not allowed yet. Rewrite the reply with NO price, amount, currency figure or "starting from" — follow the SALES STATE line and continue the sales flow with the next question.' }];
+        parsed = await ask(retryNote || []);
+        if (!parsed.reply?.trim()) {
+            logger.warn(`WhatsApp AI returned an empty reply (attempt ${attempt + 1}): ${JSON.stringify(parsed)}`);
+            continue;
+        }
+        priceLeaked = !gate.allowed && leaksPrice(parsed.reply);
+        if (!priceLeaked) break;
+        logger.warn(`WhatsApp AI stated a price while the gate was closed (attempt ${attempt + 1}); regenerating`);
+    }
+    // Still leaking after retries: never send the price. A short neutral line that keeps the flow going.
+    if (priceLeaked) {
+        parsed = {
+            ...parsed,
+            reply: /[\u0980-\u09FF]/.test(message)
+                ? 'আপনার প্রয়োজন অনুযায়ী সঠিক প্যাকেজ ঠিক করতে আগে একটু জেনে নিই — আপনি কী ধরনের ওয়েবসাইট চান, আর কী বিক্রি করবেন?'
+                : "To suggest the right package I first need a little more detail — what kind of website do you need, and what will you sell?",
+            stage: 'discover',
+            stageReason: 'Draft stated a price before features and extras were covered, so it was replaced with a discovery question.',
+        };
     }
     const result: WhatsAppAIResult = {
         reply: parsed.reply?.trim() || FALLBACK_REPLY,
@@ -191,6 +239,10 @@ export async function processWhatsAppMessage(
         escalateReason: parsed.escalateReason,
         matches,
         taughtCount: examples.taught.length,
+        // A price/next-step label can't be true while the gate was closed (the reply was already checked for amounts).
+        stage: !isSalesStage(parsed.stage) ? 'other' : !gate.allowed && (parsed.stage === 'price' || parsed.stage === 'next_step') ? 'recap' : parsed.stage,
+        stageReason: String(parsed.stageReason ?? '').slice(0, 300),
+        priceAllowed: gate.allowed,
     };
 
     // Feed the "unanswered questions" list: the AI handed off, or the knowledge base had nothing close.

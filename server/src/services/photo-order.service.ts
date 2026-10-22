@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { notifyPhotoOrderStatus } from './order-notify.service.js';
 import PhotoOrderModel, { type IPhotoOrder, type PhotoOrderStatus, type PhotoOrderPriority } from '../models/photo-order.model.js';
 import PhotoServiceModel from '../models/photo-service.model.js';
 import PhotoReturnFormatModel from '../models/photo-return-format.model.js';
@@ -148,6 +149,7 @@ async function changeStatus(id: string, status: PhotoOrderStatus, userId: string
     if (status === 'delivered') order.deliveredAt = new Date();
     order.timeline.push({ status, timestamp: new Date(), changedBy: new mongoose.Types.ObjectId(userId), ...(note ? { note } : {}) });
     await order.save();
+    void notifyPhotoOrderStatus(order._id, status);
     return getOrder(id);
 }
 
@@ -178,6 +180,7 @@ async function addRevision(id: string, instruction: string, userId: string) {
     order.revisionInstructions.push({ instruction, createdAt: new Date(), createdBy: new mongoose.Types.ObjectId(userId) });
     order.timeline.push({ status: 'revision', timestamp: new Date(), changedBy: new mongoose.Types.ObjectId(userId), note: instruction });
     await order.save();
+    void notifyPhotoOrderStatus(order._id, 'revision');
     return getOrder(id);
 }
 

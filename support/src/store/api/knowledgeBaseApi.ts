@@ -28,6 +28,9 @@ export interface KnowledgeTestResult {
     reply: string;
     escalate: boolean;
     escalateReason: string | null;
+    stage: string;
+    stageReason: string;
+    priceAllowed: boolean;
     lowConfidence: boolean;
     lowConfidenceBelow: number;
     matches: KnowledgeTestMatch[];
@@ -60,11 +63,52 @@ export interface AiExample {
     createdAt: string;
 }
 
+export interface PageMeta {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+}
+export interface Paged<T> {
+    items: T[];
+    meta: PageMeta;
+}
+export interface PageArgs {
+    page: number;
+    limit: number;
+    q?: string;
+}
+export interface KnowledgeStats {
+    total: number; // knowledge entries
+    chars: number;
+    over: number;
+    rules: number;
+    gaps: number;
+    replies: number;
+    repliesCorrected: number;
+    taught: number;
+    humanNew: number;
+    humanTaught: number;
+}
+
+const EMPTY_META: PageMeta = { page: 1, limit: 20, total: 0, totalPages: 1 };
+const paged = <T>(res: { data?: T[]; meta?: PageMeta }): Paged<T> => ({ items: res.data ?? [], meta: res.meta ?? EMPTY_META });
+const qs = (args: Record<string, string | number | boolean | undefined>) => {
+    const p = new URLSearchParams();
+    for (const [k, v] of Object.entries(args)) if (v !== undefined && v !== '') p.set(k, String(v));
+    return p.toString();
+};
+
 export const knowledgeBaseApi = baseApi.injectEndpoints({
     endpoints: (builder) => ({
-        getKnowledgeChunks: builder.query<KnowledgeChunk[], void>({
-            query: () => '/support/knowledge-base',
-            transformResponse: (res: { data: KnowledgeChunk[] }) => res.data ?? [],
+        getKnowledgeStats: builder.query<KnowledgeStats, void>({
+            query: () => '/support/knowledge-base/stats',
+            transformResponse: (res: { data: KnowledgeStats }) => res.data,
+            providesTags: ['KnowledgeBase', 'AiLearning'],
+        }),
+        getKnowledgeChunks: builder.query<Paged<KnowledgeChunk>, PageArgs>({
+            query: (args) => `/support/knowledge-base?${qs({ ...args })}`,
+            transformResponse: paged<KnowledgeChunk>,
             providesTags: ['KnowledgeBase'],
         }),
         createKnowledgeChunk: builder.mutation<KnowledgeChunk, { text: string; source?: string }>({
@@ -86,9 +130,9 @@ export const knowledgeBaseApi = baseApi.injectEndpoints({
             invalidatesTags: ['KnowledgeBase'],
         }),
         // Questions the AI escalated or had no good knowledge for — staff turn them into entries.
-        getKnowledgeGaps: builder.query<KnowledgeGap[], void>({
-            query: () => '/support/knowledge-base/gaps',
-            transformResponse: (res: { data: KnowledgeGap[] }) => res.data ?? [],
+        getKnowledgeGaps: builder.query<Paged<KnowledgeGap>, PageArgs>({
+            query: (args) => `/support/knowledge-base/gaps?${qs({ ...args })}`,
+            transformResponse: paged<KnowledgeGap>,
             providesTags: ['KnowledgeBase'],
         }),
         deleteKnowledgeGap: builder.mutation<void, string>({
@@ -100,18 +144,19 @@ export const knowledgeBaseApi = baseApi.injectEndpoints({
             query: ({ id, reply }) => ({ url: `/support/knowledge-base/gaps/${id}/answer`, method: 'POST', body: { reply } }),
             invalidatesTags: ['KnowledgeBase', 'AiLearning'],
         }),
-        getAiReplies: builder.query<AiReply[], { status?: 'ok' | 'corrected' } | void>({
-            query: (arg) => `/support/knowledge-base/replies${arg?.status ? `?status=${arg.status}` : ''}`,
-            transformResponse: (res: { data: AiReply[] }) => res.data ?? [],
+        getAiReplies: builder.query<Paged<AiReply>, PageArgs & { status?: 'ok' | 'corrected' }>({
+            query: (args) => `/support/knowledge-base/replies?${qs({ ...args })}`,
+            transformResponse: paged<AiReply>,
             providesTags: ['AiLearning'],
         }),
         correctAiReply: builder.mutation<AiExample, { id: string; reply: string }>({
             query: ({ id, reply }) => ({ url: `/support/knowledge-base/replies/${id}/correct`, method: 'POST', body: { reply } }),
             invalidatesTags: ['AiLearning'],
         }),
-        getAiExamples: builder.query<AiExample[], { kind?: AiExample['kind'] } | void>({
-            query: (arg) => `/support/knowledge-base/examples${arg?.kind ? `?kind=${arg.kind}` : ''}`,
-            transformResponse: (res: { data: AiExample[] }) => res.data ?? [],
+        // kind 'taught' = everything staff wrote or corrected (not the human-agent replies).
+        getAiExamples: builder.query<Paged<AiExample>, PageArgs & { kind?: AiExample['kind'] | 'taught'; approved?: boolean }>({
+            query: (args) => `/support/knowledge-base/examples?${qs({ ...args })}`,
+            transformResponse: paged<AiExample>,
             providesTags: ['AiLearning'],
         }),
         createAiExample: builder.mutation<AiExample, { question: string; reply: string }>({
@@ -146,6 +191,7 @@ export const knowledgeBaseApi = baseApi.injectEndpoints({
 });
 
 export const {
+    useGetKnowledgeStatsQuery,
     useGetKnowledgeChunksQuery,
     useCreateKnowledgeChunkMutation,
     useUpdateKnowledgeChunkMutation,

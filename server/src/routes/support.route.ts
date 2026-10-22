@@ -184,6 +184,7 @@ router.post('/chats/convert', requireUnifiedAuth, restrictTo('admin', 'super_adm
 router.post('/admin/migrate-cloudinary', requireUnifiedAuth, restrictTo('admin', 'super_admin'), SupportController.triggerCloudinaryMigration);
 
 // Knowledge base (pgvector) — WhatsApp AI's RAG source, managed by staff.
+router.get('/knowledge-base/stats', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), KnowledgeBaseController.stats);
 router.get('/knowledge-base', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), KnowledgeBaseController.listChunks);
 router.post('/knowledge-base', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), KnowledgeBaseController.createChunk);
 router.patch('/knowledge-base/:id', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), KnowledgeBaseController.updateChunk);

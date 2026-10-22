@@ -26,6 +26,13 @@ export interface WhatsAppCustomerDetails {
     messageCount: number;
     conversationCount: number;
     linkedTicketId: string | null;
+    // Where the AI's sales flow stands and how it got there (null until the AI has replied with a stage).
+    sales: {
+        stage: string;
+        label: string;
+        reason: string;
+        history: { stage: string; label: string; reason: string; at: string | null }[];
+    } | null;
     client: {
         id: string;
         clientId: string | null;

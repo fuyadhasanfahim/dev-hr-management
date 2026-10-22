@@ -52,7 +52,9 @@ const CYCLE: Record<string, string> = {
 };
 
 /** Prompt text describing the catalog, or '' when it can't be read (the AI then relies on the knowledge base alone). */
-export async function getCatalogContext(chatText: string): Promise<string> {
+export async function getCatalogContext(chatText: string, opts: { showPrices?: boolean } = {}): Promise<string> {
+    // Prices are left out of the text entirely until the sales flow reaches the price step — the model can't leak what it never saw.
+    const showPrices = opts.showPrices !== false;
     try {
         const snap = await load();
         const text = chatText.toLowerCase();
@@ -72,7 +74,7 @@ export async function getCatalogContext(chatText: string): Promise<string> {
                 const platformHit = !!platform && mentioned(platform.name, platform.slug);
                 const label = `${platform ? `${platform.name} · ` : ''}${p.name}`;
                 lines.push(
-                    `- ${label}: ${money(p.price, p.priceMax)}${CYCLE[p.billingCycle] ?? ''}` +
+                    `- ${label}${showPrices ? `: ${money(p.price, p.priceMax)}${CYCLE[p.billingCycle] ?? ''}` : ''}` +
                         `${p.bestFor ? ` — best for: ${String(p.bestFor).slice(0, 100)}` : ''}` +
                         `${p.duration ? ` — delivery: ${p.duration}` : ''}`,
                 );
@@ -84,6 +86,13 @@ export async function getCatalogContext(chatText: string): Promise<string> {
                         .map((f: any) => f.name);
                     const bullets: string[] = names.length ? names : (p.bullets ?? []).slice(0, MAX_FEATURES_PER_PACKAGE);
                     if (bullets.length) lines.push(`  includes: ${bullets.join('; ')}`);
+                    // Optional paid extras for this package — what the "extras" step offers the customer.
+                    const addons = (p.addonIds ?? [])
+                        .map((id: any) => snap.features.get(String(id)))
+                        .filter(Boolean)
+                        .slice(0, MAX_FEATURES_PER_PACKAGE)
+                        .map((f: any) => (showPrices && f.price ? `${f.name} (+${money(f.price)})` : f.name));
+                    if (addons.length) lines.push(`  optional extras: ${addons.join('; ')}`);
                 }
             }
         }
