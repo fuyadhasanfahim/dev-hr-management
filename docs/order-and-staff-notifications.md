@@ -49,13 +49,18 @@ Hello {{1}}, the status of your order {{2}} is now: {{3}}. Thank you for choosin
 ### Staff alert — `WA_TEMPLATE_STAFF_ALERT`
 
 ```
-Hello {{1}}, HR update from Web Briks: {{2}}
+Hello {{1}}, HR update from Web Briks: {{2}} Please check your HR dashboard for details.
 ```
 
 | Var | Filled with | Sample |
 | --- | --- | --- |
 | {{1}} | staff name | Karim |
 | {{2}} | the alert | Marked Absent. Your attendance for 22/10/2026 has been marked absent. |
+
+```
+## Status
+
+Submitted to Meta (Web Briks, Utility, `en`) on 2026-10-22 and pending review: `order_status_update`, `staff_hr_alert`.
 
 ```
 WA_TEMPLATE_ORDER_STATUS=order_status_update
