@@ -46,10 +46,10 @@ Hello {{1}}, the status of your order {{2}} is now: {{3}}. Thank you for choosin
 | {{2}} | order number | ORD-2026-00010 |
 | {{3}} | status | in progress |
 
-### Staff alert — `WA_TEMPLATE_STAFF_ALERT`
+### Staff alert — `WA_TEMPLATE_STAFF_ALERT` (`staff_attendance_update`)
 
 ```
-Hello {{1}}, HR update from Web Briks: {{2}} Please check your HR dashboard for details.
+Hello {{1}}, this is an update about your attendance or leave record at Web Briks: {{2}} - Web Briks HR
 ```
 
 | Var | Filled with | Sample |
@@ -60,10 +60,10 @@ Hello {{1}}, HR update from Web Briks: {{2}} Please check your HR dashboard for 
 ```
 ## Status
 
-Submitted to Meta (Web Briks, Utility, `en`) on 2026-10-22 and pending review: `order_status_update`, `staff_hr_alert`.
+Approved by Meta (Web Briks, Utility, `en`): `order_status_update`, `staff_attendance_update`. An earlier `staff_hr_alert` was reclassified as Marketing and deleted; keep staff wording neutral (no "check the dashboard" call to action) so it stays Utility.
 
 ```
 WA_TEMPLATE_ORDER_STATUS=order_status_update
-WA_TEMPLATE_STAFF_ALERT=staff_hr_alert
+WA_TEMPLATE_STAFF_ALERT=staff_attendance_update
 NOTIFY_MODE=live
 ```
