@@ -1,4 +1,5 @@
 import { format } from 'date-fns';
+import { formatMoneyCode } from '../utils/money.util.js';
 import puppeteer from 'puppeteer';
 import fs from 'fs';
 import path from 'path';
@@ -19,37 +20,7 @@ const __dirname = path.dirname(__filename);
 
 /** Matches the Invoice / Quotation puppeteer PDF's money formatting exactly. */
 function formatMoneyPdf(amount: number | null | undefined, currency?: string | null): string {
-    const n = Number(amount || 0);
-    const fractionDigits = 2;
-    const BDT_TOKENS = new Set(['BDT', 'BDT.', '৳', 'Tk', 'TK', 'tk']);
-    const cur = currency?.trim() || '';
-    const isBDT = cur && BDT_TOKENS.has(cur);
-
-    if (isBDT) {
-        return `Tk ${n.toLocaleString('en-IN', {
-            minimumFractionDigits: fractionDigits,
-            maximumFractionDigits: fractionDigits,
-        })}`;
-    }
-
-    const fallbackSymbol = cur || '$';
-    if (/^[A-Za-z]{3}$/.test(fallbackSymbol)) {
-        try {
-            return new Intl.NumberFormat('en-US', {
-                style: 'currency',
-                currency: fallbackSymbol.toUpperCase(),
-                minimumFractionDigits: fractionDigits,
-                maximumFractionDigits: fractionDigits,
-            }).format(n);
-        } catch {
-            /* fall through */
-        }
-    }
-
-    return `${fallbackSymbol}${n.toLocaleString('en-US', {
-        minimumFractionDigits: fractionDigits,
-        maximumFractionDigits: fractionDigits,
-    })}`;
+    return formatMoneyCode(amount, currency);
 }
 
 function esc(s: unknown): string {

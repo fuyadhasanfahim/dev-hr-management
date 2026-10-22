@@ -153,7 +153,7 @@ export default function EarningsPage() {
             Revenue collected from receipt payments
             {stats?.usdToBdtRate && (
               <span className="text-xs">
-                · USD converted to BDT in totals at ৳{stats.usdToBdtRate.toFixed(2)} / $1
+                · USD converted to BDT in totals at BDT {stats.usdToBdtRate.toFixed(2)} / USD 1
               </span>
             )}
             {isLoading && (

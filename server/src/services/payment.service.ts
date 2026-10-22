@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import { normalizeCurrencyCode } from '../utils/money.util.js';
 import jwt from 'jsonwebtoken';
 import mongoose, { Types } from 'mongoose';
 import OrderModel, { type IOrder } from '../models/order.model.js';
@@ -175,12 +176,15 @@ export function fromStripeMinorUnits(minorAmount: number, gatewayCurrency: strin
 }
 
 /**
- * Currencies neither Stripe nor PayPal will charge in directly. The invoice,
- * the payment page, and the Receipt ledger stay in the invoice's native
- * currency throughout — only the gateway call itself uses the converted
- * amount (see resolveGatewayCharge/convertGatewayAmountToNative below).
+ * Stripe and PayPal cannot charge BDT, so BDT invoices have no online payment at all: no Pay Now link is
+ * issued for them and any gateway call is refused. Every other currency (USD, EUR, GBP …) is charged
+ * as-is, in the invoice's own currency.
  */
-const GATEWAY_UNSUPPORTED_CURRENCIES = new Set(['bdt']);
+export const BDT_NO_ONLINE_PAYMENT = 'Online payment is not available for BDT invoices because Stripe and PayPal do not support BDT. Please pay by bank transfer or contact us.';
+
+export function isOnlinePayable(currency: unknown): boolean {
+    return normalizeCurrencyCode(currency) !== 'BDT';
+}
 
 export interface GatewayCharge {
     /** What to actually pass as the gateway's amount/currency. */
@@ -191,26 +195,12 @@ export interface GatewayCharge {
 }
 
 /**
- * Resolves what a gateway should actually be charged for this token: the
- * native currency/amount unchanged when the gateway supports it, or a
- * same-value USD conversion (at today's rate) when it doesn't.
+ * Resolves what a gateway should be charged for this token: the invoice's own currency and amount, unchanged.
+ * BDT is refused (see isOnlinePayable).
  */
 export async function resolveGatewayCharge(resolved: ResolvedPaymentToken): Promise<GatewayCharge> {
-    const nativeCurrency = normalizeCurrencyForGateway(resolved.currency);
-
-    if (!GATEWAY_UNSUPPORTED_CURRENCIES.has(nativeCurrency)) {
-        return { chargeCurrency: nativeCurrency, chargeAmount: resolved.amountDue, fxRate: 1 };
-    }
-
-    if (nativeCurrency === 'bdt') {
-        const usdToBdt = await getUsdToBdtRate();
-        const chargeAmount = Math.round((resolved.amountDue / usdToBdt) * 100) / 100;
-        // fxRate expresses "native units per 1 charge-currency unit" so the
-        // inverse conversion below is a plain multiplication.
-        return { chargeCurrency: 'usd', chargeAmount, fxRate: usdToBdt };
-    }
-
-    throw new AppError(`Currency "${resolved.currency}" is not supported for online payment.`, 422);
+    if (!isOnlinePayable(resolved.currency)) throw new AppError(BDT_NO_ONLINE_PAYMENT, 422);
+    return { chargeCurrency: normalizeCurrencyForGateway(resolved.currency), chargeAmount: resolved.amountDue, fxRate: 1 };
 }
 
 /**
@@ -285,6 +275,7 @@ export class PaymentService {
         if (!receipt) throw new AppError('No receipt ledger found for this order', 404);
 
         const { grandTotal, currency } = resolveOrderTotals(order);
+        if (!isOnlinePayable(currency)) return null; // BDT: no payment link
         const { balanceDue } = await attachReceiptLedger(order.quotationGroupId, grandTotal);
 
         if (balanceDue <= 0.009) return null;
@@ -338,6 +329,7 @@ export class PaymentService {
         const invoice = await PhotoInvoiceModel.findById(invoiceId).lean();
         if (!invoice) throw new AppError('Invoice not found', 404);
         if (invoice.paymentStatus === 'paid') return null;
+        if (!isOnlinePayable(invoice.currency)) return null; // BDT: no payment link
 
         const existing = await PaymentTokenModel.findOne({ photoInvoiceId: invoice._id, status: 'active' });
         if (existing && existing.expiresAt > new Date()) {
@@ -382,6 +374,9 @@ export class PaymentService {
         if (!tokenDoc || tokenDoc.token !== rawToken) {
             throw new AppError('Invalid payment link.', 410);
         }
+        // An older link for a BDT invoice: say clearly why it can't be paid online. (Webhooks resolve by jti
+        // below and are deliberately not blocked, so a payment already in flight is still recorded.)
+        if (!isOnlinePayable(tokenDoc.currency)) throw new AppError(BDT_NO_ONLINE_PAYMENT, 422);
 
         return resolveFromTokenDoc(tokenDoc);
     }

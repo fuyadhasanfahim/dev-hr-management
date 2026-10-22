@@ -57,9 +57,9 @@ export const CLIENT_STATUS_OPTIONS = [
 ];
 
 export const CURRENCY_OPTIONS = [
-  { value: "USD", label: "US Dollar ($)" },
-  { value: "EUR", label: "Euro (€)" },
-  { value: "GBP", label: "British Pound (£)" },
-  { value: "AUD", label: "Australian Dollar (A$)" },
-  { value: "CAD", label: "Canadian Dollar (C$)" },
+  { value: "USD", label: "US Dollar (USD)" },
+  { value: "EUR", label: "Euro (EUR)" },
+  { value: "GBP", label: "British Pound (GBP)" },
+  { value: "AUD", label: "Australian Dollar (AUD)" },
+  { value: "CAD", label: "Canadian Dollar (CAD)" },
 ];

@@ -1,3 +1,4 @@
+import { formatMoney } from '@/lib/money';
 import { ShoppingBag, Image, DollarSign, CreditCard, Wallet, TrendingUp } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent } from "@/components/ui/card";
@@ -16,12 +17,7 @@ interface ClientOrderStatsProps {
 }
 
 export function ClientOrderStats({ stats, isLoading, currency = "USD" }: ClientOrderStatsProps) {
-    const formatCurrency = (amount: number) => {
-        return new Intl.NumberFormat('en-US', {
-            style: 'currency',
-            currency: currency,
-        }).format(amount);
-    };
+    const formatCurrency = (amount: number) => formatMoney(amount, currency);
 
     const statCards = [
         {
@@ -61,7 +57,7 @@ export function ClientOrderStats({ stats, isLoading, currency = "USD" }: ClientO
         },
         {
             label: "Total BDT",
-            value: stats?.totalBDT !== undefined ? `${stats.totalBDT.toLocaleString()} ৳` : undefined,
+            value: stats?.totalBDT !== undefined ? formatMoney(stats.totalBDT, 'BDT', { withDecimals: false }) : undefined,
             icon: TrendingUp,
             color: "text-orange-500",
             bgColor: "bg-orange-500/10",

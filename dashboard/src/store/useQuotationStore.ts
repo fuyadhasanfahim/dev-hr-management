@@ -74,7 +74,7 @@ interface QuotationStore {
 const initialState: QuotationData = {
   serviceType: "web-development",
   clientId: "",
-  currency: "৳",
+  currency: "BDT",
   company: {
     name: "WebBriks",
     address: "115 Senpara Parbata, Mirpur, Dhaka 1216, Bangladesh.",

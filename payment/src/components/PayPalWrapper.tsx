@@ -35,7 +35,7 @@ export default function PayPalWrapper({
 
     const initialOptions = {
         clientId: process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID || "",
-        // PayPal doesn't take BDT either — this must match what
+        // The PayPal SDK is booted with the invoice's own currency; this must match what
         // create-order actually charges (see resolveGatewayCharge
         // server-side); the SDK needs a currency upfront, before we can ask
         // the server, so the same BDT->USD decision is mirrored here.

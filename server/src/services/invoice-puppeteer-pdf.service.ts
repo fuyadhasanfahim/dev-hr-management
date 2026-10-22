@@ -1,4 +1,5 @@
 import { format } from 'date-fns';
+import { formatMoneyCode, normalizeCurrencyCode } from '../utils/money.util.js';
 import puppeteer from 'puppeteer';
 import fs from 'fs';
 import path from 'path';
@@ -22,37 +23,7 @@ const __dirname = path.dirname(__filename);
 
 /** Matches the Quotation / Receipt puppeteer PDF money formatting exactly. */
 function formatMoneyPdf(amount: number | null | undefined, currency?: string | null): string {
-    const n = Number(amount || 0);
-    const fractionDigits = 2;
-    const BDT_TOKENS = new Set(['BDT', 'BDT.', '৳', 'Tk', 'TK', 'tk']);
-    const cur = currency?.trim() || '';
-    const isBDT = cur && BDT_TOKENS.has(cur);
-
-    if (isBDT) {
-        return `Tk ${n.toLocaleString('en-IN', {
-            minimumFractionDigits: fractionDigits,
-            maximumFractionDigits: fractionDigits,
-        })}`;
-    }
-
-    const fallbackSymbol = cur || '$';
-    if (/^[A-Za-z]{3}$/.test(fallbackSymbol)) {
-        try {
-            return new Intl.NumberFormat('en-US', {
-                style: 'currency',
-                currency: fallbackSymbol.toUpperCase(),
-                minimumFractionDigits: fractionDigits,
-                maximumFractionDigits: fractionDigits,
-            }).format(n);
-        } catch {
-            /* fall through */
-        }
-    }
-
-    return `${fallbackSymbol}${n.toLocaleString('en-US', {
-        minimumFractionDigits: fractionDigits,
-        maximumFractionDigits: fractionDigits,
-    })}`;
+    return formatMoneyCode(amount, currency);
 }
 
 function esc(s: unknown): string {
@@ -207,16 +178,7 @@ export function isUpfrontBillingCycle(cycle: unknown): boolean {
     return c === '' || UPFRONT_BILLING_CYCLES.has(c);
 }
 
-/** Maps a stored currency (ISO code or a legacy display symbol) to an ISO 4217
- *  code. `formatMoneyPdf` already tolerates symbols, but the Receipt ledger,
- *  payment page and gateway helpers are all cleaner with a canonical code. */
-export function normalizeCurrencyCode(currency: unknown): string {
-    const raw = String(currency ?? '').trim();
-    const key = raw.toLowerCase();
-    if (key === '$' || key === 'usd') return 'USD';
-    if (key === '৳' || key === 'tk' || key === 'bdt' || key === 'tk.') return 'BDT';
-    return /^[a-z]{3}$/.test(key) ? key.toUpperCase() : raw || 'BDT';
-}
+export { normalizeCurrencyCode };
 
 /** Upfront amount for one service: basePrice + upfront line items only. */
 export function upfrontAmountFromService(svc: Record<string, any>): number {

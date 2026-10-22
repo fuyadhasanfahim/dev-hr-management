@@ -1,4 +1,5 @@
 import type { NextFunction, Request, RequestHandler, Response } from 'express';
+import { formatMoneyCode } from '../utils/money.util.js';
 import { z } from 'zod';
 import PhotoOrderService from '../services/photo-order.service.js';
 import PhotoInvoiceModel from '../models/photo-invoice.model.js';
@@ -166,7 +167,7 @@ const emailInvoice = h(async (req, res) => {
     const invoice = await PhotoOrderService.getInvoice(String(req.params.id));
     const doc = await PhotoInvoiceModel.findById(String(req.params.id)).lean();
     if (!doc) throw new AppError('Invoice not found', 404);
-    const fmt = new Intl.NumberFormat('en-US', { style: 'currency', currency: doc.currency });
+    const fmt = { format: (n: number) => formatMoneyCode(n, doc.currency) };
     const clientName = (invoice.client as { name?: string } | null)?.name ?? 'Client';
 
     const results = await Promise.allSettled(

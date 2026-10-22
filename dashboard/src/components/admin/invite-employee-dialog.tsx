@@ -254,7 +254,7 @@ export default function InviteEmployeeDialog() {
 
                         {/* Salary */}
                         <div className="grid gap-2">
-                            <Label htmlFor="salary">Salary (৳) *</Label>
+                            <Label htmlFor="salary">Salary (BDT) *</Label>
                             <Input
                                 id="salary"
                                 type="number"

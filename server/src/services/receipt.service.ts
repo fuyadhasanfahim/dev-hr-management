@@ -1,4 +1,5 @@
 import { Types } from 'mongoose';
+import { formatMoneyCode } from '../utils/money.util.js';
 import type { ClientSession } from 'mongoose';
 import ReceiptModel, { type IReceipt, type PaymentStatus, type ReceiptPaymentType } from '../models/receipt.model.js';
 import ReceiptPaymentModel, { type IReceiptPayment } from '../models/receipt-payment.model.js';
@@ -19,11 +20,7 @@ export type RecipientSendStatus = {
 };
 
 function formatAmount(amount: number, currency: string): string {
-    try {
-        return new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(amount);
-    } catch {
-        return `${amount} ${currency}`;
-    }
+    return formatMoneyCode(amount, currency);
 }
 
 async function generateReceiptNumber(): Promise<string> {
@@ -110,7 +107,7 @@ export class ReceiptService {
             clientName,
             projectTitle: quotation.details?.title || 'Project',
             category: quotation.services?.[0]?.category || 'web-development',
-            currency: quotation.currency || '৳',
+            currency: quotation.currency || 'BDT',
             totalPaid: 0,
             paymentStatus: 'pending',
             paymentHistory: [],
@@ -176,7 +173,7 @@ export class ReceiptService {
         if (remaining <= 0.009) throw new AppError('This quotation is already fully paid.', 409);
         if (data.amount > remaining + 0.01) {
             throw new AppError(
-                `Amount exceeds remaining balance (${formatAmount(remaining, receipt.currency || '৳')}).`,
+                `Amount exceeds remaining balance (${formatAmount(remaining, receipt.currency || 'BDT')}).`,
                 400,
             );
         }
@@ -430,8 +427,8 @@ export class ReceiptService {
                         clientName: receipt.clientName,
                         receiptNumber: receipt.receiptNumber,
                         projectTitle: receipt.projectTitle,
-                        amountFormatted: formatAmount(receipt.totalPaid, receipt.currency || '৳'),
-                        remainingFormatted: formatAmount(summary.remaining, receipt.currency || '৳'),
+                        amountFormatted: formatAmount(receipt.totalPaid, receipt.currency || 'BDT'),
+                        remainingFormatted: formatAmount(summary.remaining, receipt.currency || 'BDT'),
                         attachment: { filename, content: buffer, contentType: 'application/pdf' },
                     });
                     recipients.push({ email: to, status: 'sent' });

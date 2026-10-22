@@ -213,7 +213,7 @@ export default function InvitationList() {
                                     <div className="flex flex-col gap-1.5">
                                         {getRoleBadge(invitation.role)}
                                         <span className="text-sm font-medium">
-                                            ৳
+                                            BDT
                                             {invitation.salary.toLocaleString()}
                                         </span>
                                     </div>

@@ -157,7 +157,7 @@ export default function BalancesClient() {
                                     <Wallet className="h-4 w-4 text-blue-500" />
                                 </CardHeader>
                                 <CardContent>
-                                    <div className="text-2xl font-bold">৳{calculatedBalance.toLocaleString()}</div>
+                                    <div className="text-2xl font-bold">BDT {calculatedBalance.toLocaleString()}</div>
                                     <p className="text-muted-foreground mt-1">Calculated from transaction logs</p>
                                 </CardContent>
                             </Card>
@@ -168,7 +168,7 @@ export default function BalancesClient() {
                                     <TrendingUp className="h-4 w-4 text-green-500" />
                                 </CardHeader>
                                 <CardContent>
-                                    <div className="text-2xl font-bold text-green-600 dark:text-green-400">৳{totalEarned.toLocaleString()}</div>
+                                    <div className="text-2xl font-bold text-green-600 dark:text-green-400">BDT {totalEarned.toLocaleString()}</div>
                                     <p className="text-muted-foreground mt-1">Sum of all earnings & rewards</p>
                                 </CardContent>
                             </Card>
@@ -179,7 +179,7 @@ export default function BalancesClient() {
                                     <ArrowDownCircle className="h-4 w-4 text-orange-500" />
                                 </CardHeader>
                                 <CardContent>
-                                    <div className="text-2xl font-bold text-orange-600 dark:text-orange-400">৳{totalWithdrawn.toLocaleString()}</div>
+                                    <div className="text-2xl font-bold text-orange-600 dark:text-orange-400">BDT {totalWithdrawn.toLocaleString()}</div>
                                     <p className="text-muted-foreground mt-1">Sum of all payouts processed</p>
                                 </CardContent>
                             </Card>
@@ -263,7 +263,7 @@ export default function BalancesClient() {
                                                             </Badge>
                                                         </TableCell>
                                                         <TableCell className={`text-right font-bold ${tx.type === 'withdrawal' ? 'text-red-500' : 'text-green-600 dark:text-green-400'}`}>
-                                                            {tx.type === 'withdrawal' ? '-' : '+'}৳{tx.amount.toLocaleString()}
+                                                            {tx.type === 'withdrawal' ? '-' : '+'}BDT {tx.amount.toLocaleString()}
                                                         </TableCell>
                                                     </TableRow>
                                                 ))
@@ -321,7 +321,7 @@ export default function BalancesClient() {
                                                 </TableCell>
                                                 <TableCell>{staff.staffId}</TableCell>
                                                 <TableCell className="capitalize">{staff.designation}</TableCell>
-                                                <TableCell className="text-right font-bold text-blue-600 dark:text-blue-400">৳{staff.balance?.toLocaleString() || 0}</TableCell>
+                                                <TableCell className="text-right font-bold text-blue-600 dark:text-blue-400">BDT {staff.balance?.toLocaleString() || 0}</TableCell>
                                                 <TableCell className="text-right">
                                                     <WithdrawDialog staff={staff} onWithdraw={handleWithdraw} />
                                                 </TableCell>
@@ -374,7 +374,7 @@ export default function BalancesClient() {
                                                 <TableCell>{tx.description}</TableCell>
                                                 <TableCell><Badge variant="outline" className="uppercase py-0 leading-none h-4">{tx.type}</Badge></TableCell>
                                                 <TableCell className={`text-right font-bold ${tx.type === 'withdrawal' ? 'text-red-500' : 'text-green-600'}`}>
-                                                    {tx.type === 'withdrawal' ? '-' : '+'}৳{tx.amount.toLocaleString()}
+                                                    {tx.type === 'withdrawal' ? '-' : '+'}BDT {tx.amount.toLocaleString()}
                                                 </TableCell>
                                             </TableRow>
                                         ))}
@@ -440,10 +440,10 @@ function WithdrawDialog({ staff, onWithdraw }: { staff: any, onWithdraw: any }) 
                 <div className="grid gap-4 py-4">
                     <div className="grid grid-cols-4 items-center gap-4">
                         <Label className="text-right">Available</Label>
-                        <div className="col-span-3 font-bold text-blue-600 dark:text-blue-400">৳{staff.balance?.toLocaleString()}</div>
+                        <div className="col-span-3 font-bold text-blue-600 dark:text-blue-400">BDT {staff.balance?.toLocaleString()}</div>
                     </div>
                     <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="amount" className="text-right">Amount (৳)</Label>
+                        <Label htmlFor="amount" className="text-right">Amount (BDT)</Label>
                         <Input id="amount" type="number" value={amount} onChange={(e) => setAmount(e.target.value)} className="col-span-3 h-8" placeholder="0.00" />
                     </div>
                     <div className="grid grid-cols-4 items-center gap-4">

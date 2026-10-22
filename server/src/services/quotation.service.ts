@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import { formatMoneyCode } from '../utils/money.util.js';
 import jwt from 'jsonwebtoken';
 import mongoose, { Types } from 'mongoose';
 import QuotationModel from '../models/quotation.model.js';
@@ -481,17 +482,9 @@ export class QuotationService {
 
                 // Format the grand total in the quotation's currency for the email
                 // summary card. Falls back gracefully if the currency code is invalid.
-                const emailCurrency = saved.currency || 'USD';
+                const emailCurrency = saved.currency;
                 const grandTotal = saved.totals?.grandTotal ?? 0;
-                let totalAmountFormatted: string | undefined;
-                try {
-                    totalAmountFormatted = new Intl.NumberFormat('en-US', {
-                        style: 'currency',
-                        currency: emailCurrency,
-                    }).format(grandTotal);
-                } catch {
-                    totalAmountFormatted = `${grandTotal} ${emailCurrency}`;
-                }
+                const totalAmountFormatted: string | undefined = formatMoneyCode(grandTotal, emailCurrency);
 
                 const commonPayload = {
                     clientName,
@@ -504,17 +497,7 @@ export class QuotationService {
                     // Initial email: show milestone breakdown.
                     ...(Array.isArray(saved.paymentMilestones) && saved.paymentMilestones.length > 0
                         ? (() => {
-                              const currency = (saved.currency || 'USD').toUpperCase();
-                              const fmt = (amount: number) => {
-                                  try {
-                                      return new Intl.NumberFormat('en-US', {
-                                          style: 'currency',
-                                          currency,
-                                      }).format(amount);
-                                  } catch {
-                                      return `${amount} ${currency}`;
-                                  }
-                              };
+                              const fmt = (amount: number) => formatMoneyCode(amount, saved.currency);
                               const milestones: QuotationMilestoneEmailInfo[] = saved.paymentMilestones.map(
                                   (m: any) => ({
                                       label: String(m?.label || 'Milestone'),

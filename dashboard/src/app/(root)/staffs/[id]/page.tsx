@@ -398,7 +398,7 @@ export default function StaffDetailsPage() {
                             <h4 className="text-base font-bold text-foreground truncate max-w-[180px]">
                                 {canViewSalary ? (
                                     <span className="text-emerald-600 dark:text-emerald-400">
-                                        ৳{staff.salary?.toLocaleString() || 0}
+                                        BDT {staff.salary?.toLocaleString() || 0}
                                     </span>
                                 ) : (
                                     tenure || 'N/A'

@@ -1,6 +1,6 @@
 'use client';
 
-import { BILLING_CURRENCIES, currencySymbol, normalizeCurrency } from "@/lib/currency";
+import { BILLING_CURRENCIES, currencyCode, normalizeCurrency } from "@/lib/currency";
 import React, { useState, createContext, useContext, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -132,10 +132,10 @@ function currencyLabel(stored?: string | null) {
     return c ? `${c.name} (${c.code})` : code;
 }
 
-// Helper to get currency symbol — accepts the readable label ("Euro (EUR)"),
-// an ISO code, or a legacy stored symbol ("$" / "৳").
+// The text put in front of an amount — the ISO code plus a space ("EUR "), never a symbol. Accepts the
+// readable label ("Euro (EUR)"), an ISO code, or a legacy stored symbol ("$" / "৳").
 function getCurrencySymbol(currencyName: string) {
-    return currencySymbol(currencyName);
+    return `${currencyCode(currencyName)} `;
 }
 
 // --- Initial Preset Data ---
@@ -2359,7 +2359,7 @@ function PhotoEditingService({
                             />
                         </div>
                         <div className="space-y-2">
-                            <Label htmlFor="photo-rate">Rate per Image ({currencySymbol})</Label>
+                            <Label htmlFor="photo-rate">Rate per Image ({currencySymbol.trim()})</Label>
                             <Input
                                 id="photo-rate"
                                 type="number"
@@ -2519,7 +2519,7 @@ function VideoEditingService({
                             />
                         </div>
                         <div className="space-y-2">
-                            <Label htmlFor="video-rate">Rate ({currencySymbol})</Label>
+                            <Label htmlFor="video-rate">Rate ({currencySymbol.trim()})</Label>
                             <Input
                                 id="video-rate"
                                 type="number"
@@ -2796,7 +2796,7 @@ Requirements for AI:
                             <CardContent className="p-6 grid gap-4 sm:grid-cols-2">
                                 <div className="space-y-2">
                                     <Label>
-                                        Monthly Advertising Budget ({currencySymbol})
+                                        Monthly Advertising Budget ({currencySymbol.trim()})
                                     </Label>
                                     <Input
                                         type="number"
@@ -2982,7 +2982,7 @@ function FeatureItem({
                             )}
                             <div className="space-y-1">
                                 <Label className="text-xs font-semibold">
-                                    Price ({currencySymbol}) <span className="text-muted-foreground font-normal text-[11px] ml-1">(Optional)</span>
+                                    Price ({currencySymbol.trim()}) <span className="text-muted-foreground font-normal text-[11px] ml-1">(Optional)</span>
                                 </Label>
                                 <Input
                                     value={editPrice === "0" ? "" : editPrice}
@@ -3306,7 +3306,7 @@ function PricingRow({
                             </ShadcnSelect>
                         </div>
                         <div className="space-y-1">
-                            <Label className="text-xs font-semibold">Price ({currencySymbol}) <span className="text-destructive">*</span></Label>
+                            <Label className="text-xs font-semibold">Price ({currencySymbol.trim()}) <span className="text-destructive">*</span></Label>
                             <Input
                                 type="number"
                                 min={0}

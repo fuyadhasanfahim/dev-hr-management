@@ -1,3 +1,4 @@
+import { currencyCode } from "@/lib/currency";
 import Link from "next/link";
 import {
   Table,
@@ -173,7 +174,7 @@ export function QuotationTable({
                 {/* Total */}
                 <TableCell className="text-right">
                   <span className={cn("font-semibold text-sm", !canSeeFinancials && "blur-[4px] select-none pointer-events-none")}>
-                    {q.currency || "৳"}{(q.totals?.grandTotal ?? 0).toLocaleString()}
+                    {currencyCode(q.currency)}{" "}{(q.totals?.grandTotal ?? 0).toLocaleString()}
                   </span>
                 </TableCell>
 

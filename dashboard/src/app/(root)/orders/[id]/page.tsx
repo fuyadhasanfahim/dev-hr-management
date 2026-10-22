@@ -1,5 +1,6 @@
 "use client";
 
+import { currencyCode } from "@/lib/currency";
 import { useState, useMemo, useEffect } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "@/lib/auth-client";
@@ -232,6 +233,7 @@ export default function OrderDetailsPage() {
                 <div className="flex gap-2">
                     <InvoicePdfButton
                         source="order"
+                        currency={order.quotationSnapshot?.currency}
                         id={id as string}
                         fileNameBase={(
                             order.quotationSnapshot?.quotationNumber ||
@@ -326,7 +328,7 @@ export default function OrderDetailsPage() {
                                                                 </div>
                                                                 {canSeeFinancials && (
                                                                     <span className="font-black text-sm text-primary">
-                                                                        {order.quotationSnapshot?.currency || "৳"}
+                                                                        {currencyCode(order.quotationSnapshot?.currency)}{" "}
                                                                         {(svc.basePrice || 0).toLocaleString()}
                                                                     </span>
                                                                 )}
@@ -359,7 +361,7 @@ export default function OrderDetailsPage() {
                                                                                 </div>
                                                                                 {canSeeFinancials && (
                                                                                     <span className="font-bold">
-                                                                                        {order.quotationSnapshot?.currency || "৳"}{(item.price || 0).toLocaleString()}
+                                                                                        {currencyCode(order.quotationSnapshot?.currency)}{" "}{(item.price || 0).toLocaleString()}
                                                                                     </span>
                                                                                 )}
                                                                             </div>
@@ -408,7 +410,7 @@ export default function OrderDetailsPage() {
                                                             </div>
                                                             {canSeeFinancials && (
                                                                 <span className="text-lg font-black text-foreground mt-2">
-                                                                    {order.quotationSnapshot?.currency || "৳"}{amount.toLocaleString()}
+                                                                    {currencyCode(order.quotationSnapshot?.currency)}{" "}{amount.toLocaleString()}
                                                                 </span>
                                                             )}
                                                         </div>
@@ -433,7 +435,7 @@ export default function OrderDetailsPage() {
                                 <h2 className={cn("text-4xl font-black text-primary mt-1 tracking-tight", !canSeeFinancials && "blur-[3px] opacity-50 select-none")}>
                                     {canSeeFinancials ? (
                                         <>
-                                            {order.quotationSnapshot?.currency || "৳"}
+                                            {currencyCode(order.quotationSnapshot?.currency)}{" "}
                                             {(order.quotationSnapshot?.grandTotal || 0).toLocaleString()}
                                         </>
                                     ) : (
@@ -447,18 +449,18 @@ export default function OrderDetailsPage() {
                                     <>
                                         <div className="flex justify-between items-center text-xs py-1 border-b border-dashed">
                                             <span className="text-muted-foreground">Subtotal</span>
-                                            <span className="font-bold">{order.quotationSnapshot?.currency || "৳"}{(order.quotationSnapshot.totals.subtotal || 0).toLocaleString()}</span>
+                                            <span className="font-bold">{currencyCode(order.quotationSnapshot?.currency)}{" "}{(order.quotationSnapshot.totals.subtotal || 0).toLocaleString()}</span>
                                         </div>
                                         {order.quotationSnapshot.totals.discountAmount > 0 && (
                                             <div className="flex justify-between items-center text-xs py-1 border-b border-dashed text-emerald-600 dark:text-emerald-400">
                                                 <span>Discount</span>
-                                                <span className="font-bold">-{order.quotationSnapshot?.currency || "৳"}{order.quotationSnapshot.totals.discountAmount.toLocaleString()}</span>
+                                                <span className="font-bold">-{currencyCode(order.quotationSnapshot?.currency)}{" "}{order.quotationSnapshot.totals.discountAmount.toLocaleString()}</span>
                                             </div>
                                         )}
                                         {order.quotationSnapshot.totals.taxAmount > 0 && (
                                             <div className="flex justify-between items-center text-xs py-1 border-b border-dashed">
                                                 <span className="text-muted-foreground">Tax</span>
-                                                <span className="font-bold">+{order.quotationSnapshot?.currency || "৳"}{order.quotationSnapshot.totals.taxAmount.toLocaleString()}</span>
+                                                <span className="font-bold">+{currencyCode(order.quotationSnapshot?.currency)}{" "}{order.quotationSnapshot.totals.taxAmount.toLocaleString()}</span>
                                             </div>
                                         )}
                                     </>

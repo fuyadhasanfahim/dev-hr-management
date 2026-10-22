@@ -1,4 +1,4 @@
-import { currencySymbol } from "@/lib/currency";
+import { currencyCode } from "@/lib/currency";
 import {
   Table,
   TableBody,
@@ -205,7 +205,7 @@ export function OrderTable({
                         !canSeeFinancials && "blur-[4px] select-none pointer-events-none",
                       )}
                     >
-                      {currencySymbol(snap?.currency)}
+                      {currencyCode(snap?.currency)}{" "}
                       {(snap?.grandTotal ?? order.totalPrice ?? 0).toLocaleString(
                         undefined,
                         {
@@ -283,6 +283,7 @@ export function OrderTable({
                         <TooltipTrigger asChild>
                           <InvoicePdfButton
                             source="order"
+                            currency={snap?.currency}
                             id={order._id}
                             fileNameBase={(
                               order.quotationSnapshot?.quotationNumber ||

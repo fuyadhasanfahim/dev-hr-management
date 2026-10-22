@@ -1,53 +1,29 @@
 /**
- * Mirrors formatMoneyPdf in server/src/services/invoice-puppeteer-pdf.service.ts
- * so the payment page reads the same amounts the same way the invoice PDF
- * does. Needed because `currency` on an invoice is free-form display text
- * ('৳', 'Tk', 'BDT', 'USD', ...) rather than a strict ISO-4217 code —
- * Intl.NumberFormat throws a RangeError on anything else.
+ * Money is always written with the ISO code, never a symbol ("USD 1,200.00", "EUR 950.00").
+ * Mirrors formatMoneyCode in server/src/utils/money.util.ts, so the payment page reads the same amounts
+ * the invoice PDF does. `currency` on an invoice may still be an old display symbol ('$', '৳', 'Tk').
  */
-
-const BDT_TOKENS = new Set(["BDT", "BDT.", "৳", "Tk", "TK", "tk"]);
-
-export function formatMoney(amount: number, currency?: string | null): string {
-    const cur = (currency ?? "").trim();
-
-    if (cur && BDT_TOKENS.has(cur)) {
-        return `Tk ${amount.toLocaleString("en-IN", {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2,
-        })}`;
-    }
-
-    const symbol = cur || "USD";
-    if (/^[A-Za-z]{3}$/.test(symbol)) {
-        try {
-            return new Intl.NumberFormat("en-US", {
-                style: "currency",
-                currency: symbol.toUpperCase(),
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2,
-            }).format(amount);
-        } catch {
-            // Not a currency code Intl recognizes — fall through to the plain prefix below.
-        }
-    }
-
-    return `${symbol}${amount.toLocaleString("en-US", {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-    })}`;
+function normalize(currency?: string | null): string {
+    const raw = (currency ?? "").trim();
+    const key = raw.toLowerCase();
+    if (!key) return "BDT";
+    if (key === "$" || key === "usd") return "USD";
+    if (key === "€") return "EUR";
+    if (key === "£") return "GBP";
+    if (key === "৳" || key === "tk" || key === "bdt" || key === "tk.") return "BDT";
+    return raw.toUpperCase();
 }
 
-/**
- * Mirrors the gateway-unsupported-currency decision in
- * server/src/services/payment.service.ts's resolveGatewayCharge — used only
- * to pick which currency to boot the PayPal JS SDK with (it needs this
- * upfront, before we can call the server to get the authoritative charge
- * amount/currency). The actual amount charged always comes from the server.
- */
+export function formatMoney(amount: number, currency?: string | null): string {
+    const code = normalize(currency);
+    const text = Number(amount || 0).toLocaleString(code === "BDT" ? "en-IN" : "en-US", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+    });
+    return `${code} ${text}`;
+}
+
+/** The currency the PayPal JS SDK is booted with: the invoice's own currency (BDT invoices are never payable online). */
 export function resolveDisplayGatewayCurrency(nativeCurrency?: string | null): string {
-    const key = (nativeCurrency ?? "").trim().toLowerCase();
-    const isBdt = key === "৳" || key === "tk" || key === "bdt";
-    if (isBdt) return "USD";
-    return /^[a-z]{3}$/.test(key) ? key.toUpperCase() : "USD";
+    return normalize(nativeCurrency);
 }

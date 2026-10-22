@@ -208,7 +208,7 @@ export default function TeamLeaderDashboard() {
                   </div>
                   <div className="text-base sm:text-lg font-black tracking-tight text-foreground">
                     {isSalaryUnlocked ? (
-                      "৳ " + (staff?.salary?.toLocaleString() || 0)
+                      "BDT " + (staff?.salary?.toLocaleString() || 0)
                     ) : (
                       <span className="text-muted-foreground tracking-widest font-medium text-sm">
                         ••••••••

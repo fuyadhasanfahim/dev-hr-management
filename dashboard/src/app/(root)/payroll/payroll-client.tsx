@@ -300,7 +300,7 @@ export default function PayrollPage() {
                             <DollarSign className="h-4 w-4 text-muted-foreground" />
                         </CardHeader>
                         <CardContent>
-                            <div className="text-2xl font-bold">৳{displayTotal.toLocaleString()}</div>
+                            <div className="text-2xl font-bold">BDT {displayTotal.toLocaleString()}</div>
                             <p className="text-xs text-muted-foreground mt-1">Total payroll cost for this month</p>
                         </CardContent>
                     </Card>
@@ -312,7 +312,7 @@ export default function PayrollPage() {
                             <Wallet className="h-4 w-4 text-muted-foreground" />
                         </CardHeader>
                         <CardContent>
-                            <div className="text-2xl font-bold text-green-600 dark:text-green-400">৳{displayPaid.toLocaleString()}</div>
+                            <div className="text-2xl font-bold text-green-600 dark:text-green-400">BDT {displayPaid.toLocaleString()}</div>
                             <div className="mt-4 flex flex-col gap-2">
                                 <div className="flex justify-between text-[10px] font-bold">
                                     <span>Allocation Progress</span>
@@ -330,7 +330,7 @@ export default function PayrollPage() {
                             <Clock className="h-4 w-4 text-muted-foreground" />
                         </CardHeader>
                         <CardContent>
-                            <div className="text-2xl font-bold text-amber-600 dark:text-amber-400">৳{displayPending.toLocaleString()}</div>
+                            <div className="text-2xl font-bold text-amber-600 dark:text-amber-400">BDT {displayPending.toLocaleString()}</div>
                             <p className="text-xs text-muted-foreground mt-1">Outstanding liability</p>
                         </CardContent>
                     </Card>

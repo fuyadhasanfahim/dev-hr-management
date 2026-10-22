@@ -61,7 +61,7 @@ export function ClientOrderStats({ stats, isLoading, currency = "USD" }: ClientO
         },
         {
             label: "Total BDT",
-            value: stats?.totalBDT !== undefined ? `${stats.totalBDT.toLocaleString()} ৳` : undefined,
+            value: stats?.totalBDT !== undefined ? `BDT ${stats.totalBDT.toLocaleString()}` : undefined,
             icon: TrendingUp,
             color: "text-orange-500",
             bgColor: "bg-orange-500/10",

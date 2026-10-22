@@ -128,7 +128,7 @@ export function TransferHistory() {
                         </CardHeader>
                         <CardContent>
                             <div className="text-2xl font-bold">
-                                ৳{stats.totalTransferred.toLocaleString()}
+                                BDT {stats.totalTransferred.toLocaleString()}
                             </div>
                         </CardContent>
                     </Card>
@@ -282,7 +282,7 @@ export function TransferHistory() {
                                         </div>
                                     </TableCell>
                                     <TableCell className="font-semibold text-primary">
-                                        ৳{transfer.amount.toLocaleString()}
+                                        BDT {transfer.amount.toLocaleString()}
                                     </TableCell>
                                     <TableCell>
                                         <Badge variant="outline">
@@ -327,7 +327,7 @@ export function TransferHistory() {
                     <AlertDialogHeader>
                         <AlertDialogTitle>Delete Transfer</AlertDialogTitle>
                         <AlertDialogDescription>
-                            Are you sure you want to delete this transfer of ৳
+                            Are you sure you want to delete this transfer of BDT
                             {deletingTransfer?.amount.toLocaleString()} to{' '}
                             {deletingTransfer?.businessId.name}? This action
                             cannot be undone.

@@ -71,7 +71,7 @@ export function FinancialPerformanceChart() {
   const isProfitPositive = totalProfit >= 0;
 
   const formatBDT = (amount: number) => {
-    return `৳${amount.toLocaleString("en-BD", { maximumFractionDigits: 0 })}`;
+    return `BDT ${amount.toLocaleString("en-BD", { maximumFractionDigits: 0 })}`;
   };
 
   if (isLoading) {

@@ -61,7 +61,7 @@ const quotationSchema = new Schema<IQuotation>(
         workflow: [{ type: String }],
 
         // ── Currency snapshot (used in PDF/UI/events) ────────────────────────────
-        currency: { type: String, default: '৳' },
+        currency: { type: String, default: 'BDT' },
 
         totals: {
             subtotal: { type: Number, default: 0 },

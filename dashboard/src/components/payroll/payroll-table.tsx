@@ -270,7 +270,7 @@ export default function PayrollTable({
             <span className="mx-2 opacity-30">|</span>
             Payable:{" "}
             <span className="text-primary">
-              ৳ {totalPayableWithAdjustments.toLocaleString()}
+              BDT {totalPayableWithAdjustments.toLocaleString()}
             </span>
           </div>
           <Button

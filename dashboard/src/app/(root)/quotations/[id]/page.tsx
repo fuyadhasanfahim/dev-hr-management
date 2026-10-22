@@ -1,5 +1,6 @@
 'use client';
 
+import { currencyCode } from '@/lib/currency';
 import React, { useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
@@ -436,7 +437,7 @@ export default function ViewQuotationPage() {
             'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-900/50',
     };
 
-    const currency = data.currency || '৳';
+    const currency = `${currencyCode(data.currency)} `; // code + space, e.g. "EUR "
     const totals = data.totals ?? {
         subtotal: liveTotals.totals.subtotal,
         discountAmount: liveTotals.totals.discountAmount,
@@ -551,6 +552,7 @@ export default function ViewQuotationPage() {
 
                     <InvoicePdfButton
                         source="quotation"
+                        currency={data.currency}
                         id={id as string}
                         fileNameBase={(data.quotationNumber || 'quotation').replace(
                             /^QTN/i,

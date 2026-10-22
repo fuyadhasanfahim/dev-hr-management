@@ -1,3 +1,4 @@
+import { formatMoney } from '@/lib/money';
 import {
     Table,
     TableBody,
@@ -22,12 +23,7 @@ interface OrderHistoryTableProps {
 }
 
 export function OrderHistoryTable({ orders, isLoading, currency = "USD" }: OrderHistoryTableProps) {
-    const formatCurrency = (amount: number) => {
-        return new Intl.NumberFormat('en-US', {
-            style: 'currency',
-            currency: currency,
-        }).format(amount);
-    };
+    const formatCurrency = (amount: number) => formatMoney(amount, currency);
 
     if (isLoading) {
         return (

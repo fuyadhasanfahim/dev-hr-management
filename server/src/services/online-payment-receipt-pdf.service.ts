@@ -1,4 +1,5 @@
 import { format } from 'date-fns';
+import { formatMoneyCode } from '../utils/money.util.js';
 import puppeteer from 'puppeteer';
 import { AppError } from '../utils/AppError.js';
 import { logger } from '../lib/logger.js';
@@ -22,24 +23,7 @@ function esc(s: unknown): string {
 
 /** Matches the other PDFs' money formatting (Tk prefix for BDT, else Intl currency). */
 export function formatMoneyPdf(amount: number, currency: string): string {
-    const n = Number(amount || 0);
-    const BDT_TOKENS = new Set(['BDT', 'BDT.', '৳', 'Tk', 'TK', 'tk']);
-    if (BDT_TOKENS.has(currency)) {
-        return `Tk ${n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-    }
-    if (/^[A-Za-z]{3}$/.test(currency)) {
-        try {
-            return new Intl.NumberFormat('en-US', {
-                style: 'currency',
-                currency: currency.toUpperCase(),
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2,
-            }).format(n);
-        } catch {
-            /* fall through */
-        }
-    }
-    return `${currency}${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    return formatMoneyCode(amount, currency);
 }
 
 export interface OnlinePaymentReceiptData {

@@ -6,6 +6,7 @@ import { FileText, Loader2, Search } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
+import { BdtInvoiceNotice, hasNoPaymentLink } from "@/components/shared/BdtInvoiceNotice";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -55,6 +56,11 @@ export function InvoiceTab() {
         setPicked(new Set());
     };
 
+    const [bdtNotice, setBdtNotice] = useState(false);
+
+    // BDT can't be paid through Stripe/PayPal, so tell the user before the invoice is made without a payment link.
+    const requestGenerate = () => (hasNoPaymentLink(currency) ? setBdtNotice(true) : void generate());
+
     const generate = async () => {
         try {
             const inv = await createInvoice({ clientId, month, year, orderIds: [...picked] }).unwrap();
@@ -68,6 +74,7 @@ export function InvoiceTab() {
 
     return (
         <div className="space-y-4">
+            <BdtInvoiceNotice open={bdtNotice} onOpenChange={setBdtNotice} onConfirm={() => void generate()} />
             <div className="flex flex-wrap items-center gap-2">
                 <Select value={String(month)} onValueChange={(v) => changePeriod(() => setMonth(Number(v)))}>
                     <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
@@ -165,7 +172,7 @@ export function InvoiceTab() {
                                     {chosen.length} selected · {totals.images.toLocaleString("en-US")} images · <span className="font-semibold text-foreground">{money(totals.amount, currency)}</span>
                                 </p>
                                 {can("photoOrder.invoice") && (
-                                    <Button disabled={!chosen.length || creating} onClick={generate}>
+                                    <Button disabled={!chosen.length || creating} onClick={requestGenerate}>
                                         {creating ? <Loader2 className="mr-1 size-4 animate-spin" /> : <FileText className="mr-1 size-4" />}Generate invoice
                                     </Button>
                                 )}

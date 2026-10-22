@@ -91,7 +91,7 @@ export default function AdminDashboard() {
   } = data;
 
   const formatCurrency = (amount: number) => {
-    return "৳" + amount.toLocaleString("en-BD", { maximumFractionDigits: 0 });
+    return "BDT " + amount.toLocaleString("en-BD", { maximumFractionDigits: 0 });
   };
 
   const earningsThisMonth = financialStats?.thisMonthEarnings || 0;

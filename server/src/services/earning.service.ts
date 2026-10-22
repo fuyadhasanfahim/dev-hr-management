@@ -79,7 +79,7 @@ async function syncEarningFromReceipt(
                 quotationGroupId: receipt.quotationGroupId,
                 quotationNumber: receipt.quotationNumber,
                 orderTitle: receipt.projectTitle,
-                currency: receipt.currency || '৳',
+                currency: receipt.currency || 'BDT',
                 totalAmount,
                 paidAmount,
                 amountInBDT: paidAmount,

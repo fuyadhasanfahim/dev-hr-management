@@ -1,5 +1,6 @@
 "use client";
 
+import { normalizeCurrency } from "@/lib/currency";
 import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { format } from "date-fns";
@@ -93,7 +94,7 @@ export function AddPaymentDialog({
 
   const isFullyPaid = !!summaryData && summaryData.remaining <= 0.009;
   const hasExistingOrder = !!summaryData?.quotation.orderId;
-  const currency = summaryData?.quotation.currency || "৳";
+  const currency = normalizeCurrency(summaryData?.quotation.currency);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

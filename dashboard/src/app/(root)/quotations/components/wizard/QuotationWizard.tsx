@@ -73,7 +73,7 @@ import { FEATURE_PROMPT, depthOf, blockEnd, fixDepths, parseFeatureTree, Tip, Ic
 import { useGetServicesQuery } from "@/redux/features/service/serviceApi";
 import { useGetStaffsQuery } from "@/redux/features/staff/staffApi";
 import { useDebounce } from "@/hooks/use-debounce";
-import { BILLING_CURRENCIES, currencySymbol, normalizeCurrency } from "@/lib/currency";
+import { BILLING_CURRENCIES, currencyCode, formatMoneyCode, normalizeCurrency } from "@/lib/currency";
 import { useCreateClientMutation, useGetClientsQuery } from "@/redux/features/client/clientApi";
 import { useCreateQuotationMutation, useSendQuotationMutation, useUpdateQuotationMutation } from "@/redux/features/quotation/quotationApi";
 import { QuotationEmailDialog } from "../QuotationEmailDialog";
@@ -143,7 +143,7 @@ const COMPANY = {
 };
 const todayISO = () => new Date().toISOString().split("T")[0];
 const plusDaysISO = (d: number) => new Date(Date.now() + d * 86400000).toISOString().split("T")[0];
-const money = (n: number, cur: string) => `${currencySymbol(cur)} ${Math.round(n).toLocaleString("en-US")}`;
+const money = (n: number, cur: string) => formatMoneyCode(Math.round(n), cur);
 
 // ───────────────────────────── small building blocks ─────────────────────────────
 
@@ -1136,7 +1136,7 @@ export default function QuotationWizard() {
                         <SelectTrigger className="h-10 w-full"><SelectValue /></SelectTrigger>
                         <SelectContent>
                             {BILLING_CURRENCIES.map((c) => (
-                                <SelectItem key={c.code} value={c.code}>{c.code} ({c.symbol}) — {c.name}</SelectItem>
+                                <SelectItem key={c.code} value={c.code}>{c.code} — {c.name}</SelectItem>
                             ))}
                         </SelectContent>
                     </Select>
@@ -2164,7 +2164,7 @@ export default function QuotationWizard() {
                     <div className={cardCls}>
                         <div className="flex items-start justify-between gap-3">
                             <div className="flex gap-3">
-                                <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-lg font-bold text-primary">{currencySymbol(cur)}</span>
+                                <span className="flex h-10 min-w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 px-2 text-sm font-bold text-primary">{currencyCode(cur)}</span>
                                 <p className="text-sm font-semibold">Pricing</p>
                             </div>
                             <Button type="button" variant="outline" size="sm" className="h-7 text-primary" onClick={() => go(3)}><IconPencil className="size-3.5" /> Edit</Button>
@@ -2406,6 +2406,10 @@ export default function QuotationWizard() {
                         <>
                             <Button type="button" variant="outline" disabled={pdfBusy || saving} onClick={downloadPdf}>
                                 <IconDownload className="size-4" /> {pdfBusy ? "Preparing…" : "Download PDF"}
+                            </Button>
+                            {/* Keeps the quotation (as a draft) without emailing the client. */}
+                            <Button type="button" variant="secondary" disabled={saving || sending || pdfBusy} onClick={save}>
+                                <IconDeviceFloppy className="size-4" /> {saving ? "Saving…" : "Save"}
                             </Button>
                             <Button type="button" disabled={saving || sending || !ready} onClick={openSend}>
                                 <IconSend className="size-4" /> Send to Client

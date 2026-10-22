@@ -1,8 +1,9 @@
-const SYMBOLS: Record<string, string> = { BDT: "৳", USD: "$", EUR: "€", GBP: "£", AUD: "A$", CAD: "C$" };
+import { normalizeCurrency } from "@/lib/currency";
 
-export const currencySymbol = (c?: string) => SYMBOLS[(c ?? "").toUpperCase()] ?? (c || "");
+// Money is written with the ISO code, never a symbol.
+export const currencySymbol = (c?: string) => normalizeCurrency(c);
 
-export const fmtMoney = (n: number, c?: string) => `${currencySymbol(c)} ${Math.round(n || 0).toLocaleString("en-US")}`.trim();
+export const fmtMoney = (n: number, c?: string) => `${normalizeCurrency(c)} ${Math.round(n || 0).toLocaleString("en-US")}`;
 
 export const fmtDate = (v?: string) => {
     const d = v ? new Date(v) : null;

@@ -64,7 +64,7 @@ export function DebitStatsCards() {
 
                     <div className="space-y-1">
                         <h3 className="text-3xl font-bold tracking-tight text-rose-600 dark:text-rose-400">
-                            ৳{formatCurrency(totalBorrowed)}
+                            BDT {formatCurrency(totalBorrowed)}
                         </h3>
                         <p className="text-xs text-muted-foreground">
                             Total amount given out
@@ -106,7 +106,7 @@ export function DebitStatsCards() {
 
                     <div className="space-y-1">
                         <h3 className="text-3xl font-bold tracking-tight text-emerald-600 dark:text-emerald-400">
-                            ৳{formatCurrency(totalReturned)}
+                            BDT {formatCurrency(totalReturned)}
                         </h3>
                         <p className="text-xs text-muted-foreground">
                             Total amount received back
@@ -180,7 +180,7 @@ export function DebitStatsCards() {
                                 ? 'text-blue-600 dark:text-blue-400'
                                 : 'text-slate-600 dark:text-slate-400'
                             }`}>
-                            ৳{formatCurrency(Math.abs(currentBalance))}
+                            BDT {formatCurrency(Math.abs(currentBalance))}
                         </h3>
                         <p className="text-xs text-muted-foreground">
                             {currentBalance > 0

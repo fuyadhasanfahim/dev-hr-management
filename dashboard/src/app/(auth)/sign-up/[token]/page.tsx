@@ -165,7 +165,7 @@ export default function SignupPage() {
                                 {invitation.designation}
                             </p>
                             <p>
-                                <span className="font-medium">Salary:</span> ৳
+                                <span className="font-medium">Salary:</span> BDT
                                 {invitation.salary.toLocaleString()}
                             </p>
                         </div>

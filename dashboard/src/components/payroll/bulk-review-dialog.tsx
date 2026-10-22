@@ -51,7 +51,7 @@ export default function BulkReviewDialog({
                             Total Payable Amount
                         </span>
                         <span className="text-2xl font-bold text-primary">
-                            ৳ {totalAmount.toLocaleString()}
+                            BDT {totalAmount.toLocaleString()}
                         </span>
                     </div>
 

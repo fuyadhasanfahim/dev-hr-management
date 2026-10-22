@@ -1,5 +1,6 @@
 'use client';
 
+import { formatMoney } from '@/lib/money';
 import { useState } from 'react';
 import {
     useGetAnalyticsYearsQuery,
@@ -58,24 +59,7 @@ import {
     exportAnalyticsToPDF,
 } from '@/utils/export-analytics';
 
-const formatCurrency = (amount: number, currency: string = 'BDT') => {
-    try {
-        if (currency === 'BDT') {
-            return `৳${amount.toLocaleString('en-IN', {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2,
-            })}`;
-        }
-        return amount.toLocaleString('en-US', {
-            style: 'currency',
-            currency: currency,
-        });
-    } catch {
-        // Fallback for invalid currency codes
-        console.error('Invalid currency code:', currency);
-        return `${currency} ${amount.toFixed(2)}`;
-    }
-};
+const formatCurrency = (amount: number, currency: string = 'BDT') => formatMoney(amount, currency);
 
 const barChartConfig = {
     earnings: {

@@ -33,7 +33,7 @@ const EarningSchema = new Schema<IEarning>(
         currency: {
             type: String,
             required: true,
-            default: '৳',
+            default: 'BDT',
         },
 
         totalAmount: {

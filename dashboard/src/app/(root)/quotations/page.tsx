@@ -276,7 +276,7 @@ export default function QuotationsPage() {
       },
       {
         description: "Project Value",
-        value: `৳${stats.projectValue.toLocaleString()}`,
+        value: `BDT ${stats.projectValue.toLocaleString()}`,
         trend: "up" as const,
         trendLabel: "Value",
         footerTitle: "Across all latest versions",

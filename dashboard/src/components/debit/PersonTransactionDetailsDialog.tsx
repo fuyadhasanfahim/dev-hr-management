@@ -170,7 +170,7 @@ export function PersonTransactionDetailsDialog({
                           : "text-muted-foreground",
                     )}
                   >
-                    ৳{formatCurrency(Math.abs(balance))}
+                    BDT {formatCurrency(Math.abs(balance))}
                   </p>
                 </CardContent>
               </Card>
@@ -180,7 +180,7 @@ export function PersonTransactionDetailsDialog({
                     Borrowed On This View
                   </p>
                   <p className="text-2xl font-semibold text-red-500">
-                    ৳{formatCurrency(filteredSummary.borrowed)}
+                    BDT {formatCurrency(filteredSummary.borrowed)}
                   </p>
                 </CardContent>
               </Card>
@@ -190,7 +190,7 @@ export function PersonTransactionDetailsDialog({
                     Returned On This View
                   </p>
                   <p className="text-2xl font-semibold text-emerald-500">
-                    ৳{formatCurrency(filteredSummary.returned)}
+                    BDT {formatCurrency(filteredSummary.returned)}
                   </p>
                 </CardContent>
               </Card>
@@ -328,7 +328,7 @@ export function PersonTransactionDetailsDialog({
                               : "text-emerald-500",
                           )}
                         >
-                          ৳{formatCurrency(transaction.amount)}
+                          BDT {formatCurrency(transaction.amount)}
                         </TableCell>
                         <TableCell className="max-w-xs text-muted-foreground">
                           {transaction.description || "—"}

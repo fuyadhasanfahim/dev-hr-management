@@ -55,7 +55,7 @@ const receiptSchema = new Schema<IReceipt>(
             required: true,
             default: 'web-development',
         },
-        currency: { type: String, default: '৳' },
+        currency: { type: String, default: 'BDT' },
 
         // Ledger totals (updated atomically on each addPayment / voidPayment)
         totalPaid: { type: Number, default: 0, min: 0 },

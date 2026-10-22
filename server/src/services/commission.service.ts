@@ -102,7 +102,7 @@ async function reconcileEarningCommission(
         const period = earning ? ` (${earning.month}/${earning.year})` : "";
         const description =
             delta > 0
-                ? `5% commission on ৳${totalGrossBDT.toLocaleString()} gross — ${clientName}${period}`
+                ? `5% commission on BDT ${totalGrossBDT.toLocaleString()} gross — ${clientName}${period}`
                 : `Commission adjustment (payment voided) — ${clientName}${period}`;
 
         // 4. One signed transaction + matching balance move, atomically.
@@ -140,7 +140,7 @@ async function reconcileEarningCommission(
         if (!parentSession) await session.commitTransaction();
 
         console.log(
-            `[Commission] ${delta >= 0 ? "+" : ""}৳${delta} for earning ${earningId} (target ৳${desired}, was ৳${previous})`,
+            `[Commission] ${delta >= 0 ? "+" : ""}BDT ${delta} for earning ${earningId} (target BDT ${desired}, was BDT ${previous})`,
         );
 
         return { earningId, staffId, delta, desired, previous };

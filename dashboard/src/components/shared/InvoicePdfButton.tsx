@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { FileText, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { publicApiUrl } from '@/lib/public-api';
+import { BdtInvoiceNotice, hasNoPaymentLink } from '@/components/shared/BdtInvoiceNotice';
 
 interface Props {
   /** `quotation` → /api/quotations/:id/invoice/pdf · `order` → /api/orders/:id/invoice/pdf */
@@ -15,6 +16,8 @@ interface Props {
   className?: string;
   /** Render as an icon-only button (no label), e.g. for table row actions. */
   iconOnly?: boolean;
+  /** The invoice's currency. BDT can't be paid online, so generating one first shows a notice. */
+  currency?: string | null;
 }
 
 function parseContentDispositionFilename(header: string | null): string | null {
@@ -40,8 +43,11 @@ function sanitizeFileName(base: string): string {
   return stem.endsWith('.pdf') ? stem : `${stem}.pdf`;
 }
 
-export default function InvoicePdfButton({ source, id, fileNameBase, className, iconOnly }: Props) {
+export default function InvoicePdfButton({ source, id, fileNameBase, className, iconOnly, currency }: Props) {
   const [loading, setLoading] = useState(false);
+  const [noticeOpen, setNoticeOpen] = useState(false);
+
+  const handleClick = () => (hasNoPaymentLink(currency) ? setNoticeOpen(true) : void handleDownload());
 
   const handleDownload = async () => {
     const segment = source === 'order' ? 'orders' : 'quotations';
@@ -109,13 +115,14 @@ export default function InvoicePdfButton({ source, id, fileNameBase, className, 
 
   if (iconOnly) {
     return (
+      <>
       <Button
         type="button"
         variant="ghost"
         size="icon"
         className={className}
         disabled={loading}
-        onClick={handleDownload}
+        onClick={handleClick}
         aria-label="Download invoice"
       >
         {loading ? (
@@ -124,16 +131,19 @@ export default function InvoicePdfButton({ source, id, fileNameBase, className, 
           <FileText className="h-3.5 w-3.5" aria-hidden />
         )}
       </Button>
+      <BdtInvoiceNotice open={noticeOpen} onOpenChange={setNoticeOpen} onConfirm={() => void handleDownload()} />
+      </>
     );
   }
 
   return (
+    <>
     <Button
       type="button"
       variant="outline"
       className={className}
       disabled={loading}
-      onClick={handleDownload}
+      onClick={handleClick}
     >
       {loading ? (
         <span className="flex items-center gap-2">
@@ -147,5 +157,7 @@ export default function InvoicePdfButton({ source, id, fileNameBase, className, 
         </span>
       )}
     </Button>
+    <BdtInvoiceNotice open={noticeOpen} onOpenChange={setNoticeOpen} onConfirm={() => void handleDownload()} />
+    </>
   );
 }

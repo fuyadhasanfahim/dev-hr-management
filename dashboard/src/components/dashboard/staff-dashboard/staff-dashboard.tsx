@@ -148,7 +148,7 @@ export default function StaffDashboard() {
           <CardContent className="space-y-1 pb-4">
             <div className="text-xl sm:text-2xl font-extrabold tracking-tight text-foreground flex items-center justify-between">
               {isSalaryUnlocked ? (
-                "৳ " + (staff?.salary?.toLocaleString() || 0)
+                "BDT " + (staff?.salary?.toLocaleString() || 0)
               ) : (
                 <span className="text-muted-foreground tracking-widest font-mono text-base">
                   ••••••••
