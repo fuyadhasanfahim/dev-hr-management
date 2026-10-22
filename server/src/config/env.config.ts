@@ -156,6 +156,8 @@ const envConfig = {
     /** Approved Meta template names for client payment reminders. Unset → that WhatsApp reminder is skipped. */
     wa_template_payment_due: process.env.WA_TEMPLATE_PAYMENT_DUE || '',
     wa_template_payment_recurring: process.env.WA_TEMPLATE_PAYMENT_RECURRING || '',
+    /** Due-payment reminder WITHOUT a pay link (BDT invoices can't be paid online). Unset → falls back to the link template with a "contact us" note. */
+    wa_template_payment_due_no_link: process.env.WA_TEMPLATE_PAYMENT_DUE_NO_LINK || '',
     wa_template_language: process.env.WA_TEMPLATE_LANGUAGE || 'en',
     /** Approved templates for order-status and staff alerts. Unset → WhatsApp falls back to free text inside the 24h window, else is skipped. */
     wa_template_order_status: process.env.WA_TEMPLATE_ORDER_STATUS || '',

@@ -175,14 +175,24 @@ async function deliver(r: IPaymentReminder): Promise<{ amount: number; paid: boo
         problems.push('Email: client has no email address');
     }
 
-    const template = r.kind === 'due' ? envConfig.wa_template_payment_due : envConfig.wa_template_payment_recurring;
+    // A due reminder with no pay link (BDT can't be paid through Stripe/PayPal) is a plain reminder: no link anywhere.
+    const noLink = r.kind === 'due' && !payUrl;
+    const template =
+        r.kind !== 'due'
+            ? envConfig.wa_template_payment_recurring
+            : noLink && envConfig.wa_template_payment_due_no_link
+              ? envConfig.wa_template_payment_due_no_link
+              : envConfig.wa_template_payment_due;
     const phone = toWhatsAppNumber(client?.phone);
     if (template && phone) {
         // Template bodies: due → {{1}} name {{2}} amount {{3}} order {{4}} pay link
+        //                  due, no link → {{1}} name {{2}} amount {{3}} order
         //                  recurring → {{1}} name {{2}} cycle {{3}} charge {{4}} amount {{5}} order
         const params =
             r.kind === 'due'
-                ? [r.clientName, amountFormatted, r.orderNumber, payUrl || 'please contact us']
+                ? template === envConfig.wa_template_payment_due_no_link
+                    ? [r.clientName, amountFormatted, r.orderNumber]
+                    : [r.clientName, amountFormatted, r.orderNumber, payUrl || 'please contact us for payment details']
                 : [r.clientName, r.cycle === 'yearly' ? 'yearly' : 'monthly', r.title, amountFormatted, r.orderNumber];
         try {
             await whatsappService.sendTemplateMessage(phone, template, envConfig.wa_template_language, params);

@@ -25,7 +25,7 @@ const waSent: any[] = [];
 const oid = () => new (mongoose.Types.ObjectId)();
 const BD10 = (d: Date) => new Date(new Date(`${d.toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' })}T10:00:00+06:00`));
 
-async function seedOrder(opts: { status?: string; paid?: number; total?: number; emails?: string[]; phone?: string; recurring?: any[]; n: string }) {
+async function seedOrder(opts: { currency?: string; status?: string; paid?: number; total?: number; emails?: string[]; phone?: string; recurring?: any[]; n: string }) {
     const clientId = oid();
     const groupId = `g-${opts.n}`;
     await mongoose.connection.collection('clients').insertOne({ _id: clientId, name: `Client ${opts.n}`, emails: opts.emails ?? [`c${opts.n}@x.test`], ...(opts.phone ? { phone: opts.phone } : {}) });
@@ -37,17 +37,17 @@ async function seedOrder(opts: { status?: string; paid?: number; total?: number;
         clientId,
         status: opts.status ?? 'completed',
         totalPrice: opts.total ?? 100000,
-        currency: 'BDT',
+        currency: opts.currency ?? 'USD',
         quotationSnapshot: {
             clientName: `Client ${opts.n}`,
-            currency: 'BDT',
+            currency: opts.currency ?? 'USD',
             grandTotal: opts.total ?? 100000,
             services: [],
             recurringCharges: opts.recurring ?? [],
         },
     });
     await mongoose.connection.collection('receipts').insertOne({
-        _id: oid(), receiptNumber: `RCPT-${opts.n}`, quotationGroupId: groupId, totalPaid: opts.paid ?? 40000, status: 'issued', currency: 'BDT',
+        _id: oid(), receiptNumber: `RCPT-${opts.n}`, quotationGroupId: groupId, totalPaid: opts.paid ?? 40000, status: 'issued', currency: opts.currency ?? 'USD',
     });
     return { orderId: String(orderId), clientId, groupId };
 }
@@ -337,5 +337,46 @@ test('whatsapp: skipped without a template; sent with one; email-less client rea
     const o3 = await seedOrder({ n: '19', emails: [] });
     await Svc.createForCompletedOrder(o3.orderId);
     await assert.rejects(Svc.act(String((await find(o3.orderId, 'due'))._id), 'send-now'), /no email/i);
+    envConfig.wa_template_payment_due = '';
+});
+
+test('BDT due reminder: no pay link anywhere, just a reminder', { skip }, async () => {
+    const { orderId } = await seedOrder({ n: '20', currency: 'BDT', phone: '01712345678' });
+    await Svc.createForCompletedOrder(orderId);
+    const id = String((await find(orderId, 'due'))._id);
+
+    // no dedicated template configured → the link template is used with a "contact us" note, never a link
+    waSent.length = 0; sent.length = 0;
+    envConfig.wa_template_payment_due = 'payment_due_reminder';
+    envConfig.wa_template_payment_due_no_link = '';
+    await Svc.act(id, 'send-now');
+    assert.equal(sent.length, 1);
+    assert.equal(sent[0].payUrl, undefined, 'email has no pay link');
+    assert.match(sent[0].amountFormatted, /^BDT /);
+    assert.equal(waSent[0][1], 'payment_due_reminder');
+    assert.doesNotMatch(waSent[0][3][3], /https?:\/\//);
+    assert.match(waSent[0][3][3], /contact us/i);
+
+    // with the link-free template configured it is used, with 3 values
+    waSent.length = 0;
+    envConfig.wa_template_payment_due_no_link = 'payment_due_reminder_no_link';
+    await Svc.act(id, 'send-now');
+    assert.equal(waSent[0][1], 'payment_due_reminder_no_link');
+    assert.equal(waSent[0][3].length, 3);
+    assert.match(waSent[0][3][1], /^BDT /);
+    envConfig.wa_template_payment_due = '';
+    envConfig.wa_template_payment_due_no_link = '';
+});
+
+test('non-BDT due reminder still carries the pay link', { skip }, async () => {
+    const { orderId } = await seedOrder({ n: '21', currency: 'EUR', phone: '01712345678' });
+    await Svc.createForCompletedOrder(orderId);
+    const id = String((await find(orderId, 'due'))._id);
+    sent.length = 0; waSent.length = 0;
+    envConfig.wa_template_payment_due = 'payment_due_reminder';
+    await Svc.act(id, 'send-now');
+    assert.match(sent[0].payUrl, /^https:\/\/pay\.test\/payment\//);
+    assert.match(sent[0].amountFormatted, /^EUR /);
+    assert.match(waSent[0][3][3], /^https:\/\/pay\.test\/payment\//);
     envConfig.wa_template_payment_due = '';
 });

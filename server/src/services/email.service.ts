@@ -128,6 +128,7 @@ const sendPaymentReminderEmail = async (data: SendPaymentReminderData) => {
 <p>Hi ${esc(data.clientName)},</p>
 <p>${line}</p>
 ${data.payUrl ? `<p style="margin:20px 0"><a href="${esc(data.payUrl)}" style="background:#4f46e5;color:#fff;padding:11px 22px;border-radius:6px;text-decoration:none;font-weight:600">Pay now</a></p>` : ''}
+${isDue && !data.payUrl ? '<p>Please contact us for payment details.</p>' : ''}
 <p>If you have already paid, please ignore this email. For any questions, just reply to this email.</p>
 <p style="color:#6b6b76;font-size:13px">WebBriks</p></div>`;
     return transporter.sendMail({ from: 'Billing | WebBriks', to: data.to, subject, html });
