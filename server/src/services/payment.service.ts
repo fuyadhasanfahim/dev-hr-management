@@ -269,13 +269,14 @@ export class PaymentService {
         const order = await OrderModel.findById(orderId).lean();
         if (!order) throw new AppError('Order not found', 404);
 
+        const { grandTotal, currency } = resolveOrderTotals(order);
+        if (!isOnlinePayable(currency)) return null; // BDT: no payment link, whatever the ledger looks like
+
         const receipt = await ReceiptModel.findOne({ quotationGroupId: order.quotationGroupId })
             .select('_id')
             .lean();
         if (!receipt) throw new AppError('No receipt ledger found for this order', 404);
 
-        const { grandTotal, currency } = resolveOrderTotals(order);
-        if (!isOnlinePayable(currency)) return null; // BDT: no payment link
         const { balanceDue } = await attachReceiptLedger(order.quotationGroupId, grandTotal);
 
         if (balanceDue <= 0.009) return null;
