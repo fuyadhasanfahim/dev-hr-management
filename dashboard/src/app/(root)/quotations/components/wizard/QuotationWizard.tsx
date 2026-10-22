@@ -73,6 +73,7 @@ import { FEATURE_PROMPT, depthOf, blockEnd, fixDepths, parseFeatureTree, Tip, Ic
 import { useGetServicesQuery } from "@/redux/features/service/serviceApi";
 import { useGetStaffsQuery } from "@/redux/features/staff/staffApi";
 import { useDebounce } from "@/hooks/use-debounce";
+import { BILLING_CURRENCIES, currencySymbol, normalizeCurrency } from "@/lib/currency";
 import { useCreateClientMutation, useGetClientsQuery } from "@/redux/features/client/clientApi";
 import { useCreateQuotationMutation, useSendQuotationMutation, useUpdateQuotationMutation } from "@/redux/features/quotation/quotationApi";
 import { QuotationEmailDialog } from "../QuotationEmailDialog";
@@ -142,7 +143,7 @@ const COMPANY = {
 };
 const todayISO = () => new Date().toISOString().split("T")[0];
 const plusDaysISO = (d: number) => new Date(Date.now() + d * 86400000).toISOString().split("T")[0];
-const money = (n: number, cur: string) => `${cur === "USD" ? "$" : "৳"} ${Math.round(n).toLocaleString("en-US")}`;
+const money = (n: number, cur: string) => `${currencySymbol(cur)} ${Math.round(n).toLocaleString("en-US")}`;
 
 // ───────────────────────────── small building blocks ─────────────────────────────
 
@@ -589,7 +590,7 @@ export default function QuotationWizard() {
         /* eslint-enable @typescript-eslint/no-explicit-any */
         return [{ value: "", label: "Unassigned / None", description: "No telemarketer assigned" }, ...list];
     }, [staffsData]);
-    const [currency, setCurrency] = useState<"BDT" | "USD">("BDT");
+    const [currency, setCurrency] = useState<string>("BDT");
     const [date] = useState(todayISO());
     const [validUntil, setValidUntil] = useState(plusDaysISO(30));
     const [taxPct, setTaxPct] = useState(0);
@@ -878,7 +879,8 @@ export default function QuotationWizard() {
             address: c.address || c.officeAddress || "",
         });
         setEmails(c.emails?.length ? c.emails : [""]);
-        if (c.currency === "USD") setCurrency("USD");
+        // The quotation is billed in the client's own currency (BDT / USD / EUR …), so Stripe and PayPal charge that.
+        setCurrency(normalizeCurrency(c.currency));
     };
 
     /** A new client's name doubles as company + contact name on the document. */
@@ -1130,11 +1132,12 @@ export default function QuotationWizard() {
                     <Input type="tel" className="h-10" placeholder="+880 1XXX XXXXXX" value={snap.phone} onChange={(e) => setSnap({ ...snap, phone: e.target.value })} />
                 </Field>
                 <Field label="Preferred Currency" required>
-                    <Select value={currency} onValueChange={(v) => setCurrency(v as "BDT" | "USD")}>
+                    <Select value={currency} onValueChange={(v) => setCurrency(v)}>
                         <SelectTrigger className="h-10 w-full"><SelectValue /></SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="BDT">BDT (৳) — Bangladeshi Taka</SelectItem>
-                            <SelectItem value="USD">USD ($) — US Dollar</SelectItem>
+                            {BILLING_CURRENCIES.map((c) => (
+                                <SelectItem key={c.code} value={c.code}>{c.code} ({c.symbol}) — {c.name}</SelectItem>
+                            ))}
                         </SelectContent>
                     </Select>
                 </Field>
@@ -2161,7 +2164,7 @@ export default function QuotationWizard() {
                     <div className={cardCls}>
                         <div className="flex items-start justify-between gap-3">
                             <div className="flex gap-3">
-                                <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-lg font-bold text-primary">{cur === "USD" ? "$" : "৳"}</span>
+                                <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-lg font-bold text-primary">{currencySymbol(cur)}</span>
                                 <p className="text-sm font-semibold">Pricing</p>
                             </div>
                             <Button type="button" variant="outline" size="sm" className="h-7 text-primary" onClick={() => go(3)}><IconPencil className="size-3.5" /> Edit</Button>

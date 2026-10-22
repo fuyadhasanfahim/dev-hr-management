@@ -1,3 +1,4 @@
+import { currencySymbol } from "@/lib/currency";
 import {
   Table,
   TableBody,
@@ -204,7 +205,7 @@ export function OrderTable({
                         !canSeeFinancials && "blur-[4px] select-none pointer-events-none",
                       )}
                     >
-                      {snap?.currency === "USD" ? "$" : snap?.currency || "৳"}
+                      {currencySymbol(snap?.currency)}
                       {(snap?.grandTotal ?? order.totalPrice ?? 0).toLocaleString(
                         undefined,
                         {

@@ -1,5 +1,6 @@
 'use client';
 
+import { BILLING_CURRENCIES, currencySymbol, normalizeCurrency } from "@/lib/currency";
 import React, { useState, createContext, useContext, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -95,8 +96,7 @@ type PricingItem = {
 };
 
 const currencies = [
-    "Bangladeshi Taka (BDT)",
-    "US Dollar (USD)"
+    ...BILLING_CURRENCIES.map((c) => `${c.name} (${c.code})`)
 ];
 
 const servicesList = [
@@ -125,11 +125,17 @@ const serviceMetaData: Record<string, { icon: any; description: string }> = {
     },
 };
 
-// Helper to get currency symbol — accepts the readable label ("US Dollar (USD)"),
-// an ISO code ("USD" / "BDT"), or a legacy stored symbol ("$" / "৳").
+/** The dropdown label for a stored currency, e.g. "EUR" → "Euro (EUR)". */
+function currencyLabel(stored?: string | null) {
+    const code = normalizeCurrency(stored);
+    const c = BILLING_CURRENCIES.find((x) => x.code === code);
+    return c ? `${c.name} (${c.code})` : code;
+}
+
+// Helper to get currency symbol — accepts the readable label ("Euro (EUR)"),
+// an ISO code, or a legacy stored symbol ("$" / "৳").
 function getCurrencySymbol(currencyName: string) {
-    if (currencyName.includes("USD") || currencyName === "$") return "$";
-    return "৳";
+    return currencySymbol(currencyName);
 }
 
 // --- Initial Preset Data ---
@@ -1039,11 +1045,7 @@ Please review the details below. Should you have any questions or require custom
 
             // Accept both the current ISO codes ("USD" / "BDT") and the legacy
             // stored symbols ("$" / "৳").
-            if (initialData.currency === "$" || initialData.currency === "USD") {
-                setSelectedCurrency("US Dollar (USD)");
-            } else {
-                setSelectedCurrency("Bangladeshi Taka (BDT)");
-            }
+            setSelectedCurrency(currencyLabel(initialData.currency));
 
             const rawClientId = typeof initialData.clientId === 'object'
                 ? (initialData.clientId as any)?._id
@@ -1526,7 +1528,7 @@ Please review the details below. Should you have any questions or require custom
             clientId: selectedClient,
             // Store ISO 4217 codes, not display symbols — the invoice PDF,
             // payment page and gateway helpers all key off these.
-            currency: selectedCurrency === "US Dollar (USD)" ? "USD" : "BDT",
+            currency: normalizeCurrency(selectedCurrency),
             company: initialData?.company || {
                 name: "WebBriks",
                 address: "115 Senpara Parbata, Mirpur, Dhaka 1216, Bangladesh.",

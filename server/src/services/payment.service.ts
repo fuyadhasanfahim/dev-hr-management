@@ -146,6 +146,8 @@ const CURRENCY_SYMBOL_MAP: Record<string, string> = {
     bdt: 'bdt',
     '$': 'usd',
     usd: 'usd',
+    '€': 'eur',
+    '£': 'gbp',
 };
 
 /** Zero-decimal currencies per Stripe's docs — none of ours today, but kept explicit rather than assumed. */
