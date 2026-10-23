@@ -280,42 +280,55 @@ function MessageMedia({ message: m, isMe, onOpen }: { message: WhatsAppMessage; 
 }
 
 // Several photos/videos sent together: a 2-column grid, "+N" on the last tile.
-function AlbumGrid({ messages, onOpen }: { messages: WhatsAppMessage[]; onOpen: (index: number) => void }) {
+function AlbumGrid({
+    messages,
+    onOpen,
+    onDelete,
+}: {
+    messages: WhatsAppMessage[];
+    onOpen: (index: number) => void;
+    onDelete: (m: WhatsAppMessage) => void;
+}) {
     const shown = messages.slice(0, 4);
     const extra = messages.length - shown.length;
     return (
         <div className="grid w-72 max-w-full grid-cols-2 gap-1">
             {shown.map((m, i) => (
-                <button
+                <div
                     key={messageKey(m)}
-                    type="button"
                     data-msg-key={messageKey(m)}
-                    onClick={() => onOpen(i)}
-                    aria-label={m.type === 'video' ? 'Open video' : 'Open photo'}
                     className={cn(
-                        'relative cursor-zoom-in overflow-hidden rounded-lg bg-black/10',
+                        'group/item relative overflow-hidden rounded-lg bg-black/10',
                         shown.length === 3 && i === 0 ? 'col-span-2 aspect-[2/1]' : 'aspect-square',
                     )}
                 >
-                    {m.type === 'video' ? (
-                        <>
-                            <video src={mediaUrl(m)} muted preload="metadata" className="size-full object-cover" />
-                            <span className="absolute inset-0 flex items-center justify-center">
-                                <span className="flex size-9 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm">
-                                    <Play className="size-4 translate-x-px fill-current" />
+                    <button
+                        type="button"
+                        onClick={() => onOpen(i)}
+                        aria-label={m.type === 'video' ? 'Open video' : 'Open photo'}
+                        className="absolute inset-0 cursor-zoom-in"
+                    >
+                        {m.type === 'video' ? (
+                            <>
+                                <video src={mediaUrl(m)} muted preload="metadata" className="size-full object-cover" />
+                                <span className="absolute inset-0 flex items-center justify-center">
+                                    <span className="flex size-9 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm">
+                                        <Play className="size-4 translate-x-px fill-current" />
+                                    </span>
                                 </span>
+                            </>
+                        ) : (
+                            // eslint-disable-next-line @next/next/no-img-element -- streamed from our API
+                            <img src={mediaUrl(m)} alt={m.body || 'Photo'} loading="lazy" className="size-full object-cover" />
+                        )}
+                        {extra > 0 && i === shown.length - 1 && (
+                            <span className="absolute inset-0 flex items-center justify-center bg-black/55 text-2xl font-semibold text-white">
+                                +{extra}
                             </span>
-                        </>
-                    ) : (
-                        // eslint-disable-next-line @next/next/no-img-element -- streamed from our API
-                        <img src={mediaUrl(m)} alt={m.body || 'Photo'} loading="lazy" className="size-full object-cover" />
-                    )}
-                    {extra > 0 && i === shown.length - 1 && (
-                        <span className="absolute inset-0 flex items-center justify-center bg-black/55 text-2xl font-semibold text-white">
-                            +{extra}
-                        </span>
-                    )}
-                </button>
+                        )}
+                    </button>
+                    <MessageMenu message={m} onBubble={false} scope="item" overlay onDelete={() => onDelete(m)} />
+                </div>
             ))}
         </div>
     );
@@ -464,12 +477,18 @@ function ThreadMessages({
                                     {m.deleted ? (
                                         <span className="italic opacity-70">🚫 This message was deleted</span>
                                     ) : kind === 'album' ? (
-                                        <AlbumGrid messages={group} onOpen={(i) => onOpenMedia(group, i)} />
+                                        <AlbumGrid messages={group} onOpen={(i) => onOpenMedia(group, i)} onDelete={setDeleting} />
                                     ) : kind === 'files' ? (
                                         <div className="flex w-72 max-w-full flex-col gap-1">
                                             {group.map((x) => (
-                                                <div key={messageKey(x)} data-msg-key={messageKey(x)} className="rounded-xl">
+                                                <div key={messageKey(x)} data-msg-key={messageKey(x)} className="group/item relative rounded-xl">
                                                     <MessageMedia message={x} isMe={isMe} onOpen={() => {}} />
+                                                    <MessageMenu
+                                                        message={x}
+                                                        onBubble={isMe}
+                                                        scope="item"
+                                                        onDelete={() => setDeleting(x)}
+                                                    />
                                                 </div>
                                             ))}
                                         </div>

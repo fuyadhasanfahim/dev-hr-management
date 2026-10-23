@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { ChevronLeft, ChevronRight, Download, X } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
+import { downloadMedia } from '@/components/messages/message-actions';
 import { mediaUrl, type WhatsAppMessage } from '@/store/api/whatsappApi';
 
 /** Full-screen viewer for a set of photos/videos, with ←/→ navigation. Key it by what opened it so it starts on `index`. */
@@ -68,16 +69,14 @@ export function MediaLightbox({
                                 {items.length > 1 && `${current + 1} / ${items.length}`}
                             </span>
                             <div className="flex items-center gap-1">
-                                <a
-                                    href={mediaUrl(item)}
-                                    download={item.media?.filename}
-                                    target="_blank"
-                                    rel="noreferrer"
+                                <button
+                                    type="button"
+                                    onClick={() => void downloadMedia(item)}
                                     aria-label="Download"
                                     className="flex size-9 items-center justify-center rounded-full hover:bg-white/15"
                                 >
                                     <Download className="size-4" />
-                                </a>
+                                </button>
                                 <button
                                     type="button"
                                     onClick={onClose}
