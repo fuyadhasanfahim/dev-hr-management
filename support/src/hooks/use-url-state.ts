@@ -1,7 +1,7 @@
 'use client';
 
-import { useCallback, useEffect } from 'react';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { useCallback, useEffect, useState } from 'react';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { DEFAULT_PAGE_SIZE, PAGE_SIZE_OPTIONS } from '@/components/ui/pagination-bar';
 
 type Patch = Record<string, string | number | null | undefined>;
@@ -11,12 +11,15 @@ type Patch = Record<string, string | number | null | undefined>;
  * and shared links land on the same view. Defaults are left out of the URL. Needs a <Suspense> parent.
  */
 export function useUrlState(defaults: Record<string, string> = {}) {
-    const router = useRouter();
     const pathname = usePathname();
-    const params = useSearchParams();
-    const query = params.toString();
+    const routerQuery = useSearchParams().toString();
+    // The page's own copy of the query string. A click updates it at once and mirrors it into the address bar, so
+    // switching a tab never waits on a server round trip; the router's value only re-seeds it when the URL changes
+    // from outside (back/forward, a sidebar link, a shared link).
+    const [query, setQuery] = useState(routerQuery);
+    useEffect(() => setQuery(routerQuery), [routerQuery]);
 
-    const get = useCallback((key: string) => params.get(key) ?? defaults[key] ?? '', [params, defaults]);
+    const get = useCallback((key: string) => new URLSearchParams(query).get(key) ?? defaults[key] ?? '', [query, defaults]);
 
     const set = useCallback(
         (patch: Patch) => {
@@ -26,9 +29,10 @@ export function useUrlState(defaults: Record<string, string> = {}) {
                 else next.set(key, String(value));
             }
             const qs = next.toString();
-            router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+            setQuery(qs);
+            window.history.replaceState(window.history.state, '', qs ? `${pathname}?${qs}` : pathname);
         },
-        [query, defaults, router, pathname],
+        [query, defaults, pathname],
     );
 
     return { get, set };
