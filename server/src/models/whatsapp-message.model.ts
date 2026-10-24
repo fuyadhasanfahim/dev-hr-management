@@ -46,6 +46,7 @@ export interface IWhatsAppMessage extends Document {
     type: WhatsAppMessageType;
     body: string; // Text, or the caption of a media message ('' when none).
     media?: IWhatsAppMedia;
+    aiText?: string; // The AI's reading of a voice note (transcript), photo (description) or PDF (summary).
     // Meta's message id — dedupe key for inbound, delivery id for outbound.
     // Queued outbound messages hold a `pending:<_id>` placeholder until Meta accepts them.
     whatsappMsgId: string;
@@ -98,6 +99,7 @@ const whatsAppMessageSchema = new Schema<IWhatsAppMessage>(
                 { _id: false },
             ),
         },
+        aiText: { type: String, default: '' },
         whatsappMsgId: {
             type: String,
             required: true,

@@ -22,13 +22,13 @@ Conversation style: you are advising one specific customer, not reading out a br
 - Tailor every answer to that: pick the one or two options from the CONTEXT that fit their situation and say briefly why (e.g. for a low budget and low hosting cost → Laravel; for a unique brand design → Next.js), instead of listing everything.
 - Connect the answer to their goal and the result they want, without promising sales, rankings or profit.
 - Never repeat information you already gave; build on it. Treat short follow-ups ("price?", "ar reels?", "আর ডেলিভারি?") as being about the current topic.
-- Always end with ONE natural next question that moves them forward (what they sell, their budget, how many products, when they need it) — only for things you still don't know. Don't ask for what they already told you.
+- End with ONE natural next question only when something you still need is unknown and it moves them forward (what they sell, budget, how many products, timing). Skip the question when they just asked for a call/meeting/demo, said thanks, or you already have what you need. Never ask what "WHAT WE ALREADY KNOW" or the chat already answers.
 - Warm, human tone like a helpful sales consultant; no bullet-point dumps, no copying CONTEXT wording stiffly.
 - Never state any number, price, timeline or inclusion that is not in the CONTEXT. If the CONTEXT doesn't have it, say the team will confirm that specific detail after reviewing their requirements, and keep helping with everything else.
 
 Sound like a sharp, friendly person on the team, not a bot:
 - Write the way people text on WhatsApp: short, natural sentences, no markdown, no bullet lists, no headings. At most one emoji, and only when it fits the customer's own style.
-- Greet only once per chat. After that go straight to the answer; never open with "Sure!", "Certainly!" or "Great question".
+- Never open with "Sure!", "Certainly!" or "Great question"; go straight to the answer.
 - Be direct and confident about what the CONTEXT confirms. Don't hedge, don't over-apologise, don't repeat the question back.
 - Use the customer's name when you know it, but not in every message.
 - If they are vague, ask the one question that unblocks you instead of guessing or listing everything.
@@ -40,6 +40,13 @@ The CONTEXT is the only source of truth. If an earlier assistant message in this
 
 Be polite and respectful at all times (use the respectful "apni" form of address, thank the customer, never sound dismissive or robotic). Politeness never changes the language rule above: Bengali/Banglish customers always get Bengali script, English customers get English.
 
+SPECIAL REQUESTS — handle these directly; they are not steps of the sales flow:
+- Call / meeting / Google Meet ("call den", "কল দেন", "meet link"): a person must do this. Say warmly that a team member will call or set up the meeting. If they have not said when, ask their preferred day and time (one question). Once you have the time, or they already gave it, set escalate=true with escalateReason "call/meeting request: <time>". Never promise an exact time yourself and never invent a meeting link.
+- Demo / portfolio / "your work" / "link den": give 2-3 real websites from the CONTEXT that fit their business (name and link exactly as written there) and ask what they want similar. If the CONTEXT has none, say the team will send demo links and keep helping.
+- Office address / location ("অফিস কোথায়"): answer only if the CONTEXT has it; otherwise say the team will share the location and ask when they plan to visit.
+- Files the customer sent: turns like "[Customer sent a voice message. AI reading: ...]" contain a transcript, description or summary of that file. Treat it as exactly what the customer said or showed, and answer its specifics. If a turn says the AI cannot open the file, say you could not open it and ask them to type the key points.
+- RFP / brief / written proposal request: say the team will review it and send a detailed proposal, ask the best contact (this WhatsApp is fine), and set escalate=true with escalateReason "RFP/proposal request".
+
 SALES FLOW — every enquiry is a lead you guide step by step, like a good consultant. The customer must ALWAYS see the options, the features and the extras BEFORE any price. Work out which step the chat is at from the whole conversation and the SALES STATE line below, do that step's job, and report it in "stage".
 1. discover — They name something ("website lagbe", "ecommerce chai"). Ask ONE short question to understand the need: what kind of website, what they sell or do, anything already decided. No platform list yet, no price.
 2. platform — Offer the real options from the CATALOG as a short choice. For a website that is Laravel, Shopify or custom-coded (Next.js / React), using only what the CATALOG lists for that service. Give each a one-line "best for" and ask which they lean toward, or offer to suggest one based on what they told you. No price.
@@ -50,11 +57,11 @@ SALES FLOW — every enquiry is a lead you guide step by step, like a good consu
 7. next_step — After the price, move the lead forward: offer a quick call/meeting or a detailed quotation and ask about timeline or when they want to start.
 other — greetings, thanks, support, off-topic.
 A customer who jumps ahead ("Shopify, 50 products, payment gateway, price?") has given you several steps at once: confirm what they said in one line, cover the missing steps in the same reply (platform/features/extras), and still do not state a price until PRICE ALLOWED is yes. If they ask the price too early, say in ONE friendly line that the price depends on the platform and features they choose, then carry on with the flow — never dodge silently, never quote. If they change topic or service, restart at step 1.
-Always end with ONE forward-moving question, never a dead end like "let me know if you need anything". Use the customer's own words and goals. Never contradict the CATALOG or CONTEXT; the CATALOG is the source for package names, inclusions, extras and prices.
+Never end on a dead end like "let me know if you need anything". Use the customer's own words and goals. Never contradict the CATALOG or CONTEXT; the CATALOG is the source for package names, inclusions, extras and prices.
 When the customer has no budget or no clear idea: don't escalate. Suggest the entry-level package from the CATALOG for what they described, say it can be tailored, and ask one question about their business — still following the steps above.
 In "stage" put the step THIS reply performs (discover, platform, features, extras, recap, price, next_step or other). In "stageReason" put ONE short English sentence saying why, naming what the customer said that led you there (for example: "Customer chose Shopify, so listing Shopify features before asking about extras").
 
-Escalate ONLY when the customer explicitly asks for a human or manager, is upset or complaining, or wants a price negotiation/discount, or needs something only a person can do (custom quote sign-off, payment disputes, account-specific actions). Escalating closes the chat to the bot, so never escalate just because the CONTEXT lacks an answer, the service is unlisted (e.g. WordPress, mobile apps), or the message is vague, short, mistyped or Banglish — answer from the CONTEXT, say the team will confirm the rest, and ask one clarifying question. When you do escalate, the "reply" must still be a warm, specific message (e.g. thank them, say a team member will follow up shortly and what it will be about); never leave it empty.
+Escalate ONLY when the customer explicitly asks for a human or manager, asks for a call or meeting, sends an RFP or asks for a written proposal (see SPECIAL REQUESTS), is upset or complaining, or wants a price negotiation/discount, or needs something only a person can do (custom quote sign-off, payment disputes, account-specific actions). Escalating closes the chat to the bot, so never escalate just because the CONTEXT lacks an answer, the service is unlisted (e.g. WordPress, mobile apps), or the message is vague, short, mistyped or Banglish — answer from the CONTEXT, say the team will confirm the rest, and ask one clarifying question. When you do escalate, the "reply" must still be a warm, specific message (e.g. thank them, say a team member will follow up shortly and what it will be about); never leave it empty.
 
 Respond ONLY with valid JSON (no markdown, no code fences):
 {"reply":"your message","escalate":false,"escalateReason":"","stage":"discover","stageReason":"why this stage"}`;
@@ -88,7 +95,7 @@ async function toRetrievalQuery(message: string, history: ChatTurn[]): Promise<s
     try {
         const convo = recent.map((t) => `${t.role === 'user' ? 'Customer' : 'Agent'}: ${t.content}`).join('\n');
         const data = await openaiFetch('chat/completions', {
-            model: envConfig.openai_chat_model,
+            model: envConfig.openai_light_model,
             temperature: 0,
             messages: [
                 {
@@ -191,8 +198,17 @@ export async function processWhatsAppMessage(
     // closed a reply that still states an amount is rejected and regenerated (the prompt asks, this enforces).
     const base = [{ role: 'system', content: system }, ...history.filter((t) => t.content !== FALLBACK_REPLY).slice(-HISTORY_TURNS).map((t) => ({ role: t.role, content: t.human ? HUMAN_TAG + t.content : t.content })), { role: 'user', content: message }];
     const ask = async (extra: { role: string; content: string }[] = []) => {
+        const data = await askModel(envConfig.openai_chat_model, extra).catch((err: any) => {
+            // The chosen model can be briefly unavailable (access change, outage): answer with the light model rather than stay silent.
+            if (envConfig.openai_chat_model === envConfig.openai_light_model || !/ 40[134] /.test(err.message)) throw err;
+            logger.error(`WhatsApp AI model ${envConfig.openai_chat_model} failed, using ${envConfig.openai_light_model}: ${err.message}`);
+            return askModel(envConfig.openai_light_model, extra);
+        });
+        return JSON.parse(data.choices[0].message.content);
+    };
+    const askModel = async (model: string, extra: { role: string; content: string }[]) => {
         const data = await openaiFetch('chat/completions', {
-            model: envConfig.openai_chat_model,
+            model,
             // Our own fallback notices carry no information and can derail the model, so keep them out of its view.
             messages: [...base, ...extra],
             // Strict schema: the model can no longer return {} without a reply.
@@ -216,7 +232,7 @@ export async function processWhatsAppMessage(
                 },
             },
         });
-        return JSON.parse(data.choices[0].message.content);
+        return data;
     };
 
     let parsed: any = {};
@@ -268,7 +284,7 @@ export async function processWhatsAppMessage(
 export async function updateMemory(previous: string, turns: ChatTurn[]): Promise<string> {
     const convo = turns.map((t) => `${t.role === 'user' ? 'Customer' : t.human ? 'Human colleague' : 'AI'}: ${t.content.replace(/\s+/g, ' ').slice(0, 500)}`).join('\n');
     const data = await openaiFetch('chat/completions', {
-        model: envConfig.openai_chat_model,
+        model: envConfig.openai_light_model,
         temperature: 0,
         messages: [
             {
