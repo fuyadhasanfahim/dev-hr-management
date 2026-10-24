@@ -47,24 +47,24 @@ SPECIAL REQUESTS — handle these directly; they are not steps of the sales flow
 - Files the customer sent: turns like "[Customer sent a voice message. AI reading: ...]" contain a transcript, description or summary of that file. Treat it as exactly what the customer said or showed, and answer its specifics. If a turn says the AI cannot open the file, say you could not open it and ask them to type the key points.
 - RFP / brief / written proposal request: say the team will review it and send a detailed proposal, ask the best contact (this WhatsApp is fine), and set escalate=true with escalateReason "RFP/proposal request".
 
-SALES FLOW — every enquiry is a lead you guide step by step, like a good consultant. The customer must ALWAYS see the options, the features and the extras BEFORE any price. Work out which step the chat is at from the whole conversation and the SALES STATE line below, do that step's job, and report it in "stage".
-1. discover — They name something ("website lagbe", "ecommerce chai"). Ask ONE short question to understand the need: what kind of website, what they sell or do, anything already decided. No platform list yet, no price.
-2. platform — Offer the real options from the CATALOG as a short choice. For a website that is Laravel, Shopify or custom-coded (Next.js / React), using only what the CATALOG lists for that service. Give each a one-line "best for" and ask which they lean toward, or offer to suggest one based on what they told you. No price.
-3. features — They picked a platform (or accepted your suggestion). Say what that platform's package includes at our end: 4-8 highlights from the CATALOG "includes", tied to their business, in flowing sentences (no bullet dump). If there are several packages, name them and say what each adds. Then ask what they specifically need. No price.
-4. extras — Ask whether they want anything beyond what is included. Mention the CATALOG "optional extras" that fit them (names only, no prices) and ask which they'd like, plus whether they need anything custom. Note their list. If they need nothing extra, move on.
+SALES FLOW — every enquiry is a lead you guide step by step, like a good consultant. The customer must ALWAYS hear what they need, your platform recommendation, its packages and their features BEFORE any price — never an offer or price as the first thing. Work out which step the chat is at from the whole conversation and the SALES STATE line below, do that step's job, and report it in "stage".
+1. discover — They name something ("website lagbe", "ecommerce chai", "price koto?"). Do NOT give a price and do not make an offer yet. Say in one friendly line that the price varies with what they need, mention that we already build with ready platforms (Shopify, Laravel) and fully custom (React / Next.js), and ask for their requirements: what they sell or do, how many products/pages, must-have features, anything decided already. One or two questions at most.
+2. platform — They have told you what they need. Recommend the ONE platform from the CATALOG that fits best and say in a sentence why, using their own words (e.g. "আপনার ৪০টা প্রোডাক্ট আর কম বাজেটের জন্য Shopify সবচেয়ে ভালো হবে"). Name that platform's packages from the CATALOG (e.g. Business and Pro) with a short "best for" each. Mention another platform only if it is clearly close. No price yet.
+3. features — Tell them what the recommended package(s) include: 4-8 highlights from the CATALOG "includes" tied to their needs, in flowing sentences. If there are two packages, say what the higher one adds. Then ask which fits, or what else they need. No price unless PRICE ALLOWED is yes and they asked.
+4. extras — Optional; skip it if they ask for the price right after the features. Ask whether they want anything beyond what is included. Mention the CATALOG "optional extras" that fit them (names only, no prices) and ask which they'd like, plus whether they need anything custom. Note their list. If they need nothing extra, move on.
 5. recap — Sum up in 2-3 sentences: the platform, the one package that covers most of their needs, and the extras they chose (and anything that needs a higher package or custom work). Then offer the price ("Shall I share the price for this?" / "এই প্যাকেজের দাম জানাবো?") unless they already asked for it.
-6. price — ONLY when PRICE ALLOWED is yes, and they asked for the price or agreed after the recap: give the matched package price from the CATALOG, the price of each chosen paid extra, and the total in one line. If a chosen extra has no price in the CATALOG, say the team will confirm that part. Never invent, round or discount.
+6. price — ONLY when PRICE ALLOWED is yes and they asked for the price (or agreed after the recap). Give the price of the package you recommended BY ITS NAME (e.g. "Shopify Business Pro — ৳..."), the price of each paid extra they chose, and the total in one line; if two packages were discussed give both, each with its name and what it includes. If a chosen extra has no price in the CATALOG, say the team will confirm that part. Never invent, round or discount.
 7. next_step — After the price, move the lead forward: offer a quick call/meeting or a detailed quotation and ask about timeline or when they want to start.
 other — greetings, thanks, support, off-topic.
-A customer who jumps ahead ("Shopify, 50 products, payment gateway, price?") has given you several steps at once: confirm what they said in one line, cover the missing steps in the same reply (platform/features/extras), and still do not state a price until PRICE ALLOWED is yes. If they ask the price too early, say in ONE friendly line that the price depends on the platform and features they choose, then carry on with the flow — never dodge silently, never quote. If they change topic or service, restart at step 1.
+A customer who jumps ahead ("Shopify, 50 products, payment gateway, price?") has given you several steps at once: confirm what they said in one line and cover the missing steps in the same reply (platform + package + features); state a price only when PRICE ALLOWED is yes. If they ask the price too early (before you have recommended a platform and package), say in ONE friendly line that the price depends on what they need and ask for their requirements — never dodge silently, never quote, never make an offer. If they change topic or service, restart at step 1.
 Never end on a dead end like "let me know if you need anything". Use the customer's own words and goals. Never contradict the CATALOG or CONTEXT; the CATALOG is the source for package names, inclusions, extras and prices.
 When the customer has no budget or no clear idea: don't escalate. Suggest the entry-level package from the CATALOG for what they described, say it can be tailored, and ask one question about their business — still following the steps above.
 In "stage" put the step THIS reply performs (discover, platform, features, extras, recap, price, next_step or other). In "stageReason" put ONE short English sentence saying why, naming what the customer said that led you there (for example: "Customer chose Shopify, so listing Shopify features before asking about extras").
 
-Escalate ONLY when the customer explicitly asks for a human or manager, asks for a call or meeting, sends an RFP or asks for a written proposal (see SPECIAL REQUESTS), is upset or complaining, or wants a price negotiation/discount, or needs something only a person can do (custom quote sign-off, payment disputes, account-specific actions). Escalating closes the chat to the bot, so never escalate just because the CONTEXT lacks an answer, the service is unlisted (e.g. WordPress, mobile apps), or the message is vague, short, mistyped or Banglish — answer from the CONTEXT, say the team will confirm the rest, and ask one clarifying question. When you do escalate, the "reply" must still be a warm, specific message (e.g. thank them, say a team member will follow up shortly and what it will be about); never leave it empty.
+Escalate ONLY when the customer explicitly asks for a human or manager, asks for a call or meeting, sends an RFP or asks for a written proposal (see SPECIAL REQUESTS), is upset or complaining, or wants a price negotiation/discount, or needs something only a person can do (custom quote sign-off, payment disputes, account-specific actions). Escalating also raises a support ticket for the team, so whenever escalate is true fill ticketSubject (max 80 chars, specific: what the customer needs, e.g. "Google Meet request — Shopify clothing store, 200 products"), ticketSummary (3-6 short lines in English: who they are and what they want, what was already discussed or decided, what the team must do next, and any deadline/time they gave), ticketCategory (support = existing customer needs help, service = quotation/meeting/proposal/new project, development = change request on an existing site, billing = payment/invoice, bug = something broken) and ticketPriority (low/medium/high/urgent: urgent only for a broken live site or an angry customer). Leave all four empty when escalate is false. When it is a support problem from an existing customer, first ask which website or order it is about and what exactly is wrong (one question) unless they already said, then escalate. Escalating closes the chat to the bot, so never escalate just because the CONTEXT lacks an answer, the service is unlisted (e.g. WordPress, mobile apps), or the message is vague, short, mistyped or Banglish — answer from the CONTEXT, say the team will confirm the rest, and ask one clarifying question. When you do escalate, the "reply" must still be a warm, specific message (e.g. thank them, say a team member will follow up shortly and what it will be about); never leave it empty.
 
 Respond ONLY with valid JSON (no markdown, no code fences):
-{"reply":"your message","escalate":false,"escalateReason":"","stage":"discover","stageReason":"why this stage"}`;
+{"reply":"your message","escalate":false,"escalateReason":"","stage":"discover","stageReason":"why this stage","ticketSubject":"","ticketSummary":"","ticketCategory":"support","ticketPriority":"medium"}`;
 
 const GREETING_FIRST = `Greetings: this is the very first reply in this chat, so a plain greeting (hi, hello, salam) gets exactly this and nothing more:
 - Bengali: "আসসালামু আলাইকুম! 🌸\n\nআমি Mira, Webbriks-এর ভার্চুয়াল অ্যাসিস্ট্যান্ট।\n\nবলুন, কীভাবে আপনাকে হেল্প করতে পারি?"
@@ -124,6 +124,8 @@ export interface WhatsAppAIOptions {
     salesStage?: SalesStage;
     // Running profile of this customer (business, platform, budget...) kept across the whole chat.
     memory?: string;
+    // Internal staff notes on this customer (never shown to them).
+    notes?: string;
 }
 
 export interface WhatsAppAIResult {
@@ -135,6 +137,7 @@ export interface WhatsAppAIResult {
     stage: SalesStage; // which step of the sales flow this reply performed
     stageReason: string; // why, in one sentence — shown to staff
     priceAllowed: boolean; // whether the price gate was open for this reply
+    ticket: { subject: string; summary: string; category: string; priority: string }; // what to put on the support ticket when escalating
 }
 
 export async function processWhatsAppMessage(
@@ -180,6 +183,8 @@ export async function processWhatsAppMessage(
     const system = [
         SYSTEM_PROMPT.replace('__GREETING__', firstReply ? GREETING_FIRST : GREETING_LATER),
         `Turns marked "${HUMAN_TAG.trim()}" in the chat were written by a human colleague, not by you. Treat what they said and promised as part of the conversation: never repeat their questions, never contradict them, and continue from where they left off.`,
+        `PRIORITY ORDER when instructions conflict: STAFF RULES > TAUGHT REPLIES > CONTEXT / CATALOG facts > the style guidance in this prompt. Anything staff have set in the knowledge base is binding; never ignore or work around it.`,
+        options.notes && `INTERNAL TEAM NOTES about this customer (written by our staff; use them to understand the customer, but NEVER mention or quote them to the customer):\n${options.notes}`,
         options.memory && `WHAT WE ALREADY KNOW ABOUT THIS CUSTOMER (from the whole chat so far; trust it, never ask for these again):\n${options.memory}`,
         rules && `STAFF RULES (always follow these; they override the style guidance above):\n${rules}`,
         examples.taught.length &&
@@ -225,8 +230,12 @@ export async function processWhatsAppMessage(
                             escalateReason: { type: 'string' },
                             stage: { type: 'string', enum: [...SALES_STAGES] },
                             stageReason: { type: 'string' },
+                            ticketSubject: { type: 'string' },
+                            ticketSummary: { type: 'string' },
+                            ticketCategory: { type: 'string', enum: ['support', 'service', 'development', 'billing', 'bug'] },
+                            ticketPriority: { type: 'string', enum: ['low', 'medium', 'high', 'urgent'] },
                         },
-                        required: ['reply', 'escalate', 'escalateReason', 'stage', 'stageReason'],
+                        required: ['reply', 'escalate', 'escalateReason', 'stage', 'stageReason', 'ticketSubject', 'ticketSummary', 'ticketCategory', 'ticketPriority'],
                         additionalProperties: false,
                     },
                 },
@@ -271,6 +280,12 @@ export async function processWhatsAppMessage(
         stage: !isSalesStage(parsed.stage) ? 'other' : !gate.allowed && (parsed.stage === 'price' || parsed.stage === 'next_step') ? 'recap' : parsed.stage,
         stageReason: String(parsed.stageReason ?? '').slice(0, 300),
         priceAllowed: gate.allowed,
+        ticket: {
+            subject: String(parsed.ticketSubject ?? '').trim().slice(0, 120),
+            summary: String(parsed.ticketSummary ?? '').trim().slice(0, 1500),
+            category: String(parsed.ticketCategory ?? 'support'),
+            priority: String(parsed.ticketPriority ?? 'medium'),
+        },
     };
 
     // Feed the "unanswered questions" list: the AI handed off, or the knowledge base had nothing close.
@@ -281,7 +296,7 @@ export async function processWhatsAppMessage(
 }
 
 // Folds the newest turns into the customer's running profile. Short on purpose: it is read on every reply.
-export async function updateMemory(previous: string, turns: ChatTurn[]): Promise<string> {
+export async function updateMemory(previous: string, turns: ChatTurn[], today = new Date().toISOString().slice(0, 10)): Promise<string> {
     const convo = turns.map((t) => `${t.role === 'user' ? 'Customer' : t.human ? 'Human colleague' : 'AI'}: ${t.content.replace(/\s+/g, ' ').slice(0, 500)}`).join('\n');
     const data = await openaiFetch('chat/completions', {
         model: envConfig.openai_light_model,
@@ -291,13 +306,13 @@ export async function updateMemory(previous: string, turns: ChatTurn[]): Promise
                 role: 'system',
                 content:
                     'You maintain a short English profile of one sales-chat customer for a digital agency. Given the current profile and the newest chat turns, output the UPDATED profile: ' +
-                    'max 8 short lines "key: value" covering only facts the customer or a colleague actually stated — business/what they sell, service wanted, platform chosen, package discussed, product count, budget, timeline, ' +
-                    'existing site/reference links, decisions or promises made (e.g. call arranged, proposal pending), questions already answered, language. Keep old facts unless contradicted. Never invent. Output only the profile, under 700 characters.',
+                    'max 12 short lines "key: value" covering only facts the customer or a colleague actually stated — business/what they sell, service wanted, platform chosen, package discussed, product count, budget, timeline, ' +
+                    'existing site/reference links, decisions or promises made (e.g. call arranged, proposal pending), questions already answered, language. Keep old facts unless the customer clearly contradicts them; lines a staff member wrote are authoritative, keep them word for word. Put the month on time-sensitive facts so they make sense later (e.g. "wants Shopify store for clothing brand (Oct 2026)"). Never invent. Output only the profile, under 1200 characters.',
             },
-            { role: 'user', content: `Current profile:\n${previous || '(empty)'}\n\nNewest turns:\n${convo}` },
+            { role: 'user', content: `Today: ${today}\nCurrent profile:\n${previous || '(empty)'}\n\nNewest turns:\n${convo}` },
         ],
     });
-    return String(data.choices[0].message.content ?? '').trim().slice(0, 900) || previous;
+    return String(data.choices[0].message.content ?? '').trim().slice(0, 1800) || previous;
 }
 
 export default { processWhatsAppMessage, updateMemory };

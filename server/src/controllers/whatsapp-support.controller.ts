@@ -191,6 +191,18 @@ async function addNote(req: Request, res: Response) {
     }
 }
 
+async function setMemory(req: Request, res: Response) {
+    try {
+        const text = typeof req.body?.text === 'string' ? req.body.text.trim() : null;
+        if (text === null) return res.status(400).json({ success: false, message: 'text is required' });
+        if (text.length > 2000) return res.status(400).json({ success: false, message: 'Memory is limited to 2000 characters' });
+        await whatsappSupportService.setMemory(req.params.id!, text, agentOf(req));
+        return res.status(200).json({ success: true });
+    } catch (err: any) {
+        return sendError(res, err);
+    }
+}
+
 async function deleteNote(req: Request, res: Response) {
     try {
         await whatsappSupportService.deleteNote(req.params.id!, req.params.noteId!, agentOf(req));
@@ -205,6 +217,7 @@ export default {
     getDetails,
     listNotes,
     addNote,
+    setMemory,
     deleteNote,
     listConversations,
     getMessages,

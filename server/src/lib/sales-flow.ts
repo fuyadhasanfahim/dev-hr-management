@@ -18,8 +18,8 @@ export const STAGE_LABEL: Record<SalesStage, string> = {
 
 export const isSalesStage = (v: unknown): v is SalesStage => (SALES_STAGES as readonly string[]).includes(v as string);
 
-// Stages after which the customer has seen platform + features + extras, so a price may be given.
-const PRICE_READY: SalesStage[] = ['extras', 'recap', 'price', 'next_step'];
+// Stages after which the customer has heard the recommended platform and its packages, so a price may be given when they ask.
+const PRICE_READY: SalesStage[] = ['platform', 'features', 'extras', 'recap', 'price', 'next_step'];
 
 // "price", "koto taka", "দাম কত", "khoroch"… Deliberately broad: a false positive only lifts the gate for one message.
 const ASKS_PRICE =
@@ -34,7 +34,7 @@ export interface PriceGate {
 
 /**
  * May this reply contain a price?
- *  - yes once the previous reply was at extras/recap/price/next_step (features and extras are already on the table);
+ *  - yes once the previous reply was at platform/features/extras/recap/price/next_step (the recommendation and packages are already on the table);
  *  - yes if the customer has now asked for the price twice (an earlier ask went unanswered with a price) — never stonewall;
  *  - otherwise no: the reply must move the flow forward (platform → features → extras) instead.
  */

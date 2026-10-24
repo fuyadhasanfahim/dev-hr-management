@@ -219,6 +219,7 @@ router.post('/whatsapp/conversations/:id/assignment', requireUnifiedAuth, suppor
 router.get('/whatsapp/conversations/:id/details', requireUnifiedAuth, supportAccess, WhatsAppSupportController.getDetails);
 router.get('/whatsapp/conversations/:id/notes', requireUnifiedAuth, supportAccess, WhatsAppSupportController.listNotes);
 router.post('/whatsapp/conversations/:id/notes', requireUnifiedAuth, supportAccess, WhatsAppSupportController.addNote);
+router.put('/whatsapp/conversations/:id/memory', requireUnifiedAuth, supportAccess, WhatsAppSupportController.setMemory);
 router.delete('/whatsapp/conversations/:id/notes/:noteId', requireUnifiedAuth, supportAccess, WhatsAppSupportController.deleteNote);
 
 export const SupportRoutes = router;

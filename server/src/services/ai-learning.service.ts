@@ -285,11 +285,20 @@ async function captureAgentReply(conversationId: Types.ObjectId | string, answer
             .map((m) => `${m.direction === WhatsAppMessageDirection.INBOUND ? 'Customer' : 'Team'}: ${clip(m.body)}`)
             .join('\n');
 
-        await prisma.$executeRaw`
-            INSERT INTO ai_examples (id, kind, question, context, answer, approved, "sourceKey", "agentName", "createdAt", "updatedAt")
-            VALUES (gen_random_uuid()::text, 'agent', ${inbound.body.slice(0, 1000)}, ${context || null}, ${text}, false, ${`msg:${inbound._id}`}, ${agentName}, now(), now())
-            ON CONFLICT ("sourceKey") DO NOTHING
-        `;
+        // Embedded straight away: the AI learns the team's tone from every human reply without waiting for review
+        // (staff approval still decides whether a reply is also followed as a fact — see retrieve()).
+        const embedding = literal(await embed(inbound.body.slice(0, 1000)));
+        await prisma.$executeRawUnsafe(
+            `INSERT INTO ai_examples (id, kind, question, context, answer, embedding, approved, "sourceKey", "agentName", "createdAt", "updatedAt")
+             VALUES (gen_random_uuid()::text, 'agent', $1, $2, $3, $4::vector, false, $5, $6, now(), now())
+             ON CONFLICT ("sourceKey") DO NOTHING`,
+            inbound.body.slice(0, 1000),
+            context || null,
+            text,
+            embedding,
+            `msg:${inbound._id}`,
+            agentName,
+        );
     } catch (err: any) {
         logger.error(`Agent reply capture failed: ${err.message}`);
     }
@@ -307,7 +316,7 @@ async function retrieve(queryEmbedding: number[]): Promise<ExamplesForPrompt> {
     const find = (kinds: string[], k: number) =>
         prisma.$queryRawUnsafe<(AiExample & { score: number })[]>(
             `SELECT kind, question, context, answer, "createdAt", 1 - (embedding <=> $1::vector) AS score
-             FROM ai_examples WHERE approved AND embedding IS NOT NULL AND kind = ANY($2::text[])
+             FROM ai_examples WHERE (approved OR kind = 'agent') AND embedding IS NOT NULL AND kind = ANY($2::text[])
              ORDER BY embedding <=> $1::vector LIMIT ${k}`,
             lit,
             kinds,
