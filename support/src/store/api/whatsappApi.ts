@@ -26,6 +26,8 @@ export interface WhatsAppCustomerDetails {
     messageCount: number;
     conversationCount: number;
     linkedTicketId: string | null;
+    // What the AI knows about this customer (kept per phone number across chats); staff can edit it.
+    memory: { text: string; updatedBy: string | null; updatedAt: string | null };
     // Where the AI's sales flow stands and how it got there (null until the AI has replied with a stage).
     sales: {
         stage: string;
@@ -319,6 +321,14 @@ export const whatsappApi = baseApi.injectEndpoints({
             transformResponse: (res: { data: WhatsAppCustomerDetails }) => res.data,
             providesTags: (_r, _e, conversationId) => [{ type: 'WhatsAppDetails', id: conversationId }],
         }),
+        setWhatsAppMemory: builder.mutation<void, { conversationId: string; text: string }>({
+            query: ({ conversationId, text }) => ({
+                url: `/support/whatsapp/conversations/${conversationId}/memory`,
+                method: 'PUT',
+                body: { text },
+            }),
+            invalidatesTags: (_r, _e, { conversationId }) => [{ type: 'WhatsAppDetails', id: conversationId }],
+        }),
         getWhatsAppNotes: builder.query<WhatsAppNote[], string>({
             query: (conversationId) => `/support/whatsapp/conversations/${conversationId}/notes`,
             transformResponse: (res: { data: WhatsAppNote[] }) => res.data ?? [],
@@ -369,6 +379,7 @@ export const {
     useMarkWhatsAppConversationReadMutation,
     useSetWhatsAppAssignmentMutation,
     useGetWhatsAppDetailsQuery,
+    useSetWhatsAppMemoryMutation,
     useGetWhatsAppNotesQuery,
     useAddWhatsAppNoteMutation,
     useDeleteWhatsAppNoteMutation,

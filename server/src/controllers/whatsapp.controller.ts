@@ -8,6 +8,9 @@ import aiLearning from '../services/ai-learning.service.js';
 import WhatsAppConversationModel, { WhatsAppConversationStatus, type IWhatsAppConversation } from '../models/whatsapp-conversation.model.js';
 import { isAckOnly } from '../lib/sales-flow.js';
 import { readMedia } from '../lib/media-reader.js';
+import WhatsAppCustomerMemoryModel from '../models/whatsapp-customer-memory.model.js';
+import WhatsAppNoteModel from '../models/whatsapp-note.model.js';
+import ClientModel from '../models/client.model.js';
 import WhatsAppMessageModel, {
     WhatsAppMessageDirection,
     WhatsAppMessageSender,
@@ -16,7 +19,7 @@ import WhatsAppMessageModel, {
 } from '../models/whatsapp-message.model.js';
 import { isValidMetaSignature } from '../lib/whatsapp-signature.js';
 import { parseEcho, parseIncoming, senderId, type EchoMessage, type HistoryThread, type IncomingMessage, type InboundContent } from '../lib/whatsapp-inbound.js';
-import whatsappSupportService, { findOrCreateConversation, previewText } from '../services/whatsapp-support.service.js';
+import whatsappSupportService, { findByPhone, findOrCreateConversation, previewText } from '../services/whatsapp-support.service.js';
 import { notifyMessageStatus } from '../services/whatsapp-send.queue.js';
 import { createTicket } from '../services/support-ticket.service.js';
 import { TicketSource } from '../models/ticket.model.js';
@@ -346,18 +349,38 @@ async function answerWithAi(
         return [{ role: (fromCustomer ? 'user' : 'assistant') as 'user' | 'assistant', content: text, human: m.sender === WhatsAppMessageSender.AGENT }];
     });
 
+    // Per-customer memory (keyed by phone, so it survives a resolved chat starting again) and the team's internal notes.
+    const [memoryDoc, noteDocs] = await Promise.all([
+        WhatsAppCustomerMemoryModel.findOne({ customerPhone: conversation.customerPhone }).lean(),
+        WhatsAppNoteModel.find({ customerPhone: conversation.customerPhone }).sort({ createdAt: -1 }).limit(5).lean(),
+    ]);
+    const memory = memoryDoc?.text || conversation.aiMemory || '';
+
     const ai = await whatsappAiService.processWhatsAppMessage(body, history, {
         customerName: conversation.customerName,
         salesStage: conversation.salesStage ?? undefined,
-        memory: conversation.aiMemory || undefined,
+        memory: memory || undefined,
+        notes: noteDocs.map((n) => `- ${n.body.replace(/\s+/g, ' ').slice(0, 400)} (${n.author.name}, ${n.createdAt.toISOString().slice(0, 10)})`).join('\n') || undefined,
     });
 
-    const sentId = await whatsappService.sendTextMessage(fromPhone, ai.reply);
+    // A hand-off raises the support ticket first, so the customer is told its number in the same message.
+    let ticket: any = null;
+    let reply = ai.reply;
+    if (ai.escalate) {
+        try {
+            ticket = await raiseHandoffTicket(conversation, fromPhone, body, history, ai, memory);
+            reply += /[\u0980-\u09FF]/.test(reply) ? `\n\n🎫 আপনার টিকেট নম্বর: ${ticket.ticketId}` : `\n\n🎫 Your ticket reference: ${ticket.ticketId}`;
+        } catch (err: any) {
+            logger.error(`Could not raise the hand-off ticket for ${conversation._id}: ${err.message}`);
+        }
+    }
+
+    const sentId = await whatsappService.sendTextMessage(fromPhone, reply);
     await WhatsAppMessageModel.create({
         conversationId: conversation._id,
         direction: WhatsAppMessageDirection.OUTBOUND,
         sender: WhatsAppMessageSender.AI,
-        body: ai.reply,
+        body: reply,
         whatsappMsgId: sentId,
         status: WhatsAppMessageStatus.SENT,
     });
@@ -394,23 +417,11 @@ async function answerWithAi(
 
     // Fold this exchange (and any human colleague turns before it) into the customer's running profile.
     void whatsappAiService
-        .updateMemory(conversation.aiMemory ?? '', [...history.slice(-8), { role: 'user', content: body }, { role: 'assistant', content: ai.reply }])
-        .then((memory) => WhatsAppConversationModel.updateOne({ _id: conversation._id }, { $set: { aiMemory: memory } }))
+        .updateMemory(memory, [...history.slice(-8), { role: 'user', content: body }, { role: 'assistant', content: ai.reply }])
+        .then((text) => WhatsAppCustomerMemoryModel.updateOne({ customerPhone: conversation.customerPhone }, { $set: { text, updatedBy: 'AI' } }, { upsert: true }))
         .catch((err: any) => logger.error(`Could not update AI memory: ${err.message}`));
 
-    if (ai.escalate) {
-        const transcript = [...history, { role: 'user' as const, content: body }]
-            .map((m) => `[${m.role === 'user' ? 'Customer' : (m as { human?: boolean }).human ? 'Team' : 'AI'}]: ${m.content}`)
-            .join('\n');
-
-        const ticket = await createTicket({
-            subject: `WhatsApp: ${conversation.customerName || fromPhone}`,
-            text: `${ai.escalateReason || 'AI handed off to a human agent.'}\n\n--- Chat Transcript ---\n${transcript}`,
-            source: TicketSource.WHATSAPP,
-            visitorName: conversation.customerName || fromPhone,
-            whatsappPhone: fromPhone,
-        });
-
+    if (ai.escalate && ticket) {
         conversation.status = WhatsAppConversationStatus.ESCALATED;
         conversation.linkedTicketId = ticket._id;
         await conversation.save();
@@ -421,6 +432,45 @@ async function answerWithAi(
             subject: ticket.subject ?? '',
         });
     }
+}
+
+const TICKET_CATEGORIES = ['support', 'service', 'development', 'billing', 'bug'];
+const TICKET_PRIORITIES = ['low', 'medium', 'high', 'urgent'];
+
+// The ticket the team works from: a specific subject, a short brief, what the AI knows about the customer, and the
+// chat. Linked to the customer's client record when the number belongs to one, so it shows up under that client.
+async function raiseHandoffTicket(
+    conversation: IWhatsAppConversation,
+    fromPhone: string,
+    body: string,
+    history: { role: 'user' | 'assistant'; content: string; human?: boolean }[],
+    ai: Awaited<ReturnType<typeof whatsappAiService.processWhatsAppMessage>>,
+    memory: string,
+) {
+    const transcript = [...history, { role: 'user' as const, content: body }]
+        .map((m) => `[${m.role === 'user' ? 'Customer' : m.human ? 'Team' : 'AI'}]: ${m.content}`)
+        .join('\n');
+    const client = await findByPhone<any>(ClientModel, fromPhone, 'name').catch(() => null);
+    const name = conversation.customerName || fromPhone;
+    const text = [
+        ai.ticket.summary || ai.escalateReason || 'AI handed off to a human agent.',
+        ai.escalateReason && `Hand-off reason: ${ai.escalateReason}`,
+        memory && `What the AI knows about the customer:\n${memory}`,
+        conversation.salesStage && `Sales stage: ${conversation.salesStage}`,
+        `--- Chat Transcript ---\n${transcript}`,
+    ]
+        .filter(Boolean)
+        .join('\n\n');
+    return createTicket({
+        subject: ai.ticket.subject || `WhatsApp: ${name}`,
+        text,
+        source: TicketSource.WHATSAPP,
+        category: TICKET_CATEGORIES.includes(ai.ticket.category) ? ai.ticket.category : 'support',
+        priority: TICKET_PRIORITIES.includes(ai.ticket.priority) ? ai.ticket.priority : 'medium',
+        visitorName: name,
+        whatsappPhone: fromPhone,
+        ...(client ? { clientId: client._id.toString() } : {}),
+    });
 }
 
 export default { verifyWebhook, receiveWebhook };

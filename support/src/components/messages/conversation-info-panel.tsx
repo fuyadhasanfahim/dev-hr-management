@@ -4,6 +4,7 @@ import { useMemo, useState, type FormEvent } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import {
     Bot,
+    Brain,
     Briefcase,
     Calendar,
     FileText,
@@ -37,6 +38,7 @@ import {
     useDeleteWhatsAppNoteMutation,
     useGetWhatsAppDetailsQuery,
     useGetWhatsAppNotesQuery,
+    useSetWhatsAppMemoryMutation,
     type WhatsAppConversation,
     type WhatsAppMessage,
 } from '@/store/api/whatsappApi';
@@ -83,6 +85,74 @@ function Section({ title, action, children }: { title: string; action?: React.Re
             </div>
             {children}
         </section>
+    );
+}
+
+// What the AI has learned about this customer, kept per phone number across chats. Staff can correct it; the AI
+// treats staff-written lines as facts and never asks the customer for them again.
+function AiMemory({ conversationId, memory }: { conversationId: string; memory: { text: string; updatedBy: string | null; updatedAt: string | null } }) {
+    const [editing, setEditing] = useState(false);
+    const [draft, setDraft] = useState(memory.text);
+    const [save, { isLoading }] = useSetWhatsAppMemoryMutation();
+
+    const submit = () =>
+        save({ conversationId, text: draft.trim() })
+            .unwrap()
+            .then(() => {
+                setEditing(false);
+                toast.success('Saved — the AI will use this from now on');
+            })
+            .catch((err: { data?: { message?: string } }) => toast.error('Couldn’t save', { description: err.data?.message }));
+
+    return (
+        <Section
+            title="What the AI knows"
+            action={
+                !editing && (
+                    <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-6 px-2 text-xs"
+                        onClick={() => {
+                            setDraft(memory.text);
+                            setEditing(true);
+                        }}
+                    >
+                        Edit
+                    </Button>
+                )
+            }
+        >
+            {editing ? (
+                <div className="space-y-2">
+                    <Textarea value={draft} onChange={(e) => setDraft(e.target.value)} className="min-h-40 resize-y text-sm" maxLength={2000} autoFocus />
+                    <div className="flex items-center justify-between">
+                        <span className="text-[11px] text-muted-foreground">One fact per line. Your lines are kept as facts.</span>
+                        <div className="flex gap-2">
+                            <Button size="sm" variant="ghost" onClick={() => setEditing(false)}>
+                                Cancel
+                            </Button>
+                            <Button size="sm" disabled={isLoading || draft.trim() === memory.text.trim()} onClick={submit}>
+                                {isLoading && <Loader2 className="size-3.5 animate-spin" />}
+                                Save
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            ) : memory.text ? (
+                <div className="rounded-lg border bg-background/60 p-3">
+                    <p className="text-sm whitespace-pre-wrap break-words">{memory.text}</p>
+                    <p className="mt-2 flex items-center gap-1 text-[11px] text-muted-foreground">
+                        <Brain className="size-3" /> Updated by {memory.updatedBy ?? 'AI'}
+                        {memory.updatedAt && ` · ${formatDate(memory.updatedAt)}`}
+                    </p>
+                </div>
+            ) : (
+                <p className="rounded-lg border border-dashed py-4 text-center text-xs text-muted-foreground">
+                    The AI hasn&apos;t learned anything about this customer yet.
+                </p>
+            )}
+        </Section>
     );
 }
 
@@ -340,6 +410,13 @@ export function ConversationInfoPanel({
                             </>
                         )}
                     </Section>
+
+                    {details && (
+                        <>
+                            <Separator />
+                            <AiMemory key={`${conversation.id}-${details.memory.updatedAt}`} conversationId={conversation.id} memory={details.memory} />
+                        </>
+                    )}
 
                     {details?.sales && (
                         <>

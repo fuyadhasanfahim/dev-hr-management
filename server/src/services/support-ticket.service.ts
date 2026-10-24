@@ -26,7 +26,12 @@ export async function createTicket(data: CreateTicketData): Promise<any> {
         throw new AppError('Subject and description are required', 400);
     }
 
-    const ticketId = `TKT-${Math.floor(100000 + Math.random() * 900000)}`;
+    // Random 6-digit refs can collide; re-roll until free so two tickets never share a number.
+    let ticketId = '';
+    for (let i = 0; i < 5; i++) {
+        ticketId = `TKT-${Math.floor(100000 + Math.random() * 900000)}`;
+        if (!(await TicketModel.exists({ ticketId }))) break;
+    }
 
     const ticketFields: any = {
         ticketId,

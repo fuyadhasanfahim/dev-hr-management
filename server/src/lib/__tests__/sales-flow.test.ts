@@ -17,10 +17,11 @@ test('prices are caught in the reply, plain words are not', () => {
         assert.ok(!leaksPrice(r), r);
 });
 
-test('price gate: closed until features and extras are covered', () => {
+test('price gate: closed until a platform and its packages have been recommended', () => {
     assert.equal(priceGate(undefined, 'price?', []).allowed, false);
     assert.equal(priceGate('discover', 'dam koto', []).allowed, false);
-    assert.equal(priceGate('features', 'price koto', []).allowed, false);
+    assert.equal(priceGate('platform', 'price koto', []).allowed, true);
+    assert.equal(priceGate('features', 'price koto', []).allowed, true);
     assert.equal(priceGate('extras', 'ok, price?', []).allowed, true);
     assert.equal(priceGate('recap', 'koto?', []).allowed, true);
     assert.equal(priceGate('price', 'and the second package?', []).allowed, true);
@@ -28,8 +29,8 @@ test('price gate: closed until features and extras are covered', () => {
 
 test('price gate: opens when the customer insists a second time', () => {
     const history = [{ role: 'user', content: 'price koto?' }, { role: 'assistant', content: 'It depends on the platform…' }];
-    assert.equal(priceGate('platform', 'dam ta bolen', history).allowed, true);
-    assert.equal(priceGate('platform', 'ok shopify', history).allowed, false);
+    assert.equal(priceGate('discover', 'dam ta bolen', history).allowed, true);
+    assert.equal(priceGate('discover', 'ok shopify', history).allowed, false);
 });
 
 test('price gate: opens when a human teammate already took the customer through the package', () => {

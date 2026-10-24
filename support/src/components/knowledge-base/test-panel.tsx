@@ -1,13 +1,66 @@
 'use client';
 
 import { useState, type FormEvent } from 'react';
-import { AlertTriangle, Loader2, Send } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Loader2, PencilLine, Send } from 'lucide-react';
+import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import { isInstructions } from '@/lib/knowledge-base';
-import { useTestKnowledgeBaseMutation } from '@/store/api/knowledgeBaseApi';
+import { EXAMPLE_MAX_CHARS } from '@/lib/knowledge-base';
+import { useCreateAiExampleMutation, useTestKnowledgeBaseMutation } from '@/store/api/knowledgeBaseApi';
+
+// Rewrite a test reply the way it should have been. Saved as a taught reply: the AI follows it for this question and
+// similar ones, and the newest correction wins.
+function CorrectReply({ question, reply }: { question: string; reply: string }) {
+    const [editing, setEditing] = useState(false);
+    const [saved, setSaved] = useState(false);
+    const [text, setText] = useState(reply);
+    const [create, { isLoading }] = useCreateAiExampleMutation();
+
+    const save = async () => {
+        try {
+            await create({ question, reply: text.trim() }).unwrap();
+            setSaved(true);
+            setEditing(false);
+            toast.success('Saved — the AI will reply like this next time');
+        } catch (err) {
+            toast.error((err as { data?: { message?: string } })?.data?.message ?? 'Could not save the correction');
+        }
+    };
+
+    if (editing) {
+        return (
+            <div className="space-y-2 rounded-lg border bg-background p-3">
+                <p className="text-xs text-muted-foreground">Rewrite the reply the way it should have been sent.</p>
+                <Textarea value={text} onChange={(e) => setText(e.target.value)} maxLength={EXAMPLE_MAX_CHARS} rows={6} autoFocus />
+                <div className="flex justify-end gap-2">
+                    <Button size="sm" variant="ghost" onClick={() => setEditing(false)}>
+                        Cancel
+                    </Button>
+                    <Button size="sm" disabled={isLoading || !text.trim() || text.trim() === reply.trim()} onClick={save}>
+                        {isLoading && <Loader2 className="mr-1.5 size-3.5 animate-spin" />}
+                        Save correction
+                    </Button>
+                </div>
+            </div>
+        );
+    }
+    return (
+        <div className="flex flex-wrap items-center gap-2">
+            <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setEditing(true)}>
+                <PencilLine className="size-3.5" /> {saved ? 'Correct again' : 'Correct this reply'}
+            </Button>
+            {saved && (
+                <span className="flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400">
+                    <CheckCircle2 className="size-3.5" /> Saved — try asking again to check
+                </span>
+            )}
+        </div>
+    );
+}
 
 // Ask the AI a customer question and see exactly which entries it read.
 export function TestPanel() {
@@ -56,6 +109,7 @@ export function TestPanel() {
                         {data.escalate && data.escalateReason && (
                             <p className="text-xs text-muted-foreground">Reason: {data.escalateReason}</p>
                         )}
+                        <CorrectReply key={`${question}|${data.reply}`} question={question.trim()} reply={data.reply} />
                         {data.lowConfidence && (
                             <p className="flex items-start gap-1.5 text-xs text-amber-600 dark:text-amber-400">
                                 <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />

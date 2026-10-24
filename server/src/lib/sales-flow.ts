@@ -18,12 +18,12 @@ export const STAGE_LABEL: Record<SalesStage, string> = {
 
 export const isSalesStage = (v: unknown): v is SalesStage => (SALES_STAGES as readonly string[]).includes(v as string);
 
-// Stages after which the customer has seen platform + features + extras, so a price may be given.
-const PRICE_READY: SalesStage[] = ['extras', 'recap', 'price', 'next_step'];
+// Stages after which the customer has heard the recommended platform and its packages, so a price may be given when they ask.
+const PRICE_READY: SalesStage[] = ['platform', 'features', 'extras', 'recap', 'price', 'next_step'];
 
 // "price", "koto taka", "দাম কত", "khoroch"… Deliberately broad: a false positive only lifts the gate for one message.
 const ASKS_PRICE =
-    /\b(price|prices|pricing|cost|costs|rate|rates|charge|charges|fee|fees|quote|quotation|how much|budget)\b|\bdam\b|\bdar\b|দাম|মূল্য|খরচ|টাকা|কত\s*(পড|লাগ|হবে)|koto\s*(taka|dam|poro|pore|lagbe|hobe|khoroch)|khoroch|khorc|takar/i;
+    /\b(price|prices|pricing|cost|costs|rate|rates|charge|charges|fee|fees|quote|quotation|how much)\b|\bdam\b|\bdar\b|দাম|মূল্য|খরচ|টাকা|কত\s*(পড|লাগ|হবে)|koto\s*(taka|dam|poro|pore|lagbe|hobe|khoroch)|khoroch|khorc|takar/i;
 
 export const asksPrice = (text: string) => ASKS_PRICE.test(text);
 
@@ -34,7 +34,7 @@ export interface PriceGate {
 
 /**
  * May this reply contain a price?
- *  - yes once the previous reply was at extras/recap/price/next_step (features and extras are already on the table);
+ *  - yes once the previous reply was at platform/features/extras/recap/price/next_step (the recommendation and packages are already on the table);
  *  - yes if the customer has now asked for the price twice (an earlier ask went unanswered with a price) — never stonewall;
  *  - otherwise no: the reply must move the flow forward (platform → features → extras) instead.
  */
@@ -54,12 +54,14 @@ const MONEY =
 export const leaksPrice = (reply: string) => MONEY.test(reply);
 
 /** One-line instruction describing where the chat is, injected into the prompt every turn. */
-export function stageBrief(prev: SalesStage | undefined, gate: PriceGate): string {
+export function stageBrief(prev: SalesStage | undefined, gate: PriceGate, askedPriceNow = false): string {
     return (
         `SALES STATE — previous reply stage: ${prev ?? 'none (new chat)'}. ` +
         `PRICE ALLOWED: ${gate.allowed ? 'yes' : 'NO'} (${gate.why}). ` +
         (gate.allowed
-            ? 'You may state the matched package price now (only from the CATALOG), then move to the next step.'
+            ? askedPriceNow
+                ? 'THE CUSTOMER IS ASKING FOR THE PRICE IN THIS MESSAGE and the price is allowed: state it in this reply — the price of the package(s) you recommended, each BY ITS NAME, plus any chosen paid extras and the total (only from the CATALOG) — then ask the next-step question. Do not answer a price question with features alone.'
+                : 'You may state the matched package price now (only from the CATALOG), then move to the next step.'
             : 'Do NOT state, hint at or compare any price, package price or "starting from" amount in this reply — not even if asked. ' +
               'If they asked, say in one friendly line that the price depends on the platform and features they pick, and continue the flow with the next question.')
     );

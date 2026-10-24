@@ -11,6 +11,7 @@ import WhatsAppConversationModel, {
     type IWhatsAppAssignee,
 } from '../models/whatsapp-conversation.model.js';
 import WhatsAppNoteModel from '../models/whatsapp-note.model.js';
+import WhatsAppCustomerMemoryModel from '../models/whatsapp-customer-memory.model.js';
 import ClientModel from '../models/client.model.js';
 import LeadModel from '../models/lead.model.js';
 import { escapeRegex } from '../lib/sanitize.js';
@@ -527,6 +528,16 @@ async function addNote(conversationId: string, body: string, agent: Agent): Prom
 }
 
 // Authors delete their own notes; managers can delete any.
+// Staff can correct or add to what the AI believes about this customer; the AI treats staff-written lines as facts.
+async function setMemory(conversationId: string, text: string, agent: Agent): Promise<void> {
+    await WhatsAppCustomerMemoryModel.updateOne(
+        { customerPhone: await phoneOf(conversationId) },
+        { $set: { text, updatedBy: agent.name } },
+        { upsert: true },
+    );
+    notifyAgents('whatsapp:notes_updated', { conversationId });
+}
+
 async function deleteNote(conversationId: string, noteId: string, agent: Agent): Promise<void> {
     const filter: Record<string, unknown> = { _id: noteId, customerPhone: await phoneOf(conversationId) };
     if (!agent.canManage) filter['author.id'] = agent.id;
@@ -539,7 +550,7 @@ const lastDigits = (phone: string, n = 10) => phone.replace(/\D/g, '').slice(-n)
 
 // Phones are stored however staff typed them ("+880 17…", "017…"), so match
 // on the last 10 digits after a cheap regex pre-filter on the last 4.
-async function findByPhone<T extends { phone?: string }>(model: any, phone: string, select: string): Promise<T | null> {
+export async function findByPhone<T extends { phone?: string }>(model: any, phone: string, select: string): Promise<T | null> {
     const tail = lastDigits(phone);
     if (!isPhoneId(phone) || tail.length < 7) return null; // BSUIDs have digits but aren't numbers
     const candidates: T[] = await model
@@ -554,7 +565,8 @@ async function getCustomerDetails(conversationId: string) {
     const conversation = await WhatsAppConversationModel.findById(conversationId).lean();
     if (!conversation) throw new InboxError('Conversation not found', 404);
 
-    const [client, lead, firstMessage, messageCount, conversationCount] = await Promise.all([
+    const [memory, client, lead, firstMessage, messageCount, conversationCount] = await Promise.all([
+        WhatsAppCustomerMemoryModel.findOne({ customerPhone: conversation.customerPhone }).lean(),
         findByPhone<any>(ClientModel, conversation.customerPhone, 'clientId name emails phone status currency address createdAt'),
         findByPhone<any>(LeadModel, conversation.customerPhone, 'name email phone status source createdAt'),
         WhatsAppMessageModel.findOne({ conversationId }).sort({ createdAt: 1 }).select('createdAt').lean(),
@@ -573,6 +585,7 @@ async function getCustomerDetails(conversationId: string) {
         messageCount,
         conversationCount,
         linkedTicketId: conversation.linkedTicketId?.toString() ?? null,
+        memory: { text: memory?.text ?? '', updatedBy: memory?.updatedBy ?? null, updatedAt: memory?.updatedAt?.toISOString() ?? null },
         sales: conversation.salesStage
             ? {
                   stage: conversation.salesStage,
@@ -626,6 +639,7 @@ export default {
     markConversationRead,
     listNotes,
     addNote,
+    setMemory,
     deleteNote,
     getCustomerDetails,
 };
