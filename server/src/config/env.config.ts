@@ -171,6 +171,8 @@ const envConfig = {
     openai_api_key: process.env.OPENAI_API_KEY || '',
     // Customer replies + reading photos/PDFs. Reasoning models reject a custom temperature, so none is sent.
     openai_chat_model: process.env.OPENAI_CHAT_MODEL || 'gpt-4.1-mini',
+    // 'minimal' | 'low' | 'medium' | 'high' for reasoning models (gpt-5+/gpt-6); empty = the model's default.
+    openai_reasoning_effort: process.env.OPENAI_REASONING_EFFORT || '',
     // Small background jobs (search-query rewrite, customer memory): fast and cheap.
     openai_light_model: process.env.OPENAI_LIGHT_MODEL || 'gpt-4.1-mini',
     // Voice messages -> text.

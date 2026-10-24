@@ -1,6 +1,10 @@
 import envConfig from '../config/env.config.js';
 
-export async function openaiFetch(path: string, body: unknown) {
+export async function openaiFetch(path: string, body: any) {
+    // Reasoning models think before answering; a WhatsApp reply should not wait on a long think. Only they accept this field.
+    if (envConfig.openai_reasoning_effort && !/^gpt-4/.test(body?.model ?? '') && path === 'chat/completions' && !body.reasoning_effort) {
+        body = { ...body, reasoning_effort: envConfig.openai_reasoning_effort };
+    }
     const res = await fetch(`https://api.openai.com/v1/${path}`, {
         method: 'POST',
         headers: {
