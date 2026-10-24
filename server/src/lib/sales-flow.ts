@@ -38,8 +38,10 @@ export interface PriceGate {
  *  - yes if the customer has now asked for the price twice (an earlier ask went unanswered with a price) — never stonewall;
  *  - otherwise no: the reply must move the flow forward (platform → features → extras) instead.
  */
-export function priceGate(prevStage: SalesStage | undefined, message: string, history: { role: string; content: string }[]): PriceGate {
+export function priceGate(prevStage: SalesStage | undefined, message: string, history: { role: string; content: string; human?: boolean }[]): PriceGate {
     if (prevStage && PRICE_READY.includes(prevStage)) return { allowed: true, why: `previous stage was "${prevStage}"` };
+    // A human teammate already took this customer through platform/package; the stage (set only by AI replies) is stale.
+    if (asksPrice(message) && history.some((t) => t.human)) return { allowed: true, why: 'a human teammate already discussed the package with this customer' };
     const askedBefore = history.some((t) => t.role === 'user' && asksPrice(t.content));
     if (asksPrice(message) && askedBefore) return { allowed: true, why: 'customer asked for the price again' };
     return { allowed: false, why: 'features and extras not covered yet' };
@@ -62,3 +64,9 @@ export function stageBrief(prev: SalesStage | undefined, gate: PriceGate): strin
               'If they asked, say in one friendly line that the price depends on the platform and features they pick, and continue the flow with the next question.')
     );
 }
+
+// "thanks", "welcome", "joined", a lone thumbs-up: nothing to answer, and a bot reply only adds noise.
+// Deliberately NOT "ok"/"yes" — those often answer the AI's last question.
+const ACK_ONLY = /^(?:thanks?(?: you)?(?: so much)?|thx|welcome|joined(?: the (?:google )?meet)?|dhonnobad|ধন্যবাদ|(?:[\p{Extended_Pictographic}\s\u200d\ufe0f])+)[\s.!]*$/iu;
+
+export const isAckOnly = (text: string) => text.trim().length <= 40 && ACK_ONLY.test(text.trim());

@@ -1,7 +1,7 @@
 // Run with: node --import tsx --test src/lib/__tests__/sales-flow.test.ts
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { asksPrice, leaksPrice, priceGate } from '../sales-flow.js';
+import { asksPrice, isAckOnly, leaksPrice, priceGate } from '../sales-flow.js';
 
 test('price questions in English, Bengali and Banglish are detected', () => {
     for (const m of ['What is the price?', 'how much for a store', 'দাম কত', 'এটার খরচ কত পড়বে', 'website er dam koto', 'koto taka lagbe', 'rate bolen'])
@@ -30,4 +30,15 @@ test('price gate: opens when the customer insists a second time', () => {
     const history = [{ role: 'user', content: 'price koto?' }, { role: 'assistant', content: 'It depends on the platform…' }];
     assert.equal(priceGate('platform', 'dam ta bolen', history).allowed, true);
     assert.equal(priceGate('platform', 'ok shopify', history).allowed, false);
+});
+
+test('price gate: opens when a human teammate already took the customer through the package', () => {
+    const human = [{ role: 'assistant', content: 'Next.js starter package ta nin', human: true }];
+    assert.equal(priceGate('discover', 'price ki fixed', human).allowed, true);
+    assert.equal(priceGate('discover', 'price ki fixed', [{ role: 'assistant', content: 'hi' }]).allowed, false);
+});
+
+test('acknowledgements need no reply, but "ok"/"yes" can answer a question', () => {
+    for (const m of ['Thanks', 'welcome', 'Joined', '👍', 'ধন্যবাদ']) assert.ok(isAckOnly(m), m);
+    for (const m of ['Ok', 'Yes', 'Hello', '?', 'price koto']) assert.ok(!isAckOnly(m), m);
 });
