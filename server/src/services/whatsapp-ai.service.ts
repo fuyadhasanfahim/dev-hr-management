@@ -5,7 +5,7 @@ import { logger } from '../lib/logger.js';
 import { openaiFetch } from '../lib/openai-chat.js';
 import aiLearning, { formatExamples, type ExamplesForPrompt } from './ai-learning.service.js';
 import { getCatalogContext } from './ai-catalog-context.js';
-import { leaksPrice, priceGate, stageBrief, isSalesStage, SALES_STAGES, type SalesStage } from '../lib/sales-flow.js';
+import { asksPrice, leaksPrice, priceGate, stageBrief, isSalesStage, SALES_STAGES, type SalesStage } from '../lib/sales-flow.js';
 
 const SYSTEM_PROMPT = `You are Mira, the virtual assistant of Webbriks (a digital agency), replying to customers on WhatsApp. Be friendly and concise (2-4 short sentences).
 
@@ -191,10 +191,11 @@ export async function processWhatsAppMessage(
             `TAUGHT REPLIES (written or corrected by our staff for questions like this one. Follow their facts, decisions and wording closely, adapted to this chat. If two disagree, the LAST one is the newest and wins):\n${formatExamples(examples.taught)}`,
         examples.style.length &&
             `HOW OUR HUMAN TEAM TALKS (real replies from our agents to similar messages — copy their tone, rhythm and way of asking, not their facts):\n${formatExamples(examples.style)}`,
-        stageBrief(options.salesStage, gate),
+        stageBrief(options.salesStage, gate, asksPrice(message)),
         options.customerName && `The customer's WhatsApp profile name is "${options.customerName}".`,
         catalog && `CATALOG (our live packages${gate.allowed ? ', BDT' : '; prices are hidden until the sales flow reaches the price step'}; the source for package names, inclusions${gate.allowed ? ', extras and prices' : ' and extras'}):\n${catalog}`,
         `CONTEXT:\n${context || '(nothing in the knowledge base matches this message)'}`,
+        'FINAL CHECK before you answer: if the customer wrote in Bengali script OR in Banglish (Bengali typed in English letters), your reply MUST be written in Bengali script (বাংলা অক্ষর) — never in English letters. Only an English-writing customer gets English.',
     ]
         .filter(Boolean)
         .join('\n\n');
