@@ -14,10 +14,7 @@ Language (strict): reply ONLY in Bengali script or English, never in Banglish (B
 - Customer writes Bengali script OR Banglish (e.g. "apnader ki ki service ache?", "assalamu alaikum", "kemon achen") → reply in proper Bengali script. Never answer Banglish with Banglish.
 - Brand and product words such as Webbriks, Mira, app, apps, website, e-commerce, SEO may stay in English inside a Bengali reply. Keep prices, links, emails and phone numbers exactly as they appear in the CONTEXT.
 
-Greetings: the very first reply in a chat, or a plain greeting (hi, hello, salam), gets exactly this and nothing more:
-- Bengali: "আসসালামু আলাইকুম! 🌸\n\nআমি Mira, Webbriks-এর ভার্চুয়াল অ্যাসিস্ট্যান্ট।\n\nবলুন, কীভাবে আপনাকে হেল্প করতে পারি?"
-- English: "Hello! 🌸\n\nI'm Mira, Webbriks' virtual assistant.\n\nHow can I help you today?"
-Do not add anything about team members, "let me know if you need anything" or similar filler. A greeting or small talk is never a reason to escalate.
+__GREETING__
 
 Never send generic, filler or template-sounding messages. Every reply must respond to what this specific customer just said, using what they told you in the chat. Never end with generic lines like "feel free to contact our team", "let us know if you need anything else" or "a team member can help you". You are meant to fully replace a team member: answer everything yourself from the CONTEXT and only involve a human for things that truly cannot be done without one.
 
@@ -62,6 +59,12 @@ Escalate ONLY when the customer explicitly asks for a human or manager, is upset
 Respond ONLY with valid JSON (no markdown, no code fences):
 {"reply":"your message","escalate":false,"escalateReason":"","stage":"discover","stageReason":"why this stage"}`;
 
+const GREETING_FIRST = `Greetings: this is the very first reply in this chat, so a plain greeting (hi, hello, salam) gets exactly this and nothing more:
+- Bengali: "আসসালামু আলাইকুম! 🌸\n\nআমি Mira, Webbriks-এর ভার্চুয়াল অ্যাসিস্ট্যান্ট।\n\nবলুন, কীভাবে আপনাকে হেল্প করতে পারি?"
+- English: "Hello! 🌸\n\nI'm Mira, Webbriks' virtual assistant.\n\nHow can I help you today?"
+Do not add anything about team members, "let me know if you need anything" or similar filler. A greeting or small talk is never a reason to escalate.`;
+const GREETING_LATER = `Greetings: you have ALREADY talked to this customer in this chat (see the chat history), so NEVER greet or introduce yourself again, not even if they say hi/hello/"?"/"hlw". If they only ping or greet, answer in one short line that picks up the last open topic or question (e.g. "জি, বলুন — আমরা Shopify প্যাকেজটা নিয়ে কথা বলছিলাম, কোনটা নিয়ে জানতে চান?"). Do not add anything about team members or filler. A greeting or small talk is never a reason to escalate.`;
+
 // Only used if the model returns an empty reply: still polite, and neutral about script.
 const FALLBACK_REPLY =
     'আপনার মেসেজের জন্য ধন্যবাদ 🙏 আমাদের একজন টিম মেম্বার খুব শীঘ্রই আপনার সাথে যোগাযোগ করবেন। / Thank you for your message — a team member will get back to you shortly.';
@@ -69,14 +72,18 @@ const FALLBACK_REPLY =
 interface ChatTurn {
     role: 'user' | 'assistant';
     content: string;
+    human?: boolean; // assistant turn written by a human teammate, not by the AI
 }
+
+const HUMAN_TAG = '[Human team member] ';
+const HISTORY_TURNS = 24;
 
 // The knowledge base is English, and embeddings match Bengali-script queries poorly
 // against English chunks. Short follow-ups ("Bdt price") also lose their topic without
 // the conversation. So rewrite the latest message into a standalone English search
 // query using the recent turns — for retrieval only; the reply is unaffected.
 async function toRetrievalQuery(message: string, history: ChatTurn[]): Promise<string> {
-    const recent = history.slice(-4);
+    const recent = history.slice(-6);
     if (!recent.length && !/[\u0980-\u09FF]/.test(message)) return message;
     try {
         const convo = recent.map((t) => `${t.role === 'user' ? 'Customer' : 'Agent'}: ${t.content}`).join('\n');
@@ -108,6 +115,8 @@ export interface WhatsAppAIOptions {
     recordGaps?: boolean;
     // Where the previous AI reply in this chat left the sales flow (kept on the conversation).
     salesStage?: SalesStage;
+    // Running profile of this customer (business, platform, budget...) kept across the whole chat.
+    memory?: string;
 }
 
 export interface WhatsAppAIResult {
@@ -160,8 +169,11 @@ export async function processWhatsAppMessage(
     }
 
     const context = knowledgeBaseService.formatContext(matches);
+    const firstReply = !history.some((t) => t.role === 'assistant');
     const system = [
-        SYSTEM_PROMPT,
+        SYSTEM_PROMPT.replace('__GREETING__', firstReply ? GREETING_FIRST : GREETING_LATER),
+        `Turns marked "${HUMAN_TAG.trim()}" in the chat were written by a human colleague, not by you. Treat what they said and promised as part of the conversation: never repeat their questions, never contradict them, and continue from where they left off.`,
+        options.memory && `WHAT WE ALREADY KNOW ABOUT THIS CUSTOMER (from the whole chat so far; trust it, never ask for these again):\n${options.memory}`,
         rules && `STAFF RULES (always follow these; they override the style guidance above):\n${rules}`,
         examples.taught.length &&
             `TAUGHT REPLIES (written or corrected by our staff for questions like this one. Follow their facts, decisions and wording closely, adapted to this chat. If two disagree, the LAST one is the newest and wins):\n${formatExamples(examples.taught)}`,
@@ -177,7 +189,7 @@ export async function processWhatsAppMessage(
 
     // The model occasionally returns an empty "reply"; one retry nearly always fixes it. While the price gate is
     // closed a reply that still states an amount is rejected and regenerated (the prompt asks, this enforces).
-    const base = [{ role: 'system', content: system }, ...history.filter((t) => t.content !== FALLBACK_REPLY).slice(-10), { role: 'user', content: message }];
+    const base = [{ role: 'system', content: system }, ...history.filter((t) => t.content !== FALLBACK_REPLY).slice(-HISTORY_TURNS).map((t) => ({ role: t.role, content: t.human ? HUMAN_TAG + t.content : t.content })), { role: 'user', content: message }];
     const ask = async (extra: { role: string; content: string }[] = []) => {
         const data = await openaiFetch('chat/completions', {
             model: envConfig.openai_chat_model,
@@ -252,4 +264,24 @@ export async function processWhatsAppMessage(
     return result;
 }
 
-export default { processWhatsAppMessage };
+// Folds the newest turns into the customer's running profile. Short on purpose: it is read on every reply.
+export async function updateMemory(previous: string, turns: ChatTurn[]): Promise<string> {
+    const convo = turns.map((t) => `${t.role === 'user' ? 'Customer' : t.human ? 'Human colleague' : 'AI'}: ${t.content.replace(/\s+/g, ' ').slice(0, 500)}`).join('\n');
+    const data = await openaiFetch('chat/completions', {
+        model: envConfig.openai_chat_model,
+        temperature: 0,
+        messages: [
+            {
+                role: 'system',
+                content:
+                    'You maintain a short English profile of one sales-chat customer for a digital agency. Given the current profile and the newest chat turns, output the UPDATED profile: ' +
+                    'max 8 short lines "key: value" covering only facts the customer or a colleague actually stated — business/what they sell, service wanted, platform chosen, package discussed, product count, budget, timeline, ' +
+                    'existing site/reference links, decisions or promises made (e.g. call arranged, proposal pending), questions already answered, language. Keep old facts unless contradicted. Never invent. Output only the profile, under 700 characters.',
+            },
+            { role: 'user', content: `Current profile:\n${previous || '(empty)'}\n\nNewest turns:\n${convo}` },
+        ],
+    });
+    return String(data.choices[0].message.content ?? '').trim().slice(0, 900) || previous;
+}
+
+export default { processWhatsAppMessage, updateMemory };

@@ -5,7 +5,8 @@ import whatsappService from '../services/whatsapp.service.js';
 import whatsappAiService from '../services/whatsapp-ai.service.js';
 import { agentReplyPolicy, isAiActive } from '../services/ai-settings.service.js';
 import aiLearning from '../services/ai-learning.service.js';
-import { WhatsAppConversationStatus, type IWhatsAppConversation } from '../models/whatsapp-conversation.model.js';
+import WhatsAppConversationModel, { WhatsAppConversationStatus, type IWhatsAppConversation } from '../models/whatsapp-conversation.model.js';
+import { isAckOnly } from '../lib/sales-flow.js';
 import WhatsAppMessageModel, {
     WhatsAppMessageDirection,
     WhatsAppMessageSender,
@@ -190,7 +191,7 @@ async function handleEcho(echo: EchoMessage) {
 }
 
 async function handleIncomingMessage(fromPhone: string, content: InboundContent, contactName?: string) {
-    const { whatsappMsgId, body } = content;
+    const { whatsappMsgId } = content;
     // Idempotency: Meta may redeliver the same message on retry.
     const existing = await WhatsAppMessageModel.findOne({ whatsappMsgId });
     if (existing) return;
@@ -226,35 +227,101 @@ async function handleIncomingMessage(fromPhone: string, content: InboundContent,
     // Admin AI controls (off / schedule / per-feature switch) — see ai-settings.service.
     if (!(await isAiActive('whatsapp'))) return;
 
-    await answerWithAi(conversation, fromPhone, body, whatsappMsgId);
+    scheduleAnswer(conversation._id.toString());
 }
 
-// Also used by the auto-resume sweep to answer a customer message that went unanswered while AI was paused.
-export async function answerWithAi(
+// Customers often send several short messages in a row ("Price" / "Koto" / "bolen"). Wait a moment so they are
+// answered together in ONE reply instead of one reply per fragment.
+// ponytail: in-memory timers, fine for the single devhr-server process; move to a queue if that ever scales out.
+const ANSWER_DELAY_MS = 8_000;
+const answerTimers = new Map<string, NodeJS.Timeout>();
+const answering = new Set<string>();
+
+function scheduleAnswer(conversationId: string, delay = ANSWER_DELAY_MS) {
+    clearTimeout(answerTimers.get(conversationId));
+    answerTimers.set(
+        conversationId,
+        setTimeout(() => {
+            answerTimers.delete(conversationId);
+            void answerPending(conversationId).catch((err: any) => logger.error(`WhatsApp AI answer failed for ${conversationId}: ${err.message}`));
+        }, delay),
+    );
+}
+
+// Answers whatever the customer has said since the last time we (AI) answered or a human colleague replied.
+// Re-reads the chat first, so a message a human already handled is never answered a second time, late.
+// Also used by the auto-resume sweep.
+export async function answerPending(conversationId: string) {
+    if (answering.has(conversationId)) return scheduleAnswer(conversationId, 3_000);
+    answering.add(conversationId);
+    try {
+        const conversation = await WhatsAppConversationModel.findById(conversationId);
+        if (!conversation || !conversation.aiEnabled || conversation.status !== WhatsAppConversationStatus.BOT) return;
+        if (!(await isAiActive('whatsapp'))) return;
+
+        const lastBy = (sender: WhatsAppMessageSender) =>
+            WhatsAppMessageModel.findOne({ conversationId: conversation._id, sender }).sort({ createdAt: -1 }).select('createdAt');
+        const [lastAgent, lastAi] = await Promise.all([lastBy(WhatsAppMessageSender.AGENT), lastBy(WhatsAppMessageSender.AI)]);
+        const floor = Math.max(lastAgent?.createdAt.getTime() ?? 0, (conversation.aiAnsweredUpTo ?? lastAi?.createdAt)?.getTime() ?? 0);
+        const pending = await WhatsAppMessageModel.find({
+            conversationId: conversation._id,
+            sender: WhatsAppMessageSender.CUSTOMER,
+            type: WhatsAppMessageType.TEXT,
+            body: { $ne: '' },
+            createdAt: { $gt: new Date(floor) },
+            deletedAt: { $exists: false },
+        }).sort({ createdAt: 1 });
+        if (!pending.length) return;
+
+        const answeredUpTo = pending[pending.length - 1]!.createdAt;
+        // "thanks" / "welcome" / "joined" mid-chat: nothing to answer.
+        if ((lastAi || lastAgent) && pending.every((m) => isAckOnly(m.body))) {
+            await WhatsAppConversationModel.updateOne({ _id: conversation._id }, { $set: { aiAnsweredUpTo: answeredUpTo } });
+            return;
+        }
+        await answerWithAi(conversation, conversation.customerPhone, pending.map((m) => m.body).join('\n'), pending.map((m) => m.whatsappMsgId), answeredUpTo);
+    } finally {
+        answering.delete(conversationId);
+    }
+}
+
+const FILE_LABEL: Partial<Record<WhatsAppMessageType, string>> = {
+    [WhatsAppMessageType.IMAGE]: 'a photo',
+    [WhatsAppMessageType.VIDEO]: 'a video',
+    [WhatsAppMessageType.AUDIO]: 'a voice message / audio',
+    [WhatsAppMessageType.DOCUMENT]: 'a document',
+    [WhatsAppMessageType.STICKER]: 'a sticker',
+};
+
+async function answerWithAi(
     conversation: IWhatsAppConversation,
     fromPhone: string,
     body: string,
-    excludeMsgId?: string,
+    excludeMsgIds: string[],
+    answeredUpTo: Date,
 ) {
-    // The 20 most recent turns before this message (oldest-first), so a long chat
-    // keeps its latest context. The message being answered is passed separately.
+    // The 30 most recent turns before the messages being answered (oldest-first). Photos, voice notes and
+    // documents can't be read by the AI, but it must still know they were sent — otherwise it asks for what the
+    // customer already provided. Human colleagues' turns are flagged so the AI continues their thread.
     const priorMessages = await WhatsAppMessageModel.find({
         conversationId: conversation._id,
-        body: { $ne: '' },
-        ...(excludeMsgId ? { whatsappMsgId: { $ne: excludeMsgId } } : {}),
-        type: WhatsAppMessageType.TEXT,
+        type: { $ne: WhatsAppMessageType.CALL },
+        whatsappMsgId: { $nin: excludeMsgIds },
         deletedAt: { $exists: false },
     })
         .sort({ createdAt: -1 })
-        .limit(20);
-    const history = priorMessages.reverse().map((m) => ({
-        role: (m.sender === WhatsAppMessageSender.CUSTOMER ? 'user' : 'assistant') as 'user' | 'assistant',
-        content: m.body,
-    }));
+        .limit(30);
+    const history = priorMessages.reverse().flatMap((m) => {
+        const fromCustomer = m.sender === WhatsAppMessageSender.CUSTOMER;
+        const text = m.body || (FILE_LABEL[m.type] ? `[${fromCustomer ? 'Customer' : 'Team'} sent ${FILE_LABEL[m.type]}, which the AI cannot open]` : '');
+        if (!text) return [];
+        return [{ role: (fromCustomer ? 'user' : 'assistant') as 'user' | 'assistant', content: text, human: m.sender === WhatsAppMessageSender.AGENT }];
+    });
 
     const ai = await whatsappAiService.processWhatsAppMessage(body, history, {
         customerName: conversation.customerName,
         salesStage: conversation.salesStage ?? undefined,
+        memory: conversation.aiMemory || undefined,
     });
 
     const sentId = await whatsappService.sendTextMessage(fromPhone, ai.reply);
@@ -271,6 +338,7 @@ export async function answerWithAi(
     // Remember where the sales flow stands (and why) — a new history entry only when the stage actually changes.
     // Never lets a bookkeeping failure break the reply that was already sent.
     try {
+        conversation.aiAnsweredUpTo = answeredUpTo;
         conversation.salesStageReason = ai.stageReason;
         if (conversation.salesStage !== ai.stage) {
             conversation.salesStage = ai.stage;
@@ -296,9 +364,15 @@ export async function answerWithAi(
         sources: ai.matches.map((m) => (m.source ? `[${m.source}] ` : '') + m.text.slice(0, 120)),
     });
 
+    // Fold this exchange (and any human colleague turns before it) into the customer's running profile.
+    void whatsappAiService
+        .updateMemory(conversation.aiMemory ?? '', [...history.slice(-8), { role: 'user', content: body }, { role: 'assistant', content: ai.reply }])
+        .then((memory) => WhatsAppConversationModel.updateOne({ _id: conversation._id }, { $set: { aiMemory: memory } }))
+        .catch((err: any) => logger.error(`Could not update AI memory: ${err.message}`));
+
     if (ai.escalate) {
         const transcript = [...history, { role: 'user' as const, content: body }]
-            .map((m) => `[${m.role === 'user' ? 'Customer' : 'AI'}]: ${m.content}`)
+            .map((m) => `[${m.role === 'user' ? 'Customer' : (m as { human?: boolean }).human ? 'Team' : 'AI'}]: ${m.content}`)
             .join('\n');
 
         const ticket = await createTicket({

@@ -1,12 +1,7 @@
 import WhatsAppConversationModel, { WhatsAppConversationStatus } from '../models/whatsapp-conversation.model.js';
-import WhatsAppMessageModel, {
-    WhatsAppMessageDirection,
-    WhatsAppMessageSender,
-    WhatsAppMessageType,
-} from '../models/whatsapp-message.model.js';
-import { answerWithAi } from '../controllers/whatsapp.controller.js';
+import { answerPending } from '../controllers/whatsapp.controller.js';
 import { notifyAgents } from '../socket/support.namespace.js';
-import { isAiActive, isAutoResumeEnabled } from './ai-settings.service.js';
+import { isAutoResumeEnabled } from './ai-settings.service.js';
 import { logger } from '../lib/logger.js';
 
 // Turns AI back on for chats whose agent went quiet (aiResumeAt passed), and
@@ -27,16 +22,8 @@ async function sweep() {
             await conversation.save();
             notifyAgents('whatsapp:conversation_updated', { conversationId: conversation._id.toString() });
 
-            const last = await WhatsAppMessageModel.findOne({ conversationId: conversation._id }).sort({ createdAt: -1 });
-            if (
-                (await isAiActive('whatsapp')) &&
-                last?.direction === WhatsAppMessageDirection.INBOUND &&
-                last.sender === WhatsAppMessageSender.CUSTOMER &&
-                last.type === WhatsAppMessageType.TEXT &&
-                last.body
-            ) {
-                await answerWithAi(conversation, conversation.customerPhone, last.body, last.whatsappMsgId);
-            }
+            // Decides for itself whether anything is still unanswered (a human may have handled it meanwhile).
+            await answerPending(conversation._id.toString());
         } catch (err: any) {
             logger.error(`WhatsApp AI auto-resume failed for ${conversation._id}: ${err.message}`);
         }

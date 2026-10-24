@@ -33,6 +33,8 @@ export interface IWhatsAppConversation extends Document {
     salesStage?: SalesStage | null; // where the AI's sales flow stands (see lib/sales-flow.ts)
     salesStageReason?: string;
     salesStageHistory?: ISalesStageEntry[];
+    aiMemory?: string; // Short running profile of the customer (business, platform, budget...) kept across the whole chat.
+    aiAnsweredUpTo?: Date | null; // createdAt of the newest customer message the AI has already answered.
     lastMessageAt: Date;
     lastReadAt: Date; // Set when an agent opens the thread — messages after this are "unread".
     createdAt: Date;
@@ -83,6 +85,8 @@ const whatsAppConversationSchema = new Schema<IWhatsAppConversation>(
             type: [new Schema<ISalesStageEntry>({ stage: { type: String, enum: [...SALES_STAGES] }, reason: String, at: Date }, { _id: false })],
             default: [],
         },
+        aiMemory: { type: String, default: '' },
+        aiAnsweredUpTo: { type: Date, default: null },
         lastMessageAt: {
             type: Date,
             default: Date.now,
