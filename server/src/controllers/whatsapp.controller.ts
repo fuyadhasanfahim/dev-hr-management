@@ -7,6 +7,7 @@ import { agentReplyPolicy, isAiActive } from '../services/ai-settings.service.js
 import aiLearning from '../services/ai-learning.service.js';
 import WhatsAppConversationModel, { WhatsAppConversationStatus, type IWhatsAppConversation } from '../models/whatsapp-conversation.model.js';
 import { isAckOnly } from '../lib/sales-flow.js';
+import { readMedia } from '../lib/media-reader.js';
 import WhatsAppMessageModel, {
     WhatsAppMessageDirection,
     WhatsAppMessageSender,
@@ -198,7 +199,7 @@ async function handleIncomingMessage(fromPhone: string, content: InboundContent,
 
     const conversation = await findOrCreateConversation(fromPhone, contactName);
 
-    await WhatsAppMessageModel.create({
+    const stored = await WhatsAppMessageModel.create({
         conversationId: conversation._id,
         direction: WhatsAppMessageDirection.INBOUND,
         sender: WhatsAppMessageSender.CUSTOMER,
@@ -220,9 +221,17 @@ async function handleIncomingMessage(fromPhone: string, content: InboundContent,
 
     // AI off (agent already handling it manually via the app) or already
     // escalated to a human ticket — the bot stays quiet either way.
-    // The AI only reads text — media and call events wait for a human.
+    // Voice notes, photos and PDFs are read first (transcript / description / summary), then answered like text.
+    // Other media and call events wait for a human.
     if (!conversation.aiEnabled || conversation.status !== WhatsAppConversationStatus.BOT) return;
-    if (content.type !== WhatsAppMessageType.TEXT) return;
+    if (content.type !== WhatsAppMessageType.TEXT) {
+        if (READABLE_MEDIA.includes(content.type) && content.media) {
+            void readIncomingMedia(stored._id.toString(), content.type, content.media)
+                .then((read) => read && scheduleAnswer(conversation._id.toString()))
+                .catch((err: any) => logger.error(`WhatsApp media read failed: ${err.message}`));
+        }
+        return;
+    }
 
     // Admin AI controls (off / schedule / per-feature switch) — see ai-settings.service.
     if (!(await isAiActive('whatsapp'))) return;
@@ -266,8 +275,7 @@ export async function answerPending(conversationId: string) {
         const pending = await WhatsAppMessageModel.find({
             conversationId: conversation._id,
             sender: WhatsAppMessageSender.CUSTOMER,
-            type: WhatsAppMessageType.TEXT,
-            body: { $ne: '' },
+            $or: [{ type: WhatsAppMessageType.TEXT, body: { $ne: '' } }, { aiText: { $nin: [null, ''] } }],
             createdAt: { $gt: new Date(floor) },
             deletedAt: { $exists: false },
         }).sort({ createdAt: 1 });
@@ -275,11 +283,11 @@ export async function answerPending(conversationId: string) {
 
         const answeredUpTo = pending[pending.length - 1]!.createdAt;
         // "thanks" / "welcome" / "joined" mid-chat: nothing to answer.
-        if ((lastAi || lastAgent) && pending.every((m) => isAckOnly(m.body))) {
+        if ((lastAi || lastAgent) && pending.every((m) => isAckOnly(messageText(m)))) {
             await WhatsAppConversationModel.updateOne({ _id: conversation._id }, { $set: { aiAnsweredUpTo: answeredUpTo } });
             return;
         }
-        await answerWithAi(conversation, conversation.customerPhone, pending.map((m) => m.body).join('\n'), pending.map((m) => m.whatsappMsgId), answeredUpTo);
+        await answerWithAi(conversation, conversation.customerPhone, pending.map(messageText).join('\n'), pending.map((m) => m.whatsappMsgId), answeredUpTo);
     } finally {
         answering.delete(conversationId);
     }
@@ -288,10 +296,30 @@ export async function answerPending(conversationId: string) {
 const FILE_LABEL: Partial<Record<WhatsAppMessageType, string>> = {
     [WhatsAppMessageType.IMAGE]: 'a photo',
     [WhatsAppMessageType.VIDEO]: 'a video',
-    [WhatsAppMessageType.AUDIO]: 'a voice message / audio',
+    [WhatsAppMessageType.AUDIO]: 'a voice message',
     [WhatsAppMessageType.DOCUMENT]: 'a document',
     [WhatsAppMessageType.STICKER]: 'a sticker',
 };
+const READABLE_MEDIA = [WhatsAppMessageType.AUDIO, WhatsAppMessageType.IMAGE, WhatsAppMessageType.DOCUMENT];
+
+// What the AI sees for one message: the text, or for a file what was read from it (transcript / description / summary).
+function messageText(m: { sender: WhatsAppMessageSender; type: WhatsAppMessageType; body: string; aiText?: string }): string {
+    const label = FILE_LABEL[m.type];
+    if (!label) return m.body;
+    const who = m.sender === WhatsAppMessageSender.CUSTOMER ? 'Customer' : 'Team';
+    const file = m.aiText ? `[${who} sent ${label}. AI reading: ${m.aiText}]` : `[${who} sent ${label}, which the AI cannot open]`;
+    return m.body ? `${m.body}\n${file}` : file;
+}
+
+// Downloads a customer's voice note / photo / PDF from Meta and stores what the AI could read from it.
+async function readIncomingMedia(messageId: string, type: WhatsAppMessageType, media: NonNullable<InboundContent['media']>): Promise<boolean> {
+    const file = await whatsappService.downloadMedia(media.id);
+    const bytes = Buffer.from(await new Response(file.body).arrayBuffer());
+    const text = await readMedia(type, bytes, media.mimeType || file.mimeType, media.filename);
+    if (!text) return false;
+    await WhatsAppMessageModel.updateOne({ _id: messageId }, { $set: { aiText: text } });
+    return true;
+}
 
 async function answerWithAi(
     conversation: IWhatsAppConversation,
@@ -313,7 +341,7 @@ async function answerWithAi(
         .limit(30);
     const history = priorMessages.reverse().flatMap((m) => {
         const fromCustomer = m.sender === WhatsAppMessageSender.CUSTOMER;
-        const text = m.body || (FILE_LABEL[m.type] ? `[${fromCustomer ? 'Customer' : 'Team'} sent ${FILE_LABEL[m.type]}, which the AI cannot open]` : '');
+        const text = messageText(m);
         if (!text) return [];
         return [{ role: (fromCustomer ? 'user' : 'assistant') as 'user' | 'assistant', content: text, human: m.sender === WhatsAppMessageSender.AGENT }];
     });
