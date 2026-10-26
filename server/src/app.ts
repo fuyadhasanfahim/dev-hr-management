@@ -146,10 +146,10 @@ app.use(
         // Support routes bypass the global auth middleware because they implement unified/guest auth internally
         const isSupportRoute = req.path.startsWith("/support");
 
-        // AI chat public endpoints (chat and info)
-        const isPublicAIChatRoute =
-            (req.method === "POST" && req.path === "/ai-chat/chat") ||
-            (req.method === "GET" && (req.path === "/ai-chat/info" || req.path === "/ai-chat/status"));
+        // AI chat endpoints are all visitor-facing and check who the caller is themselves (ai-chat.route.ts):
+        // chat/info/status are open, ticket accepts a guest token or a name + email, live-support needs a
+        // verified guest or client. The staff session gate above would turn every website visitor away.
+        const isPublicAIChatRoute = req.path.startsWith("/ai-chat/");
 
         if (
             isPublicInvitationRoute ||
