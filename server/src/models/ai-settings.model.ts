@@ -29,6 +29,9 @@ export interface IAiSettings {
     masterMode: 'on' | 'off'; // off = permanently off until someone turns it back on
     timezone: string;
     features: Record<AiFeature, { enabled: boolean }>;
+    // Website assistant only (the WhatsApp assistant has its own rules): may it open tickets, and does it
+    // remember a visitor across chats.
+    web: { createTickets: boolean; remember: boolean };
     autoResume: { enabled: boolean; minutes: number }; // AI returns by itself after an agent goes quiet
     pauseOnAgentReply: boolean; // an agent reply switches AI off for that chat
     schedules: IAiSchedule[];
@@ -63,6 +66,10 @@ const AiSettingsSchema = new Schema<IAiSettings>(
             whatsapp: { type: new Schema(featureDefault, { _id: false }), default: () => ({}) },
             web_chat: { type: new Schema(featureDefault, { _id: false }), default: () => ({}) },
             chat_summary: { type: new Schema(featureDefault, { _id: false }), default: () => ({}) },
+        },
+        web: {
+            createTickets: { type: Boolean, default: true },
+            remember: { type: Boolean, default: true },
         },
         autoResume: {
             enabled: { type: Boolean, default: true },

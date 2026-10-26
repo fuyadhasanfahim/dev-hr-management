@@ -1,5 +1,11 @@
 import type { Request, Response } from 'express';
 import { processAIChat, getWebBriksInfo } from '../services/ai-chat.service.js';
+import { updateMemory } from '../services/whatsapp-ai.service.js';
+import aiSettingsService from '../services/ai-settings.service.js';
+import { contactIdFor } from '../services/contact.service.js';
+import AiConversationModel from '../models/ai-conversation.model.js';
+import ContactModel from '../models/contact.model.js';
+import GuestModel from '../models/guest.model.js';
 import consultationService from '../services/consultation.service.js';
 import liveChatService from '../services/live-chat.service.js';
 import supportTicketService from '../services/support-ticket.service.js';
@@ -28,8 +34,77 @@ async function chat(req: Request, res: Response) {
         }
 
         const chatHistory = Array.isArray(history) ? history : [];
+        const settings = await aiSettingsService.getSettings();
 
-        const result = await processAIChat(message, chatHistory);
+        // Who is this? A signed-in guest or client is known; anyone else is anonymous until they tell the AI.
+        const isGuest = req.user?.role === 'Guest';
+        const known: { name?: string; email?: string; phone?: string } = {};
+        if (isGuest) {
+            const g: any = await GuestModel.findById(req.user!.id).select('name email phone').lean();
+            Object.assign(known, { name: g?.name, email: g?.email, phone: g?.phone });
+        } else if (req.user?.id) {
+            Object.assign(known, { name: (req.user as any).name, email: (req.user as any).email });
+        }
+        const existing: any = conversationId ? await AiConversationModel.findOne({ conversationId }).lean() : null;
+        known.name ||= existing?.visitorName;
+        known.email ||= existing?.visitorEmail;
+        known.phone ||= existing?.visitorPhone;
+
+        // Memory of this visitor: this conversation's, else what we learnt about the same person in earlier chats.
+        let knownContactId: any = existing?.contactId;
+        if (!knownContactId && (known.email || known.phone)) {
+            knownContactId = await contactIdFor({ name: known.name, emails: [known.email], phones: [known.phone], guestId: isGuest ? req.user!.id : undefined });
+        }
+        let memory = '';
+        if (settings.web.remember) {
+            memory = existing?.aiMemory || '';
+            if (!memory && knownContactId) memory = ((await ContactModel.findById(knownContactId).select('aiMemory').lean()) as any)?.aiMemory || '';
+        }
+
+        const result = await processAIChat(message, chatHistory, { memory, visitor: known, allowTickets: settings.web.createTickets });
+
+        // The AI raised a ticket: it lands in Tickets like a WhatsApp one, with what the AI knows about the visitor.
+        let raised: { ticketId: string; _id: string } | null = null;
+        if (result.action === 'create_ticket' && result.ticket && result.visitor) {
+            try {
+                const v = result.visitor;
+                const transcript = [...chatHistory.map((m: any) => `[${m.role === 'user' ? 'Customer' : 'AI'}]: ${m.parts?.[0]?.text ?? ''}`), `[Customer]: ${message}`, `[AI]: ${result.reply}`].join('\n');
+                const text = [result.ticket.summary || 'The website assistant raised this ticket.', memory && `What the AI knows about the visitor:\n${memory}`, `--- Chat Transcript ---\n${transcript}`]
+                    .filter(Boolean)
+                    .join('\n\n');
+                const ticketArgs: any = {
+                    subject: result.ticket.subject,
+                    text,
+                    source: 'ai_chat',
+                    category: result.ticket.category,
+                    priority: result.ticket.priority,
+                    visitorName: v.name,
+                    visitorEmail: v.email,
+                    visitorPhone: v.phone,
+                    visitorIsWhatsapp: v.isWhatsapp,
+                };
+                if (req.user?.id && !isGuest) {
+                    ticketArgs.clientId = req.user.id;
+                } else {
+                    ticketArgs.guestId = (await guestAuthService.getOrCreateGuest(v.email, v.name, { phone: v.phone, isWhatsapp: v.isWhatsapp }))._id.toString();
+                }
+                const ticket: any = await supportTicketService.createTicket(ticketArgs);
+                raised = { ticketId: ticket.ticketId, _id: ticket._id.toString() };
+                notifyAgents('ticket:created', { ticketId: raised._id, ticketRef: raised.ticketId, subject: ticket.subject ?? '' });
+                logger.info(`Website AI raised ticket ${raised.ticketId} for ${v.email}`);
+            } catch (err: any) {
+                logger.error(`Website AI could not raise the ticket: ${err.message}`);
+            }
+        }
+
+        // The visitor's identity, as far as it is now known (sign-in, what they told the AI, a consultation request).
+        const seen: { name?: string; email?: string; phone?: string; isWhatsapp?: boolean } = result.visitor ?? {};
+        const visitorName = known.name || seen.name || result.consultationData?.name;
+        const visitorEmail = known.email || seen.email || result.consultationData?.email;
+        const visitorPhone = known.phone || seen.phone || result.consultationData?.phone;
+        if (!knownContactId && (visitorEmail || visitorPhone)) {
+            knownContactId = await contactIdFor({ name: visitorName, emails: [visitorEmail], phones: [visitorPhone], whatsappPhone: seen.isWhatsapp ? seen.phone : undefined });
+        }
 
         // Auto-save consultation when AI decides to book
         if (result.action === 'book_consultation' && result.consultationData) {
@@ -64,12 +139,15 @@ async function chat(req: Request, res: Response) {
         // Persist the AI chat turn (non-blocking — never fail the chat on a logging error)
         let savedConversationId: string | undefined;
         try {
-            const isGuest = req.user?.role === 'Guest';
             const conversation = await aiConversationService.appendTurn({
                 conversationId,
                 clientId: !isGuest ? req.user?.id : undefined,
                 guestId: isGuest ? req.user?.id : undefined,
-                visitorEmail: result.consultationData?.email,
+                visitorEmail,
+                visitorName,
+                visitorPhone,
+                contactId: knownContactId,
+                linkedTicketId: raised?._id,
                 userMessage: message,
                 aiReply: result.reply,
                 action: result.action,
@@ -79,7 +157,27 @@ async function chat(req: Request, res: Response) {
             logger.error(`Failed to persist AI conversation: ${err.message}`);
         }
 
-        return res.status(200).json({ success: true, data: result, conversationId: savedConversationId });
+        // Fold this exchange into the visitor's running profile (same helper the WhatsApp assistant uses). Not awaited.
+        if (settings.web.remember && savedConversationId) {
+            const turns = [
+                ...chatHistory.slice(-8).map((m: any) => ({ role: m.role === 'user' ? ('user' as const) : ('assistant' as const), content: String(m.parts?.[0]?.text ?? '') })),
+                { role: 'user' as const, content: message },
+                { role: 'assistant' as const, content: result.reply },
+            ];
+            const conversationKey = savedConversationId;
+            void updateMemory(memory, turns)
+                .then(async (text) => {
+                    await aiConversationService.saveMemory(conversationKey, text);
+                    if (knownContactId) await ContactModel.updateOne({ _id: knownContactId }, { $set: { aiMemory: text } });
+                })
+                .catch((err: any) => logger.error(`Could not update the website AI memory: ${err.message}`));
+        }
+
+        // The widget needs to know about a raised ticket, not the internal ticket/visitor brief.
+        const { ticket: _brief, visitor: _visitor, ...publicResult } = result;
+        void _brief;
+        void _visitor;
+        return res.status(200).json({ success: true, data: { ...publicResult, ticket: raised }, conversationId: savedConversationId });
     } catch (err: any) {
         const aiStatus = err.status ?? err.statusCode ?? 0;
         logger.error(`AI Chat error: [status=${aiStatus}] ${err.message} ${err.stack ?? ''}`);

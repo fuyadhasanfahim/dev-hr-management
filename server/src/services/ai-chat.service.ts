@@ -26,7 +26,7 @@ Off-topic requests (general knowledge, homework, personal advice): decline in on
 
 ACTIONS - set "action" to exactly one of:
 - "continue": normal answer (default).
-- "create_ticket": the visitor reports a problem, bug, billing issue or complaint that needs the team to follow up.
+__TICKET_RULE__
 - "connect_live_support": the visitor asks for a person, or the matter cannot be handled in chat (payment dispute, custom quote sign-off, call or meeting request).
 - "book_consultation": the visitor wants a consultation or a quote. First collect, one at a time and naturally, their name, email, phone and a short project description. Only when you have all four, set this action and fill the consultation fields; otherwise keep asking with action "continue" and leave the consultation fields empty.
 "actionReason" is one short English sentence for the team. projectType must be one of: Web Design, Web Development, Website Maintenance, SEO, Custom Solutions (or empty).
@@ -46,16 +46,50 @@ interface ConsultationData {
     projectType?: string;
 }
 
+export interface AIChatTicket {
+    subject: string;
+    summary: string;
+    category: string;
+    priority: string;
+}
+
+export interface AIChatVisitor {
+    name: string;
+    email: string;
+    phone: string;
+    isWhatsapp: boolean;
+}
+
 interface AIChatResponse {
     reply: string;
     action: 'continue' | 'create_ticket' | 'connect_live_support' | 'book_consultation';
     actionReason?: string;
     consultationData?: ConsultationData | null;
+    // Set with action "create_ticket": what to put on the ticket and who it is for. The caller creates it.
+    ticket?: AIChatTicket | null;
+    visitor?: AIChatVisitor | null;
+}
+
+export interface AIChatOptions {
+    // Running profile of this visitor, kept between chats (see updateMemory in whatsapp-ai.service).
+    memory?: string;
+    // What we already know about the visitor (guest sign-in, an earlier ticket): the AI must not ask for it again.
+    visitor?: { name?: string; email?: string; phone?: string };
+    // Admin switch: may the assistant raise tickets itself?
+    allowTickets?: boolean;
 }
 
 const ACTIONS = ['continue', 'create_ticket', 'connect_live_support', 'book_consultation'] as const;
 const PROJECT_TYPES = ['Web Design', 'Web Development', 'Website Maintenance', 'SEO', 'Custom Solutions', ''] as const;
 const HISTORY_TURNS = 20;
+const TICKET_CATEGORIES = ['support', 'service', 'development', 'billing', 'bug'] as const;
+const TICKET_PRIORITIES = ['low', 'medium', 'high', 'urgent'] as const;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+const TICKET_RULE_ON =
+    '- "create_ticket": the visitor reports a problem, bug, billing issue or complaint, or needs the team to follow up in writing. YOU raise the ticket yourself. First make sure you hold their name, email and phone number, and whether that number is on WhatsApp: ask for one missing detail at a time, naturally, and never ask again for anything listed under "Visitor details already known". Only when you hold name, email and phone, set action to create_ticket and fill the ticket and visitor fields, and tell them the ticket is raised and the team will reply by email or WhatsApp. Until then keep action "continue" and ask for the next detail.';
+const TICKET_RULE_OFF =
+    '- Do NOT use "create_ticket" (ticket raising is switched off). For a problem, offer "connect_live_support" or answer as well as you can.';
 const FALLBACK_REPLY = "I'm sorry, could you try rephrasing that?";
 
 const REPLY_SCHEMA = {
@@ -73,10 +107,20 @@ const REPLY_SCHEMA = {
             consultationPhone: { type: 'string' },
             consultationDescription: { type: 'string' },
             consultationProjectType: { type: 'string', enum: [...PROJECT_TYPES] },
+            ticketSubject: { type: 'string' },
+            ticketSummary: { type: 'string' },
+            ticketCategory: { type: 'string', enum: [...TICKET_CATEGORIES] },
+            ticketPriority: { type: 'string', enum: [...TICKET_PRIORITIES] },
+            visitorName: { type: 'string' },
+            visitorEmail: { type: 'string' },
+            visitorPhone: { type: 'string' },
+            phoneIsWhatsapp: { type: 'boolean' },
         },
         required: [
             'reply', 'action', 'actionReason', 'customerLanguage',
             'consultationName', 'consultationEmail', 'consultationPhone', 'consultationDescription', 'consultationProjectType',
+            'ticketSubject', 'ticketSummary', 'ticketCategory', 'ticketPriority',
+            'visitorName', 'visitorEmail', 'visitorPhone', 'phoneIsWhatsapp',
         ],
         additionalProperties: false,
     },
@@ -87,7 +131,12 @@ const toTurns = (history: ChatHistoryMessage[]): ChatTurn[] =>
         .map((m) => ({ role: m.role === 'user' ? ('user' as const) : ('assistant' as const), content: String(m.parts?.[0]?.text ?? '') }))
         .filter((t) => t.content);
 
-export async function processAIChat(userMessage: string, history: ChatHistoryMessage[]): Promise<AIChatResponse> {
+export async function processAIChat(
+    userMessage: string,
+    history: ChatHistoryMessage[],
+    options: AIChatOptions = {},
+): Promise<AIChatResponse> {
+    const allowTickets = options.allowTickets !== false;
     if (!envConfig.openai_api_key) {
         throw new Error('OPENAI_API_KEY environment variable is not set');
     }
@@ -122,8 +171,18 @@ export async function processAIChat(userMessage: string, history: ChatHistoryMes
         logger.error(`Web AI could not load staff rules: ${err.message}`);
     }
 
+    const known = options.visitor ?? {};
+    const knownLines = [
+        known.name && `name: ${known.name}`,
+        known.email && `email: ${known.email}`,
+        known.phone && `phone: ${known.phone}`,
+    ].filter(Boolean);
+
     const system = [
-        SYSTEM_PROMPT,
+        SYSTEM_PROMPT.replace('__TICKET_RULE__', allowTickets ? TICKET_RULE_ON : TICKET_RULE_OFF),
+        knownLines.length ? `Visitor details already known (do not ask for these again):\n${knownLines.join('\n')}` : '',
+        options.memory &&
+            `WHAT WE ALREADY KNOW ABOUT THIS VISITOR (from their earlier chats; trust it, never ask for it again, refer to it naturally and continue from where they left off):\n${options.memory}`,
         turns.some((t) => t.role === 'assistant')
             ? 'Greetings: you have already talked to this visitor, so never greet or introduce yourself again; go straight to the answer.'
             : 'Greetings: this is your first reply, so open with one brief greeting (English: "Hello!"; Bengali: "আসসালামু আলাইকুম!", never "নমস্কার"), then answer.',
@@ -157,8 +216,19 @@ export async function processAIChat(userMessage: string, history: ChatHistoryMes
     let parsed: any = {};
     let priceLeaked = false;
     let wrongScript = false;
+    let missing: string[] = [];
+    const visitorFrom = (p: any): AIChatVisitor => ({
+        name: String(p.visitorName || known.name || '').trim(),
+        email: String(p.visitorEmail || known.email || '').trim(),
+        phone: String(p.visitorPhone || known.phone || '').trim(),
+        isWhatsapp: Boolean(p.phoneIsWhatsapp),
+    });
+    const missingDetails = (v: AIChatVisitor) =>
+        [!v.name && 'name', !EMAIL_RE.test(v.email) && 'a valid email', v.phone.replace(/\D/g, '').length < 7 && 'phone number'].filter(Boolean) as string[];
     for (let attempt = 0; attempt < 3; attempt++) {
         const notes = [
+            missing.length > 0 &&
+                `You set create_ticket, but these visitor details are still missing: ${missing.join(', ')}. Do not raise the ticket yet: ask for the next missing detail and keep action "continue".`,
             priceLeaked && 'Your previous draft stated a price or amount, which is not allowed yet. Rewrite it with NO price or amount.',
             wrongScript && 'Your previous draft was not in Bengali script, but this visitor writes Bengali/Banglish. Rewrite the whole reply in Bengali script (brand and product words may stay in English).',
         ].filter(Boolean) as string[];
@@ -169,8 +239,16 @@ export async function processAIChat(userMessage: string, history: ChatHistoryMes
         }
         priceLeaked = !priceAllowed && leaksPrice(parsed.reply);
         wrongScript = parsed.customerLanguage === 'bengali' && bengaliShare(parsed.reply) < 0.3;
-        if (!priceLeaked && !wrongScript) break;
-        logger.warn(`Web AI draft rejected (attempt ${attempt + 1}): ${priceLeaked ? 'price too early' : 'wrong script'}`);
+        missing = allowTickets && parsed.action === 'create_ticket' ? missingDetails(visitorFrom(parsed)) : [];
+        if (!priceLeaked && !wrongScript && missing.length === 0) break;
+        logger.warn(`Web AI draft rejected (attempt ${attempt + 1}): ${priceLeaked ? 'price too early' : wrongScript ? 'wrong script' : `ticket details missing: ${missing.join(', ')}`}`);
+    }
+    if (missing.length > 0) {
+        // The model kept claiming a ticket without the details: ask for them instead of saying it is raised.
+        parsed.reply = /[\u0980-\u09FF]/.test(userMessage)
+            ? 'টিকেট খোলার জন্য আপনার নাম, ইমেইল আর ফোন নম্বর লাগবে। এগুলো জানাবেন?'
+            : 'To raise a ticket I need your name, email and phone number. Could you share them?';
+        parsed.action = 'continue';
     }
     if (priceLeaked) {
         // Still leaking after retries: never send the amount.
@@ -180,7 +258,11 @@ export async function processAIChat(userMessage: string, history: ChatHistoryMes
         parsed.action = 'continue';
     }
 
-    const action: AIChatResponse['action'] = ACTIONS.includes(parsed.action) ? parsed.action : 'continue';
+    let action: AIChatResponse['action'] = ACTIONS.includes(parsed.action) ? parsed.action : 'continue';
+    const visitor = visitorFrom(parsed);
+    // A ticket needs the switch on and the visitor's details; otherwise the assistant keeps talking.
+    const raising = action === 'create_ticket' && allowTickets && missingDetails(visitor).length === 0;
+    if (action === 'create_ticket' && !raising) action = 'continue';
     const consultation: ConsultationData = {
         name: String(parsed.consultationName ?? '').trim(),
         email: String(parsed.consultationEmail ?? '').trim(),
@@ -203,6 +285,15 @@ export async function processAIChat(userMessage: string, history: ChatHistoryMes
         action: booking || action !== 'book_consultation' ? action : 'continue',
         actionReason: parsed.actionReason || undefined,
         consultationData: booking ? consultation : null,
+        ticket: raising
+            ? {
+                  subject: String(parsed.ticketSubject ?? '').trim().slice(0, 120) || `Website chat: ${visitor.name}`,
+                  summary: String(parsed.ticketSummary ?? '').trim().slice(0, 1500),
+                  category: (TICKET_CATEGORIES as readonly string[]).includes(parsed.ticketCategory) ? parsed.ticketCategory : 'support',
+                  priority: (TICKET_PRIORITIES as readonly string[]).includes(parsed.ticketPriority) ? parsed.ticketPriority : 'medium',
+              }
+            : null,
+        visitor: visitor.email || visitor.phone || visitor.name ? visitor : null,
     };
 }
 

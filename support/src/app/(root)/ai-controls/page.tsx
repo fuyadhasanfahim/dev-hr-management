@@ -3,7 +3,7 @@
 import { Suspense, useMemo, useState } from 'react';
 import { format, formatDistanceToNowStrict } from 'date-fns';
 import { toast } from 'sonner';
-import { Bot, CalendarClock, Clock, Loader, Pencil, Plus, Power, Timer, Trash2 } from 'lucide-react';
+import { Bot, CalendarClock, Clock, Pencil, Plus, Timer, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { PaginationBar } from '@/components/ui/pagination-bar';
 import { SearchInput } from '@/components/ui/search-input';
@@ -130,11 +130,9 @@ function AiControls() {
     const [editing, setEditing] = useState<AiSchedule | null>(null);
     const [deleting, setDeleting] = useState<AiSchedule | null>(null);
     const [minutesDraft, setMinutesDraft] = useState<string | null>(null);
-    const [confirmPermanentOff, setConfirmPermanentOff] = useState(false);
 
     const settings = data?.settings;
     const status = data?.status;
-    const anyOff = !!status && AI_FEATURES.some((f) => !status[f].active);
 
     const apply = async (patch: AiSettingsPatch, success?: string) => {
         try {
@@ -157,7 +155,8 @@ function AiControls() {
     const shown = matching.slice((page - 1) * limit, page * limit);
     useClampPage(page, totalPages, (n) => url.set({ page: n }));
 
-    const quickPause = (opt: (typeof QUICK_PAUSES)[number]) => {
+    // Pausing and resuming are per AI: pausing WhatsApp never touches the website assistant (and the reverse).
+    const quickPause = (opt: (typeof QUICK_PAUSES)[number], feature: AiFeature) => {
         const start = new Date();
         const end = new Date(start);
         if (opt.untilTomorrow9) {
@@ -172,27 +171,25 @@ function AiControls() {
             kind: 'once',
             action: 'off_during',
             enabled: true,
-            features: [],
+            features: [feature],
             startAt: start.toISOString(),
             endAt: end.toISOString(),
             days: [],
         };
-        void apply({ schedules: [...schedules, pause] }, `AI paused until ${format(end, 'MMM d, h:mm a')}`);
+        void apply({ schedules: [...schedules, pause] }, `${FEATURE_META[feature].title} paused until ${format(end, 'MMM d, h:mm a')}`);
     };
 
-    const resumeNow = async () => {
+    // Turns one AI back on: its own switch, and any running pause is trimmed to the other AIs only.
+    const resumeNow = async (feature: AiFeature) => {
         const now = Date.now();
-        const remaining = schedules.filter(
-            (s) => !(s.kind === 'once' && s.action === 'off_during' && s.startAt && s.endAt && new Date(s.startAt).getTime() <= now && now < new Date(s.endAt).getTime()),
-        );
-        await apply(
-            {
-                masterMode: 'on',
-                schedules: remaining,
-                features: { whatsapp: { enabled: true }, web_chat: { enabled: true }, chat_summary: { enabled: true } },
-            },
-            'AI resumed',
-        );
+        const running = (x: AiSchedule) =>
+            x.kind === 'once' && x.action === 'off_during' && x.startAt && x.endAt && new Date(x.startAt).getTime() <= now && now < new Date(x.endAt).getTime();
+        const remaining = schedules.flatMap((x) => {
+            if (!running(x) || !(x.features.length === 0 || x.features.includes(feature))) return [x];
+            const others = (x.features.length === 0 ? [...AI_FEATURES] : x.features).filter((f) => f !== feature);
+            return others.length ? [{ ...x, features: others }] : [];
+        });
+        await apply({ masterMode: 'on', schedules: remaining, features: { [feature]: { enabled: true } } }, `${FEATURE_META[feature].title} resumed`);
     };
 
     const saveSchedule = async (s: AiSchedule) => {
@@ -239,7 +236,7 @@ function AiControls() {
                 </span>
                 <div>
                     <h1 className="text-xl font-semibold tracking-tight md:text-2xl">AI Controls</h1>
-                    <p className="text-sm text-muted-foreground">Turn the AI on or off, schedule it, and decide how it comes back after your team replies.</p>
+                    <p className="text-sm text-muted-foreground">Turn each AI on or off, pause or schedule it, and decide how the WhatsApp AI comes back after your team replies.</p>
                 </div>
             </header>
 
@@ -247,70 +244,30 @@ function AiControls() {
                 <p className="rounded-lg border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">You can view these settings but not change them.</p>
             )}
 
-            {/* ── Master ─────────────────────────────────────────────── */}
-            <Card className={cn(settings?.masterMode === 'off' && 'border-rose-500/40')}>
-                <CardContent className="space-y-4 pt-6">
-                    <div className="flex flex-wrap items-center justify-between gap-4">
-                        <div className="flex items-center gap-3">
-                            <span className={cn('flex size-11 items-center justify-center rounded-full', settings?.masterMode === 'off' ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400' : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400')}>
-                                <Power className="size-5" />
-                            </span>
-                            <div>
-                                <p className="font-semibold">{isLoading ? 'Loading…' : settings?.masterMode === 'off' ? 'All AI is permanently off' : 'AI is on'}</p>
-                                <p className="text-sm text-muted-foreground">
-                                    {settings?.masterMode === 'off'
-                                        ? 'Nothing is answered by AI until you turn this back on. Schedules are ignored.'
-                                        : anyOff
-                                          ? 'Some AI is currently off because of a switch or schedule below.'
-                                          : 'Every AI is working and follows the schedules below.'}
-                                </p>
-                            </div>
-                        </div>
-                        <div className="flex items-center gap-3">
-                            <span className="text-sm text-muted-foreground">{settings?.masterMode === 'off' ? 'Off' : 'On'}</span>
-                            <Switch
-                                aria-label="Master AI switch"
-                                checked={settings?.masterMode !== 'off'}
-                                disabled={!canManage || saving || isLoading}
-                                onCheckedChange={(on) => (on ? apply({ masterMode: 'on' }, 'AI is on') : setConfirmPermanentOff(true))}
-                            />
-                        </div>
-                    </div>
+            {/* The old "all AI off" master switch is retired: every AI has its own switch below. If someone still has it
+                off through the API, say so here so nobody is stuck. */}
+            {settings?.masterMode === 'off' && (
+                <Card className="border-rose-500/40">
+                    <CardContent className="flex flex-wrap items-center justify-between gap-3 pt-6">
+                        <p className="text-sm">
+                            <span className="font-semibold">An old “all AI off” switch is still on.</span> Nothing answers until you turn it back on. Use the switches below to control each AI separately.
+                        </p>
+                        {canManage && (
+                            <Button size="sm" disabled={saving} onClick={() => apply({ masterMode: 'on' }, 'Old master switch turned off')}>
+                                Clear it
+                            </Button>
+                        )}
+                    </CardContent>
+                </Card>
+            )}
 
-                    {canManage && settings?.masterMode !== 'off' && (
-                        <div className="space-y-2 border-t pt-4">
-                            <p className="flex items-center gap-2 text-sm font-medium">
-                                <Timer className="size-4 text-muted-foreground" /> Pause for a while
-                            </p>
-                            <div className="flex flex-wrap gap-2">
-                                {QUICK_PAUSES.map((q) => (
-                                    <Button key={q.label} size="sm" variant="outline" disabled={saving} onClick={() => quickPause(q)}>
-                                        {q.label}
-                                    </Button>
-                                ))}
-                                <Button size="sm" variant="outline" disabled={saving} onClick={() => { setEditing(null); setDialogOpen(true); }}>
-                                    Custom…
-                                </Button>
-                                {anyOff && (
-                                    <Button size="sm" disabled={saving} onClick={resumeNow}>
-                                        Resume now
-                                    </Button>
-                                )}
-                            </div>
-                        </div>
-                    )}
-                    {canManage && settings?.masterMode === 'off' && (
-                        <Button size="sm" disabled={saving} onClick={resumeNow}>
-                            Turn everything back on
-                        </Button>
-                    )}
-                </CardContent>
-            </Card>
-
-            {/* ── Each AI ────────────────────────────────────────────── */}
+            {/* ── Each AI works on its own ───────────────────────────── */}
             <section className="space-y-3">
-                <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Each AI</h2>
-                <div className="grid gap-3 md:grid-cols-3">
+                <div>
+                    <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Each AI works on its own</h2>
+                    <p className="text-xs text-muted-foreground">Switching off or pausing one never changes the others.</p>
+                </div>
+                <div className="grid gap-3 lg:grid-cols-3">
                     {AI_FEATURES.map((f: AiFeature) => (
                         <Card key={f}>
                             <CardContent className="space-y-3 pt-6">
@@ -330,6 +287,67 @@ function AiControls() {
                                     <StatusPill status={status?.[f]} />
                                     <span className="text-xs text-muted-foreground">{statusLine(status?.[f])}</span>
                                 </div>
+
+                                {canManage && (
+                                    <div className="space-y-2 border-t pt-3">
+                                        <p className="flex items-center gap-1.5 text-xs font-medium">
+                                            <Timer className="size-3.5 text-muted-foreground" /> Pause for a while
+                                        </p>
+                                        <div className="flex flex-wrap gap-1.5">
+                                            {QUICK_PAUSES.map((q) => (
+                                                <Button key={q.label} size="sm" variant="outline" className="h-7 px-2 text-xs" disabled={saving} onClick={() => quickPause(q, f)}>
+                                                    {q.label}
+                                                </Button>
+                                            ))}
+                                            <Button
+                                                size="sm"
+                                                variant="outline"
+                                                className="h-7 px-2 text-xs"
+                                                disabled={saving}
+                                                onClick={() => {
+                                                    setEditing({ id: '', label: '', kind: 'once', action: 'off_during', enabled: true, features: [f], days: [] });
+                                                    setDialogOpen(true);
+                                                }}
+                                            >
+                                                Custom…
+                                            </Button>
+                                            {status && !status[f].active && (
+                                                <Button size="sm" className="h-7 px-2 text-xs" disabled={saving} onClick={() => resumeNow(f)}>
+                                                    Resume now
+                                                </Button>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {f === 'web_chat' && (
+                                    <div className="space-y-3 border-t pt-3">
+                                        <div className="flex items-start justify-between gap-3">
+                                            <div>
+                                                <p className="text-sm font-medium">AI raises tickets</p>
+                                                <p className="text-xs text-muted-foreground">It collects name, email and phone, then opens the ticket itself. It shows in Tickets.</p>
+                                            </div>
+                                            <Switch
+                                                aria-label="AI raises tickets from the website"
+                                                checked={settings?.web.createTickets ?? true}
+                                                disabled={!canManage || saving || isLoading}
+                                                onCheckedChange={(v) => apply({ web: { createTickets: v } }, v ? 'The website AI can raise tickets' : 'The website AI will not raise tickets')}
+                                            />
+                                        </div>
+                                        <div className="flex items-start justify-between gap-3">
+                                            <div>
+                                                <p className="text-sm font-medium">AI remembers visitors</p>
+                                                <p className="text-xs text-muted-foreground">Keeps a short profile of each visitor (business, what they asked) and uses it in later chats.</p>
+                                            </div>
+                                            <Switch
+                                                aria-label="Website AI remembers visitors"
+                                                checked={settings?.web.remember ?? true}
+                                                disabled={!canManage || saving || isLoading}
+                                                onCheckedChange={(v) => apply({ web: { remember: v } }, v ? 'The website AI remembers visitors' : 'The website AI will not keep a memory')}
+                                            />
+                                        </div>
+                                    </div>
+                                )}
                             </CardContent>
                         </Card>
                     ))}
@@ -425,7 +443,7 @@ function AiControls() {
                         <CardTitle className="flex items-center gap-2 text-base">
                             <CalendarClock className="size-4" /> Schedules
                         </CardTitle>
-                        <CardDescription>Switch the AI off (or allow it only) at set times — once, daily, weekly or monthly.</CardDescription>
+                        <CardDescription>Switch an AI off (or allow it only) at set times — once, daily, weekly or monthly. Pick which AI each schedule is for.</CardDescription>
                     </div>
                     {canManage && (
                         <Button size="sm" onClick={() => { setEditing(null); setDialogOpen(true); }}>
@@ -520,23 +538,6 @@ function AiControls() {
             </Card>
 
             <ScheduleDialog open={dialogOpen} onOpenChange={setDialogOpen} schedule={editing} saving={saving} onSave={saveSchedule} />
-
-            <AlertDialog open={confirmPermanentOff} onOpenChange={setConfirmPermanentOff}>
-                <AlertDialogContent>
-                    <AlertDialogHeader>
-                        <AlertDialogTitle>Turn all AI off permanently?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                            WhatsApp, the website chat and chat summaries stop using AI until you turn this back on. Customers who message in the meantime will wait for your team.
-                        </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={() => apply({ masterMode: 'off' }, 'All AI is off')}>
-                            {saving && <Loader className="mr-2 size-4 animate-spin" />}Turn off
-                        </AlertDialogAction>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-            </AlertDialog>
 
             <AlertDialog open={!!deleting} onOpenChange={(o) => !o && setDeleting(null)}>
                 <AlertDialogContent>

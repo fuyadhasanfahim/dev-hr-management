@@ -24,6 +24,11 @@ export interface IAiConversation extends Document {
     clientId?: Types.ObjectId; // Ref: Client
     guestId?: Types.ObjectId; // Ref: Guest
     visitorEmail?: string; // captured if known (e.g. from consultationData)
+    visitorName?: string;
+    visitorPhone?: string;
+    contactId?: Types.ObjectId; // Ref: Contact — set once we know who the visitor is
+    linkedTicketId?: Types.ObjectId; // Ref: Ticket — the ticket the assistant raised from this chat
+    aiMemory?: string; // Running profile of the visitor, like the WhatsApp assistant's memory
     messages: IAiMessage[];
     lastAction?: AiChatAction; // the most recent action taken
     messageCount: number;
@@ -76,6 +81,11 @@ const aiConversationSchema = new Schema<IAiConversation>(
             type: String,
             trim: true,
         },
+        visitorName: { type: String, trim: true },
+        visitorPhone: { type: String, trim: true },
+        contactId: { type: Schema.Types.ObjectId, ref: 'Contact', index: true },
+        linkedTicketId: { type: Schema.Types.ObjectId, ref: 'Ticket' },
+        aiMemory: { type: String, default: '' },
         messages: {
             type: [aiMessageSchema],
             default: [],

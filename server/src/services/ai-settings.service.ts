@@ -25,6 +25,7 @@ const DEFAULTS: Plain = {
     masterMode: 'on',
     timezone: 'Asia/Dhaka',
     features: { whatsapp: { enabled: true }, web_chat: { enabled: true }, chat_summary: { enabled: true } },
+    web: { createTickets: true, remember: true },
     autoResume: { enabled: true, minutes: 5 },
     pauseOnAgentReply: true,
     schedules: [],
@@ -46,6 +47,7 @@ function normalise(doc: any): Plain {
             web_chat: { enabled: o.features?.web_chat?.enabled ?? true },
             chat_summary: { enabled: o.features?.chat_summary?.enabled ?? true },
         },
+        web: { createTickets: o.web?.createTickets ?? true, remember: o.web?.remember ?? true },
         autoResume: { enabled: o.autoResume?.enabled ?? true, minutes: o.autoResume?.minutes ?? 5 },
         pauseOnAgentReply: o.pauseOnAgentReply ?? true,
         schedules: (o.schedules ?? []).map((s: any) => ({ ...s })),
@@ -238,6 +240,12 @@ export async function updateSettings(patch: any, user: { id: string; name: strin
             if (typeof patch.features[f]?.enabled === 'boolean') next.features[f] = { enabled: patch.features[f].enabled };
         }
     }
+    if (patch.web) {
+        next.web = {
+            createTickets: typeof patch.web.createTickets === 'boolean' ? patch.web.createTickets : current.web.createTickets,
+            remember: typeof patch.web.remember === 'boolean' ? patch.web.remember : current.web.remember,
+        };
+    }
     if (patch.autoResume) {
         const minutes = patch.autoResume.minutes !== undefined ? Number(patch.autoResume.minutes) : current.autoResume.minutes;
         if (!Number.isInteger(minutes) || minutes < 1 || minutes > 1440) throw new AiSettingsError('Minutes must be 1–1440');
@@ -258,6 +266,7 @@ export async function updateSettings(patch: any, user: { id: string; name: strin
             masterMode: next.masterMode,
             timezone: next.timezone,
             features: next.features,
+            web: next.web,
             autoResume: next.autoResume,
             pauseOnAgentReply: next.pauseOnAgentReply,
             schedules: next.schedules,

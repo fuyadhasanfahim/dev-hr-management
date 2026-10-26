@@ -210,17 +210,30 @@ export async function revokeGuestSessions(guestId: string): Promise<void> {
  * email-verified (they must OTP to *view* tickets), but we can attribute the
  * ticket to them.
  */
-export async function getOrCreateGuest(email: string, name: string): Promise<IGuest> {
+export async function getOrCreateGuest(
+    email: string,
+    name: string,
+    extra: { phone?: string; isWhatsapp?: boolean } = {},
+): Promise<IGuest> {
     if (!email || !name) {
         throw new AppError('Name and email are required', 400);
     }
     const lower = email.toLowerCase().trim();
     let guest = await GuestModel.findOne({ email: lower });
     if (!guest) {
-        guest = await GuestModel.create({ name: name.trim(), email: lower, emailVerified: false });
-    } else if (name.trim() && guest.name !== name.trim()) {
-        guest.name = name.trim();
-        await guest.save();
+        guest = await GuestModel.create({ name: name.trim(), email: lower, emailVerified: false, phone: extra.phone, isWhatsapp: extra.isWhatsapp });
+    } else {
+        let changed = false;
+        if (name.trim() && guest.name !== name.trim()) {
+            guest.name = name.trim();
+            changed = true;
+        }
+        if (extra.phone && guest.phone !== extra.phone) {
+            guest.phone = extra.phone;
+            if (typeof extra.isWhatsapp === 'boolean') guest.isWhatsapp = extra.isWhatsapp;
+            changed = true;
+        }
+        if (changed) await guest.save();
     }
     return guest;
 }
