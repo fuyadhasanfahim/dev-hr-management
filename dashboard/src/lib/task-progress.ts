@@ -9,50 +9,8 @@ import { isPast } from 'date-fns';
  * drift (e.g. different SubTaskItem shapes).
  */
 
-export interface SubTaskItem {
-    _id: string;
-    title: string;
-    completed: boolean;
-    completedAt?: string;
-    isSubFeature?: boolean;
-    parentName?: string;
-    needsRevision?: boolean;
-    revisionNote?: string;
-}
-
-export interface TaskAssignee {
-    _id: string;
-    name?: string;
-    designation?: string;
-    userId?: {
-        _id: string;
-        name: string;
-        email: string;
-        image?: string;
-    };
-}
-
-export interface TaskItem {
-    _id: string;
-    orderId?: any;
-    assignedTo?: TaskAssignee | string;
-    assignedBy?: any;
-    title: string;
-    description?: string;
-    subtasks?: SubTaskItem[];
-    status: 'pending' | 'in_progress' | 'under_review' | 'completed' | 'rejected';
-    priority: 'low' | 'medium' | 'high' | 'urgent';
-    startDate?: string;
-    dueDate: string;
-    submissionNote?: string;
-    submissionAttachment?: string;
-    submittedAt?: string;
-    reviewNote?: string;
-    reviewedBy?: any;
-    reviewedAt?: string;
-    createdAt: string;
-    updatedAt?: string;
-}
+export type { SubTaskItem, TaskAssignee, TaskItem } from '@/types/task.type';
+import type { SubTaskItem, TaskAssignee, TaskItem, TaskOrderRef } from '@/types/task.type';
 
 /**
  * Subtasks are the single progress source of truth. Older tasks created
@@ -167,6 +125,16 @@ export const PRIORITY_LABEL: Record<TaskItem['priority'], string> = {
     high: 'High',
     urgent: 'Urgent',
 };
+
+/** The order as an object (the API populates it), or null when it is only an id or missing. */
+export function orderRefOf(task: Pick<TaskItem, 'orderId'>): TaskOrderRef | null {
+    return task.orderId && typeof task.orderId === 'object' ? task.orderId : null;
+}
+
+/** The assignee as an object (the API populates it), or null when it is only an id or missing. */
+export function assigneeOf(task: Pick<TaskItem, 'assignedTo'>): TaskAssignee | null {
+    return task.assignedTo && typeof task.assignedTo === 'object' ? task.assignedTo : null;
+}
 
 export function getAssigneeName(assignee?: TaskAssignee | string | null): string {
     if (!assignee || typeof assignee === 'string') return 'Unassigned';

@@ -42,6 +42,7 @@ import {
 } from '@/lib/task-progress';
 import { ClipboardList, LayoutGrid, LayoutList, Plus, Send } from 'lucide-react';
 import { apiMessage } from '@/lib/api-error';
+import type { StaffListItem } from '@/types/task.type';
 
 const DEFAULT_FILTERS: WorkloadFiltersState = {
     search: '',
@@ -74,17 +75,17 @@ export default function TeamWorkloadPage() {
 
     const { data: tasksRes, isLoading } = useGetMyTasksQuery(undefined);
     const { data: staffsData } = useGetStaffsQuery({ limit: 100 });
-    const staffs = useMemo(() => staffsData?.staffs || [], [staffsData]);
+    const staffs = useMemo(() => (staffsData?.staffs ?? []) as StaffListItem[], [staffsData]);
 
     const [submitTask, { isLoading: isSubmitting }] = useSubmitTaskMutation();
 
     const [viewMode, setViewMode] = useState<'table' | 'kanban'>('table');
     const [filters, setFilters] = useState<WorkloadFiltersState>(DEFAULT_FILTERS);
     const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
-    const [editTaskData, setEditTaskData] = useState<any>(null);
+    const [editTaskData, setEditTaskData] = useState<TaskItem | null>(null);
     const [detailTaskId, setDetailTaskId] = useState<string | null>(null);
     const [isSubmitModalOpen, setIsSubmitModalOpen] = useState(false);
-    const [selectedTask, setSelectedTask] = useState<any>(null);
+    const [selectedTask, setSelectedTask] = useState<TaskItem | null>(null);
     const [submissionLink, setSubmissionLink] = useState('');
     const [submissionNote, setSubmissionNote] = useState('');
 
@@ -96,7 +97,7 @@ export default function TeamWorkloadPage() {
     const detailTask = useMemo(() => tasks.find((t) => t._id === detailTaskId) || null, [tasks, detailTaskId]);
 
     // Group tasks by staff member (source of truth for the workload table)
-    const allMembers: MemberRow[] = useMemo(() => {
+    const allMembers: (MemberRow & { designationValue: string })[] = useMemo(() => {
         const tasksByStaff = new Map<string, TaskItem[]>();
         tasks.forEach((t) => {
             const staffId = typeof t.assignedTo === 'object' ? t.assignedTo?._id : t.assignedTo;
@@ -105,7 +106,7 @@ export default function TeamWorkloadPage() {
             tasksByStaff.get(staffId)!.push(t);
         });
 
-        return staffs.map((staff: any) => {
+        return staffs.map((staff) => {
             const staffTasks = tasksByStaff.get(staff._id) || [];
             const currentTask = getCurrentTask(staffTasks);
             const activeCount = countActiveTasks(staffTasks);
@@ -124,7 +125,7 @@ export default function TeamWorkloadPage() {
 
     const roleOptions = useMemo(() => {
         const set = new Set<string>();
-        staffs.forEach((s: any) => s.designation && set.add(s.designation));
+        staffs.forEach((s) => s.designation && set.add(s.designation));
         return Array.from(set).map((d) => ({ value: d, label: DESIGNATION_LABELS[d as Designation] || d }));
     }, [staffs]);
 
@@ -139,7 +140,7 @@ export default function TeamWorkloadPage() {
     }, [tasks]);
 
     const filteredMembers = useMemo(() => {
-        return allMembers.filter((m: any) => {
+        return allMembers.filter((m) => {
             if (filters.search.trim()) {
                 const q = filters.search.toLowerCase();
                 const nameMatch = m.name.toLowerCase().includes(q);
@@ -175,7 +176,7 @@ export default function TeamWorkloadPage() {
         return { total, inProgress, blocked, overdue, availableMembers };
     }, [tasks, allMembers]);
 
-    const handleOpenSubmit = (task: any) => {
+    const handleOpenSubmit = (task: TaskItem) => {
         setSelectedTask(task);
         setSubmissionLink('');
         setSubmissionNote('');
@@ -187,6 +188,7 @@ export default function TeamWorkloadPage() {
             toast.error('Please enter a brief submission note.');
             return;
         }
+        if (!selectedTask) return;
         try {
             await submitTask({
                 taskId: selectedTask._id,

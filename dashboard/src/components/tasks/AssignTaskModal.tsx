@@ -31,14 +31,17 @@ import { toast } from "sonner";
 import { Loader2, CalendarClock, UserPlus, Layers, Sparkles, CheckSquare, Square, Link2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { apiMessage } from '@/lib/api-error';
+import type { RawScopeItem, StaffListItem, TaskItem } from '@/types/task.type';
+import type { IOrder } from '@/types/order.type';
+import { getAssigneeName } from '@/lib/task-progress';
 
 interface AssignTaskModalProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     orderId?: string;
-    order?: any;
-    phases?: any;
-    existingTasks?: any[];
+    order?: IOrder;
+    phases?: unknown;
+    existingTasks?: TaskItem[];
     defaultStaffId?: string;
 }
 
@@ -98,9 +101,10 @@ function parseOrderScopeFeatures(rawItems: string[]): ScopeFeatureNode[] {
             const parsed = JSON.parse(cleanText);
             const items = Array.isArray(parsed) ? parsed : [parsed];
 
-            return items.map((item: any, idx: number) => {
-                const node = parseNameRoutePrice(typeof item === 'string' ? item : item.name || item.title || '');
-                const childrenRaw = Array.isArray(item.children)
+            return (items as RawScopeItem[]).map((rawItem, idx: number) => {
+                const item = typeof rawItem === 'string' ? { name: rawItem } : rawItem;
+                const node = parseNameRoutePrice(item.name || item.title || '');
+                const childrenRaw: RawScopeItem[] = Array.isArray(item.children)
                     ? item.children
                     : Array.isArray(item.subFeatures)
                     ? item.subFeatures
@@ -108,8 +112,9 @@ function parseOrderScopeFeatures(rawItems: string[]): ScopeFeatureNode[] {
                     ? item.items
                     : [];
 
-                const children: ScopeFeatureNode[] = childrenRaw.map((c: any, cIdx: number) => {
-                    const cNode = parseNameRoutePrice(typeof c === 'string' ? c : c.name || c.title || '');
+                const children: ScopeFeatureNode[] = childrenRaw.map((rawChild, cIdx: number) => {
+                    const c = typeof rawChild === 'string' ? { name: rawChild } : rawChild;
+                    const cNode = parseNameRoutePrice(c.name || c.title || '');
                     return {
                         id: `json_${idx}_child_${cIdx}`,
                         name: cNode.name,
@@ -177,7 +182,7 @@ function parseOrderScopeFeatures(rawItems: string[]): ScopeFeatureNode[] {
 
 export function getFeatureAssignmentInfo(
     featureName: string, 
-    existingTasks: any[], 
+    existingTasks: TaskItem[],
     currentTaskId?: string
 ): { isAssigned: boolean; taskTitle?: string; assignedStaffName?: string } {
     if (!existingTasks || existingTasks.length === 0 || !featureName) {
@@ -187,24 +192,24 @@ export function getFeatureAssignmentInfo(
     const normName = featureName.toLowerCase().trim();
 
     for (const t of existingTasks) {
-        if (currentTaskId && (t._id === currentTaskId || t.id === currentTaskId)) {
+        if (currentTaskId && t._id === currentTaskId) {
             continue;
         }
 
         if (t.subtasks && Array.isArray(t.subtasks)) {
-            const hasMatch = t.subtasks.some((st: any) => {
+            const hasMatch = t.subtasks.some((st) => {
                 const stTitle = (st.title || '').toLowerCase().trim();
                 return stTitle === normName || (normName.length > 5 && stTitle.includes(normName));
             });
             if (hasMatch) {
-                const staffName = t.assignedTo?.userId?.name || t.assignedTo?.name || 'Staff Member';
+                const staffName = getAssigneeName(t.assignedTo) === 'Unassigned' ? 'Staff Member' : getAssigneeName(t.assignedTo);
                 return { isAssigned: true, taskTitle: t.title, assignedStaffName: staffName };
             }
         }
 
         const desc = (t.description || '').toLowerCase();
         if (desc.includes(normName)) {
-            const staffName = t.assignedTo?.userId?.name || t.assignedTo?.name || 'Staff Member';
+            const staffName = getAssigneeName(t.assignedTo) === 'Unassigned' ? 'Staff Member' : getAssigneeName(t.assignedTo);
             return { isAssigned: true, taskTitle: t.title, assignedStaffName: staffName };
         }
     }
@@ -222,7 +227,7 @@ function FeatureItemRow({
     node: ScopeFeatureNode;
     selectedFeatures: string[];
     onToggle: (node: ScopeFeatureNode, checked: boolean) => void;
-    existingTasks: any[];
+    existingTasks: TaskItem[];
     isChild?: boolean;
 }) {
     const isChecked = selectedFeatures.includes(node.name);
@@ -348,8 +353,8 @@ export function AssignTaskModal({
 
     const staffWorkloadMap = useMemo(() => {
         const map: Record<string, number> = {};
-        allTasks.forEach((t: any) => {
-            const staffId = t.assignedTo?._id || t.assignedTo;
+        allTasks.forEach((t) => {
+            const staffId = typeof t.assignedTo === 'object' ? t.assignedTo?._id : t.assignedTo;
             if (staffId && t.status !== 'completed') {
                 map[staffId] = (map[staffId] || 0) + 1;
             }
@@ -360,13 +365,12 @@ export function AssignTaskModal({
     // Fetch orders if no order pre-selected
     const { data: ordersRes, isLoading: isOrdersLoading } = useGetOrdersQuery({ limit: 1000 });
 
-    const ordersList = useMemo(() => {
-        if (!ordersRes) return [];
-        if (Array.isArray(ordersRes.data)) return ordersRes.data;
-        if ((ordersRes as any)?.data?.data && Array.isArray((ordersRes as any).data.data)) {
-            return (ordersRes as any).data.data;
-        }
-        return [];
+    // The orders list comes back as { data: [...] }, or nested one level deeper by older endpoints.
+    const ordersList = useMemo((): IOrder[] => {
+        const body = ordersRes as { data?: IOrder[] | { data?: IOrder[] } } | undefined;
+        if (!body?.data) return [];
+        if (Array.isArray(body.data)) return body.data;
+        return Array.isArray(body.data.data) ? body.data.data : [];
     }, [ordersRes]);
 
     // Fetch order by ID if selected from dropdown and no initial order passed
@@ -386,13 +390,13 @@ export function AssignTaskModal({
     const activeOrder = useMemo(() => {
         if (initialOrder) return initialOrder;
         if (fetchedOrderRes?.data) return fetchedOrderRes.data;
-        return ordersList.find((o: any) => o._id === selectedOrderId);
+        return ordersList.find((o) => o._id === selectedOrderId);
     }, [initialOrder, fetchedOrderRes, ordersList, selectedOrderId]);
 
     // Which order is shown: the one passed in, else the first one (adjusted while rendering; it settles after one pass).
     const wantedOrderId = initialOrderId
         ? initialOrderId
-        : ordersList.length > 0 && (!selectedOrderId || !ordersList.some((o: any) => o._id === selectedOrderId))
+        : ordersList.length > 0 && (!selectedOrderId || !ordersList.some((o) => o._id === selectedOrderId))
           ? ordersList[0]._id
           : null;
     if (wantedOrderId && wantedOrderId !== selectedOrderId) setSelectedOrderId(wantedOrderId);
@@ -400,7 +404,7 @@ export function AssignTaskModal({
     const { data: staffsData, isLoading: isStaffLoading } = useGetStaffsQuery({ limit: 100 });
     const [createTask, { isLoading: isCreating }] = useCreateTaskMutation();
 
-    const staffs = staffsData?.staffs || [];
+    const staffs = (staffsData?.staffs ?? []) as StaffListItem[];
 
     // Extract available Web Design & Development features grouped by category with hierarchical nodes
     const groupedServices = useMemo(() => {
@@ -410,11 +414,11 @@ export function AssignTaskModal({
         const groups: Array<{ categoryKey: string; categoryName: string; featureNodes: ScopeFeatureNode[] }> = [];
 
         if (Array.isArray(snapshot.services) && snapshot.services.length > 0) {
-            snapshot.services.forEach((s: any) => {
+            snapshot.services.forEach((s) => {
                 const name = CATEGORY_NAMES[s.category] || s.category || "Web Design & Development";
                 const rawItems = Array.isArray(s.scopeItems) ? [...s.scopeItems] : [];
                 if (Array.isArray(s.lineItems)) {
-                    s.lineItems.forEach((li: any) => {
+                    s.lineItems.forEach((li) => {
                         if (li.title) rawItems.push(li.title);
                     });
                 }
@@ -429,7 +433,7 @@ export function AssignTaskModal({
                 }
             });
         } else if (Array.isArray(snapshot.scopeOfWork)) {
-            snapshot.scopeOfWork.forEach((sow: any, idx: number) => {
+            snapshot.scopeOfWork.forEach((sow, idx: number) => {
                 const rawItems = Array.isArray(sow.items) ? sow.items : [];
                 const featureNodes = parseOrderScopeFeatures(rawItems);
                 if (featureNodes.length > 0) {
@@ -584,7 +588,7 @@ export function AssignTaskModal({
                                     <SelectValue placeholder={isOrdersLoading ? "Loading orders..." : "Select active order..."} />
                                 </SelectTrigger>
                                 <SelectContent className="max-h-56">
-                                    {ordersList.map((o: any) => (
+                                    {ordersList.map((o) => (
                                         <SelectItem key={o._id} value={o._id}>
                                             <div className="flex items-center justify-between w-full gap-4 text-xs">
                                                 <span className="font-semibold">{o.quotationSnapshot?.templateName || o.orderNumber}</span>
@@ -679,7 +683,7 @@ export function AssignTaskModal({
                                     <SelectValue placeholder={isStaffLoading ? "Loading staff..." : "Select staff..."} />
                                 </SelectTrigger>
                                 <SelectContent className="max-h-56 text-xs">
-                                    {staffs.map((staff: any) => {
+                                    {staffs.map((staff) => {
                                         const activeCount = staffWorkloadMap[staff._id] || 0;
                                         return (
                                             <SelectItem key={staff._id} value={staff._id}>

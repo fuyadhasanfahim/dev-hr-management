@@ -44,6 +44,7 @@ import {
 import { cn } from '@/lib/utils';
 import { ArrowLeft, CalendarClock, Send, UserRound } from 'lucide-react';
 import { apiMessage } from '@/lib/api-error';
+import type { StaffListItem } from '@/types/task.type';
 
 const AVAILABILITY_META: Record<WorkloadStatus, { label: string; badge: string }> = {
     available: { label: 'Available', badge: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-transparent' },
@@ -81,15 +82,15 @@ export default function TeamMemberTaskDetailsPage() {
     const { data: staffsData, isLoading: isStaffsLoading } = useGetStaffsQuery({ limit: 100 });
     const [submitTask, { isLoading: isSubmitting }] = useSubmitTaskMutation();
 
-    const [editTaskData, setEditTaskData] = useState<any>(null);
+    const [editTaskData, setEditTaskData] = useState<TaskItem | null>(null);
     const [detailTaskId, setDetailTaskId] = useState<string | null>(null);
     const [isSubmitModalOpen, setIsSubmitModalOpen] = useState(false);
-    const [selectedTask, setSelectedTask] = useState<any>(null);
+    const [selectedTask, setSelectedTask] = useState<TaskItem | null>(null);
     const [submissionLink, setSubmissionLink] = useState('');
     const [submissionNote, setSubmissionNote] = useState('');
 
     const staff = useMemo(
-        () => (staffsData?.staffs || []).find((s: any) => s._id === staffId),
+        () => ((staffsData?.staffs ?? []) as StaffListItem[]).find((s) => s._id === staffId),
         [staffsData, staffId]
     );
 
@@ -111,7 +112,7 @@ export default function TeamMemberTaskDetailsPage() {
     const overdueCount = memberTasks.filter((t) => isTaskOverdue(t)).length;
     const completionRate = memberTasks.length > 0 ? Math.round((completedCount / memberTasks.length) * 100) : 0;
 
-    const handleOpenSubmit = (task: any) => {
+    const handleOpenSubmit = (task: TaskItem) => {
         setSelectedTask(task);
         setSubmissionLink('');
         setSubmissionNote('');
@@ -123,6 +124,7 @@ export default function TeamMemberTaskDetailsPage() {
             toast.error('Please enter a brief submission note.');
             return;
         }
+        if (!selectedTask) return;
         try {
             await submitTask({
                 taskId: selectedTask._id,

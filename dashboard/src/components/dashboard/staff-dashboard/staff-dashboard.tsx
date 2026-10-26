@@ -38,7 +38,7 @@ export default function StaffDashboard() {
 
   const staff = meData?.staff;
   const tasks = tasksData?.data || [];
-  const activeTasks = tasks.filter((t: any) => t.status !== "completed");
+  const activeTasks = tasks.filter((t) => t.status !== "completed");
   const leaveBalance = leaveBalanceData?.data;
 
   const [isSalaryUnlocked, setIsSalaryUnlocked] = useState(false);

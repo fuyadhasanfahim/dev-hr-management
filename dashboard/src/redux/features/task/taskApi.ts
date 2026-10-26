@@ -1,37 +1,8 @@
 import { apiSlice } from "../../api/apiSlice";
 
-export interface SubTaskItem {
-    _id: string;
-    title: string;
-    completed: boolean;
-    completedAt?: string;
-    isSubFeature?: boolean;
-    parentName?: string;
-    needsRevision?: boolean;
-    revisionNote?: string;
-}
+import type { SubTaskItem, TaskItem } from "@/types/task.type";
 
-export interface TaskItem {
-    _id: string;
-    orderId: any;
-    assignedTo: any;
-    assignedBy: any;
-    title: string;
-    description?: string;
-    subtasks?: SubTaskItem[];
-    status: string;
-    priority: string;
-    startDate: string;
-    dueDate: string;
-    submissionNote?: string;
-    submissionAttachment?: string;
-    submittedAt?: string;
-    reviewNote?: string;
-    reviewedBy?: any;
-    reviewedAt?: string;
-    createdAt: string;
-    updatedAt: string;
-}
+export type { SubTaskItem, TaskItem };
 
 export const taskApi = apiSlice.injectEndpoints({
     endpoints: (builder) => ({
@@ -43,14 +14,14 @@ export const taskApi = apiSlice.injectEndpoints({
             }),
             invalidatesTags: ["Order", "Task"],
         }),
-        getOrderTasks: builder.query({
+        getOrderTasks: builder.query<{ data: TaskItem[] }, string>({
             query: (orderId) => ({
                 url: `/tasks/order/${orderId}`,
                 method: "GET",
             }),
             providesTags: (result, error, orderId) => [{ type: "Task", id: orderId }],
         }),
-        getMyTasks: builder.query({
+        getMyTasks: builder.query<{ data: TaskItem[] }, void>({
             query: () => ({
                 url: "/tasks/mine",
                 method: "GET",
@@ -73,13 +44,13 @@ export const taskApi = apiSlice.injectEndpoints({
             }),
             async onQueryStarted({ taskId, data }, { dispatch, queryFulfilled }) {
                 const patchResultMine = dispatch(
-                    taskApi.util.updateQueryData("getMyTasks", undefined, (draft: any) => {
+                    taskApi.util.updateQueryData("getMyTasks", undefined, (draft) => {
                         if (draft?.data) {
-                            const task = draft.data.find((t: any) => t._id === taskId);
+                            const task = draft.data.find((t) => t._id === taskId);
                             if (task) {
                                 task.status = data.decision === 'approve' ? 'completed' : 'rejected';
                                 if (task.status === 'completed' && task.subtasks) {
-                                    task.subtasks.forEach((s: any) => {
+                                    task.subtasks.forEach((s) => {
                                         s.completed = true;
                                         s.needsRevision = false;
                                         s.revisionNote = undefined;
@@ -113,13 +84,13 @@ export const taskApi = apiSlice.injectEndpoints({
             }),
             async onQueryStarted({ taskId, status }, { dispatch, queryFulfilled }) {
                 const patchResultMine = dispatch(
-                    taskApi.util.updateQueryData("getMyTasks", undefined, (draft: any) => {
+                    taskApi.util.updateQueryData("getMyTasks", undefined, (draft) => {
                         if (draft?.data) {
-                            const task = draft.data.find((t: any) => t._id === taskId);
+                            const task = draft.data.find((t) => t._id === taskId);
                             if (task) {
                                 task.status = status;
                                 if (status === 'completed' && task.subtasks) {
-                                    task.subtasks.forEach((s: any) => {
+                                    task.subtasks.forEach((s) => {
                                         s.completed = true;
                                         s.needsRevision = false;
                                         s.revisionNote = undefined;
@@ -145,11 +116,11 @@ export const taskApi = apiSlice.injectEndpoints({
             }),
             async onQueryStarted({ taskId, subtaskId, completed }, { dispatch, queryFulfilled }) {
                 const patchResultMine = dispatch(
-                    taskApi.util.updateQueryData("getMyTasks", undefined, (draft: any) => {
+                    taskApi.util.updateQueryData("getMyTasks", undefined, (draft) => {
                         if (draft?.data) {
-                            const task = draft.data.find((t: any) => t._id === taskId);
+                            const task = draft.data.find((t) => t._id === taskId);
                             if (task?.subtasks) {
-                                const st = task.subtasks.find((s: any) => s._id === subtaskId);
+                                const st = task.subtasks.find((s) => s._id === subtaskId);
                                 if (st) {
                                     st.completed = completed !== undefined ? completed : !st.completed;
                                     st.completedAt = st.completed ? new Date().toISOString() : undefined;
@@ -174,15 +145,15 @@ export const taskApi = apiSlice.injectEndpoints({
             }),
             async onQueryStarted({ taskId, subtaskId, note }, { dispatch, queryFulfilled }) {
                 const patchResultMine = dispatch(
-                    taskApi.util.updateQueryData("getMyTasks", undefined, (draft: any) => {
+                    taskApi.util.updateQueryData("getMyTasks", undefined, (draft) => {
                         if (draft?.data) {
-                            const task = draft.data.find((t: any) => t._id === taskId);
+                            const task = draft.data.find((t) => t._id === taskId);
                             if (task) {
                                 if (task.status === 'completed' || task.status === 'under_review') {
                                     task.status = 'in_progress';
                                 }
                                 if (task.subtasks) {
-                                    const st = task.subtasks.find((s: any) => s._id === subtaskId);
+                                    const st = task.subtasks.find((s) => s._id === subtaskId);
                                     if (st) {
                                         st.completed = false;
                                         st.needsRevision = true;

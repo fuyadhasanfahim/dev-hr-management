@@ -32,11 +32,14 @@ import { toast } from "sonner";
 import { Loader2, CalendarClock, Edit3, Layers, Sparkles, CheckSquare, Square, Link2, FileText } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { apiMessage } from '@/lib/api-error';
+import type { RawScopeItem, StaffListItem, TaskItem } from '@/types/task.type';
+import type { IOrder } from '@/types/order.type';
+import { orderRefOf } from '@/lib/task-progress';
 
 interface EditTaskModalProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
-    task: any;
+    task: TaskItem | null;
 }
 
 export interface ScopeFeatureNode {
@@ -91,9 +94,10 @@ function parseOrderScopeFeatures(rawItems: string[]): ScopeFeatureNode[] {
             const parsed = JSON.parse(cleanText);
             const items = Array.isArray(parsed) ? parsed : [parsed];
 
-            return items.map((item: any, idx: number) => {
-                const node = parseNameRoutePrice(typeof item === 'string' ? item : item.name || item.title || '');
-                const childrenRaw = Array.isArray(item.children)
+            return (items as RawScopeItem[]).map((rawItem, idx: number) => {
+                const item = typeof rawItem === 'string' ? { name: rawItem } : rawItem;
+                const node = parseNameRoutePrice(item.name || item.title || '');
+                const childrenRaw: RawScopeItem[] = Array.isArray(item.children)
                     ? item.children
                     : Array.isArray(item.subFeatures)
                     ? item.subFeatures
@@ -101,8 +105,9 @@ function parseOrderScopeFeatures(rawItems: string[]): ScopeFeatureNode[] {
                     ? item.items
                     : [];
 
-                const children: ScopeFeatureNode[] = childrenRaw.map((c: any, cIdx: number) => {
-                    const cNode = parseNameRoutePrice(typeof c === 'string' ? c : c.name || c.title || '');
+                const children: ScopeFeatureNode[] = childrenRaw.map((rawChild, cIdx: number) => {
+                    const c = typeof rawChild === 'string' ? { name: rawChild } : rawChild;
+                    const cNode = parseNameRoutePrice(c.name || c.title || '');
                     return {
                         id: `json_${idx}_child_${cIdx}`,
                         name: cNode.name,
@@ -178,7 +183,7 @@ function FeatureItemRow({
     node: ScopeFeatureNode;
     selectedFeatures: string[];
     onToggle: (node: ScopeFeatureNode, checked: boolean) => void;
-    existingTasks: any[];
+    existingTasks: TaskItem[];
     currentTaskId?: string;
     isChild?: boolean;
 }) {
@@ -287,11 +292,12 @@ export function EditTaskModal({
     const [priority, setPriority] = useState("medium");
     const [selectedFeatures, setSelectedFeatures] = useState<string[]>([]);
 
-    const orderId = typeof task?.orderId === 'object' ? task?.orderId?._id : task?.orderId;
-    const { data: fetchedOrderRes } = useGetOrderByIdQuery(orderId, { skip: !orderId || !open });
-    const { data: orderTasksRes } = useGetOrderTasksQuery(orderId, { skip: !orderId || !open });
+    const orderRef = task ? orderRefOf(task) : null;
+    const orderId = orderRef?._id ?? (typeof task?.orderId === 'string' ? task.orderId : undefined);
+    const { data: fetchedOrderRes } = useGetOrderByIdQuery(orderId ?? '', { skip: !orderId || !open });
+    const { data: orderTasksRes } = useGetOrderTasksQuery(orderId ?? '', { skip: !orderId || !open });
 
-    const activeOrder = fetchedOrderRes?.data || (typeof task?.orderId === 'object' ? task?.orderId : null);
+    const activeOrder: Pick<IOrder, 'quotationSnapshot'> & { orderNumber?: string } | null = fetchedOrderRes?.data || orderRef;
     const activeOrderTasks = useMemo(() => {
         if (orderTasksRes?.data && Array.isArray(orderTasksRes.data)) return orderTasksRes.data;
         return [];
@@ -299,7 +305,7 @@ export function EditTaskModal({
 
     const { data: staffsData, isLoading: isStaffLoading } = useGetStaffsQuery({ limit: 100 });
     const [updateTask, { isLoading: isUpdating }] = useUpdateTaskMutation();
-    const staffs = staffsData?.staffs || [];
+    const staffs = (staffsData?.staffs ?? []) as StaffListItem[];
 
     // Fill the form from the task each time the dialog opens or a different task is passed in
     // (adjusted while rendering instead of in an effect, so there is no render with the old task).
@@ -314,7 +320,7 @@ export function EditTaskModal({
             let extractedFeatures: string[] = [];
 
             if (Array.isArray(task.subtasks) && task.subtasks.length > 0) {
-                extractedFeatures = task.subtasks.map((s: any) => s.title);
+                extractedFeatures = task.subtasks.map((s) => s.title);
                 if (rawDesc.includes("Selected Features & Sub-Features:\n- ")) {
                     const parts = rawDesc.split("\n\nInstructions:\n");
                     rawDesc = parts[1] || "";
@@ -331,7 +337,7 @@ export function EditTaskModal({
             setDescription(rawDesc);
             setSelectedFeatures(extractedFeatures);
 
-            const staffId = task.assignedTo?._id || task.assignedTo;
+            const staffId = typeof task.assignedTo === 'object' ? task.assignedTo?._id : task.assignedTo;
             setAssignedTo(staffId || "");
             setPriority(task.priority || "medium");
             
@@ -353,11 +359,11 @@ export function EditTaskModal({
         const groups: Array<{ categoryKey: string; categoryName: string; featureNodes: ScopeFeatureNode[] }> = [];
 
         if (Array.isArray(snapshot.services) && snapshot.services.length > 0) {
-            snapshot.services.forEach((s: any) => {
+            snapshot.services.forEach((s) => {
                 const name = CATEGORY_NAMES[s.category] || s.category || "Web Design & Development";
                 const rawItems = Array.isArray(s.scopeItems) ? [...s.scopeItems] : [];
                 if (Array.isArray(s.lineItems)) {
-                    s.lineItems.forEach((li: any) => {
+                    s.lineItems.forEach((li) => {
                         if (li.title) rawItems.push(li.title);
                     });
                 }
@@ -372,7 +378,7 @@ export function EditTaskModal({
                 }
             });
         } else if (Array.isArray(snapshot.scopeOfWork)) {
-            snapshot.scopeOfWork.forEach((sow: any, idx: number) => {
+            snapshot.scopeOfWork.forEach((sow, idx: number) => {
                 const rawItems = Array.isArray(sow.items) ? sow.items : [];
                 const featureNodes = parseOrderScopeFeatures(rawItems);
                 if (featureNodes.length > 0) {
@@ -442,7 +448,7 @@ export function EditTaskModal({
         ].filter(Boolean).join("\n\n");
 
         const subtasks = selectedFeatures.map((f) => {
-            const existing = Array.isArray(task?.subtasks) ? task.subtasks.find((s: any) => s.title === f) : null;
+            const existing = Array.isArray(task?.subtasks) ? task.subtasks.find((s) => s.title === f) : null;
             const matchedNode = allFeatureNodes.find((n) => n.name === f);
             return {
                 title: f,
@@ -452,6 +458,7 @@ export function EditTaskModal({
             };
         });
 
+        if (!task) return;
         try {
             await updateTask({
                 taskId: task._id,
@@ -579,7 +586,7 @@ export function EditTaskModal({
                                     <SelectValue placeholder={isStaffLoading ? "Loading staff..." : "Select staff..."} />
                                 </SelectTrigger>
                                 <SelectContent className="max-h-56 text-xs">
-                                    {staffs.map((staff: any) => (
+                                    {staffs.map((staff) => (
                                         <SelectItem key={staff._id} value={staff._id}>
                                             <div className="flex flex-col text-left">
                                                 <span className="font-semibold">{staff.user?.name || staff.name || "Unknown"}</span>

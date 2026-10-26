@@ -48,8 +48,8 @@ export default function TeamLeaderDashboard() {
   const staff = meData?.staff;
 
   const tasks = tasksData?.data || [];
-  const activeTasks = tasks.filter((t: any) => t.status !== "completed");
-  const underReviewTasks = tasks.filter((t: any) => t.status === "under_review");
+  const activeTasks = tasks.filter((t) => t.status !== "completed");
+  const underReviewTasks = tasks.filter((t) => t.status === "under_review");
   const orders = ordersData?.data || [];
 
   // Salary pin lock state

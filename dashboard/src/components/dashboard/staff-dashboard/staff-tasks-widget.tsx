@@ -18,13 +18,14 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { formatDistanceToNow, isPast } from "date-fns";
+import { orderRefOf } from '@/lib/task-progress';
 
 export function StaffTasksWidget() {
     const { data: tasksRes, isLoading } = useGetMyTasksQuery(undefined);
     const tasks = tasksRes?.data || [];
 
     // Show only incomplete and not-under-review tasks ideally, or all pending tasks
-    const activeTasks = tasks.filter((t: any) => t.status !== "completed");
+    const activeTasks = tasks.filter((t) => t.status !== "completed");
 
     if (isLoading) {
         return (
@@ -88,7 +89,7 @@ export function StaffTasksWidget() {
                     </div>
                 ) : (
                     <div className="divide-y divide-muted/30 border-t border-muted/30">
-                        {activeTasks.slice(0, 4).map((task: any) => {
+                        {activeTasks.slice(0, 4).map((task) => {
                             const dueDate = new Date(task.dueDate);
                             const isOverdue =
                                 isPast(dueDate) &&
@@ -124,15 +125,11 @@ export function StaffTasksWidget() {
                                             <div className="flex items-center gap-1.5 truncate">
                                                 <span className="font-bold text-[10px] text-foreground/60 uppercase">
                                                     #
-                                                    {task.orderId
-                                                        ?.orderNumber || "N/A"}
+                                                    {orderRefOf(task)?.orderNumber || "N/A"}
                                                 </span>
                                                 <span className="truncate font-normal">
                                                     •{" "}
-                                                    {task.orderId
-                                                        ?.quotationSnapshot
-                                                        ?.clientName ||
-                                                        "Dev Task"}
+                                                    {orderRefOf(task)?.quotationSnapshot?.clientName || "Dev Task"}
                                                 </span>
                                             </div>
 

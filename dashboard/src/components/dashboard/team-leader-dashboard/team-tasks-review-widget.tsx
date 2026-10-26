@@ -22,6 +22,7 @@ import { format } from "date-fns";
 import Link from "next/link";
 import { Spinner } from "@/components/ui/spinner";
 import { apiMessage } from '@/lib/api-error';
+import { assigneeOf } from '@/lib/task-progress';
 
 interface TeamTasksReviewWidgetProps {
   tasks: TaskItem[];
@@ -114,7 +115,7 @@ export function TeamTasksReviewWidget({ tasks, isLoading }: TeamTasksReviewWidge
         ) : (
           <div className="space-y-3">
             {reviewTasks.slice(0, 4).map((task) => {
-              const assignee = task.assignedTo as any;
+              const assignee = assigneeOf(task);
               const assigneeName = assignee?.name || assignee?.userId?.name || "Team Member";
               const initials = assigneeName
                 .split(" ")
