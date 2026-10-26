@@ -78,6 +78,10 @@ const envConfig = {
     better_auth_url: process.env.BETTER_AUTH_URL!,
     trusted_origins: process.env.TRUSTED_ORIGINS!,
 
+    // Cloudflare Turnstile (website chat bot check). Mode: off | soft (verify a token when sent) | enforce (token required).
+    turnstile_secret_key: process.env.TURNSTILE_SECRET_KEY || '',
+    turnstile_mode: process.env.TURNSTILE_MODE || (process.env.TURNSTILE_SECRET_KEY ? 'soft' : 'off'),
+
     // client
     client_url: process.env.CLIENT_URL || 'http://localhost:3000',
     // Base URL of the dashboard app, which now hosts the sign-in / sign-up /

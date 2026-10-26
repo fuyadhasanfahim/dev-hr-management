@@ -5,6 +5,7 @@ import { validateRequest } from '../middlewares/validateRequest.js';
 import { CreateTicketFromAIValidation } from '../validators/ticket.validator.js';
 import { isAiActive } from '../services/ai-settings.service.js';
 import { aiChatLimiter, generalPublicLimiter } from '../middlewares/rate-limit.middleware.js';
+import { verifyTurnstile } from '../middlewares/turnstile.middleware.js';
 
 const router = express.Router();
 
@@ -21,7 +22,7 @@ router.get('/status', generalPublicLimiter, async (_req, res) => {
 
 // Optional auth — verified guests/clients are attributed via their session; an
 // unverified visitor may instead supply name + email in the body.
-router.post('/ticket', optionalUnifiedAuth, validateRequest(CreateTicketFromAIValidation), AIChatController.createTicketFromAI);
+router.post('/ticket', optionalUnifiedAuth, verifyTurnstile, validateRequest(CreateTicketFromAIValidation), AIChatController.createTicketFromAI);
 
 // Auth required — connect to live human support
 router.post('/live-support', requireUnifiedAuth, AIChatController.connectLiveSupport);
