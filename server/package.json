@@ -35,7 +35,6 @@
     "dependencies": {
         "@aws-sdk/client-s3": "^3.1048.0",
         "@aws-sdk/s3-request-presigner": "^3.1048.0",
-        "@google/genai": "^2.7.0",
         "@prisma/adapter-pg": "7.10.0",
         "@prisma/client": "7.10.0",
         "@react-email/components": "^1.0.6",
@@ -79,7 +78,6 @@
         "puppeteer@24.42.0": true,
         "protobufjs@7.6.2": true,
         "msgpackr-extract@3.0.3": true,
-        "@google/genai@2.7.0": true,
         "prisma@7.10.0": true,
         "@prisma/engines@7.10.0": true
     }

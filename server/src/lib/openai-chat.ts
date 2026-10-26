@@ -15,7 +15,8 @@ export async function openaiFetch(path: string, body: any) {
     });
     const data: any = await res.json();
     if (!res.ok) {
-        throw new Error(`OpenAI ${path} failed: ${res.status} ${JSON.stringify(data)}`);
+        // `status` lets callers tell a busy/rate-limited API (retryable) from a real failure.
+        throw Object.assign(new Error(`OpenAI ${path} failed: ${res.status} ${JSON.stringify(data)}`), { status: res.status });
     }
     return data;
 }

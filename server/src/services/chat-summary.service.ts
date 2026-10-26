@@ -1,27 +1,13 @@
-import { GoogleGenAI } from '@google/genai';
 import ChatSessionModel from '../models/chat-session.model.js';
 import ChatMessageModel from '../models/chat-message.model.js';
 import { sendMail } from '../lib/nodemailer.js';
 import envConfig from '../config/env.config.js';
 import { isAiActive } from './ai-settings.service.js';
+import { openaiFetch } from '../lib/openai-chat.js';
 import { logger } from '../lib/logger.js';
 
 const SUMMARY_SYSTEM_PROMPT =
     'Summarize this customer support conversation in 3-5 sentences: what the customer needed, what was discussed, and the outcome/resolution. Plain text, no markdown, neutral tone.';
-
-// Lazy Gemini client (mirrors ai-chat.service.ts getAI()).
-let ai: GoogleGenAI | null = null;
-
-function getAI(): GoogleGenAI {
-    if (!ai) {
-        const apiKey = envConfig.gemini_api_key;
-        if (!apiKey) {
-            throw new Error('GEMINI_API_KEY environment variable is not set');
-        }
-        ai = new GoogleGenAI({ apiKey });
-    }
-    return ai;
-}
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -79,18 +65,15 @@ export async function generateChatSummary(transcript: string): Promise<string> {
         if (!transcript.trim()) return 'Summary unavailable.';
         if (!(await isAiActive('chat_summary'))) return 'Summary unavailable.';
 
-        const genAI = getAI();
-        const chat = genAI.chats.create({
-            model: 'gemini-3.5-flash',
-            config: {
-                systemInstruction: SUMMARY_SYSTEM_PROMPT,
-                maxOutputTokens: 256,
-                temperature: 0.3,
-            },
+        const data = await openaiFetch('chat/completions', {
+            model: envConfig.openai_light_model,
+            temperature: 0.3,
+            messages: [
+                { role: 'system', content: SUMMARY_SYSTEM_PROMPT },
+                { role: 'user', content: transcript },
+            ],
         });
-
-        const result = await chat.sendMessage({ message: transcript });
-        const text = (result.text ?? '').trim();
+        const text = String(data.choices?.[0]?.message?.content ?? '').trim();
         return text || 'Summary unavailable.';
     } catch (err: any) {
         logger.error(`[Chat Summary] Failed to generate summary: ${err.message}`);

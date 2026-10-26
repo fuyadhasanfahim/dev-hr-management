@@ -81,9 +81,9 @@ async function chat(req: Request, res: Response) {
 
         return res.status(200).json({ success: true, data: result, conversationId: savedConversationId });
     } catch (err: any) {
-        const geminiStatus = err.status ?? err.statusCode ?? 0;
-        logger.error(`AI Chat error: [status=${geminiStatus}] ${err.message} ${err.stack ?? ''}`);
-        const isTransient = [429, 500, 502, 503, 504].includes(geminiStatus)
+        const aiStatus = err.status ?? err.statusCode ?? 0;
+        logger.error(`AI Chat error: [status=${aiStatus}] ${err.message} ${err.stack ?? ''}`);
+        const isTransient = [429, 500, 502, 503, 504].includes(aiStatus)
             || /UNAVAILABLE|RESOURCE_EXHAUSTED|high demand|overloaded|quota|INTERNAL|rate.limit|capacity/i.test(err.message)
             || err.name === 'APIConnectionError'
             || err.name === 'APIConnectionTimeoutError';

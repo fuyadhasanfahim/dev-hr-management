@@ -8,7 +8,7 @@ import { aiChatLimiter, generalPublicLimiter } from '../middlewares/rate-limit.m
 
 const router = express.Router();
 
-// Public endpoint — no auth required for basic AI chat (rate-limited: Gemini cost)
+// Public endpoint — no auth required for basic AI chat (rate-limited: OpenAI cost)
 router.post('/chat', aiChatLimiter, AIChatController.chat);
 
 // Public endpoint — get info about Web Briks services
