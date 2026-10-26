@@ -16,7 +16,38 @@ export type TicketCategory =
     | 'billing'
     | 'bug';
 
-export type TicketSource = 'direct' | 'ai_chat' | 'live_chat';
+export type TicketSource = 'direct' | 'ai_chat' | 'live_chat' | 'whatsapp';
+
+// Where the conversation happens: WhatsApp, or the website (live chat, AI widget, direct).
+export type TicketChannel = 'whatsapp' | 'web';
+
+// The person behind a ticket, shared by their WhatsApp chats, live chats and tickets.
+export interface TicketContact {
+    _id: string;
+    name?: string;
+    phones: string[];
+    emails: string[];
+    whatsappPhone?: string;
+    clientId?: string;
+    leadId?: string;
+}
+
+export interface ContactDetail {
+    contact: TicketContact;
+    tickets: {
+        _id: string;
+        ticketId: string;
+        subject: string;
+        status: TicketStatus;
+        source?: TicketSource;
+        channel?: TicketChannel;
+        updatedAt: string;
+    }[];
+    whatsappChats: { _id: string; customerPhone: string; status: string; lastMessageAt: string; linkedTicketId?: string }[];
+    liveChats: { _id: string; sessionId: string; status: string; createdAt: string; linkedTicketId?: string }[];
+    client: { _id: string; name: string } | null;
+    lead: { _id: string; name: string; status: string } | null;
+}
 
 export interface TicketUser {
     _id: string;
@@ -36,6 +67,12 @@ export interface Ticket {
     guestId?: TicketUser | null;
     visitorName?: string;
     visitorEmail?: string;
+    visitorPhone?: string;
+    visitorIsWhatsapp?: boolean;
+    whatsappPhone?: string;
+    channel?: TicketChannel;
+    contactId?: TicketContact | null;
+    chatSessionId?: { _id: string; sessionId: string; status: string } | null;
     assignedTo?: TicketUser | null;
     tags: string[];
     attachments: string[];
@@ -137,6 +174,10 @@ export const ticketApi = baseApi.injectEndpoints({
                 'Tickets',
             ],
         }),
+        getContact: builder.query<ContactDetail, string>({
+            query: (id) => `/support/contacts/${id}`,
+            transformResponse: (res: { data: ContactDetail }) => res.data,
+        }),
         assignTicketToSelf: builder.mutation<Ticket, string>({
             query: (id) => ({
                 url: `/support/tickets/${id}/assign`,
@@ -158,4 +199,5 @@ export const {
     useUpdateTicketStatusMutation,
     useUpdateTicketMutation,
     useAssignTicketToSelfMutation,
+    useGetContactQuery,
 } = ticketApi;

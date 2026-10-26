@@ -8,6 +8,7 @@ import {
     type ChangeEvent,
     type KeyboardEvent,
 } from 'react';
+import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 import {
     Ticket as TicketIcon,
@@ -31,6 +32,9 @@ import {
     Globe,
     Layers,
     ChevronDown,
+    ExternalLink,
+    MessageCircle,
+    Phone,
     User as UserIcon,
 } from 'lucide-react';
 import { format } from 'date-fns';
@@ -58,7 +62,9 @@ import {
     useUpdateTicketStatusMutation,
     useUpdateTicketMutation,
     useAssignTicketToSelfMutation,
+    useGetContactQuery,
     type Ticket,
+    type TicketChannel,
     type TicketReply,
     type TicketStatus,
     type TicketPriority,
@@ -171,7 +177,27 @@ const SOURCE_CONFIG: Record<
     direct: { label: 'Direct', icon: Globe },
     ai_chat: { label: 'AI Chat', icon: Bot },
     live_chat: { label: 'Live Chat', icon: MessageSquare },
+    whatsapp: { label: 'WhatsApp', icon: MessageCircle },
 };
+
+const CHANNEL_FILTERS: { value: TicketChannel | 'all'; label: string }[] = [
+    { value: 'all', label: 'All' },
+    { value: 'whatsapp', label: 'WhatsApp' },
+    { value: 'web', label: 'Website' },
+];
+
+/** Older tickets have no channel yet: WhatsApp ones are 'whatsapp', everything else came through the website. */
+function channelOf(t: Ticket): TicketChannel {
+    return t.channel ?? (t.source === 'whatsapp' ? 'whatsapp' : 'web');
+}
+
+/** The number to reach the customer on, and whether it is a WhatsApp number. */
+function getTicketPhone(t: Ticket): { phone: string; isWhatsapp: boolean } | null {
+    const contact = t.contactId;
+    const phone = t.whatsappPhone || t.visitorPhone || contact?.whatsappPhone || contact?.phones?.[0];
+    if (!phone) return null;
+    return { phone, isWhatsapp: !!(t.whatsappPhone || t.visitorIsWhatsapp || contact?.whatsappPhone) };
+}
 
 const STATUS_FILTERS: { value: TicketStatus | 'all'; label: string }[] = [
     { value: 'all', label: 'All' },
@@ -325,6 +351,83 @@ function SourceLabel({ source }: { source?: TicketSource }) {
     );
 }
 
+function ChannelBadge({ channel }: { channel: TicketChannel }) {
+    const whatsapp = channel === 'whatsapp';
+    return (
+        <span
+            className={cn(
+                'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium',
+                whatsapp
+                    ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
+                    : 'bg-sky-500/15 text-sky-600 dark:text-sky-400 border-sky-500/20',
+            )}
+        >
+            {whatsapp ? <MessageCircle className="size-2.5" /> : <Globe className="size-2.5" />}
+            {whatsapp ? 'WhatsApp' : 'Website'}
+        </span>
+    );
+}
+
+// The same person's other tickets and chats (WhatsApp and website), plus their client / lead record.
+function ContactStrip({ ticket, onOpenTicket }: { ticket: Ticket; onOpenTicket: (id: string) => void }) {
+    const contactId = ticket.contactId?._id;
+    const { data } = useGetContactQuery(contactId!, { skip: !contactId });
+    const sessionId = ticket.chatSessionId?.sessionId;
+    const liveOpen = !!sessionId && ['queued', 'active'].includes(ticket.chatSessionId?.status ?? '');
+    const whatsappChat = data?.whatsappChats.find((c) => c.linkedTicketId === ticket._id) ?? (ticket.source === 'whatsapp' ? data?.whatsappChats[0] : undefined);
+    const others = (data?.tickets ?? []).filter((t) => t._id !== ticket._id).slice(0, 4);
+
+    if (!liveOpen && !whatsappChat && !data?.client && !data?.lead && others.length === 0) return null;
+    return (
+        <div className="flex items-center gap-2 px-5 py-2 border-t border-border/50 flex-wrap text-xs">
+            {liveOpen && (
+                <Button asChild size="sm" className="h-7 gap-1.5">
+                    <Link href={`/live-chat?chat=${sessionId}`}>
+                        <MessageSquare className="size-3.5" />
+                        Open live chat
+                    </Link>
+                </Button>
+            )}
+            {whatsappChat && (
+                <Button asChild size="sm" variant="outline" className="h-7 gap-1.5">
+                    <Link href={`/messages/${whatsappChat._id}`}>
+                        <MessageCircle className="size-3.5 text-emerald-600" />
+                        Open WhatsApp chat
+                    </Link>
+                </Button>
+            )}
+            {data?.client && (
+                <Link href={`/clients/${data.client._id}`} className="inline-flex items-center gap-1 rounded-full bg-violet-500/15 text-violet-600 dark:text-violet-400 px-2 py-0.5 font-medium hover:underline">
+                    <UserCheck className="size-3" />
+                    Client: {data.client.name}
+                </Link>
+            )}
+            {data?.lead && (
+                <Link href="/leads" className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 px-2 py-0.5 font-medium hover:underline">
+                    <ExternalLink className="size-3" />
+                    Lead: {data.lead.name} ({data.lead.status})
+                </Link>
+            )}
+            {others.length > 0 && (
+                <div className="flex items-center gap-1.5 flex-wrap ml-auto text-muted-foreground">
+                    <span>Same person:</span>
+                    {others.map((t) => (
+                        <button
+                            key={t._id}
+                            onClick={() => onOpenTicket(t._id)}
+                            className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 hover:bg-accent hover:text-foreground"
+                            title={t.subject}
+                        >
+                            {t.channel === 'whatsapp' ? <MessageCircle className="size-3 text-emerald-600" /> : <Globe className="size-3" />}
+                            <span className="font-mono">{t.ticketId}</span>
+                        </button>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+}
+
 function TicketSkeleton() {
     return (
         <div className="flex flex-col gap-2 px-4 py-3.5">
@@ -351,6 +454,7 @@ function TicketListItem({
     onSelect: () => void;
 }) {
     const user = getTicketUser(ticket);
+    const phone = getTicketPhone(ticket);
     return (
         <button
             onClick={onSelect}
@@ -374,8 +478,15 @@ function TicketListItem({
                     {ticket.ticketId}
                 </span>
                 <span className="truncate">{user.name}</span>
+                {phone && (
+                    <span className="inline-flex items-center gap-0.5 shrink-0">
+                        {phone.isWhatsapp ? <MessageCircle className="size-3 text-emerald-600" /> : <Phone className="size-3" />}
+                        {phone.phone}
+                    </span>
+                )}
             </div>
             <div className="flex items-center gap-1.5 flex-wrap">
+                <ChannelBadge channel={channelOf(ticket)} />
                 <StatusBadge status={ticket.status} />
                 <PriorityBadge priority={ticket.priority} />
                 <CategoryBadge category={ticket.category} />
@@ -557,6 +668,7 @@ export default function TicketsPage() {
     const [categoryFilter, setCategoryFilter] = useState<TicketCategory | 'all'>(
         'all',
     );
+    const [channelFilter, setChannelFilter] = useState<TicketChannel | 'all'>('all');
     const [searchQuery, setSearchQuery] = useState('');
     const [replyValue, setReplyValue] = useState('');
     const [uploading, setUploading] = useState(false);
@@ -658,20 +770,29 @@ export default function TicketsPage() {
         [ticket, requestPresignedUrl, sendReply],
     );
 
+    const byChannel = channelFilter === 'all' ? tickets : tickets.filter((t) => channelOf(t) === channelFilter);
+    const channelCounts = {
+        all: tickets.length,
+        whatsapp: tickets.filter((t) => channelOf(t) === 'whatsapp').length,
+        web: tickets.filter((t) => channelOf(t) === 'web').length,
+    };
     const filteredTickets = searchQuery
-        ? tickets.filter((t) => {
+        ? byChannel.filter((t) => {
               const user = getTicketUser(t);
+              const phone = getTicketPhone(t)?.phone ?? '';
               const q = searchQuery.toLowerCase();
               return (
                   t.subject.toLowerCase().includes(q) ||
                   t.ticketId.toLowerCase().includes(q) ||
                   user.name.toLowerCase().includes(q) ||
-                  user.email.toLowerCase().includes(q)
+                  user.email.toLowerCase().includes(q) ||
+                  phone.replace(/\D/g, '').includes(q.replace(/\D/g, '') || '\u0000')
               );
           })
-        : tickets;
+        : byChannel;
 
     const ticketUser = ticket ? getTicketUser(ticket) : null;
+    const ticketPhone = ticket ? getTicketPhone(ticket) : null;
     const isClosed = ticket?.status === 'closed';
 
     return (
@@ -696,6 +817,26 @@ export default function TicketsPage() {
                             className="pl-9 h-9"
                         />
                     </div>
+                </div>
+
+                <div className="px-4 pb-1.5">
+                    <Tabs
+                        value={channelFilter}
+                        onValueChange={(v) => setChannelFilter(v as TicketChannel | 'all')}
+                    >
+                        <TabsList className="w-full h-auto gap-1 bg-transparent p-0">
+                            {CHANNEL_FILTERS.map((f) => (
+                                <TabsTrigger
+                                    key={f.value}
+                                    value={f.value}
+                                    className="flex-1 gap-1 text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground border rounded-md"
+                                >
+                                    {f.label}
+                                    <span className="tabular-nums opacity-70">{channelCounts[f.value]}</span>
+                                </TabsTrigger>
+                            ))}
+                        </TabsList>
+                    </Tabs>
                 </div>
 
                 <div className="px-4 pb-1.5">
@@ -810,6 +951,7 @@ export default function TicketsPage() {
                                         <CategoryBadge
                                             category={ticket.category}
                                         />
+                                        <ChannelBadge channel={channelOf(ticket)} />
                                         <SourceLabel
                                             source={ticket.source}
                                         />
@@ -857,6 +999,20 @@ export default function TicketsPage() {
                                                         <Mail className="size-3 shrink-0" />
                                                         no email on file
                                                     </span>
+                                                )}
+                                                {ticketPhone && (
+                                                    <a
+                                                        href={`tel:+${ticketPhone.phone.replace(/\D/g, '')}`}
+                                                        className="flex items-center gap-1 shrink-0 hover:text-foreground transition-colors"
+                                                    >
+                                                        {ticketPhone.isWhatsapp ? (
+                                                            <MessageCircle className="size-3 text-emerald-600" />
+                                                        ) : (
+                                                            <Phone className="size-3" />
+                                                        )}
+                                                        {ticketPhone.phone}
+                                                        {ticketPhone.isWhatsapp && <span className="text-emerald-600">WhatsApp</span>}
+                                                    </a>
                                                 )}
                                                 <span className="flex items-center gap-1 shrink-0">
                                                     <Clock className="size-3" />
@@ -1027,6 +1183,7 @@ export default function TicketsPage() {
                                     </div>
                                 )}
                             </div>
+                            <ContactStrip ticket={ticket} onOpenTicket={handleSelect} />
                         </div>
 
                         {/* Conversation thread */}
