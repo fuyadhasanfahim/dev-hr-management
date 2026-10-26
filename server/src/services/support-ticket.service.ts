@@ -2,6 +2,7 @@ import TicketModel, { TicketCategory } from '../models/ticket.model.js';
 import TicketMessageModel, { MessageSenderModel } from '../models/ticket-message.model.js';
 import { AppError } from '../utils/AppError.js';
 import { Types } from 'mongoose';
+import { notifyTicketCreated } from './ticket-notify.service.js';
 
 interface CreateTicketData {
     subject: string;
@@ -93,6 +94,9 @@ export async function createTicket(data: CreateTicketData): Promise<any> {
     }
 
     await TicketMessageModel.create(msgFields);
+
+    // Tell the customer the ticket number on WhatsApp, with a link to follow it. Not awaited.
+    void notifyTicketCreated(ticket._id);
 
     return ticket;
 }

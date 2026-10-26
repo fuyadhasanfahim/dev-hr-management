@@ -1,4 +1,5 @@
 import { Schema, model, Document, Types } from 'mongoose';
+import { randomBytes } from 'node:crypto';
 
 export enum TicketStatus {
     OPEN           = 'open',
@@ -54,6 +55,8 @@ export interface ITicket extends Document {
     contactId?: Types.ObjectId; // Ref: Contact — the person, across WhatsApp and the website
     channel?: TicketChannel; // Where the conversation happens: WhatsApp or the website
     chatSessionId?: Types.ObjectId; // Ref: ChatSession — set for tickets that are a website live chat
+    publicToken?: string; // Unguessable id in the customer's tracking link (the ticket number alone is guessable)
+    whatsappNotifiedAt?: Date; // When we told the customer their ticket number on WhatsApp
     subject: string;
     status: TicketStatus;
     priority: TicketPriority;
@@ -119,6 +122,14 @@ const ticketSchema = new Schema<ITicket>(
             ref: 'ChatSession',
             index: true,
         },
+        publicToken: {
+            type: String,
+            unique: true,
+            sparse: true,
+        },
+        whatsappNotifiedAt: {
+            type: Date,
+        },
         subject: {
             type: String,
             required: true,
@@ -171,6 +182,7 @@ ticketSchema.index({ status: 1, assignedTo: 1 });
 // Every new ticket gets its channel and, when we can tell who it is, a Contact. Never blocks saving.
 ticketSchema.pre('save', async function () {
     if (!this.isNew) return;
+    this.publicToken ??= randomBytes(18).toString('base64url');
     this.channel ??= channelOfSource(this.source);
     if (!this.contactId) {
         const { contactIdFor, identityOf } = await import('../services/contact.service.js');
