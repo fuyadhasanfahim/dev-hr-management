@@ -28,6 +28,7 @@ export interface IWhatsAppConversation extends Document {
     aiEnabled: boolean;
     aiResumeAt?: Date | null; // When set, AI switches itself back on at this time (agent went quiet).
     linkedTicketId?: Types.ObjectId; // Ref: Ticket — set once escalated
+    contactId?: Types.ObjectId; // Ref: Contact — the person behind this number
     assignedTo?: IWhatsAppAssignee | null;
     assignedAt?: Date | null;
     salesStage?: SalesStage | null; // where the AI's sales flow stands (see lib/sales-flow.ts)
@@ -71,6 +72,11 @@ const whatsAppConversationSchema = new Schema<IWhatsAppConversation>(
             type: Schema.Types.ObjectId,
             ref: 'Ticket',
         },
+        contactId: {
+            type: Schema.Types.ObjectId,
+            ref: 'Contact',
+            index: true,
+        },
         assignedTo: {
             type: new Schema<IWhatsAppAssignee>({ id: { type: String, required: true }, name: String }, { _id: false }),
             default: null,
@@ -102,6 +108,12 @@ const whatsAppConversationSchema = new Schema<IWhatsAppConversation>(
 );
 
 whatsAppConversationSchema.index({ customerPhone: 1, status: 1 });
+
+whatsAppConversationSchema.pre('save', async function () {
+    if (!this.isNew || this.contactId) return;
+    const { contactIdFor } = await import('../services/contact.service.js');
+    this.contactId = await contactIdFor({ name: this.customerName, whatsappPhone: this.customerPhone });
+});
 
 const WhatsAppConversationModel = model<IWhatsAppConversation>('WhatsAppConversation', whatsAppConversationSchema);
 export default WhatsAppConversationModel;
