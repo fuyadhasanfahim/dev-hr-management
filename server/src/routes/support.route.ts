@@ -5,6 +5,7 @@ import KnowledgeBaseController from '../controllers/knowledge-base.controller.js
 import AiLearningController from '../controllers/ai-learning.controller.js';
 import WhatsAppSupportController from '../controllers/whatsapp-support.controller.js';
 import ContactController from '../controllers/contact.controller.js';
+import WebChatController from '../controllers/web-chat.controller.js';
 import { requireAuth, restrictTo } from '../middlewares/auth.middleware.js';
 import { requirePermission } from '../middlewares/require-permission.js';
 import { validateRequest } from '../middlewares/validateRequest.js';
@@ -103,6 +104,9 @@ export async function optionalUnifiedAuth(req: Request, res: Response, next: Nex
             : sessionCookie;
     }
 
+    // A visitor with no token or cookie is simply anonymous: skip the session lookup (it logs a warning each time).
+    if (!req.headers.authorization && !req.headers.cookie) return next();
+
     let authenticated = false;
     try {
         await requireAuth(req, res, () => {
@@ -163,6 +167,9 @@ router.post('/chats/session', generalPublicLimiter, requireUnifiedAuth, SupportC
 
 // Live Support Chat Console Endpoints (for staff dashboard)
 // Static routes must come before :sessionId param routes
+// Website AI chats in the staff inbox, next to WhatsApp (same support.access permission as the WhatsApp inbox).
+router.get('/web-chats', requireUnifiedAuth, supportAccess, WebChatController.list);
+router.get('/web-chats/:conversationId', requireUnifiedAuth, supportAccess, WebChatController.detail);
 router.get('/contacts', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), ContactController.searchContacts);
 router.get('/contacts/:id', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), ContactController.getContact);
 router.get('/chat/sessions/queued', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), SupportController.listQueuedChatSessions);

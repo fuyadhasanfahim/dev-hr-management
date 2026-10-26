@@ -11,6 +11,7 @@ export interface IContact extends Document {
     guestIds: Types.ObjectId[]; // Ref: Guest
     clientId?: Types.ObjectId; // Ref: Client — set when this person is one of our clients.
     leadId?: Types.ObjectId; // Ref: Lead
+    aiMemory?: string; // What the website assistant has learnt about this person (kept across chats).
     lastActivityAt: Date;
     createdAt: Date;
     updatedAt: Date;
@@ -25,6 +26,7 @@ const contactSchema = new Schema<IContact>(
         guestIds: { type: [{ type: Schema.Types.ObjectId, ref: 'Guest' }], default: [], index: true },
         clientId: { type: Schema.Types.ObjectId, ref: 'Client', index: true },
         leadId: { type: Schema.Types.ObjectId, ref: 'Lead', index: true },
+        aiMemory: { type: String, default: '' },
         lastActivityAt: { type: Date, default: Date.now, index: true },
     },
     { timestamps: true },

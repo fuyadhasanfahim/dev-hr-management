@@ -10,7 +10,7 @@ import { verifyTurnstile } from '../middlewares/turnstile.middleware.js';
 const router = express.Router();
 
 // Public endpoint — no auth required for basic AI chat (rate-limited: OpenAI cost)
-router.post('/chat', aiChatLimiter, AIChatController.chat);
+router.post('/chat', aiChatLimiter, optionalUnifiedAuth, AIChatController.chat);
 
 // Public endpoint — get info about Web Briks services
 router.get('/info', generalPublicLimiter, AIChatController.getInfo);
