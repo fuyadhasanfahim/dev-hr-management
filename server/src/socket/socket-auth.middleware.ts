@@ -16,6 +16,28 @@ export async function socketAuthMiddleware(socket: Socket, next: (err?: Error) =
                 : sessionCookie;
         }
 
+        // An explicit guest token wins over a staff cookie. A staff member testing the website widget in a
+        // browser that is also signed in to the dashboard would otherwise chat as Staff, not as the visitor.
+        if (token) {
+            try {
+                const decoded = jwt.verify(token, envConfig.better_auth_secret) as { id: string; role: string };
+                if (decoded.role === 'Guest') {
+                    const guest = await GuestModel.findById(decoded.id);
+                    if (guest) {
+                        socket.data.user = {
+                            id: guest._id.toString(),
+                            name: guest.name,
+                            email: guest.email,
+                            role: 'Guest',
+                        };
+                        return next();
+                    }
+                }
+            } catch {
+                // not a guest token: fall through to the session check
+            }
+        }
+
         const session = await auth.api.getSession({
             headers: socket.handshake.headers,
         });
@@ -40,32 +62,6 @@ export async function socketAuthMiddleware(socket: Socket, next: (err?: Error) =
                 }),
             };
             return next();
-        }
-
-        if (token) {
-            try {
-                const decoded = jwt.verify(token, envConfig.better_auth_secret) as {
-                    id: string;
-                    email: string;
-                    name: string;
-                    role: string;
-                };
-
-                if (decoded.role === 'Guest') {
-                    const guest = await GuestModel.findById(decoded.id);
-                    if (guest) {
-                        socket.data.user = {
-                            id: guest._id.toString(),
-                            name: guest.name,
-                            email: guest.email,
-                            role: 'Guest',
-                        };
-                        return next();
-                    }
-                }
-            } catch (err) {
-                // Ignore and reject
-            }
         }
 
         return next(new Error('Authentication failed: Unauthorized connection.'));
