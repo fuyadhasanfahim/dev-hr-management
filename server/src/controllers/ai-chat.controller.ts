@@ -99,7 +99,7 @@ async function chat(req: Request, res: Response) {
 
 async function createTicketFromAI(req: Request, res: Response) {
     try {
-        const { subject, description, chatHistory, category, name, email } = req.body;
+        const { subject, description, chatHistory, category, name, email, phone, isWhatsapp } = req.body;
 
         if (!subject || !description) {
             return res.status(400).json({ success: false, message: 'Subject and description are required' });
@@ -133,6 +133,11 @@ async function createTicketFromAI(req: Request, res: Response) {
             category: category || 'support',
             source: 'ai_chat',
         };
+        // Phone from the widget form (and whether it is on WhatsApp), kept for the team and for contact matching.
+        if (typeof phone === 'string' && phone.trim()) {
+            ticketArgs.visitorPhone = phone.trim().slice(0, 40);
+            if (typeof isWhatsapp === 'boolean') ticketArgs.visitorIsWhatsapp = isWhatsapp;
+        }
 
         // Identity: a verified session/guest wins; otherwise an unverified visitor
         // must supply name + email, which we attach to a (created-if-needed) guest.

@@ -3,6 +3,7 @@ import emailService from './email.service.js';
 import jwt from 'jsonwebtoken';
 import envConfig from '../config/env.config.js';
 import { AppError } from '../utils/AppError.js';
+import { contactIdFor, identityOf } from './contact.service.js';
 
 const GUEST_JWT_SECRET = envConfig.better_auth_secret;
 
@@ -58,7 +59,11 @@ function issueGuestTokens(guest: IGuest): { accessToken: string; refreshToken: s
  * Request an OTP for guest email verification.
  * Creates a guest profile if one does not exist.
  */
-export async function requestGuestOtp(email: string, name: string): Promise<{ message: string }> {
+export async function requestGuestOtp(
+    email: string,
+    name: string,
+    extra: { phone?: string; isWhatsapp?: boolean } = {},
+): Promise<{ message: string }> {
     if (!email || !name) {
         throw new AppError('Email and name are required', 400);
     }
@@ -70,6 +75,8 @@ export async function requestGuestOtp(email: string, name: string): Promise<{ me
 
     if (guest) {
         guest.name = name;
+        if (extra.phone) guest.phone = extra.phone;
+        if (typeof extra.isWhatsapp === 'boolean') guest.isWhatsapp = extra.isWhatsapp;
         guest.otp = otp;
         guest.otpExpiresAt = otpExpiresAt;
         // A fresh code clears any prior failed-attempt lockout.
@@ -80,6 +87,8 @@ export async function requestGuestOtp(email: string, name: string): Promise<{ me
         guest = await GuestModel.create({
             name,
             email: email.toLowerCase(),
+            phone: extra.phone,
+            isWhatsapp: extra.isWhatsapp,
             otp,
             otpExpiresAt,
             emailVerified: false,
@@ -141,6 +150,9 @@ export async function verifyGuestOtp(
     guest.otpLockedUntil = undefined;
     guest.lastSeenAt = new Date();
     await guest.save();
+
+    // The email is now verified: make sure this person has a Contact (links their WhatsApp number, client and lead).
+    void contactIdFor(identityOf({ guestId: guest._id as any }));
 
     const { accessToken, refreshToken } = issueGuestTokens(guest);
     return { accessToken, refreshToken, guest };

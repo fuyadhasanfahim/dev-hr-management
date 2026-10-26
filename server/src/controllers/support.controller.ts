@@ -20,8 +20,11 @@ function emitSessionStateChange(type: string, sessionId: string) {
  */
 async function requestGuestOtp(req: Request, res: Response) {
     try {
-        const { email, name } = req.body;
-        const result = await guestAuthService.requestGuestOtp(email, name);
+        const { email, name, phone, isWhatsapp } = req.body;
+        const result = await guestAuthService.requestGuestOtp(email, name, {
+            phone: typeof phone === 'string' && phone.trim() ? phone.trim().slice(0, 40) : undefined,
+            isWhatsapp: typeof isWhatsapp === 'boolean' ? isWhatsapp : undefined,
+        });
         return res.status(200).json({ success: true, data: result });
     } catch (err: any) {
         return res.status(err.statusCode || 400).json({ success: false, message: err.message });

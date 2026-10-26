@@ -4,6 +4,8 @@ export interface IGuest extends Document {
     name: string;
     email: string;
     emailVerified: boolean;
+    phone?: string; // Given on the website chat form.
+    isWhatsapp?: boolean; // Whether that number is on WhatsApp.
     otp?: string;
     otpExpiresAt?: Date;
     otpAttempts: number;
@@ -33,6 +35,13 @@ const guestSchema = new Schema<IGuest>(
         emailVerified: {
             type: Boolean,
             default: false,
+        },
+        phone: {
+            type: String,
+            trim: true,
+        },
+        isWhatsapp: {
+            type: Boolean,
         },
         otp: {
             type: String,

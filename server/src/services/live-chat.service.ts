@@ -4,6 +4,10 @@ import TicketModel from '../models/ticket.model.js';
 import TicketMessageModel, { MessageSenderModel } from '../models/ticket-message.model.js';
 import { addToChatQueue, removeFromChatQueue } from './redis-queue.service.js';
 import { AppError } from '../utils/AppError.js';
+import GuestModel from '../models/guest.model.js';
+import ClientModel from '../models/client.model.js';
+import { createTicket } from './support-ticket.service.js';
+import { logger } from '../lib/logger.js';
 import crypto from 'crypto';
 import { Types } from 'mongoose';
 
@@ -17,6 +21,13 @@ export async function createChatSession({
     clientId?: string;
     guestId?: string;
 }): Promise<any> {
+    // A visitor who comes back (or clicks "connect" twice) rejoins their open chat instead of starting another one.
+    const owner = guestId ? { guestId: new Types.ObjectId(guestId) } : clientId ? { clientId: new Types.ObjectId(clientId) } : null;
+    if (owner) {
+        const open = await ChatSessionModel.findOne({ ...owner, status: { $in: ['queued', 'active'] } }).sort({ createdAt: -1 });
+        if (open) return open;
+    }
+
     const sessionId = crypto.randomUUID();
 
     const sessionFields: any = {
@@ -35,7 +46,34 @@ export async function createChatSession({
 
     await addToChatQueue(sessionId);
 
+    // Every live chat is a ticket too, so it shows up in Tickets next to WhatsApp ones. Best effort.
+    try {
+        await createChatTicket(session);
+    } catch (err: any) {
+        logger.error(`[live chat] could not create the ticket for session ${sessionId}: ${err.message}`);
+    }
+
     return session;
+}
+
+/** The ticket that stands for a live chat: who started it, their number, and a link back to the session. */
+async function createChatTicket(session: any): Promise<void> {
+    const guest: any = session.guestId ? await GuestModel.findById(session.guestId).select('name email phone isWhatsapp').lean() : null;
+    const client: any = session.clientId ? await ClientModel.findById(session.clientId).select('name emails phone').lean() : null;
+    const name = guest?.name ?? client?.name ?? 'a visitor';
+    await createTicket({
+        subject: `Live chat with ${name}`,
+        text: 'Started a live chat from the website.',
+        source: 'live_chat',
+        category: 'support',
+        clientId: session.clientId?.toString(),
+        guestId: session.guestId?.toString(),
+        visitorName: guest?.name ?? client?.name,
+        visitorEmail: guest?.email ?? client?.emails?.[0],
+        visitorPhone: guest?.phone ?? client?.phone,
+        visitorIsWhatsapp: guest?.isWhatsapp,
+        chatSessionId: session._id.toString(),
+    });
 }
 
 /**
@@ -147,7 +185,20 @@ export async function convertChatToTicket(
         ticketFields.assignedTo = session.assignedAgent;
     }
 
-    const ticket = await TicketModel.create(ticketFields) as any;
+    // The chat already has its own ticket (created when the chat started): turn that one into the conversion
+    // ticket instead of making a second. Older chats have none, so those still create a fresh ticket.
+    let ticket: any = await TicketModel.findOne({ chatSessionId: session._id });
+    if (ticket) {
+        ticket.subject = ticketSubject;
+        ticket.category = ticketFields.category;
+        ticket.attachments = allChatAttachments;
+        ticket.tags = [...new Set([...(ticket.tags ?? []), 'Live Chat Converted'])];
+        if (ticketFields.assignedTo) ticket.assignedTo = ticketFields.assignedTo;
+        if (ticket.status === 'resolved' || ticket.status === 'closed') ticket.status = 'open';
+        await ticket.save();
+    } else {
+        ticket = await TicketModel.create({ ...ticketFields, chatSessionId: session._id });
+    }
 
     const senderModel = session.clientId ? MessageSenderModel.CLIENT : MessageSenderModel.GUEST;
     const senderId = session.clientId ? session.clientId : session.guestId;

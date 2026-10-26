@@ -15,6 +15,9 @@ interface CreateTicketData {
     visitorName?: string;  // Snapshot of submitter identity
     visitorEmail?: string;
     whatsappPhone?: string; // Set when source is 'whatsapp'
+    visitorPhone?: string; // Phone the visitor gave
+    visitorIsWhatsapp?: boolean; // ...and whether it is on WhatsApp
+    chatSessionId?: string; // Set when the ticket is a website live chat
     assignedTo?: string;   // Pre-assign (e.g. carry over from live-chat)
 }
 
@@ -58,6 +61,13 @@ export async function createTicket(data: CreateTicketData): Promise<any> {
     }
     if (data.whatsappPhone) {
         ticketFields.whatsappPhone = data.whatsappPhone;
+    }
+    if (data.visitorPhone) {
+        ticketFields.visitorPhone = data.visitorPhone;
+        if (typeof data.visitorIsWhatsapp === 'boolean') ticketFields.visitorIsWhatsapp = data.visitorIsWhatsapp;
+    }
+    if (data.chatSessionId) {
+        ticketFields.chatSessionId = new Types.ObjectId(data.chatSessionId);
     }
     if (data.assignedTo) {
         ticketFields.assignedTo = new Types.ObjectId(data.assignedTo);
@@ -108,6 +118,8 @@ export async function listTickets(filters: {
         .populate('clientId', 'name email')
         .populate('guestId', 'name email')
         .populate('assignedTo', 'name email')
+        .populate('contactId', 'name phones emails whatsappPhone clientId leadId')
+        .populate('chatSessionId', 'sessionId status')
         .sort({ updatedAt: -1 });
 }
 
@@ -118,7 +130,9 @@ export async function getTicketDetails(ticketId: string, user: { id: string; rol
     const ticket = await TicketModel.findById(ticketId)
         .populate('clientId', 'name email')
         .populate('guestId', 'name email')
-        .populate('assignedTo', 'name email') as any;
+        .populate('assignedTo', 'name email')
+        .populate('contactId', 'name phones emails whatsappPhone clientId leadId')
+        .populate('chatSessionId', 'sessionId status') as any;
 
     if (!ticket) {
         throw new AppError('Ticket not found', 404);

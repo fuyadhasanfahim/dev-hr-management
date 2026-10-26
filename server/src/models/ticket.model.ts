@@ -30,6 +30,15 @@ export enum TicketSource {
     WHATSAPP  = 'whatsapp',
 }
 
+// The two places customers reach us. Derived from `source`: WhatsApp tickets are 'whatsapp', everything else is 'web'.
+export enum TicketChannel {
+    WHATSAPP = 'whatsapp',
+    WEB      = 'web',
+}
+
+export const channelOfSource = (source?: string): TicketChannel =>
+    source === TicketSource.WHATSAPP ? TicketChannel.WHATSAPP : TicketChannel.WEB;
+
 export interface ITicket extends Document {
     ticketId: string;
     clientId?: Types.ObjectId; // Ref: Client
@@ -40,6 +49,11 @@ export interface ITicket extends Document {
     visitorName?: string;
     visitorEmail?: string;
     whatsappPhone?: string; // Set when source is 'whatsapp' — where agent replies get sent
+    visitorPhone?: string; // Phone number the visitor gave (website chat / widget ticket)
+    visitorIsWhatsapp?: boolean; // Whether that number is on WhatsApp
+    contactId?: Types.ObjectId; // Ref: Contact — the person, across WhatsApp and the website
+    channel?: TicketChannel; // Where the conversation happens: WhatsApp or the website
+    chatSessionId?: Types.ObjectId; // Ref: ChatSession — set for tickets that are a website live chat
     subject: string;
     status: TicketStatus;
     priority: TicketPriority;
@@ -82,6 +96,28 @@ const ticketSchema = new Schema<ITicket>(
         whatsappPhone: {
             type: String,
             trim: true,
+        },
+        visitorPhone: {
+            type: String,
+            trim: true,
+        },
+        visitorIsWhatsapp: {
+            type: Boolean,
+        },
+        contactId: {
+            type: Schema.Types.ObjectId,
+            ref: 'Contact',
+            index: true,
+        },
+        channel: {
+            type: String,
+            enum: Object.values(TicketChannel),
+            index: true,
+        },
+        chatSessionId: {
+            type: Schema.Types.ObjectId,
+            ref: 'ChatSession',
+            index: true,
         },
         subject: {
             type: String,
@@ -131,6 +167,16 @@ const ticketSchema = new Schema<ITicket>(
 );
 
 ticketSchema.index({ status: 1, assignedTo: 1 });
+
+// Every new ticket gets its channel and, when we can tell who it is, a Contact. Never blocks saving.
+ticketSchema.pre('save', async function () {
+    if (!this.isNew) return;
+    this.channel ??= channelOfSource(this.source);
+    if (!this.contactId) {
+        const { contactIdFor, identityOf } = await import('../services/contact.service.js');
+        this.contactId = await contactIdFor(identityOf(this));
+    }
+});
 
 const TicketModel = model<ITicket>('Ticket', ticketSchema);
 export default TicketModel;

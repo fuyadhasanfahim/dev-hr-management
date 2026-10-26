@@ -11,7 +11,6 @@ import {
     Bot,
     Library,
     MessageCircle,
-    MessageSquare,
     Search,
     Settings,
     Target,
@@ -59,7 +58,6 @@ const NAV_GROUPS: NavGroup[] = [
         icon: Inbox,
         items: [
             { title: 'Messages', url: '/messages', icon: MessageCircle, permission: 'support.access' },
-            { title: 'Live Chat', url: '/live-chat', icon: MessageSquare },
             { title: 'Tickets', url: '/tickets', icon: Ticket },
         ],
     },
@@ -100,8 +98,8 @@ export function NavMain() {
     const { state } = useSidebar();
     const { liveChatCount, ticketCount, messagesUnreadCount } = useLiveCounts();
     const badgeByUrl: Record<string, number> = {
-        '/live-chat': liveChatCount,
-        '/tickets': ticketCount,
+        // Live chats are tickets now: a waiting chat counts on Tickets.
+        '/tickets': ticketCount + liveChatCount,
         '/messages': messagesUnreadCount,
     };
 
