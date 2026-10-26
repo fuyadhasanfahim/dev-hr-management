@@ -9,6 +9,7 @@ import {
     Inbox,
     LayoutDashboard,
     Bot,
+    Globe,
     Library,
     MessageCircle,
     Search,
@@ -58,6 +59,7 @@ const NAV_GROUPS: NavGroup[] = [
         icon: Inbox,
         items: [
             { title: 'Messages', url: '/messages', icon: MessageCircle, permission: 'support.access' },
+            { title: 'Website Chats', url: '/website-chats', icon: Globe, permission: 'support.access' },
             { title: 'Tickets', url: '/tickets', icon: Ticket },
         ],
     },

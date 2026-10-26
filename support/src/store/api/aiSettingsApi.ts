@@ -24,6 +24,7 @@ export interface AiSettings {
     masterMode: 'on' | 'off';
     timezone: string;
     features: Record<AiFeature, { enabled: boolean }>;
+    web: { createTickets: boolean; remember: boolean };
     autoResume: { enabled: boolean; minutes: number };
     pauseOnAgentReply: boolean;
     schedules: AiSchedule[];
@@ -47,6 +48,7 @@ export type AiSettingsPatch = Partial<{
     masterMode: 'on' | 'off';
     timezone: string;
     features: Partial<Record<AiFeature, { enabled: boolean }>>;
+    web: Partial<{ createTickets: boolean; remember: boolean }>;
     autoResume: Partial<{ enabled: boolean; minutes: number }>;
     pauseOnAgentReply: boolean;
     schedules: AiSchedule[];
