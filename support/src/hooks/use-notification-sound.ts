@@ -1,18 +1,27 @@
 'use client';
 
-import { useRef, useCallback, useEffect, useState } from 'react';
+import { useRef, useCallback, useEffect, useSyncExternalStore } from 'react';
 
 const STORAGE_KEY = 'support-notification-sound';
+const CHANGED = 'support-notification-sound-changed';
+
+// The on/off switch lives in localStorage so it survives reloads and is shared by every component using the hook.
+function subscribe(onChange: () => void) {
+    window.addEventListener(CHANGED, onChange);
+    window.addEventListener('storage', onChange);
+    return () => {
+        window.removeEventListener(CHANGED, onChange);
+        window.removeEventListener('storage', onChange);
+    };
+}
+const readEnabled = () => localStorage.getItem(STORAGE_KEY) !== 'false';
 
 export function useNotificationSound() {
     const audioRef = useRef<HTMLAudioElement | null>(null);
-    const [enabled, setEnabled] = useState(true);
+    const enabled = useSyncExternalStore(subscribe, readEnabled, () => true);
     const isPageVisible = useRef(true);
 
     useEffect(() => {
-        const stored = localStorage.getItem(STORAGE_KEY);
-        if (stored !== null) setEnabled(stored === 'true');
-
         audioRef.current = new Audio('/sounds/message.wav');
         audioRef.current.volume = 1;
 
@@ -30,11 +39,8 @@ export function useNotificationSound() {
     }, [enabled]);
 
     const toggleSound = useCallback(() => {
-        setEnabled((prev) => {
-            const next = !prev;
-            localStorage.setItem(STORAGE_KEY, String(next));
-            return next;
-        });
+        localStorage.setItem(STORAGE_KEY, String(!readEnabled()));
+        window.dispatchEvent(new Event(CHANGED));
     }, []);
 
     return { playSound, enabled, toggleSound, isPageVisible };

@@ -17,7 +17,11 @@ export function useUrlState(defaults: Record<string, string> = {}) {
     // switching a tab never waits on a server round trip; the router's value only re-seeds it when the URL changes
     // from outside (back/forward, a sidebar link, a shared link).
     const [query, setQuery] = useState(routerQuery);
-    useEffect(() => setQuery(routerQuery), [routerQuery]);
+    const [seenRouterQuery, setSeenRouterQuery] = useState(routerQuery);
+    if (routerQuery !== seenRouterQuery) {
+        setSeenRouterQuery(routerQuery);
+        setQuery(routerQuery);
+    }
 
     const get = useCallback((key: string) => new URLSearchParams(query).get(key) ?? defaults[key] ?? '', [query, defaults]);
 

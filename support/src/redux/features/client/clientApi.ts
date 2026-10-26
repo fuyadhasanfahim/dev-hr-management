@@ -111,7 +111,7 @@ export const clientApi = apiSlice.injectEndpoints({
             transformResponse: (response: { data: { nextClientId: string } }) => response.data,
             providesTags: ['Client'],
         }),
-        migrateClientIds: builder.mutation<{ message?: string; updatedCount: number; mappings: any[] }, void>({
+        migrateClientIds: builder.mutation<{ message?: string; updatedCount: number; mappings: unknown[] }, void>({
             query: () => ({
                 url: '/clients/migrate-ids',
                 method: 'POST',

@@ -8,7 +8,6 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { StatCard } from '@/components/dashboard/stat-card';
 import {
     useGetDashboardStatsQuery,
-    type DashboardStats,
     type ActivityItem,
 } from '@/store/api/chatApi';
 

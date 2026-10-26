@@ -41,11 +41,13 @@ export function DateTimePicker({
         value ? format(value, 'HH:mm') : '12:00',
     );
 
-    React.useEffect(() => {
-        if (value) {
-            setTime(format(value, 'HH:mm'));
-        }
-    }, [value]);
+    // Follow the picked date's time of day when the value is set from outside.
+    const valueTime = value ? format(value, 'HH:mm') : null;
+    const [seenValueTime, setSeenValueTime] = React.useState(valueTime);
+    if (valueTime !== seenValueTime) {
+        setSeenValueTime(valueTime);
+        if (valueTime) setTime(valueTime);
+    }
 
     const handleDateSelect = (selectedDate: Date | undefined) => {
         if (selectedDate) {

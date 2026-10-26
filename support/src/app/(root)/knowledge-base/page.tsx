@@ -1,13 +1,13 @@
 'use client';
 
-import { Suspense, useEffect, useState, type FormEvent } from 'react';
+import { Suspense, useState, type FormEvent } from 'react';
+import { apiMessage } from '@/lib/api-error';
 import {
     BookOpen,
     Eye,
     Loader2,
     Pencil,
     Plus,
-    Search,
     Trash2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -108,11 +108,13 @@ function EntryFormDialog({
 
     // Re-seed the form whenever a different entry is opened for editing (or
     // the dialog opens fresh for a new one).
-    useEffect(() => {
+    const [seen, setSeen] = useState({ editing, open, initialText });
+    if (seen.editing !== editing || seen.open !== open || seen.initialText !== initialText) {
+        setSeen({ editing, open, initialText });
         setText(editing?.text ?? initialText ?? '');
         setCategory(editing?.source ?? '');
         setError(null);
-    }, [editing, open, initialText]);
+    }
 
     const handleSubmit = async (e: FormEvent) => {
         e.preventDefault();
@@ -122,9 +124,7 @@ function EntryFormDialog({
             ? await updateChunk({ id: editing.id, text: text.trim(), source: category.trim() || undefined })
             : await createChunk({ text: text.trim(), source: category.trim() || undefined });
         if ('error' in result) {
-            const message =
-                (result.error as any)?.data?.message || 'Something went wrong — please try again.';
-            setError(message);
+            setError(apiMessage(result.error, 'Something went wrong — please try again.'));
             return;
         }
         onOpenChange(false);

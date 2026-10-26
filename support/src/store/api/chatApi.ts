@@ -159,7 +159,7 @@ export const chatApi = baseApi.injectEndpoints({
             transformResponse: (res: { data: ChatSession }) => res.data,
             invalidatesTags: ['ActiveSessions'],
         }),
-        createMeeting: builder.mutation<any, {
+        createMeeting: builder.mutation<unknown, {
             meetingTitle: string;
             scheduledAt: string;
             durationMinutes: number;
@@ -173,7 +173,7 @@ export const chatApi = baseApi.injectEndpoints({
                 method: 'POST',
                 body,
             }),
-            transformResponse: (res: { data: any }) => res.data,
+            transformResponse: (res: { data: unknown }) => res.data,
             invalidatesTags: ['ClientMeetings'],
         }),
         getClientMeetings: builder.query<Meeting[], string>({
