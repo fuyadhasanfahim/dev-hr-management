@@ -1,5 +1,5 @@
 import ChatSessionModel from '../models/chat-session.model.js';
-import ChatMessageModel from '../models/chat-message.model.js';
+import ChatMessageModel, { ChatSenderModel } from '../models/chat-message.model.js';
 import TicketModel from '../models/ticket.model.js';
 import TicketMessageModel, { MessageSenderModel } from '../models/ticket-message.model.js';
 import { addToChatQueue, removeFromChatQueue } from './redis-queue.service.js';
@@ -7,6 +7,19 @@ import { AppError } from '../utils/AppError.js';
 import GuestModel from '../models/guest.model.js';
 import ClientModel from '../models/client.model.js';
 import { createTicket } from './support-ticket.service.js';
+import { normalizePhone } from './contact.service.js';
+import { findOrCreateConversation } from './whatsapp-support.service.js';
+import { insideFreeTextWindow } from './ticket-notify.service.js';
+import * as whatsappService from './whatsapp.service.js';
+import WhatsAppConversationModel from '../models/whatsapp-conversation.model.js';
+import WhatsAppMessageModel, {
+    WhatsAppMessageDirection,
+    WhatsAppMessageSender,
+    WhatsAppMessageStatus,
+    WhatsAppMessageType,
+} from '../models/whatsapp-message.model.js';
+import envConfig from '../config/env.config.js';
+import { getSupportNamespace } from '../socket/support.namespace.js';
 import { logger } from '../lib/logger.js';
 import crypto from 'crypto';
 import { Types } from 'mongoose';
@@ -22,10 +35,19 @@ export async function createChatSession({
     guestId?: string;
 }): Promise<any> {
     // A visitor who comes back (or clicks "connect" twice) rejoins their open chat instead of starting another one.
+    // One conversation per visitor, like one WhatsApp thread per number: a returning visitor picks their latest chat
+    // up again (even one that was ended or turned into a ticket) instead of getting a second row in the inbox.
     const owner = guestId ? { guestId: new Types.ObjectId(guestId) } : clientId ? { clientId: new Types.ObjectId(clientId) } : null;
     if (owner) {
-        const open = await ChatSessionModel.findOne({ ...owner, status: { $in: ['queued', 'active'] } }).sort({ createdAt: -1 });
-        if (open) return open;
+        const prior: any = await ChatSessionModel.findOne({ ...owner, handedOffToWhatsApp: { $ne: true } }).sort({ updatedAt: -1 });
+        if (prior) {
+            if (prior.status === 'queued' || prior.status === 'active') return prior;
+            prior.status = prior.assignedAgent ? 'active' : 'queued';
+            await prior.save();
+            if (prior.status === 'queued') await addToChatQueue(prior.sessionId);
+            await TicketModel.updateOne({ chatSessionId: prior._id, status: { $in: ['resolved', 'closed'] } }, { $set: { status: 'open' } });
+            return prior;
+        }
     }
 
     const sessionId = crypto.randomUUID();
@@ -225,6 +247,97 @@ export async function convertChatToTicket(
     return { ticketId: ticket.ticketId };
 }
 
+const BENGALI = /[ঀ-৿]/;
+
+/**
+ * The team moves a website chat to WhatsApp: the visitor gets a WhatsApp message (free text inside the 24h window,
+ * otherwise the approved hand-off template), the chat turns into a WhatsApp conversation assigned to the agent, and
+ * the website chat becomes read-only with a note telling the visitor to continue on WhatsApp.
+ */
+export async function handOffToWhatsApp(sessionId: string, agent: { id: string; name: string }): Promise<{ conversationId: string }> {
+    const session: any = await ChatSessionModel.findOne({ sessionId });
+    if (!session) throw new AppError('Chat session not found', 404);
+    if (session.handedOffToWhatsApp && session.whatsappConversationId) {
+        return { conversationId: String(session.whatsappConversationId) };
+    }
+    if (!envConfig.meta_access_token || !envConfig.whatsapp_phone_number_id) throw new AppError('WhatsApp is not set up', 400);
+
+    const guest: any = session.guestId ? await GuestModel.findById(session.guestId).select('name phone').lean() : null;
+    const client: any = session.clientId ? await ClientModel.findById(session.clientId).select('name phone').lean() : null;
+    const phone = normalizePhone(guest?.phone ?? client?.phone);
+    if (!phone) throw new AppError('This visitor did not leave a phone number', 400);
+    const name: string = guest?.name ?? client?.name ?? '';
+    const first = name.trim().split(/\s+/)[0] || 'there';
+
+    const recent = await ChatMessageModel.find({ sessionId: session._id }).sort({ createdAt: -1 }).limit(10).select('content').lean();
+    const bengali = BENGALI.test(`${name} ${recent.map((m: any) => m.content).join(' ')}`);
+
+    const conversation: any = await findOrCreateConversation(phone, name || undefined);
+    let body: string;
+    let messageId: string;
+    try {
+        if (await insideFreeTextWindow(conversation._id)) {
+            body = bengali
+                ? `${first}, আমাদের ওয়েবসাইটের চ্যাট এখন থেকে আমরা এই WhatsApp-এ চালিয়ে যাব। আপনি এখানেই লিখুন, আমরা দেখছি।`
+                : `Hi ${first}, we're continuing your website chat here on WhatsApp. Just reply here and we'll pick it up right away.`;
+            messageId = await whatsappService.sendTextMessage(phone, body);
+        } else {
+            body = bengali
+                ? `${first}, আমাদের ওয়েবসাইটের চ্যাট এখন থেকে আমরা এই WhatsApp-এ চালিয়ে যাব। আপনি এখানেই লিখুন।`
+                : `Hi ${first}, we're continuing your website chat here on WhatsApp. Reply here and we'll pick it up right away.`;
+            messageId = await whatsappService.sendTemplateMessage(
+                phone,
+                bengali ? envConfig.wa_template_handoff_bn : envConfig.wa_template_handoff_en,
+                bengali ? 'bn' : 'en',
+                [first],
+            );
+        }
+    } catch (err: any) {
+        logger.warn(`[live chat] hand-off message failed for ${sessionId}: ${err.message}`);
+        throw new AppError(`Could not send the WhatsApp message: ${err.message}`, 502);
+    }
+
+    await WhatsAppMessageModel.create({
+        conversationId: conversation._id,
+        direction: WhatsAppMessageDirection.OUTBOUND,
+        sender: WhatsAppMessageSender.AGENT,
+        type: WhatsAppMessageType.TEXT,
+        body,
+        whatsappMsgId: messageId || `handoff:${session._id}`,
+        status: WhatsAppMessageStatus.SENT,
+    });
+    const ticket: any = await TicketModel.findOne({ chatSessionId: session._id }).select('_id');
+    await WhatsAppConversationModel.updateOne(
+        { _id: conversation._id },
+        { $set: { lastMessageAt: new Date(), assignedTo: { id: agent.id, name: agent.name }, assignedAt: new Date(), ...(ticket ? { linkedTicketId: ticket._id } : {}) } },
+    );
+    if (ticket) await TicketModel.updateOne({ _id: ticket._id }, { $set: { whatsappPhone: phone } });
+
+    session.handedOffToWhatsApp = true;
+    session.whatsappConversationId = conversation._id;
+    await session.save();
+    await removeFromChatQueue(sessionId);
+
+    // Tell the visitor in the widget, and everyone watching the chat.
+    const note = await ChatMessageModel.create({
+        sessionId: session._id,
+        sender: new Types.ObjectId(agent.id),
+        senderModel: ChatSenderModel.SYSTEM,
+        senderName: 'System',
+        content: bengali
+            ? 'আমরা এই কথোপকথন WhatsApp-এ চালিয়ে যাচ্ছি। আপনার WhatsApp দেখুন।'
+            : 'We are continuing this conversation on WhatsApp. Please check your WhatsApp.',
+        attachments: [],
+    });
+    const ns = getSupportNamespace();
+    ns?.to(sessionId).emit('chat:message', note);
+    ns?.to(sessionId).emit('chat:handoff', { sessionId });
+    ns?.to('agents_presence').emit('session:state_change', { type: 'handoff', sessionId });
+    ns?.to('agents_presence').emit('whatsapp:conversation_updated', { conversationId: String(conversation._id) });
+
+    return { conversationId: String(conversation._id) };
+}
+
 /**
  * Closes/Ends a support chat session.
  */
@@ -293,6 +406,7 @@ export default {
     assignAgentToSession,
     convertChatToTicket,
     endChatSession,
+    handOffToWhatsApp,
     reassignSession,
     getUnreadCountsForAgent,
 };

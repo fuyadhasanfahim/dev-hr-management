@@ -166,6 +166,9 @@ const envConfig = {
     /** Approved templates that tell a customer their ticket was raised (English / Bengali), each with a "Track ticket" URL button. */
     wa_template_ticket_en: process.env.WA_TEMPLATE_TICKET_EN || 'ticket_created_en',
     wa_template_ticket_bn: process.env.WA_TEMPLATE_TICKET_BN || 'ticket_created_bn',
+    // Sent when the team moves a website chat to WhatsApp (outside the 24h window only a template can start it).
+    wa_template_handoff_en: process.env.WA_TEMPLATE_HANDOFF_EN || 'web_chat_handoff_en',
+    wa_template_handoff_bn: process.env.WA_TEMPLATE_HANDOFF_BN || 'web_chat_handoff_bn',
     /** Public site that hosts the ticket status page: <base>/ticket/<token>. Must match the URL base of the approved templates. */
     ticket_link_base: (process.env.TICKET_LINK_BASE || 'https://webbriks.com').replace(/\/+$/, ''),
 

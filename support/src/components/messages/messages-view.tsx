@@ -70,6 +70,9 @@ import { CustomerAvatar } from '@/components/messages/customer-avatar';
 import { ConversationInfoPanel } from '@/components/messages/conversation-info-panel';
 import { MediaLightbox } from '@/components/messages/media-lightbox';
 import { WebChatThread } from '@/components/messages/web-chat-thread';
+import { WebChatInfoPanel } from '@/components/messages/web-chat-info-panel';
+import { WhatsAppHandoffDialog } from '@/components/messages/whatsapp-handoff-dialog';
+import { GROUP_WINDOW_MS, bubbleCorners, bubbleSpring, dateLabel, formatTime } from '@/components/messages/thread-utils';
 import { CreateTicketDialog } from '@/components/messages/create-ticket-dialog';
 import { useGetWebInboxQuery, type WebInboxChat } from '@/store/api/chatApi';
 import { DeleteMessageDialog, EditMessageDialog, MessageMenu } from '@/components/messages/message-actions';
@@ -97,16 +100,6 @@ import {
     type WhatsAppMessageStatus,
 } from '@/store/api/whatsappApi';
 
-// Messages from the same sender closer together than this stack as one group.
-const GROUP_WINDOW_MS = 5 * 60 * 1000;
-
-// A quick, slightly springy "pop" from the sender's side — iMessage-like.
-const bubbleSpring = { type: 'spring', stiffness: 520, damping: 34, mass: 0.7 } as const;
-
-function formatTime(iso: string): string {
-    return new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-}
-
 function formatListTime(iso: string): string {
     const date = new Date(iso);
     const now = new Date();
@@ -118,15 +111,6 @@ function formatListTime(iso: string): string {
     return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
 }
 
-function dateLabel(iso: string): string {
-    const date = new Date(iso);
-    const now = new Date();
-    if (date.toDateString() === now.toDateString()) return 'Today';
-    const yesterday = new Date(now);
-    yesterday.setDate(now.getDate() - 1);
-    if (date.toDateString() === yesterday.toDateString()) return 'Yesterday';
-    return date.toLocaleDateString([], { month: 'long', day: 'numeric', year: 'numeric' });
-}
 
 // One bubble in the thread: a single message, or several attachments sent
 // together that WhatsApp-style render as one album / one stack of files.
@@ -199,11 +183,6 @@ function buildThread(messages: WhatsAppMessage[]) {
 
 // Only the sender-side corners that touch another bubble in the same run get
 // squared off, so a stack reads as one block and a lone bubble stays round.
-function bubbleCorners(isMe: boolean, first: boolean, last: boolean): string {
-    const joinedTop = isMe ? 'rounded-tr-md' : 'rounded-tl-md';
-    const joinedBottom = isMe ? 'rounded-br-md' : 'rounded-bl-md';
-    return cn('rounded-2xl', !first && joinedTop, !last && joinedBottom);
-}
 
 function TickIcon({ status, onBubble }: { status: WhatsAppMessageStatus | null; onBubble: boolean }) {
     const muted = onBubble ? 'text-primary-foreground/70' : 'text-muted-foreground';
@@ -707,6 +686,7 @@ export function MessagesView({ conversationId, webSessionId }: { conversationId?
     const [filter, setFilter] = useState<Filter>('all');
     const [channel, setChannel] = useState<Channel>('all');
     const [ticketOpen, setTicketOpen] = useState(false);
+    const [handoffOpen, setHandoffOpen] = useState(false);
     const [draft, setDraft] = useState('');
     const [emojiOpen, setEmojiOpen] = useState(false);
     const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -739,6 +719,7 @@ export function MessagesView({ conversationId, webSessionId }: { conversationId?
     const [setAssignment, { isLoading: assigning }] = useSetWhatsAppAssignmentMutation();
 
     const { data: webChats = [], isLoading: webLoading } = useGetWebInboxQuery(undefined, { pollingInterval: 30_000 });
+    const webChat = webChats.find((c) => c.sessionId === webSessionId) ?? null;
     const whatsappUnread = conversations.reduce((sum, c) => sum + c.unreadCount, 0);
     const websiteUnread = webChats.reduce((sum, c) => sum + c.unreadCount, 0);
     const channelBadge: Record<Channel, number> = { all: whatsappUnread + websiteUnread, whatsapp: whatsappUnread, website: websiteUnread };
@@ -1028,7 +1009,12 @@ export function MessagesView({ conversationId, webSessionId }: { conversationId?
                                             selectedId === c.id && 'bg-sidebar-accent',
                                         )}
                                     >
-                                        <CustomerAvatar name={c.name} seed={c.phone} className="size-11 shrink-0" />
+                                        <div className="relative shrink-0">
+                                            <CustomerAvatar name={c.name} seed={c.phone} className="size-11" />
+                                            <span className="absolute -right-0.5 -bottom-0.5 flex size-4 items-center justify-center rounded-full bg-emerald-500 ring-2 ring-sidebar" title="WhatsApp">
+                                                <MessageCircle className="size-2.5 text-white" />
+                                            </span>
+                                        </div>
                                         <div className="flex-1 min-w-0">
                                             <div className="flex items-center justify-between gap-2">
                                                 <span className="flex min-w-0 items-center gap-1.5">
@@ -1122,7 +1108,13 @@ export function MessagesView({ conversationId, webSessionId }: { conversationId?
                         )}
                     </AnimatePresence>
                     {webSessionId ? (
-                        <WebChatThread key={webSessionId} sessionId={webSessionId} />
+                        <WebChatThread
+                            key={webSessionId}
+                            sessionId={webSessionId}
+                            infoOpen={infoOpen}
+                            onToggleInfo={() => setInfoOpen((o) => !o)}
+                            onOpenWhatsApp={() => setHandoffOpen(true)}
+                        />
                     ) : !selected ? (
                         <div className="flex-1 flex flex-col items-center justify-center text-center gap-2">
                             <div className="size-14 rounded-full bg-muted flex items-center justify-center">
@@ -1363,7 +1355,16 @@ export function MessagesView({ conversationId, webSessionId }: { conversationId?
                 </div>
 
                 <AnimatePresence initial={false}>
-                    {infoOpen && selected && (
+                    {infoOpen && webSessionId && webChat && (
+                        <WebChatInfoPanel
+                            key={webSessionId}
+                            chat={webChat}
+                            onClose={() => setInfoOpen(false)}
+                            fullScreen={isMobile}
+                            onOpenWhatsApp={() => setHandoffOpen(true)}
+                        />
+                    )}
+                    {infoOpen && !webSessionId && selected && (
                         <ConversationInfoPanel
                             key={selected.id}
                             conversation={selected}
@@ -1378,6 +1379,8 @@ export function MessagesView({ conversationId, webSessionId }: { conversationId?
                     )}
                 </AnimatePresence>
             </div>
+
+            <WhatsAppHandoffDialog chat={webChat} open={handoffOpen} onOpenChange={setHandoffOpen} />
 
             {selected && (
                 <CreateTicketDialog conversationId={selected.id} customerName={selected.name} open={ticketOpen} onOpenChange={setTicketOpen} />

@@ -8,7 +8,8 @@ import chatSummaryService from '../services/chat-summary.service.js';
 import cloudinaryMigrationService from '../services/cloudinary-migration.service.js';
 import ClientModel from '../models/client.model.js';
 import StaffModel from '../models/staff.model.js';
-import { getSupportNamespace, notifyNewSession, notifyAgents, notifyTicketReply } from '../socket/support.namespace.js';
+import { getSupportNamespace, notifyNewSession, notifyAgents, notifyTicketReply, announceAgentJoined, forgetAnnouncedAgent } from '../socket/support.namespace.js';
+import mongoose from 'mongoose';
 import whatsappSupportService, { findOrCreateConversation } from '../services/whatsapp-support.service.js';
 import { whatsappNumberOf } from '../services/ticket-notify.service.js';
 import { userCan } from '../middlewares/require-permission.js';
@@ -456,10 +457,20 @@ async function listInboxChatSessions(_req: Request, res: Response) {
         const sessions: any[] = await ChatSessionModel.find({ updatedAt: { $gte: since } })
             .populate('clientId', 'name emails phone')
             .populate('guestId', 'name email phone isWhatsapp')
-            .populate('assignedAgent', 'name email')
             .sort({ updatedAt: -1 })
             .limit(200)
             .lean();
+
+        // assignedAgent holds the signed-in user's id (not a Staff id), so names come from the user collection.
+        const agentIds = [...new Set(sessions.map((s) => s.assignedAgent && String(s.assignedAgent)).filter(Boolean))] as string[];
+        const agentUsers = agentIds.length
+            ? await mongoose.connection
+                  .collection('user')
+                  .find({ _id: { $in: [...agentIds.map((id) => new mongoose.Types.ObjectId(id)), ...agentIds] } } as any)
+                  .project({ name: 1, email: 1 })
+                  .toArray()
+            : [];
+        const agentName = new Map(agentUsers.map((u: any) => [String(u._id), { name: u.name as string, email: u.email as string }]));
 
         const ids = sessions.map((s) => s._id);
         const [lasts, unreads, tickets] = await Promise.all([
@@ -497,7 +508,10 @@ async function listInboxChatSessions(_req: Request, res: Response) {
                     sessionId: s.sessionId,
                     status: s.status,
                     createdAt: s.createdAt,
-                    assignedAgent: s.assignedAgent ? { _id: String(s.assignedAgent._id), name: s.assignedAgent.name, email: s.assignedAgent.email } : null,
+                    assignedAgent: s.assignedAgent
+                        ? { _id: String(s.assignedAgent), name: agentName.get(String(s.assignedAgent))?.name ?? 'A teammate', email: agentName.get(String(s.assignedAgent))?.email }
+                        : null,
+                    whatsappConversationId: s.whatsappConversationId ? String(s.whatsappConversationId) : null,
                     visitor: {
                         name: guest?.name ?? client?.name ?? 'Website visitor',
                         email: guest?.email ?? client?.emails?.[0] ?? null,
@@ -752,10 +766,25 @@ async function claimChatSessionParam(req: Request, res: Response) {
         }
 
         const result = await liveChatService.assignAgentToSession(sessionId, req.user?.id || '');
+        announceAgentJoined(sessionId, req.user?.id || '', req.user?.name || 'Support');
         emitSessionStateChange('claimed', sessionId);
         return res.status(200).json({ success: true, data: result });
     } catch (err: any) {
         return res.status(err.statusCode || 400).json({ success: false, message: err.message });
+    }
+}
+
+/**
+ * Staff: move a website chat to WhatsApp (see liveChatService.handOffToWhatsApp).
+ */
+async function handOffChatToWhatsApp(req: Request, res: Response) {
+    try {
+        const { sessionId } = req.params;
+        if (!sessionId) return res.status(400).json({ success: false, message: 'Session ID is required' });
+        const result = await liveChatService.handOffToWhatsApp(sessionId, { id: req.user?.id || '', name: req.user?.name || 'Support' });
+        return res.status(200).json({ success: true, data: result });
+    } catch (err: any) {
+        return res.status(err.statusCode || 500).json({ success: false, message: err.message });
     }
 }
 
@@ -770,6 +799,7 @@ async function closeChatSessionParam(req: Request, res: Response) {
         }
 
         const result = await liveChatService.endChatSession(sessionId);
+        forgetAnnouncedAgent(sessionId);
 
         // Persist a clear "resolved" system line in the transcript and surface it
         // to the visitor (mirrors the reassign system-message pattern).
@@ -970,6 +1000,7 @@ export default {
     getChatSessionMessages,
     claimChatSessionParam,
     closeChatSessionParam,
+    handOffChatToWhatsApp,
     convertChatToTicketParam,
     updateTicketStatus,
     assignTicketToSelf,

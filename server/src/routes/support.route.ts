@@ -185,6 +185,7 @@ router.get('/chat/client-lookup', requireUnifiedAuth, restrictTo('admin', 'super
 router.post('/meetings', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), MeetingController.createMeeting);
 router.get('/chat/sessions/:sessionId/messages', requireUnifiedAuth, SupportController.getChatSessionMessages);
 router.post('/chat/sessions/:sessionId/claim', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), SupportController.claimChatSessionParam);
+router.post('/chat/sessions/:sessionId/handoff-whatsapp', requireUnifiedAuth, supportAccess, SupportController.handOffChatToWhatsApp);
 router.post('/chat/sessions/:sessionId/close', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), SupportController.closeChatSessionParam);
 router.post('/chat/sessions/:sessionId/convert', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), validateRequest(ConvertChatToTicketValidation), SupportController.convertChatToTicketParam);
 router.post('/chat/sessions/:sessionId/reassign', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), SupportController.reassignChatSession);

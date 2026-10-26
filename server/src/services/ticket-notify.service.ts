@@ -32,7 +32,7 @@ export function whatsappNumberOf(t: {
     return normalizePhone(t.whatsappPhone || (t.visitorIsWhatsapp ? t.visitorPhone : '') || t.contactId?.whatsappPhone);
 }
 
-async function insideFreeTextWindow(conversationId: Types.ObjectId): Promise<boolean> {
+export async function insideFreeTextWindow(conversationId: Types.ObjectId): Promise<boolean> {
     const last = await WhatsAppMessageModel.findOne({ conversationId, direction: WhatsAppMessageDirection.INBOUND })
         .sort({ createdAt: -1 })
         .select('createdAt')

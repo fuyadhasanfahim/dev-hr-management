@@ -16,6 +16,8 @@ export interface IChatSession extends Document {
     assignedAgent?: Types.ObjectId; // Ref: Staff
     linkedTicketId?: Types.ObjectId; // Ref: Ticket
     contactId?: Types.ObjectId; // Ref: Contact
+    handedOffToWhatsApp?: boolean; // The team moved this chat to WhatsApp; the website chat is read-only now.
+    whatsappConversationId?: Types.ObjectId; // Ref: WhatsAppConversation it moved to
     createdAt: Date;
     updatedAt: Date;
 }
@@ -58,6 +60,8 @@ const chatSessionSchema = new Schema<IChatSession>(
             ref: 'Contact',
             index: true,
         },
+        handedOffToWhatsApp: { type: Boolean, default: false },
+        whatsappConversationId: { type: Schema.Types.ObjectId, ref: 'WhatsAppConversation' },
     },
     {
         timestamps: true,

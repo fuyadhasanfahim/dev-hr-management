@@ -35,6 +35,8 @@ export interface WebInboxChat {
     lastMessageAt: string;
     unreadCount: number;
     ticket: { id: string; ticketId: string; status: string } | null;
+    // Set once the team moved this chat to WhatsApp (the website chat is read-only after that).
+    whatsappConversationId: string | null;
 }
 
 export interface ChatMessage {
@@ -144,6 +146,12 @@ export const chatApi = baseApi.injectEndpoints({
             transformResponse: (res: { data: { ticketId: string } }) => res.data,
             invalidatesTags: ['ActiveSessions'],
         }),
+        // Moves a website chat to WhatsApp: the visitor is messaged there, the chat becomes a WhatsApp conversation.
+        handOffToWhatsApp: builder.mutation<{ conversationId: string }, string>({
+            query: (sessionId) => ({ url: `/support/chat/sessions/${sessionId}/handoff-whatsapp`, method: 'POST' }),
+            transformResponse: (res: { data: { conversationId: string } }) => res.data,
+            invalidatesTags: ['WebInbox', 'WhatsAppConversations', 'Tickets'],
+        }),
         getUnreadCounts: builder.query<Record<string, number>, void>({
             query: () => '/support/chat/sessions/unread-counts',
             transformResponse: (res: { data: Record<string, number> }) => res.data ?? {},
@@ -208,6 +216,7 @@ export const chatApi = baseApi.injectEndpoints({
 
 export const {
     useGetWebInboxQuery,
+    useHandOffToWhatsAppMutation,
     useGetQueuedSessionsQuery,
     useGetActiveSessionsQuery,
     useGetResolvedSessionsQuery,

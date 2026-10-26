@@ -19,6 +19,19 @@ export function getSupportNamespace(): Namespace | null {
  * queued session (created via REST when a visitor escalates) appears in the
  * console queue instantly, without waiting for the polling interval.
  */
+// The visitor sees "<agent> has joined the chat" once per agent per chat, however many times the claim is repeated.
+const announcedAgent = new Map<string, string>();
+
+export function announceAgentJoined(sessionId: string, agentId: string, agentName: string): void {
+    if (announcedAgent.get(sessionId) === agentId) return;
+    announcedAgent.set(sessionId, agentId);
+    supportNamespaceRef?.to(sessionId).emit('chat:agent_joined', { agentId, agentName });
+}
+
+export function forgetAnnouncedAgent(sessionId: string): void {
+    announcedAgent.delete(sessionId);
+}
+
 export function notifyNewSession(sessionId: string): void {
     supportNamespaceRef?.to('agents_presence').emit('session:created', { sessionId });
 }
@@ -144,11 +157,8 @@ export function registerSupportNamespace(io: Server) {
                     return;
                 }
 
-                // Tell the visitor an agent has joined (fires on real claim only).
-                socket.to(sessionId).emit('chat:agent_joined', {
-                    agentId: user.id,
-                    agentName: user.name,
-                });
+                // Tell the visitor an agent has joined (once per agent, see announceAgentJoined).
+                announceAgentJoined(sessionId, user.id, user.name);
 
                 // Move the session queued → active live in every agent's sidebar.
                 supportNamespace.to('agents_presence').emit('session:state_change', {
@@ -185,6 +195,10 @@ export function registerSupportNamespace(io: Server) {
 
                 if (session.status === ChatSessionStatus.ENDED) {
                     socket.emit('error', { message: 'This chat session has ended' });
+                    return;
+                }
+                if (session.handedOffToWhatsApp) {
+                    socket.emit('error', { message: 'This chat continues on WhatsApp' });
                     return;
                 }
 
