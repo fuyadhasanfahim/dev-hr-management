@@ -39,6 +39,8 @@ export function DataTable<TData, TValue>({
     getCoreRowModel: getCoreRowModel(),
   }), [data, columns]);
 
+  // TanStack Table hands back functions that cannot be memoised; this is the library's documented usage.
+  // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable(options);
 
   return (

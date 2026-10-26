@@ -21,7 +21,8 @@ export function CheckboxContent({
   className = '',
   disabled = false,
 }: CheckboxContentProps) {
-  const checkboxId = id || React.useId();
+  const generatedId = React.useId();
+  const checkboxId = id || generatedId;
   const toggle = () => {
     if (disabled) return;
     onChange(!checked);

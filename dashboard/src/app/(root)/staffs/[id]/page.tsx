@@ -137,12 +137,12 @@ export default function StaffDetailsPage() {
         if (years === 0) return `${months} mo${months > 1 ? 's' : ''}`;
         if (months === 0) return `${years} yr${years > 1 ? 's' : ''}`;
         return `${years} yr${years > 1 ? 's' : ''} ${months} mo${months > 1 ? 's' : ''}`;
-    }, [staff?.joinDate, staff?.exitDate]);
+    }, [staff]);
 
     const age = useMemo(() => {
         if (!staff?.dateOfBirth) return null;
         return differenceInYears(new Date(), new Date(staff.dateOfBirth));
-    }, [staff?.dateOfBirth]);
+    }, [staff]);
 
     if (isLoading) {
         return <StaffDetailsSkeleton />;

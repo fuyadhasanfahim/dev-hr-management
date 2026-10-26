@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
 import {
     Dialog,
     DialogContent,
@@ -335,15 +335,16 @@ export function AssignTaskModal({
     const [dueDate, setDueDate] = useState<Date | undefined>(undefined);
     const [priority, setPriority] = useState("medium");
 
-    useEffect(() => {
-        if (defaultStaffId && open) {
-            setAssignedTo(defaultStaffId);
-        }
-    }, [defaultStaffId, open]);
+    // Preselect the staff member the dialog was opened for (adjusted while rendering, not in an effect).
+    const [seenDefaultStaff, setSeenDefaultStaff] = useState({ defaultStaffId, open });
+    if (seenDefaultStaff.defaultStaffId !== defaultStaffId || seenDefaultStaff.open !== open) {
+        setSeenDefaultStaff({ defaultStaffId, open });
+        if (defaultStaffId && open) setAssignedTo(defaultStaffId);
+    }
 
     // Fetch all tasks for workload calculation
     const { data: allTasksRes } = useGetMyTasksQuery(undefined, { skip: !open });
-    const allTasks = allTasksRes?.data || existingTasks || [];
+    const allTasks = useMemo(() => allTasksRes?.data || existingTasks || [], [allTasksRes, existingTasks]);
 
     const staffWorkloadMap = useMemo(() => {
         const map: Record<string, number> = {};
@@ -388,13 +389,13 @@ export function AssignTaskModal({
         return ordersList.find((o: any) => o._id === selectedOrderId);
     }, [initialOrder, fetchedOrderRes, ordersList, selectedOrderId]);
 
-    useEffect(() => {
-        if (initialOrderId) {
-            setSelectedOrderId(initialOrderId);
-        } else if (ordersList.length > 0 && (!selectedOrderId || !ordersList.some((o: any) => o._id === selectedOrderId))) {
-            setSelectedOrderId(ordersList[0]._id);
-        }
-    }, [initialOrderId, ordersList, selectedOrderId]);
+    // Which order is shown: the one passed in, else the first one (adjusted while rendering; it settles after one pass).
+    const wantedOrderId = initialOrderId
+        ? initialOrderId
+        : ordersList.length > 0 && (!selectedOrderId || !ordersList.some((o: any) => o._id === selectedOrderId))
+          ? ordersList[0]._id
+          : null;
+    if (wantedOrderId && wantedOrderId !== selectedOrderId) setSelectedOrderId(wantedOrderId);
 
     const { data: staffsData, isLoading: isStaffLoading } = useGetStaffsQuery({ limit: 100 });
     const [createTask, { isLoading: isCreating }] = useCreateTaskMutation();

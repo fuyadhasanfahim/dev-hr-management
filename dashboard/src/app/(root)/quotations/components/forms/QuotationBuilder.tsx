@@ -768,7 +768,7 @@ function parseBulkFeatures(text: string): Feature[] {
 
 // Convert nested feature array to flat array of indented strings
 function flattenFeatureTree(features: Feature[], level = 0, isMarketing = false): string[] {
-    let result: string[] = [];
+    const result: string[] = [];
     for (const f of features) {
         const indent = "  ".repeat(level);
         let text = f.name;
@@ -915,12 +915,11 @@ function QuotationDatePicker({
     placeholder?: string;
 }) {
     const [open, setOpen] = useState(false);
-    const dateObj = React.useMemo(() => {
-        if (!value) return undefined;
+    let dateObj: Date | undefined;
+    if (value) {
         const [y, m, d] = value.split("-").map(Number);
-        if (y && m && d) return new Date(y, m - 1, d);
-        return new Date(value);
-    }, [value]);
+        dateObj = y && m && d ? new Date(y, m - 1, d) : new Date(value);
+    }
 
     return (
         <Popover open={open} onOpenChange={setOpen}>

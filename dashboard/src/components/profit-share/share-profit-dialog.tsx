@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import {
     Dialog,
     DialogContent,
@@ -135,11 +135,12 @@ export default function ShareProfitDialog() {
         setSelectedYear(String(currentYear));
     };
 
-    useEffect(() => {
-        if (!open) {
-            resetForm();
-        }
-    }, [open]);
+    // A closed dialog is reset (adjusted while rendering, not in an effect).
+    const [wasOpen, setWasOpen] = useState(open);
+    if (open !== wasOpen) {
+        setWasOpen(open);
+        if (!open) resetForm();
+    }
 
     return (
         <Dialog open={open} onOpenChange={setOpen}>

@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useIsMounted } from '@/hooks/use-is-mounted';
+import { useState } from 'react';
 import DOMPurify from 'dompurify';
 import { format } from 'date-fns';
 import { Megaphone, Pin, Calendar, Filter } from 'lucide-react';
@@ -33,11 +34,7 @@ import {
 export default function NoticesPage() {
     const [selectedCategory, setSelectedCategory] = useState<string>('all');
     const [selectedNotice, setSelectedNotice] = useState<INotice | null>(null);
-    const [isMounted, setIsMounted] = useState(false);
-
-    useEffect(() => {
-        setIsMounted(true);
-    }, []);
+    const isMounted = useIsMounted();
 
     const { data, isLoading } = useGetPublishedNoticesQuery(
         selectedCategory !== 'all' ? { category: selectedCategory as NoticeCategory } : undefined

@@ -17,7 +17,7 @@ import {
     useVerifySalaryPinMutation,
 } from "@/redux/features/staff/staffApi";
 import { Loader2, ArrowLeft } from "lucide-react";
-import { useEffect, useState } from "react";
+import {  useState } from "react";
 import { toast } from "sonner";
 import { apiMessage } from '@/lib/api-error';
 
@@ -42,13 +42,16 @@ export function SalaryPinDialog({
         isPinSet ? "verify" : "set",
     );
 
-    useEffect(() => {
+    // Start from a clean form each time the dialog opens (adjusted while rendering, not in an effect).
+    const [seenOpen, setSeenOpen] = useState({ open, isPinSet });
+    if (seenOpen.open !== open || seenOpen.isPinSet !== isPinSet) {
+        setSeenOpen({ open, isPinSet });
         if (open) {
             setMode(isPinSet ? "verify" : "set");
             setPin("");
             setConfirmPin("");
         }
-    }, [open, isPinSet]);
+    }
 
     const [verifySalaryPin, { isLoading: isVerifying }] =
         useVerifySalaryPinMutation();

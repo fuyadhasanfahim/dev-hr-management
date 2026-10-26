@@ -255,10 +255,10 @@ export default function ViewQuotationPage() {
         if (typeof data.clientId === 'string') return data.clientId;
         const populated = data.clientId as unknown as { _id?: string };
         return populated?._id ?? '';
-    }, [data?.clientId]);
+    }, [data]);
 
 
-    const liveTotals = useMemo(() => computeQuotationTotals(data?.services || []), [data?.services]);
+    const liveTotals = useMemo(() => computeQuotationTotals(data?.services || []), [data]);
 
     const sortedServices = useMemo(() => {
         if (!data?.services) return [];
@@ -267,7 +267,7 @@ export default function ViewQuotationPage() {
             const orderB = SERVICE_RANK_ORDER[b.category] ?? 99;
             return orderA - orderB;
         });
-    }, [data?.services]);
+    }, [data]);
 
     const openSendPicker = () => {
         if (!dialogClientId) {

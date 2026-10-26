@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, Suspense, useEffect } from 'react';
+import { useState, useMemo, Suspense } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
 import {
@@ -63,8 +63,11 @@ function LeadsPageContent() {
     const [nextActionDateFrom, setNextActionDateFrom] = useState(() => searchParams.get('nextActionDateFrom') || '');
     const [nextActionDateTo, setNextActionDateTo] = useState(() => searchParams.get('nextActionDateTo') || '');
 
-    // Synchronize URL changes (e.g. back/forward browser navigation) with local states
-    useEffect(() => {
+    // Follow the URL (back/forward, links). Done while rendering, so there is no render with stale filters.
+    const query = searchParams.toString();
+    const [seenQuery, setSeenQuery] = useState(query);
+    if (query !== seenQuery) {
+        setSeenQuery(query);
         setPage(Number(searchParams.get('page')) || 1);
         setLimit(Number(searchParams.get('limit')) || 20);
         setSearch(searchParams.get('search') || '');
@@ -74,7 +77,7 @@ function LeadsPageContent() {
         setNextActionType(searchParams.get('nextActionType') || '');
         setNextActionDateFrom(searchParams.get('nextActionDateFrom') || '');
         setNextActionDateTo(searchParams.get('nextActionDateTo') || '');
-    }, [searchParams]);
+    }
 
     // Helper to update local filter states and synchronize browser URL silently
     const updateFilters = (

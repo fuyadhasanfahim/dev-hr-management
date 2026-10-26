@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import {  useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   useGetOrdersQuery,
@@ -159,9 +159,12 @@ export default function OrdersPage() {
     });
   }, [orders, filters, selectedMonth, selectedYear]);
 
-  useEffect(() => {
+  // Any filter change goes back to page 1 (adjusted while rendering, not in an effect).
+  const [seenFilters, setSeenFilters] = useState({ filters, selectedMonth, selectedYear });
+  if (seenFilters.filters !== filters || seenFilters.selectedMonth !== selectedMonth || seenFilters.selectedYear !== selectedYear) {
+    setSeenFilters({ filters, selectedMonth, selectedYear });
     setPage(1);
-  }, [filters, selectedMonth, selectedYear]);
+  }
 
   const totalPages = Math.max(1, Math.ceil(filteredOrders.length / limit));
   const pagedOrders = useMemo(

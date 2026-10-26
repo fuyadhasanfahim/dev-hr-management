@@ -47,6 +47,51 @@ const formSchema = z.object({
 
 type FormData = z.infer<typeof formSchema>;
 
+type Option = { value: string; label: string };
+
+// Older staff records carry the bank details and branch name on the record itself.
+type LegacyStaff = IStaff & {
+    id?: string;
+    bankName?: string;
+    bankAccountNo?: string;
+    bankAccountName?: string;
+    branchName?: string;
+};
+
+const matchOption = (options: Option[], text?: string) => {
+    if (!text) return "";
+    const found = options.find(
+        (o) => o.value.toLowerCase() === text.toLowerCase() || o.label.toLowerCase() === text.toLowerCase(),
+    );
+    return found ? found.value : text;
+};
+
+const branchIdOf = (staff?: IStaff) => {
+    const branchId = staff?.branchId as string | { _id?: string } | null | undefined;
+    return (typeof branchId === "object" && branchId !== null ? branchId._id : branchId) || staff?.branch?._id || "";
+};
+
+// What the form shows for a staff record.
+function formValuesOf(staff: IStaff | undefined, departments: Option[], designations: Option[]): FormData {
+    const legacy = staff as LegacyStaff | undefined;
+    return {
+        branchId: branchIdOf(staff),
+        department: matchOption(departments, staff?.department),
+        designation: matchOption(designations, staff?.designation),
+        role: staff?.user?.role || Role.STAFF,
+        status: staff?.status || "active",
+        salary: staff?.salary || 0,
+        salaryVisibleToEmployee: staff?.salaryVisibleToEmployee !== false,
+        bank: {
+            bankName: staff?.bank?.bankName || legacy?.bankName || "",
+            accountNumber: staff?.bank?.accountNumber || legacy?.bankAccountNo || "",
+            accountHolderName: staff?.bank?.accountHolderName || legacy?.bankAccountName || "",
+            branch: staff?.bank?.branch || legacy?.branchName || "",
+            routingNumber: staff?.bank?.routingNumber || "",
+        },
+    };
+}
+
 interface EditStaffDialogProps {
     staff: IStaff;
     currentShiftId?: string;
@@ -85,7 +130,7 @@ export function EditStaffDialog({ staff }: EditStaffDialogProps) {
             list.push({ value: staff.department, label: staff.department });
         }
         return list;
-    }, [deptData?.departments, staff?.department]);
+    }, [deptData, staff]);
 
     // Build available designations list and guarantee current value is present
     const availableDesignations = useMemo(() => {
@@ -116,13 +161,13 @@ export function EditStaffDialog({ staff }: EditStaffDialogProps) {
             list.push({ value: staff.designation, label: staff.designation });
         }
         return list;
-    }, [desigData?.designations, staff?.designation]);
+    }, [desigData, staff]);
 
     // Build available branches list and guarantee current branch is present
     const availableBranches = useMemo(() => {
         const list: { _id: string; name: string }[] = [];
         if (branchesData?.branches?.length) {
-            branchesData.branches.forEach((b: any) => {
+            branchesData.branches.forEach((b: { _id: string; name: string }) => {
                 list.push({ _id: b._id, name: b.name });
             });
         }
@@ -137,105 +182,22 @@ export function EditStaffDialog({ staff }: EditStaffDialogProps) {
             });
         }
         return list;
-    }, [branchesData?.branches, staff?.branch]);
-
-    // Helper functions to resolve normalized matching values
-    const resolveDepartmentValue = (deptStr?: string) => {
-        if (!deptStr) return "";
-        const found = availableDepartments.find(
-            (d) =>
-                d.value.toLowerCase() === deptStr.toLowerCase() ||
-                d.label.toLowerCase() === deptStr.toLowerCase()
-        );
-        return found ? found.value : deptStr;
-    };
-
-    const resolveDesignationValue = (desigStr?: string) => {
-        if (!desigStr) return "";
-        const found = availableDesignations.find(
-            (d) =>
-                d.value.toLowerCase() === desigStr.toLowerCase() ||
-                d.label.toLowerCase() === desigStr.toLowerCase()
-        );
-        return found ? found.value : desigStr;
-    };
-
-    const resolveBranchId = () => {
-        const id =
-            (typeof staff?.branchId === "object" && staff?.branchId !== null
-                ? (staff.branchId as any)._id
-                : staff?.branchId) ||
-            staff?.branch?._id ||
-            "";
-        return id;
-    };
+    }, [branchesData, staff]);
 
     const form = useForm<FormData>({
         resolver: zodResolver(formSchema),
-        defaultValues: {
-            branchId: resolveBranchId(),
-            department: resolveDepartmentValue(staff?.department),
-            designation: resolveDesignationValue(staff?.designation),
-            role: staff?.user?.role || Role.STAFF,
-            status: staff?.status || "active",
-            salary: staff?.salary || 0,
-            salaryVisibleToEmployee: staff?.salaryVisibleToEmployee !== false,
-            bank: {
-                bankName:
-                    staff?.bank?.bankName || (staff as any)?.bankName || "",
-                accountNumber:
-                    staff?.bank?.accountNumber ||
-                    (staff as any)?.bankAccountNo ||
-                    "",
-                accountHolderName:
-                    staff?.bank?.accountHolderName ||
-                    (staff as any)?.bankAccountName ||
-                    "",
-                branch:
-                    staff?.bank?.branch || (staff as any)?.branchName || "",
-                routingNumber: staff?.bank?.routingNumber || "",
-            },
-        },
+        defaultValues: formValuesOf(staff, availableDepartments, availableDesignations),
     });
 
+    // Reload the form from the record each time the dialog opens or the record / option lists change.
     useEffect(() => {
-        if (open) {
-            form.reset({
-                branchId: resolveBranchId(),
-                department: resolveDepartmentValue(staff?.department),
-                designation: resolveDesignationValue(staff?.designation),
-                role: staff?.user?.role || Role.STAFF,
-                status: staff?.status || "active",
-                salary: staff?.salary || 0,
-                salaryVisibleToEmployee:
-                    staff?.salaryVisibleToEmployee !== false,
-                bank: {
-                    bankName:
-                        staff?.bank?.bankName ||
-                        (staff as any)?.bankName ||
-                        "",
-                    accountNumber:
-                        staff?.bank?.accountNumber ||
-                        (staff as any)?.bankAccountNo ||
-                        "",
-                    accountHolderName:
-                        staff?.bank?.accountHolderName ||
-                        (staff as any)?.bankAccountName ||
-                        "",
-                    branch:
-                        staff?.bank?.branch ||
-                        (staff as any)?.branchName ||
-                        "",
-                    routingNumber: staff?.bank?.routingNumber || "",
-                },
-            });
-        }
-    }, [open, staff, availableDepartments, availableDesignations, availableBranches]);
+        if (open) form.reset(formValuesOf(staff, availableDepartments, availableDesignations));
+    }, [open, staff, availableDepartments, availableDesignations, form]);
 
     const onSubmit = async (data: FormData) => {
         try {
             await updateStaff({
-                id: staff?._id || (staff as any)?.id || staff?.staffId,
+                id: staff?._id || (staff as LegacyStaff)?.id || staff?.staffId,
                 ...data,
             }).unwrap();
 

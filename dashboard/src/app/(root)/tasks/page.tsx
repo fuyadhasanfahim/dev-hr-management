@@ -74,7 +74,7 @@ export default function TeamWorkloadPage() {
 
     const { data: tasksRes, isLoading } = useGetMyTasksQuery(undefined);
     const { data: staffsData } = useGetStaffsQuery({ limit: 100 });
-    const staffs = staffsData?.staffs || [];
+    const staffs = useMemo(() => staffsData?.staffs || [], [staffsData]);
 
     const [submitTask, { isLoading: isSubmitting }] = useSubmitTaskMutation();
 
@@ -88,7 +88,7 @@ export default function TeamWorkloadPage() {
     const [submissionLink, setSubmissionLink] = useState('');
     const [submissionNote, setSubmissionNote] = useState('');
 
-    const tasks: TaskItem[] = tasksRes?.data || [];
+    const tasks: TaskItem[] = useMemo(() => tasksRes?.data || [], [tasksRes]);
 
     // Re-derived from the live query cache every render so toggling a checklist
     // item or changing status inside the sheet reflects immediately instead of

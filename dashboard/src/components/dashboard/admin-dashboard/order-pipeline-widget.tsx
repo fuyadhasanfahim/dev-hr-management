@@ -21,7 +21,9 @@ export function OrderPipelineWidget() {
     { pollingInterval: 30000 }
   );
 
-  const orders = ordersData?.data || [];
+  const orders = React.useMemo(() => ordersData?.data ?? [], [ordersData]);
+  // "Due soon" is measured from when the widget loaded.
+  const [now] = React.useState(() => Date.now());
 
   const statusCounts = React.useMemo(() => {
     const counts: Record<string, number> = {
@@ -153,7 +155,7 @@ export function OrderPipelineWidget() {
                 deadlineDate &&
                 order.status !== "completed" &&
                 order.status !== "delivered" &&
-                deadlineDate.getTime() - Date.now() < 3 * 24 * 60 * 60 * 1000;
+                deadlineDate.getTime() - now < 3 * 24 * 60 * 60 * 1000;
 
               const orderPrice =
                 order.quotationSnapshot?.grandTotal ?? order.totalPrice ?? 0;

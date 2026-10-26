@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useSyncExternalStore } from 'react';
 import { CalendarOff, X } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -11,9 +11,18 @@ import {
 import { isToday } from 'date-fns';
 
 const DISMISSED_KEY = 'shift-off-notice-dismissed';
+const DISMISSED_EVENT = 'shift-off-notice-dismissed-changed';
+
+function subscribeDismissed(onChange: () => void) {
+    window.addEventListener(DISMISSED_EVENT, onChange);
+    window.addEventListener('storage', onChange);
+    return () => {
+        window.removeEventListener(DISMISSED_EVENT, onChange);
+        window.removeEventListener('storage', onChange);
+    };
+}
 
 export default function ShiftOffNotice() {
-    const [dismissed, setDismissed] = useState(true);
     const { data: shiftData } = useGetMyShiftQuery({});
     const { data: offDatesData, isLoading } = useGetMyShiftOffDatesQuery({});
 
@@ -24,27 +33,13 @@ export default function ShiftOffNotice() {
     // Check if today is an off day
     const isTodayOff = offDates.some((d: string) => isToday(new Date(d)));
 
-    // Check localStorage for today's dismissal
-    useEffect(() => {
-        if (!isTodayOff) {
-            setDismissed(true);
-            return;
-        }
-
-        const today = new Date().toDateString();
-        const dismissedDate = localStorage.getItem(DISMISSED_KEY);
-
-        if (dismissedDate === today) {
-            setDismissed(true);
-        } else {
-            setDismissed(false);
-        }
-    }, [isTodayOff]);
+    // The notice stays dismissed for the rest of the day (remembered in localStorage; hidden on the server).
+    const dismissedDate = useSyncExternalStore(subscribeDismissed, () => localStorage.getItem(DISMISSED_KEY), () => 'server');
+    const dismissed = dismissedDate === new Date().toDateString() || dismissedDate === 'server';
 
     const handleDismiss = () => {
-        const today = new Date().toDateString();
-        localStorage.setItem(DISMISSED_KEY, today);
-        setDismissed(true);
+        localStorage.setItem(DISMISSED_KEY, new Date().toDateString());
+        window.dispatchEvent(new Event(DISMISSED_EVENT));
     };
 
     if (isLoading || !isTodayOff || dismissed) {

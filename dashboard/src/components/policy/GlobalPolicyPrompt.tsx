@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import { useIsMounted } from '@/hooks/use-is-mounted';
+import React, { useState } from "react";
 import DOMPurify from "dompurify";
 import { useGetPendingPoliciesQuery, useAcceptPolicyMutation } from "@/redux/features/policy/policyApi";
 import { useSession } from "@/lib/auth-client";
@@ -25,22 +26,18 @@ export function GlobalPolicyPrompt() {
     
     const [currentPolicyIndex, setCurrentPolicyIndex] = useState(0);
     const [isOpen, setIsOpen] = useState(false);
-    const [isMounted, setIsMounted] = useState(false);
-
-    useEffect(() => {
-        setIsMounted(true);
-    }, []);
+    const isMounted = useIsMounted();
 
     const pendingPolicies = data?.policies || [];
     const currentPolicy = pendingPolicies[currentPolicyIndex];
 
-    useEffect(() => {
-        if (pendingPolicies.length > 0) {
-            setIsOpen(true);
-        } else {
-            setIsOpen(false);
-        }
-    }, [pendingPolicies]);
+    // The prompt opens when policies are waiting and closes when none are (adjusted while rendering).
+    const hasPending = pendingPolicies.length > 0;
+    const [seenHasPending, setSeenHasPending] = useState(false);
+    if (hasPending !== seenHasPending) {
+        setSeenHasPending(hasPending);
+        setIsOpen(hasPending);
+    }
 
     const handleAccept = async () => {
         if (!currentPolicy) return;

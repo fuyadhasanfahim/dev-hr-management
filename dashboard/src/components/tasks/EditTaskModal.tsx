@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState,  useMemo } from "react";
 import {
     Dialog,
     DialogContent,
@@ -301,7 +301,11 @@ export function EditTaskModal({
     const [updateTask, { isLoading: isUpdating }] = useUpdateTaskMutation();
     const staffs = staffsData?.staffs || [];
 
-    useEffect(() => {
+    // Fill the form from the task each time the dialog opens or a different task is passed in
+    // (adjusted while rendering instead of in an effect, so there is no render with the old task).
+    const [seenTask, setSeenTask] = useState({ task, open });
+    if (seenTask.task !== task || seenTask.open !== open) {
+        setSeenTask({ task, open });
         if (task && open) {
             setTitle(task.title || "");
 
@@ -339,7 +343,7 @@ export function EditTaskModal({
                 }
             }
         }
-    }, [task, open]);
+    }
 
     // Extract available order features
     const groupedServices = useMemo(() => {

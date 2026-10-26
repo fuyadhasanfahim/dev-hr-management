@@ -16,6 +16,8 @@ import { format } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export function TeamOrdersWidget() {
+  // "Urgent" is measured from when the widget loaded.
+  const [now] = React.useState(() => Date.now());
   const { data: ordersData, isLoading } = useGetOrdersQuery(
     { page: 1, limit: 6 },
     { pollingInterval: 30000 }
@@ -66,7 +68,7 @@ export function TeamOrdersWidget() {
                 deadlineDate &&
                 order.status !== "completed" &&
                 order.status !== "delivered" &&
-                deadlineDate.getTime() - Date.now() < 3 * 24 * 60 * 60 * 1000;
+                deadlineDate.getTime() - now < 3 * 24 * 60 * 60 * 1000;
 
               return (
                 <div

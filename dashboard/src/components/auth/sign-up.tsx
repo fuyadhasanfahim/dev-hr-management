@@ -166,11 +166,14 @@ export default function SignupForm() {
                         />
 
                         {imagePreview && (
-                            <img
-                                src={imagePreview}
-                                alt="Preview"
-                                className="mt-2 h-24 w-24 rounded-lg object-cover border"
-                            />
+                            <>
+                                {/* eslint-disable-next-line @next/next/no-img-element -- local blob preview: next/image cannot load it */}
+                                <img
+                                    src={imagePreview}
+                                    alt="Preview"
+                                    className="mt-2 h-24 w-24 rounded-lg object-cover border"
+                                />
+                            </>
                         )}
 
                         {form.formState.errors.image && (

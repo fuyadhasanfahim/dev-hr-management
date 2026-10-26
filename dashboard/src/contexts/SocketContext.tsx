@@ -78,7 +78,8 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 }
             });
 
-            setSocket(socketInstance);
+            // Handed to React after the effect body, so the context updates once the socket exists.
+            queueMicrotask(() => setSocket(socketInstance));
 
             return () => {
                 socketInstance.disconnect();
