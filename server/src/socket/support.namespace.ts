@@ -219,6 +219,8 @@ export function registerSupportNamespace(io: Server) {
                     sessionId,
                     status: session.status,
                     fromClient,
+                    senderName: user.name,
+                    assignedAgentId: session.assignedAgent?.toString() ?? null,
                     lastMessage: {
                         content: message.content,
                         attachments: message.attachments,

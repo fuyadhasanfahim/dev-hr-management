@@ -11,6 +11,7 @@ import {
     type FormEvent,
     type KeyboardEvent,
 } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useGetAiStatusQuery } from '@/store/api/aiSettingsApi';
@@ -24,6 +25,7 @@ import {
     CheckCheck,
     ChevronDown,
     Clock3,
+    Globe,
     FileText,
     Loader2,
     Mic,
@@ -37,6 +39,7 @@ import {
     Search,
     Send,
     Smile,
+    Ticket,
     Trash2,
     Upload,
     UserCheck,
@@ -66,6 +69,9 @@ import { LiveWaveform, VoicePlayer, useVoiceRecorder } from '@/components/messag
 import { CustomerAvatar } from '@/components/messages/customer-avatar';
 import { ConversationInfoPanel } from '@/components/messages/conversation-info-panel';
 import { MediaLightbox } from '@/components/messages/media-lightbox';
+import { WebChatThread } from '@/components/messages/web-chat-thread';
+import { CreateTicketDialog } from '@/components/messages/create-ticket-dialog';
+import { useGetWebInboxQuery, type WebInboxChat } from '@/store/api/chatApi';
 import { DeleteMessageDialog, EditMessageDialog, MessageMenu } from '@/components/messages/message-actions';
 import { useSupportAgent } from '@/hooks/use-support-agent';
 import { toast } from 'sonner';
@@ -77,6 +83,7 @@ import {
     useDeleteWhatsAppMessageMutation,
     useEditWhatsAppMessageMutation,
     useGetWhatsAppConversationsQuery,
+    useGetWhatsAppDetailsQuery,
     useGetWhatsAppMessagesQuery,
     useMarkWhatsAppConversationReadMutation,
     useRetryWhatsAppMessageMutation,
@@ -85,6 +92,7 @@ import {
     useSetWhatsAppAiMutation,
     useSetWhatsAppAssignmentMutation,
     whatsappApi,
+    type WhatsAppConversation,
     type WhatsAppMessage,
     type WhatsAppMessageStatus,
 } from '@/store/api/whatsappApi';
@@ -597,11 +605,108 @@ const MAX_UPLOAD_BYTES = 16 * 1024 * 1024;
 const FILTERS = ['all', 'unread', 'mine', 'unassigned'] as const;
 type Filter = (typeof FILTERS)[number];
 
-export function MessagesView({ conversationId }: { conversationId?: string }) {
+// Which channel the list shows. "all" mixes WhatsApp and website chats by latest activity.
+const CHANNELS = [
+    { key: 'all', label: 'All' },
+    { key: 'whatsapp', label: 'WhatsApp' },
+    { key: 'website', label: 'Website' },
+] as const;
+type Channel = (typeof CHANNELS)[number]['key'];
+
+type InboxRow = { kind: 'whatsapp'; at: string; conv: WhatsAppConversation } | { kind: 'web'; at: string; chat: WebInboxChat };
+
+function ChannelCount({ count }: { count: number }) {
+    if (count <= 0) return null;
+    return (
+        <span className="ml-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-600 px-1 text-[10px] font-semibold tabular-nums text-white">
+            {count > 99 ? '99+' : count}
+        </span>
+    );
+}
+
+function WebChatRow({ chat, selected, agentId, onOpen }: { chat: WebInboxChat; selected: boolean; agentId: string | null; onOpen: () => void }) {
+    const preview = chat.lastMessage.content || (chat.lastMessage.attachments.length ? '📎 Attachment' : '');
+    const fromVisitor = chat.lastMessage.senderModel === 'Guest' || chat.lastMessage.senderModel === 'Client';
+    return (
+        <button
+            onClick={onOpen}
+            className={cn(
+                'w-full flex items-center gap-3 rounded-lg px-2.5 py-2.5 text-left transition-colors hover:bg-sidebar-accent',
+                selected && 'bg-sidebar-accent',
+            )}
+        >
+            <div className="relative shrink-0">
+                <CustomerAvatar name={chat.visitor.name} seed={chat.visitor.email ?? chat.sessionId} className="size-11" />
+                <span className="absolute -right-0.5 -bottom-0.5 flex size-4 items-center justify-center rounded-full bg-sky-500 ring-2 ring-sidebar" title="Website chat">
+                    <Globe className="size-2.5 text-white" />
+                </span>
+            </div>
+            <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between gap-2">
+                    <span className="flex min-w-0 items-center gap-1.5">
+                        <span className="text-sm font-medium truncate">{chat.visitor.name}</span>
+                        {chat.assignedAgent && (
+                            <span
+                                title={`Assigned to ${chat.assignedAgent.name}`}
+                                className={cn(
+                                    'shrink-0 rounded-full px-1.5 py-px text-[10px] font-medium',
+                                    chat.assignedAgent._id === agentId ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground',
+                                )}
+                            >
+                                {chat.assignedAgent._id === agentId ? 'You' : chat.assignedAgent.name.split(' ')[0]}
+                            </span>
+                        )}
+                    </span>
+                    <span className={cn('text-[11px] shrink-0', chat.unreadCount > 0 ? 'text-destructive font-medium' : 'text-muted-foreground')}>
+                        {formatListTime(chat.lastMessageAt)}
+                    </span>
+                </div>
+                <div className="flex items-center justify-between gap-2 mt-0.5">
+                    <span className={cn('truncate text-xs text-muted-foreground', chat.unreadCount > 0 && 'font-medium text-foreground')}>
+                        {!fromVisitor && chat.lastMessage.senderModel !== 'System' && 'You: '}
+                        {preview}
+                    </span>
+                    {chat.unreadCount > 0 && (
+                        <Badge className="h-5 min-w-5 shrink-0 justify-center px-1.5 bg-rose-600 text-white tabular-nums">
+                            {chat.unreadCount > 99 ? '99+' : chat.unreadCount}
+                        </Badge>
+                    )}
+                </div>
+            </div>
+        </button>
+    );
+}
+
+// "Ticket" opens the ticket this chat already has (the AI makes one when it hands a chat over); otherwise it offers to
+// create one. A person can always raise another one once the old one is resolved.
+function WhatsAppTicketButton({ conversationId, onCreate }: { conversationId: string; onCreate: () => void }) {
+    const { data } = useGetWhatsAppDetailsQuery(conversationId);
+    const linked = data?.linkedTicketId ?? null;
+    return (
+        <>
+            {linked && (
+                <Button asChild variant="outline" size="sm" className="h-8 gap-1.5 px-2 text-xs sm:px-3" title="Open this chat's ticket">
+                    <Link href={`/tickets?ticket=${linked}`}>
+                        <Ticket className="size-3.5" />
+                        <span className="hidden sm:inline">Ticket</span>
+                    </Link>
+                </Button>
+            )}
+            <Button variant="ghost" size="sm" className="h-8 gap-1.5 px-2 text-xs sm:px-3" onClick={onCreate} title="Create a support ticket from this chat">
+                <Ticket className="size-3.5" />
+                <span className="hidden sm:inline">{linked ? 'New ticket' : 'Create ticket'}</span>
+            </Button>
+        </>
+    );
+}
+
+export function MessagesView({ conversationId, webSessionId }: { conversationId?: string; webSessionId?: string }) {
     const router = useRouter();
     const dispatch = useDispatch<AppDispatch>();
     const [search, setSearch] = useState('');
     const [filter, setFilter] = useState<Filter>('all');
+    const [channel, setChannel] = useState<Channel>('all');
+    const [ticketOpen, setTicketOpen] = useState(false);
     const [draft, setDraft] = useState('');
     const [emojiOpen, setEmojiOpen] = useState(false);
     const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -616,6 +721,8 @@ export function MessagesView({ conversationId }: { conversationId?: string }) {
     const [lightbox, setLightbox] = useState<{ items: WhatsAppMessage[]; index: number; key: number } | null>(null);
 
     const selectedId = conversationId ?? null;
+    // Something is open on the right (a WhatsApp chat or a website chat): on a phone the list gives way to it.
+    const hasSelection = !!(selectedId || webSessionId);
 
     const { data: conversations = [], isLoading: conversationsLoading } = useGetWhatsAppConversationsQuery(
         undefined,
@@ -631,19 +738,46 @@ export function MessagesView({ conversationId }: { conversationId?: string }) {
     const [markRead] = useMarkWhatsAppConversationReadMutation();
     const [setAssignment, { isLoading: assigning }] = useSetWhatsAppAssignmentMutation();
 
-    const filtered = useMemo(() => {
+    const { data: webChats = [], isLoading: webLoading } = useGetWebInboxQuery(undefined, { pollingInterval: 30_000 });
+    const whatsappUnread = conversations.reduce((sum, c) => sum + c.unreadCount, 0);
+    const websiteUnread = webChats.reduce((sum, c) => sum + c.unreadCount, 0);
+    const channelBadge: Record<Channel, number> = { all: whatsappUnread + websiteUnread, whatsapp: whatsappUnread, website: websiteUnread };
+
+    // One list for both channels, newest activity first. The channel tabs narrow it; the unread / mine / unassigned
+    // filter applies to whichever rows are showing.
+    const rows = useMemo<InboxRow[]>(() => {
         const q = search.trim().toLowerCase();
-        return conversations.filter((c) => {
-            const matchesQuery =
-                !q || c.name.toLowerCase().includes(q) || c.phone.includes(q) || c.lastMessage.toLowerCase().includes(q);
-            const matchesFilter =
-                filter === 'all' ||
-                (filter === 'unread' && c.unreadCount > 0) ||
-                (filter === 'mine' && c.assignedTo?.id === agent.id) ||
-                (filter === 'unassigned' && !c.assignedTo);
-            return matchesQuery && matchesFilter;
-        });
-    }, [conversations, search, filter, agent.id]);
+        const list: InboxRow[] = [];
+        if (channel !== 'website') {
+            for (const c of conversations) {
+                const matchesQuery = !q || c.name.toLowerCase().includes(q) || c.phone.includes(q) || c.lastMessage.toLowerCase().includes(q);
+                const matchesFilter =
+                    filter === 'all' ||
+                    (filter === 'unread' && c.unreadCount > 0) ||
+                    (filter === 'mine' && c.assignedTo?.id === agent.id) ||
+                    (filter === 'unassigned' && !c.assignedTo);
+                if (matchesQuery && matchesFilter) list.push({ kind: 'whatsapp', at: c.lastMessageAt, conv: c });
+            }
+        }
+        if (channel !== 'whatsapp') {
+            for (const c of webChats) {
+                const v = c.visitor;
+                const matchesQuery =
+                    !q ||
+                    v.name.toLowerCase().includes(q) ||
+                    (v.email ?? '').toLowerCase().includes(q) ||
+                    (v.phone ?? '').includes(q) ||
+                    c.lastMessage.content.toLowerCase().includes(q);
+                const matchesFilter =
+                    filter === 'all' ||
+                    (filter === 'unread' && c.unreadCount > 0) ||
+                    (filter === 'mine' && c.assignedAgent?._id === agent.id) ||
+                    (filter === 'unassigned' && !c.assignedAgent);
+                if (matchesQuery && matchesFilter) list.push({ kind: 'web', at: c.lastMessageAt, chat: c });
+            }
+        }
+        return list.sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
+    }, [conversations, webChats, search, filter, channel, agent.id]);
 
     const selected = conversations.find((c) => c.id === selectedId) ?? null;
 
@@ -820,7 +954,7 @@ export function MessagesView({ conversationId }: { conversationId?: string }) {
                     className={cn(
                         'w-full md:w-[320px] shrink-0 flex-col border-r overflow-hidden',
                         // Phone: list and thread are separate screens.
-                        selectedId ? 'hidden md:flex' : 'flex',
+                        hasSelection ? 'hidden md:flex' : 'flex',
                     )}
                 >
                     <div className="px-4 pt-4 pb-3 space-y-3">
@@ -840,6 +974,16 @@ export function MessagesView({ conversationId }: { conversationId?: string }) {
                                 className="pl-9 h-9"
                             />
                         </div>
+                        <Tabs value={channel} onValueChange={(v) => setChannel(v as Channel)}>
+                            <TabsList className="w-full">
+                                {CHANNELS.map((ch) => (
+                                    <TabsTrigger key={ch.key} value={ch.key}>
+                                        {ch.label}
+                                        <ChannelCount count={channelBadge[ch.key]} />
+                                    </TabsTrigger>
+                                ))}
+                            </TabsList>
+                        </Tabs>
                         <Tabs value={filter} onValueChange={(v) => setFilter(v as Filter)}>
                             <TabsList className="w-full">
                                 {FILTERS.map((f) => (
@@ -853,16 +997,29 @@ export function MessagesView({ conversationId }: { conversationId?: string }) {
 
                     <ScrollArea className="flex-1 min-h-0">
                         <div className="px-2 pb-2">
-                            {conversationsLoading ? (
+                            {conversationsLoading || webLoading ? (
                                 <div className="space-y-2 px-1">
                                     {[...Array(4)].map((_, i) => (
                                         <Skeleton key={i} className="h-14 w-full rounded-lg" />
                                     ))}
                                 </div>
-                            ) : filtered.length === 0 ? (
+                            ) : rows.length === 0 ? (
                                 <p className="text-sm text-muted-foreground text-center py-8">No conversations found.</p>
                             ) : (
-                                filtered.map((c) => (
+                                rows.map((row) => {
+                                    if (row.kind === 'web') {
+                                        return (
+                                            <WebChatRow
+                                                key={`web-${row.chat.sessionId}`}
+                                                chat={row.chat}
+                                                selected={webSessionId === row.chat.sessionId}
+                                                agentId={agent.id}
+                                                onOpen={() => router.push(`/messages/web/${row.chat.sessionId}`)}
+                                            />
+                                        );
+                                    }
+                                    const c = row.conv;
+                                    return (
                                     <button
                                         key={c.id}
                                         onClick={() => router.push(`/messages/${c.id}`)}
@@ -926,7 +1083,8 @@ export function MessagesView({ conversationId }: { conversationId?: string }) {
                                             </div>
                                         </div>
                                     </button>
-                                ))
+                                    );
+                                })
                             )}
                         </div>
                     </ScrollArea>
@@ -934,7 +1092,7 @@ export function MessagesView({ conversationId }: { conversationId?: string }) {
 
                 {/* ── Thread ─────────────────────────────────────────────────────── */}
                 <div
-                    className={cn('relative flex-1 flex-col min-w-0', selectedId ? 'flex' : 'hidden md:flex')}
+                    className={cn('relative flex-1 flex-col min-w-0', hasSelection ? 'flex' : 'hidden md:flex')}
                     onDragOver={(e: DragEvent) => {
                         if (!selected || !e.dataTransfer.types.includes('Files')) return;
                         e.preventDefault();
@@ -963,7 +1121,9 @@ export function MessagesView({ conversationId }: { conversationId?: string }) {
                             </motion.div>
                         )}
                     </AnimatePresence>
-                    {!selected ? (
+                    {webSessionId ? (
+                        <WebChatThread key={webSessionId} sessionId={webSessionId} />
+                    ) : !selected ? (
                         <div className="flex-1 flex flex-col items-center justify-center text-center gap-2">
                             <div className="size-14 rounded-full bg-muted flex items-center justify-center">
                                 <MessageCircle className="size-6 text-muted-foreground" />
@@ -1060,6 +1220,7 @@ export function MessagesView({ conversationId }: { conversationId?: string }) {
                                             <span className="hidden sm:inline">Assign to me</span>
                                         </Button>
                                     ) : null}
+                                    {selected && <WhatsAppTicketButton conversationId={selected.id} onCreate={() => setTicketOpen(true)} />}
                                     <Button
                                         variant={infoOpen ? 'secondary' : 'ghost'}
                                         size="icon"
@@ -1217,6 +1378,10 @@ export function MessagesView({ conversationId }: { conversationId?: string }) {
                     )}
                 </AnimatePresence>
             </div>
+
+            {selected && (
+                <CreateTicketDialog conversationId={selected.id} customerName={selected.name} open={ticketOpen} onOpenChange={setTicketOpen} />
+            )}
 
             {lightbox && (
                 <MediaLightbox key={lightbox.key} items={lightbox.items} index={lightbox.index} onClose={() => setLightbox(null)} />

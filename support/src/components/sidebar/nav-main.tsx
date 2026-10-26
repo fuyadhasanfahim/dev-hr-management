@@ -58,10 +58,16 @@ const NAV_GROUPS: NavGroup[] = [
         groupLabel: 'Inbox',
         icon: Inbox,
         items: [
+            // WhatsApp and website live chats, with channel tabs.
             { title: 'Messages', url: '/messages', icon: MessageCircle, permission: 'support.access' },
-            { title: 'Website Chats', url: '/website-chats', icon: Globe, permission: 'support.access' },
-            { title: 'Tickets', url: '/tickets', icon: Ticket },
+            // What the website AI assistant talked about with visitors (not live chats with the team).
+            { title: 'Website AI Chats', url: '/website-chats', icon: Globe, permission: 'support.access' },
         ],
+    },
+    {
+        groupLabel: 'Tickets',
+        icon: Ticket,
+        items: [{ title: 'Tickets', url: '/tickets', icon: Ticket }],
     },
     {
         groupLabel: 'Sales',
@@ -98,10 +104,10 @@ function CountBadge({ count }: { count: number }) {
 export function NavMain() {
     const pathname = usePathname();
     const { state } = useSidebar();
-    const { liveChatCount, ticketCount, messagesUnreadCount } = useLiveCounts();
+    const { ticketCount, messagesUnreadCount } = useLiveCounts();
     const badgeByUrl: Record<string, number> = {
-        // Live chats are tickets now: a waiting chat counts on Tickets.
-        '/tickets': ticketCount + liveChatCount,
+        // Waiting live chats count on Messages (their unread messages), not here.
+        '/tickets': ticketCount,
         '/messages': messagesUnreadCount,
     };
 

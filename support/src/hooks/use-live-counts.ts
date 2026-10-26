@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useDispatch } from 'react-redux';
-import { useGetQueuedSessionsQuery } from '@/store/api/chatApi';
+import { useGetQueuedSessionsQuery, useGetWebInboxQuery } from '@/store/api/chatApi';
 import { useGetWhatsAppConversationsQuery, whatsappApi, type WhatsAppMessageStatus } from '@/store/api/whatsappApi';
 import { baseApi } from '@/store/api/baseApi';
 import { connectSocket, disconnectSocket } from '@/lib/socket';
@@ -11,6 +11,7 @@ import { useNotificationSound } from '@/hooks/use-notification-sound';
 import type { AppDispatch } from '@/store';
 import type { Socket } from 'socket.io-client';
 import { showWhatsAppMessageToast, type IncomingMessageEvent } from '@/components/messages/whatsapp-message-toast';
+import { showWebChatToast } from '@/components/messages/web-chat-toast';
 import { useSupportAgent } from '@/hooks/use-support-agent';
 
 // Live sidebar badge counts + the presence/ticket socket wiring behind them.
@@ -36,7 +37,12 @@ export function useLiveCounts() {
     const { data: whatsappConversations = [] } = useGetWhatsAppConversationsQuery(undefined, {
         pollingInterval: 30_000,
     });
-    const messagesUnreadCount = whatsappConversations.reduce((sum, c) => sum + c.unreadCount, 0);
+    const whatsappUnreadCount = whatsappConversations.reduce((sum, c) => sum + c.unreadCount, 0);
+
+    // Website chats: unread = visitor messages no agent has seen yet. Kept live by `session:new_message` below.
+    const { data: webChats = [] } = useGetWebInboxQuery(undefined, { pollingInterval: 30_000 });
+    const websiteUnreadCount = webChats.reduce((sum, c) => sum + c.unreadCount, 0);
+    const messagesUnreadCount = whatsappUnreadCount + websiteUnreadCount;
 
     // Clear the unread-ticket badge once the agent is looking at the tickets view.
     useEffect(() => {
@@ -56,7 +62,7 @@ export function useLiveCounts() {
             dispatch(baseApi.util.invalidateTags(['QueuedSessions']));
         };
         const onSessionStateChange = () => {
-            dispatch(baseApi.util.invalidateTags(['QueuedSessions', 'ActiveSessions', 'UnreadCounts']));
+            dispatch(baseApi.util.invalidateTags(['QueuedSessions', 'ActiveSessions', 'UnreadCounts', 'WebInbox']));
         };
         // New ticket / new client reply — refresh ticket views live, and alert the
         // agent (sound + badge) unless they're already on the tickets page.
@@ -84,6 +90,33 @@ export function useLiveCounts() {
             playSound();
             showWhatsAppMessageToast(event, () => router.push(`/messages/${conversationId}`));
         };
+        // A visitor wrote in a website chat (or a chat just started): refresh the inbox, and alert the agent
+        // (sound + toast) unless they are already looking at that chat or it belongs to a teammate.
+        const onWebChatMessage = (event: {
+            sessionId: string;
+            fromClient?: boolean;
+            senderName?: string;
+            assignedAgentId?: string | null;
+            lastMessage?: { content?: string; attachments?: string[] };
+        }) => {
+            dispatch(baseApi.util.invalidateTags(['WebInbox']));
+            if (!event.fromClient) return;
+            const me = agentRef.current;
+            if (event.assignedAgentId && event.assignedAgentId !== me.id && !me.canManage) return;
+            const viewing = pathnameRef.current === `/messages/web/${event.sessionId}` && document.visibilityState === 'visible';
+            if (viewing) return;
+            playSound();
+            const last = event.lastMessage;
+            showWebChatToast(
+                {
+                    sessionId: event.sessionId,
+                    name: event.senderName,
+                    preview: last?.content || (last?.attachments?.length ? 'Sent an attachment' : undefined),
+                },
+                () => router.push(`/messages/web/${event.sessionId}`),
+            );
+        };
+        const onWebChatChanged = () => dispatch(baseApi.util.invalidateTags(['WebInbox']));
         // Tick updates (sent / delivered / read / failed) — patched in place so the
         // thread doesn't refetch and flicker on every status change.
         const onWhatsAppStatus = ({
@@ -125,6 +158,8 @@ export function useLiveCounts() {
         socket.on('ticket:new_reply', onTicketActivity);
         socket.on('ticket:created', onTicketActivity);
         socket.on('whatsapp:new_message', onWhatsAppMessage);
+        socket.on('session:new_message', onWebChatMessage);
+        socket.on('session:created', onWebChatChanged);
         socket.on('whatsapp:message_status', onWhatsAppStatus);
         // A message was edited / deleted (here, or in the phone app) — refetch the thread.
         const onWhatsAppMessageUpdated = ({ conversationId }: { conversationId: string }) => {
@@ -143,11 +178,13 @@ export function useLiveCounts() {
             socket.off('ticket:new_reply', onTicketActivity);
             socket.off('ticket:created', onTicketActivity);
             socket.off('whatsapp:new_message', onWhatsAppMessage);
+            socket.off('session:new_message', onWebChatMessage);
+            socket.off('session:created', onWebChatChanged);
             socket.off('whatsapp:message_status', onWhatsAppStatus);
             socket.off('whatsapp:message_updated', onWhatsAppMessageUpdated);
             disconnectSocket();
         };
     }, [dispatch, playSound, router]);
 
-    return { liveChatCount, ticketCount, messagesUnreadCount };
+    return { liveChatCount, ticketCount, messagesUnreadCount, whatsappUnreadCount, websiteUnreadCount };
 }

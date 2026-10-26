@@ -24,6 +24,19 @@ export interface ChatSession {
     updatedAt: string;
 }
 
+// One website chat as the Messages inbox lists it: visitor, last message, unread count and its ticket.
+export interface WebInboxChat {
+    sessionId: string;
+    status: 'queued' | 'active' | 'ended' | 'converted_to_ticket';
+    createdAt: string;
+    assignedAgent: { _id: string; name: string; email?: string } | null;
+    visitor: { name: string; email: string | null; phone: string | null; isWhatsapp: boolean | null; isClient: boolean };
+    lastMessage: { content: string; attachments: string[]; createdAt: string; senderModel: 'Client' | 'Staff' | 'Guest' | 'System' };
+    lastMessageAt: string;
+    unreadCount: number;
+    ticket: { id: string; ticketId: string; status: string } | null;
+}
+
 export interface ChatMessage {
     _id: string;
     sessionId: string;
@@ -87,6 +100,11 @@ export const chatApi = baseApi.injectEndpoints({
             transformResponse: (res: { data: ChatSession[] }) => res.data ?? [],
             providesTags: ['ResolvedSessions'],
         }),
+        getWebInbox: builder.query<WebInboxChat[], void>({
+            query: () => '/support/chat/sessions/inbox',
+            transformResponse: (res: { data: WebInboxChat[] }) => res.data ?? [],
+            providesTags: ['WebInbox'],
+        }),
         getDashboardStats: builder.query<DashboardStats, void>({
             query: () => '/support/dashboard/stats',
             transformResponse: (res: { data: DashboardStats }) => res.data,
@@ -105,14 +123,14 @@ export const chatApi = baseApi.injectEndpoints({
                 method: 'POST',
             }),
             transformResponse: (res: { data: ChatSession }) => res.data,
-            invalidatesTags: ['QueuedSessions', 'ActiveSessions'],
+            invalidatesTags: ['QueuedSessions', 'ActiveSessions', 'WebInbox'],
         }),
         closeSession: builder.mutation<void, string>({
             query: (sessionId) => ({
                 url: `/support/chat/sessions/${sessionId}/close`,
                 method: 'POST',
             }),
-            invalidatesTags: ['ActiveSessions', 'QueuedSessions'],
+            invalidatesTags: ['ActiveSessions', 'QueuedSessions', 'WebInbox'],
         }),
         convertToTicket: builder.mutation<
             { ticketId: string },
@@ -189,6 +207,7 @@ export const chatApi = baseApi.injectEndpoints({
 });
 
 export const {
+    useGetWebInboxQuery,
     useGetQueuedSessionsQuery,
     useGetActiveSessionsQuery,
     useGetResolvedSessionsQuery,

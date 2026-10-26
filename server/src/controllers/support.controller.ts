@@ -446,6 +446,80 @@ async function listQueuedChatSessions(_req: Request, res: Response) {
 }
 
 /**
+ * Staff: every website chat of the last 30 days that has at least one message, newest first, in one query set —
+ * the Messages inbox shows these next to the WhatsApp conversations. `unreadCount` counts visitor messages no agent
+ * has seen yet (an agent opening the chat marks them read).
+ */
+async function listInboxChatSessions(_req: Request, res: Response) {
+    try {
+        const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+        const sessions: any[] = await ChatSessionModel.find({ updatedAt: { $gte: since } })
+            .populate('clientId', 'name emails phone')
+            .populate('guestId', 'name email phone isWhatsapp')
+            .populate('assignedAgent', 'name email')
+            .sort({ updatedAt: -1 })
+            .limit(200)
+            .lean();
+
+        const ids = sessions.map((s) => s._id);
+        const [lasts, unreads, tickets] = await Promise.all([
+            ChatMessageModel.aggregate([
+                { $match: { sessionId: { $in: ids } } },
+                { $sort: { createdAt: -1 } },
+                {
+                    $group: {
+                        _id: '$sessionId',
+                        content: { $first: '$content' },
+                        attachments: { $first: '$attachments' },
+                        createdAt: { $first: '$createdAt' },
+                        senderModel: { $first: '$senderModel' },
+                    },
+                },
+            ]),
+            ChatMessageModel.aggregate([
+                { $match: { sessionId: { $in: ids }, senderModel: { $in: ['Guest', 'Client'] }, 'readBy.0': { $exists: false } } },
+                { $group: { _id: '$sessionId', count: { $sum: 1 } } },
+            ]),
+            TicketModel.find({ chatSessionId: { $in: ids } }).select('ticketId status chatSessionId').lean(),
+        ]);
+        const lastBy = new Map(lasts.map((l: any) => [String(l._id), l]));
+        const unreadBy = new Map(unreads.map((u: any) => [String(u._id), u.count as number]));
+        const ticketBy = new Map((tickets as any[]).map((t) => [String(t.chatSessionId), t]));
+
+        const data = sessions
+            .filter((s) => lastBy.has(String(s._id)))
+            .map((s) => {
+                const last: any = lastBy.get(String(s._id));
+                const guest = s.guestId;
+                const client = s.clientId;
+                const ticket: any = ticketBy.get(String(s._id));
+                return {
+                    sessionId: s.sessionId,
+                    status: s.status,
+                    createdAt: s.createdAt,
+                    assignedAgent: s.assignedAgent ? { _id: String(s.assignedAgent._id), name: s.assignedAgent.name, email: s.assignedAgent.email } : null,
+                    visitor: {
+                        name: guest?.name ?? client?.name ?? 'Website visitor',
+                        email: guest?.email ?? client?.emails?.[0] ?? null,
+                        phone: guest?.phone ?? client?.phone ?? null,
+                        isWhatsapp: guest?.isWhatsapp ?? null,
+                        isClient: !!client,
+                    },
+                    lastMessage: { content: last.content, attachments: last.attachments ?? [], createdAt: last.createdAt, senderModel: last.senderModel },
+                    lastMessageAt: last.createdAt,
+                    unreadCount: unreadBy.get(String(s._id)) ?? 0,
+                    ticket: ticket ? { id: String(ticket._id), ticketId: ticket.ticketId, status: ticket.status } : null,
+                };
+            })
+            .sort((a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime());
+
+        return res.status(200).json({ success: true, data });
+    } catch (err: any) {
+        return res.status(500).json({ success: false, message: err.message });
+    }
+}
+
+/**
  * Staff: List all active support chat sessions.
  */
 async function listActiveChatSessions(_req: Request, res: Response) {
@@ -891,6 +965,7 @@ export default {
     listQueuedChatSessions,
     listActiveChatSessions,
     listResolvedChatSessions,
+    listInboxChatSessions,
     getSupportDashboardStats,
     getChatSessionMessages,
     claimChatSessionParam,

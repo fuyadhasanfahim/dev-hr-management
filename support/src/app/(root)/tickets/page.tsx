@@ -373,7 +373,7 @@ function ContactStrip({ ticket, onOpenTicket }: { ticket: Ticket; onOpenTicket: 
     const contactId = ticket.contactId?._id;
     const { data } = useGetContactQuery(contactId!, { skip: !contactId });
     const sessionId = ticket.chatSessionId?.sessionId;
-    const liveOpen = !!sessionId && ['queued', 'active'].includes(ticket.chatSessionId?.status ?? '');
+    const liveOpen = !!sessionId && ['queued', 'active', 'converted_to_ticket'].includes(ticket.chatSessionId?.status ?? '');
     const whatsappChat = data?.whatsappChats.find((c) => c.linkedTicketId === ticket._id) ?? (ticket.source === 'whatsapp' ? data?.whatsappChats[0] : undefined);
     const others = (data?.tickets ?? []).filter((t) => t._id !== ticket._id).slice(0, 4);
 
@@ -382,7 +382,7 @@ function ContactStrip({ ticket, onOpenTicket }: { ticket: Ticket; onOpenTicket: 
         <div className="flex items-center gap-2 px-5 py-2 border-t border-border/50 flex-wrap text-xs">
             {liveOpen && (
                 <Button asChild size="sm" className="h-7 gap-1.5">
-                    <Link href={`/live-chat?chat=${sessionId}`}>
+                    <Link href={`/messages/web/${sessionId}`}>
                         <MessageSquare className="size-3.5" />
                         Open live chat
                     </Link>

@@ -176,6 +176,7 @@ router.get('/contacts', requireUnifiedAuth, restrictTo('admin', 'super_admin', '
 router.get('/contacts/:id', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), ContactController.getContact);
 router.get('/chat/sessions/queued', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), SupportController.listQueuedChatSessions);
 router.get('/chat/sessions/active', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), SupportController.listActiveChatSessions);
+router.get('/chat/sessions/inbox', requireUnifiedAuth, supportAccess, SupportController.listInboxChatSessions);
 router.get('/chat/sessions/resolved', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), SupportController.listResolvedChatSessions);
 router.get('/dashboard/stats', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), SupportController.getSupportDashboardStats);
 router.get('/chat/sessions/unread-counts', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), SupportController.getUnreadCounts);
@@ -228,6 +229,7 @@ router.post('/whatsapp/conversations/:id/read', requireUnifiedAuth, supportAcces
 router.post('/whatsapp/conversations/:id/media', requireUnifiedAuth, supportAccess, whatsappUpload.single('file'), WhatsAppSupportController.sendMedia);
 router.get('/whatsapp/media/:mediaId', requireUnifiedAuth, supportAccess, WhatsAppSupportController.getMedia);
 // Assignment (one agent per chat), internal notes and the customer info panel.
+router.post('/whatsapp/conversations/:id/ticket', requireUnifiedAuth, supportAccess, WhatsAppSupportController.createTicket);
 router.post('/whatsapp/conversations/:id/assignment', requireUnifiedAuth, supportAccess, WhatsAppSupportController.setAssignment);
 router.get('/whatsapp/conversations/:id/details', requireUnifiedAuth, supportAccess, WhatsAppSupportController.getDetails);
 router.get('/whatsapp/conversations/:id/notes', requireUnifiedAuth, supportAccess, WhatsAppSupportController.listNotes);
