@@ -55,6 +55,9 @@ const RELATIONS = [
     "Other",
 ];
 
+// The date fields start empty until the person picks one; the form's type requires a Date.
+const EMPTY_DATE = undefined as unknown as Date;
+
 export default function EditProfile() {
     const { data: session, isPending } = useSession();
     const {
@@ -74,7 +77,7 @@ export default function EditProfile() {
         name: session?.user?.name || "",
         email: session?.user?.email || "",
         phone: staff?.phone || "",
-        dateOfBirth: staff?.dateOfBirth ? new Date(staff.dateOfBirth) : (undefined as any),
+        dateOfBirth: staff?.dateOfBirth ? new Date(staff.dateOfBirth) : EMPTY_DATE,
         bloodGroup: staff?.bloodGroup || "",
         nationalId: staff?.nationalId || "",
         address: staff?.address || "",
@@ -93,7 +96,7 @@ export default function EditProfile() {
             branch: staff?.bank?.branch || "",
             routingNumber: staff?.bank?.routingNumber || "",
         },
-        joinDate: staff?.joinDate ? new Date(staff.joinDate) : (undefined as any),
+        joinDate: staff?.joinDate ? new Date(staff.joinDate) : EMPTY_DATE,
     }), [session?.user?.name, session?.user?.email, staff]);
 
     const form = useForm<ProfileFormValues>({

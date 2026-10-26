@@ -28,6 +28,7 @@ import { Spinner } from '../ui/spinner';
 import { useForm, Controller } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
+import type { IShift } from '@/types/shift.type';
 
 const WEEK_DAYS = [
     { label: 'Sun', value: 0 },
@@ -62,7 +63,7 @@ type UpdateShiftFormData = z.infer<typeof updateShiftSchema>;
 interface UpdateShiftProps {
     open: boolean;
     setOpen: (v: boolean) => void;
-    shift: any;
+    shift: IShift | null | undefined;
 }
 
 export default function UpdateShift({
@@ -127,6 +128,7 @@ export default function UpdateShift({
                 return;
             }
 
+            if (!shift) return;
             await updateShift({
                 id: shift._id,
                 data: {
@@ -192,7 +194,7 @@ export default function UpdateShift({
                                         <SelectValue placeholder="Select branch" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        {branchData?.branches?.map((b: any) => (
+                                        {branchData?.branches?.map((b: { _id: string; name: string }) => (
                                             <SelectItem
                                                 key={b._id}
                                                 value={b._id}

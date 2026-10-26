@@ -57,6 +57,27 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { apiMessage } from '@/lib/api-error';
 
+// What the wallet screens read from the transaction and staff endpoints.
+interface WalletTx {
+    _id: string;
+    createdAt: string;
+    description?: string;
+    amount: number;
+    type: string;
+    status?: string;
+    metadata?: { clientName?: string };
+    staffId?: { userId?: { name?: string } };
+}
+
+interface WalletStaff {
+    _id: string;
+    phone?: string;
+    staffId?: string;
+    designation?: string;
+    balance: number;
+    user?: { name?: string };
+}
+
 export default function BalancesClient() {
     // Separate pagination states for each tab
     const [myTxPage, setMyTxPage] = useState(1);
@@ -103,7 +124,7 @@ export default function BalancesClient() {
 
     const [adminWithdraw] = useAdminWithdrawMutation();
 
-    const transactions = txData?.data || [];
+    const transactions: WalletTx[] = txData?.data || [];
     const myTxMeta = txData?.meta;
 
     // Calculate accurate balance from transaction logs to avoid sync issues
@@ -237,7 +258,7 @@ export default function BalancesClient() {
                                                     </TableCell>
                                                 </TableRow>
                                             ) : (
-                                                transactions.map((tx: any) => (
+                                                transactions.map((tx) => (
                                                     <TableRow key={tx._id} className="hover:bg-muted/30 transition-colors">
                                                         <TableCell className="font-medium">
                                                             {format(new Date(tx.createdAt), "dd MMM, yyyy")}
@@ -312,7 +333,7 @@ export default function BalancesClient() {
                                             <TableRow>
                                                 <TableCell colSpan={5} className="h-24 text-center">Loading...</TableCell>
                                             </TableRow>
-                                        ) : adminStaffData?.staffs?.map((staff: any) => (
+                                        ) : (adminStaffData?.staffs as WalletStaff[] | undefined)?.map((staff) => (
                                             <TableRow key={staff._id}>
                                                 <TableCell>
                                                     <div className="flex flex-col">
@@ -368,7 +389,7 @@ export default function BalancesClient() {
                                     <TableBody>
                                         {isAllTxFetching && (!allTxData || allTxPage > 1) ? (
                                             <TableRow><TableCell colSpan={5} className="text-center h-24">Loading audit log...</TableCell></TableRow>
-                                        ) : allTxData?.data?.map((tx: any) => (
+                                        ) : (allTxData?.data as WalletTx[] | undefined)?.map((tx) => (
                                             <TableRow key={tx._id}>
                                                 <TableCell>{format(new Date(tx.createdAt), "dd MMM HH:mm")}</TableCell>
                                                 <TableCell className="font-medium">{tx.staffId?.userId?.name || 'Deleted Staff'}</TableCell>
@@ -402,7 +423,7 @@ export default function BalancesClient() {
     );
 }
 
-function WithdrawDialog({ staff, onWithdraw }: { staff: any, onWithdraw: any }) {
+function WithdrawDialog({ staff, onWithdraw }: { staff: WalletStaff; onWithdraw: (staffDocId: string, amount: number, description: string) => Promise<void> }) {
     const [amount, setAmount] = useState("");
     const [description, setDescription] = useState("");
     const [open, setOpen] = useState(false);

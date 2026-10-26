@@ -296,7 +296,7 @@ export default function InviteEmployeeDialog() {
                                         </SelectItem>
                                     )}
                                     {branchesData?.branches?.map(
-                                        (branch: any) => (
+                                        (branch: { _id: string; name: string }) => (
                                             <SelectItem
                                                 key={branch._id}
                                                 value={branch._id}
@@ -325,7 +325,7 @@ export default function InviteEmployeeDialog() {
                                     <SelectItem value="unassigned">
                                         None
                                     </SelectItem>
-                                    {shiftsData?.shifts?.map((shift: any) => (
+                                    {shiftsData?.shifts?.map((shift: { _id: string; name: string }) => (
                                         <SelectItem
                                             key={shift._id}
                                             value={shift._id}

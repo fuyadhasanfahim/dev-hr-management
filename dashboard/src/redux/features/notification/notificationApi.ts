@@ -62,7 +62,7 @@ export const notificationApi = apiSlice.injectEndpoints({
             }),
             invalidatesTags: ['Notification'],
         }),
-        markAllAsRead: builder.mutation<{ modifiedCount: number }, any>({
+        markAllAsRead: builder.mutation<{ modifiedCount: number }, unknown>({
             query: () => ({
                 url: '/notifications/read-all',
                 method: 'POST',

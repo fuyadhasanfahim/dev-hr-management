@@ -294,7 +294,7 @@ export default function OrderDetailsPage() {
                                         <div className="grid gap-5">
                                             {/* Services list if present */}
                                             {Array.isArray(order.quotationSnapshot?.services) && order.quotationSnapshot.services.length > 0 ? (
-                                                order.quotationSnapshot.services.map((svc: any, idx: number) => {
+                                                order.quotationSnapshot.services.map((svc, idx: number) => {
                                                     const CATEGORY_NAMES: Record<string, string> = {
                                                         'web-development': 'Web Design & Development',
                                                         'marketing': 'Marketing & Growth',
@@ -352,7 +352,7 @@ export default function OrderDetailsPage() {
                                                                 <div className="space-y-2 pt-2 border-t border-dashed">
                                                                     <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Included Pricing Items:</span>
                                                                     <div className="grid gap-2">
-                                                                        {svc.lineItems.map((item: any, i: number) => (
+                                                                        {svc.lineItems.map((item, i: number) => (
                                                                             <div key={i} className="flex justify-between items-center text-xs p-2 bg-muted/30 rounded border">
                                                                                 <div className="flex flex-col">
                                                                                     <span className="font-bold text-foreground">{item.title}</span>
@@ -373,7 +373,7 @@ export default function OrderDetailsPage() {
                                                 })
                                             ) : (
                                                 /* Fallback to ScopeOfWork */
-                                                order.quotationSnapshot?.scopeOfWork?.map((item: any, index: number) => (
+                                                order.quotationSnapshot?.scopeOfWork?.map((item, index: number) => (
                                                     <div key={index} className="flex flex-col md:flex-row justify-between items-start md:items-center p-5 rounded-xl border bg-card hover:shadow-md transition-shadow">
                                                         <div className="flex items-start gap-4">
                                                             <div className="p-3 bg-primary/5 rounded-lg">
@@ -397,7 +397,7 @@ export default function OrderDetailsPage() {
                                         <div className="border-t pt-5">
                                             <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-3">Payment Terms & Milestones</h3>
                                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                                                {order.quotationSnapshot.paymentMilestones.map((m: any, idx: number) => {
+                                                {order.quotationSnapshot.paymentMilestones.map((m, idx: number) => {
                                                     const amount = ((order.quotationSnapshot?.grandTotal || 0) * (m.percentage || 0)) / 100;
                                                     return (
                                                         <div key={idx} className="p-3 bg-muted/20 rounded-lg border flex flex-col justify-between">

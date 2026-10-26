@@ -46,6 +46,7 @@ import { format, formatDistanceToNow } from 'date-fns';
 import InviteEmployeeDialog from './invite-employee-dialog';
 import { usePermissions } from '@/hooks/use-permissions';
 import { apiMessage } from '@/lib/api-error';
+import type { IInvitation } from '@/types/invitation.type';
 
 export default function InvitationList() {
     const { can } = usePermissions();
@@ -107,7 +108,7 @@ export default function InvitationList() {
         }
     };
 
-    const getStatusBadge = (invitation: any) => {
+    const getStatusBadge = (invitation: IInvitation) => {
         if (invitation.isUsed) {
             return (
                 <Badge
@@ -160,7 +161,7 @@ export default function InvitationList() {
         );
     };
 
-    const renderTable = (invitations: any[]) => (
+    const renderTable = (invitations: IInvitation[]) => (
         <div className="rounded-lg border">
             <Table>
                 <TableHeader>
@@ -429,7 +430,7 @@ export default function InvitationList() {
                 <Tabs
                     defaultValue="all"
                     value={filter}
-                    onValueChange={(v: string) => setFilter(v as any)}
+                    onValueChange={(v) => setFilter(v as typeof filter)}
                 >
                     <TabsList className="w-full sm:w-auto grid grid-cols-4 sm:inline-flex">
                         <TabsTrigger value="all" className="text-xs sm:text-sm">

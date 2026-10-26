@@ -21,6 +21,7 @@ import { Loader, Trash2, Plus, GripVertical } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { apiMessage } from '@/lib/api-error';
+import type { LeadSetting } from "@/types/lead.type";
 
 interface LeadSettingsDialogProps {
   open: boolean;
@@ -47,8 +48,8 @@ export function LeadSettingsDialog({ open, onOpenChange }: LeadSettingsDialogPro
   const [newItemName, setNewItemName] = useState("");
   const [selectedColor, setSelectedColor] = useState(predefinedColors[0]);
 
-  const settings = settingsData?.data || [];
-  const currentItems = settings.filter((s: any) => s.type === activeTab);
+  const settings: LeadSetting[] = settingsData?.data || [];
+  const currentItems = settings.filter((s) => s.type === activeTab);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -161,7 +162,7 @@ export function LeadSettingsDialog({ open, onOpenChange }: LeadSettingsDialogPro
                   No items added yet.
                 </div>
               ) : (
-                currentItems.map((item: any) => (
+                currentItems.map((item) => (
                   <div
                     key={item._id}
                     className="flex items-center justify-between p-3 bg-card border border-border rounded-lg shadow-sm group hover:border-border transition-colors"

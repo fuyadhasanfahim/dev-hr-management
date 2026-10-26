@@ -28,7 +28,7 @@ import { LeadStats } from '@/components/lead/LeadStats';
 import { LeadFilters } from '@/components/lead/LeadFilters';
 import { LeadTable } from '@/components/lead/LeadTable';
 import { LeadPagination } from '@/components/lead/LeadPagination';
-import { Lead } from '@/types/lead.type';
+import { Lead, type LeadSetting } from '@/types/lead.type';
 import { apiFieldErrors, apiMessage } from '@/lib/api-error';
 
 export default function LeadsPage() {
@@ -117,15 +117,15 @@ function LeadsPageContent() {
     // Queries
     const { data: settingsData } = useGetLeadSettingsQuery(undefined);
     const statuses = useMemo(
-        () => settingsData?.data?.filter((s: any) => s.type === 'STATUS') || [],
+        () => (settingsData?.data as LeadSetting[] | undefined)?.filter((s) => s.type === 'STATUS') || [],
         [settingsData],
     );
     const sources = useMemo(
-        () => settingsData?.data?.filter((s: any) => s.type === 'SOURCE') || [],
+        () => (settingsData?.data as LeadSetting[] | undefined)?.filter((s) => s.type === 'SOURCE') || [],
         [settingsData],
     );
     const actionTypes = useMemo(
-        () => settingsData?.data?.filter((s: any) => s.type === 'ACTION_TYPE') || [],
+        () => (settingsData?.data as LeadSetting[] | undefined)?.filter((s) => s.type === 'ACTION_TYPE') || [],
         [settingsData],
     );
 

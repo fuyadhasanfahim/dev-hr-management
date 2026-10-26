@@ -16,7 +16,7 @@ import {
     TableHeader,
     TableRow,
 } from '@/components/ui/table';
-import { useGetDistributionsQuery } from '@/redux/features/profitShare/profitShareApi';
+import { useGetDistributionsQuery, type IProfitDistribution } from '@/redux/features/profitShare/profitShareApi';
 import { Loader, History, Calendar } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -48,11 +48,11 @@ export default function DistributionHistory() {
         }).format(amount);
     };
 
-    const getPeriodLabel = (distribution: any) => {
+    const getPeriodLabel = (distribution: IProfitDistribution) => {
         if (distribution.periodType === 'year') {
             return `Full Year ${distribution.year}`;
         }
-        return `${monthNames[distribution.month]} ${distribution.year}`;
+        return `${monthNames[distribution.month ?? 0]} ${distribution.year}`;
     };
 
     if (isLoading) {

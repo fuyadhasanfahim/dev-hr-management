@@ -174,7 +174,7 @@ export default function BranchManagement() {
 
                     <Select
                         value={statusFilter}
-                        onValueChange={(val: any) => setStatusFilter(val)}
+                        onValueChange={(val) => setStatusFilter(val as typeof statusFilter)}
                     >
                         <SelectTrigger className="w-[140px] h-9">
                             <SelectValue placeholder="All Status" />

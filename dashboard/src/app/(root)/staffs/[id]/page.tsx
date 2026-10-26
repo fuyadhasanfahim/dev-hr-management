@@ -168,11 +168,13 @@ export default function StaffDetailsPage() {
     }
 
     const { user, branch, currentShift } = staff;
+    // Older records keep the bank details on the staff record itself.
+    const legacy = staff as typeof staff & { bankName?: string; bankAccountNo?: string; bankAccountName?: string; branchName?: string };
     const bankDetails = staff.bank || {};
-    const bankName = bankDetails.bankName || (staff as any).bankName;
-    const bankAccountNo = bankDetails.accountNumber || (staff as any).bankAccountNo;
-    const bankAccountName = bankDetails.accountHolderName || (staff as any).bankAccountName;
-    const bankBranch = bankDetails.branch || (staff as any).branchName;
+    const bankName = bankDetails.bankName || legacy.bankName;
+    const bankAccountNo = bankDetails.accountNumber || legacy.bankAccountNo;
+    const bankAccountName = bankDetails.accountHolderName || legacy.bankAccountName;
+    const bankBranch = bankDetails.branch || legacy.branchName;
     const bankRouting = bankDetails.routingNumber;
 
     const formattedDesignation = staff.designation

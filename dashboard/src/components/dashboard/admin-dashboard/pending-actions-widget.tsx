@@ -108,7 +108,7 @@ export function PendingActionsWidget() {
         ) : (
           <div className="space-y-3">
             {pendingLeaves.slice(0, 4).map((leave) => {
-              const staff = leave.staffId as any;
+              const staff = leave.staffId as unknown as { userId?: { name?: string }; name?: string } | null;
               const staffName = staff?.userId?.name || staff?.name || "Staff Member";
               const initials = staffName
                 .split(" ")

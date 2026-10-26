@@ -169,9 +169,9 @@ export function AddPaymentDialog({
             toast.success("Order automatically generated", { id: orderToastId });
             onRecorded?.();
           })
-          .catch((orderErr: any) => {
+          .catch((orderErr) => {
             toast.error(
-              orderErr?.data?.message || orderErr?.message || "Payment recorded but failed to create order.",
+              apiMessage(orderErr, "Payment recorded but failed to create order."),
               { id: orderToastId }
             );
           });
@@ -284,7 +284,7 @@ export function AddPaymentDialog({
             </label>
             <SelectContent
               value={paymentType}
-              onChange={(val) => setPaymentType(val as any)}
+              onChange={(val) => setPaymentType(val as typeof paymentType)}
               options={paymentTypeOptions}
               align="down"
             />

@@ -48,6 +48,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 import { apiMessage } from '@/lib/api-error';
+import type { LeadActivity, LeadActivityType, LeadSetting } from '@/types/lead.type';
 
 export default function LeadDetailsPage() {
   return (
@@ -76,16 +77,16 @@ function LeadDetailsContent() {
   const [convertLead, { isLoading: isConverting }] = useConvertLeadToClientMutation();
 
   const statuses = useMemo(
-    () => settingsData?.data?.filter((s: any) => s.type === "STATUS") || [],
+    () => (settingsData?.data as LeadSetting[] | undefined)?.filter((s) => s.type === "STATUS") || [],
     [settingsData]
   );
   const actionTypes = useMemo(
-    () => settingsData?.data?.filter((s: any) => s.type === "ACTION_TYPE") || [],
+    () => (settingsData?.data as LeadSetting[] | undefined)?.filter((s) => s.type === "ACTION_TYPE") || [],
     [settingsData]
   );
 
   const lead = leadData?.data?.lead;
-  const activities = leadData?.data?.activities || [];
+  const activities: LeadActivity[] = leadData?.data?.activities || [];
 
   const [isActivityOpen, setIsActivityOpen] = useState(false);
   const [activityNote, setActivityNote] = useState("");
@@ -118,7 +119,13 @@ function LeadDetailsContent() {
   const handleAddActivity = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const payload: any = {
+      const payload: {
+        activityType: LeadActivityType;
+        notes: string;
+        newStatus?: string;
+        nextActionType?: string;
+        nextActionDate?: string;
+      } = {
         activityType: "NOTE_ADDED",
         notes: activityNote,
       };
@@ -327,7 +334,7 @@ function LeadDetailsContent() {
             </CardHeader>
             <CardContent className="pt-6">
               <div className="space-y-6 relative before:absolute before:inset-0 before:ml-5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-border before:to-transparent">
-                {activities.map((act: any) => (
+                {activities.map((act) => (
                   <div
                     key={act._id}
                     className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active"
@@ -423,7 +430,7 @@ function LeadDetailsContent() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">Don&apos;t Change</SelectItem>
-                    {statuses.map((s: any) => (
+                    {statuses.map((s) => (
                       <SelectItem key={s._id} value={s._id}>
                         {s.name}
                       </SelectItem>
@@ -439,7 +446,7 @@ function LeadDetailsContent() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">None</SelectItem>
-                    {actionTypes.map((a: any) => (
+                    {actionTypes.map((a) => (
                       <SelectItem key={a._id} value={a._id}>
                         {a.name}
                       </SelectItem>
