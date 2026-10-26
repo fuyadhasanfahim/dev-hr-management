@@ -30,6 +30,7 @@ import { DateTimePicker } from "@/components/shared/DateTimePicker";
 import { toast } from "sonner";
 import { Loader2, CalendarClock, UserPlus, Layers, Sparkles, CheckSquare, Square, Link2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { apiMessage } from '@/lib/api-error';
 
 interface AssignTaskModalProps {
     open: boolean;
@@ -552,8 +553,8 @@ export function AssignTaskModal({
             setAssignedTo("");
             setDueDate(undefined);
             onOpenChange(false);
-        } catch (err: any) {
-            toast.error(err?.data?.message || "Failed to assign task.");
+        } catch (err) {
+            toast.error(apiMessage(err, "Failed to assign task."));
         }
     };
 

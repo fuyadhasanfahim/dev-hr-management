@@ -4,26 +4,17 @@ import { useState, useEffect, useRef } from "react";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
 import {
-  TrendingUp,
-  AlertCircle,
-  LogOut,
-  Calendar,
   ListTodo,
-  FileText,
   DollarSign,
   UserCheck,
   PlaneTakeoff,
   Lock,
-  Unlock,
-} from "lucide-react";
+  } from "lucide-react";
 import StaffHeader from "./staff-header";
 import { HRTimeTrackingWidget } from "../admin-dashboard/hr-time-tracking-widget";
 import { StaffTasksWidget } from "./staff-tasks-widget";

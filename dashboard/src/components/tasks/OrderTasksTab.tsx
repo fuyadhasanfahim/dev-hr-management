@@ -17,8 +17,7 @@ import {
     CardContent,
     CardHeader,
     CardTitle,
-    CardDescription,
-} from '@/components/ui/card';
+    } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -31,12 +30,6 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import {
     Accordion,
     AccordionContent,
@@ -51,7 +44,7 @@ import {
     ClipboardList,
     UserCog,
     PlusCircle,
-    MoreHorizontal,
+    
     Trash2,
     CheckCircle2,
     XCircle,
@@ -73,6 +66,7 @@ import {
     LayoutGrid,
     List,
 } from 'lucide-react';
+import { apiMessage } from '@/lib/api-error';
 import {
     Dialog,
     DialogContent,
@@ -122,7 +116,7 @@ export function OrderTasksTab({ order, canManage }: OrderTasksTabProps) {
                 },
             }).unwrap();
             toast.success('Project Owner assigned.');
-        } catch (err: any) {
+        } catch {
             toast.error('Failed to update Project Owner.');
         }
     };
@@ -137,7 +131,7 @@ export function OrderTasksTab({ order, canManage }: OrderTasksTabProps) {
                 data: { decision, note: `Task reviewed & ${decision}d.` },
             }).unwrap();
             toast.success(`Task explicitly ${decision}d.`);
-        } catch (err) {
+        } catch {
             toast.error('Failed to record review logic.');
         }
     };
@@ -150,8 +144,8 @@ export function OrderTasksTab({ order, canManage }: OrderTasksTabProps) {
         try {
             await updateTaskStatus({ taskId, status, currentStatus }).unwrap();
             toast.success(`Marked as ${status.replace('_', ' ')}`);
-        } catch (err: any) {
-            toast.error(err?.data?.message || 'Status jump restricted.');
+        } catch (err) {
+            toast.error(apiMessage(err, 'Status jump restricted.'));
         }
     };
 
@@ -169,8 +163,8 @@ export function OrderTasksTab({ order, canManage }: OrderTasksTabProps) {
             setSubmitModalTask(null);
             setSubmitNote('');
             setSubmitAttachment('');
-        } catch (err: any) {
-            toast.error(err?.data?.message || 'Submission error.');
+        } catch (err) {
+            toast.error(apiMessage(err, 'Submission error.'));
         }
     };
 
@@ -180,25 +174,11 @@ export function OrderTasksTab({ order, canManage }: OrderTasksTabProps) {
         try {
             await deleteTask(taskId).unwrap();
             toast.success('Pipeline phase eradicated.');
-        } catch (err) {
+        } catch {
             toast.error('Failed deletion cascade.');
         }
     };
 
-    const getStatusVariant = (status: string) => {
-        switch (status) {
-            case 'completed':
-                return 'bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 border-emerald-200/50 dark:text-emerald-400';
-            case 'under_review':
-                return 'bg-amber-500/10 text-amber-600 hover:bg-amber-500/20 border-amber-200/50 dark:text-amber-400';
-            case 'in_progress':
-                return 'bg-blue-500/10 text-blue-600 hover:bg-blue-500/20 border-blue-200/50 dark:text-blue-400';
-            case 'rejected':
-                return 'bg-rose-500/10 text-rose-600 hover:bg-rose-500/20 border-rose-200/50 dark:text-rose-400';
-            default:
-                return 'bg-slate-100 text-slate-600 border-slate-200';
-        }
-    };
 
     const getPriorityStyles = (priority: string) => {
         switch (priority?.toLowerCase()) {
@@ -533,7 +513,7 @@ export function OrderTasksTab({ order, canManage }: OrderTasksTabProps) {
                                                                                     <div className="flex items-center gap-2 text-blue-700 dark:text-blue-400 font-black text-[10px] uppercase tracking-wider">
                                                                                         <Paperclip className="h-3.5 w-3.5" /> Artifact Delivered
                                                                                     </div>
-                                                                                    <p className="text-sm italic text-blue-900 dark:text-blue-200 font-medium">"{task.submissionNote}"</p>
+                                                                                    <p className="text-sm italic text-blue-900 dark:text-blue-200 font-medium">&quot;{task.submissionNote}&quot;</p>
                                                                                     {task.submissionAttachment && (
                                                                                         <a href={task.submissionAttachment} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 text-xs font-bold text-blue-700 bg-white border px-3 py-1.5 rounded shadow-sm hover:bg-blue-50 mt-1 transition-colors">
                                                                                             <ExternalLink className="h-3 w-3" /> Fetch Assets

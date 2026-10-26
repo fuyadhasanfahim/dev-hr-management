@@ -3,7 +3,6 @@
 import { useState } from 'react';
 import { format } from 'date-fns';
 import {
-    X,
     Download,
     Mail,
     Phone,

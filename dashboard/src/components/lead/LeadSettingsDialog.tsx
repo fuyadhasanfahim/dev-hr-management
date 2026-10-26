@@ -20,6 +20,7 @@ import { Label } from "@/components/ui/label";
 import { Loader, Trash2, Plus, GripVertical } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
+import { apiMessage } from '@/lib/api-error';
 
 interface LeadSettingsDialogProps {
   open: boolean;
@@ -62,8 +63,8 @@ export function LeadSettingsDialog({ open, onOpenChange }: LeadSettingsDialogPro
       await createSetting(payload).unwrap();
       setNewItemName("");
       toast.success("Added successfully");
-    } catch (error: any) {
-      toast.error(error?.data?.message || "Failed to add item");
+    } catch (error) {
+      toast.error(apiMessage(error, "Failed to add item"));
     }
   };
 
@@ -72,8 +73,8 @@ export function LeadSettingsDialog({ open, onOpenChange }: LeadSettingsDialogPro
     try {
       await deleteSetting(id).unwrap();
       toast.success("Deleted successfully");
-    } catch (error: any) {
-      toast.error(error?.data?.message || "Failed to delete item");
+    } catch (error) {
+      toast.error(apiMessage(error, "Failed to delete item"));
     }
   };
 

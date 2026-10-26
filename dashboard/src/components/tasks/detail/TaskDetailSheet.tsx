@@ -45,6 +45,7 @@ import {
 } from '@/lib/task-progress';
 import { cn } from '@/lib/utils';
 import { CalendarClock, CheckCircle2, Edit3, PlayCircle, Send, Trash2, XCircle, RotateCcw } from 'lucide-react';
+import { apiMessage } from '@/lib/api-error';
 
 interface TaskDetailSheetProps {
     task: TaskItem | null;
@@ -98,8 +99,8 @@ export function TaskDetailSheet({ task, open, onOpenChange, canManage, onEdit, o
         try {
             await updateTaskStatus({ taskId: task._id, status, currentStatus: task.status }).unwrap();
             toast.success('Task status updated');
-        } catch (err: any) {
-            toast.error(err?.data?.message || 'Failed to update status');
+        } catch (err) {
+            toast.error(apiMessage(err, 'Failed to update status'));
         }
     };
 
@@ -116,8 +117,8 @@ export function TaskDetailSheet({ task, open, onOpenChange, canManage, onEdit, o
         if (subtaskId.startsWith('fallback_')) return;
         try {
             await toggleSubtask({ taskId: task._id, subtaskId, completed: !completed }).unwrap();
-        } catch (err: any) {
-            toast.error(err?.data?.message || 'Failed to toggle checklist item');
+        } catch (err) {
+            toast.error(apiMessage(err, 'Failed to toggle checklist item'));
         }
     };
 
@@ -142,8 +143,8 @@ export function TaskDetailSheet({ task, open, onOpenChange, canManage, onEdit, o
             toast.success('Revision requested for this feature');
             setRevisionModalOpen(false);
             setActiveSubtaskId(null);
-        } catch (err: any) {
-            toast.error(err?.data?.message || 'Failed to request revision');
+        } catch (err) {
+            toast.error(apiMessage(err, 'Failed to request revision'));
         }
     };
 

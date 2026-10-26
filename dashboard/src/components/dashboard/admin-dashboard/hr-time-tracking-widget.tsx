@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
-import { useRouter } from "next/navigation";
 import {
   Card,
   CardHeader,
@@ -29,12 +28,9 @@ import {
   FileText,
   Timer,
   LogOut,
-  Calendar,
   Briefcase,
-  PlaneTakeoff,
   ArrowRight,
-  ShieldCheck,
-} from "lucide-react";
+  } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
 import {
   useCheckInMutation,
@@ -56,7 +52,6 @@ const formatDuration = (minutes: number) => {
 const EARLY_CHECKIN_WINDOW_MINUTES = 15;
 
 export function HRTimeTrackingWidget() {
-  const router = useRouter();
   const { data: todaysData } = useGetTodayAttendanceQuery(undefined);
   const { data: myShiftData } = useGetMyShiftQuery(undefined);
   const { data: leaveBalanceData } = useGetLeaveBalanceQuery(undefined);

@@ -23,7 +23,7 @@ import {
     TableHeader,
     TableRow,
 } from '@/components/ui/table';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
     Tooltip,
     TooltipContent,
@@ -45,6 +45,7 @@ import { toast } from 'sonner';
 import { format, formatDistanceToNow } from 'date-fns';
 import InviteEmployeeDialog from './invite-employee-dialog';
 import { usePermissions } from '@/hooks/use-permissions';
+import { apiMessage } from '@/lib/api-error';
 
 export default function InvitationList() {
     const { can } = usePermissions();
@@ -66,8 +67,8 @@ export default function InvitationList() {
             await resendInvitation(id).unwrap();
             toast.success('Invitation resent successfully!');
             refetch();
-        } catch (err: any) {
-            toast.error(err?.data?.message || 'Failed to resend invitation');
+        } catch (err) {
+            toast.error(apiMessage(err, 'Failed to resend invitation'));
         }
     };
 
@@ -79,8 +80,8 @@ export default function InvitationList() {
             await cancelInvitation(id).unwrap();
             toast.success('Invitation cancelled successfully!');
             refetch();
-        } catch (err: any) {
-            toast.error(err?.data?.message || 'Failed to cancel invitation');
+        } catch (err) {
+            toast.error(apiMessage(err, 'Failed to cancel invitation'));
         }
     };
 

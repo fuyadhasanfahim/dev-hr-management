@@ -62,6 +62,7 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { apiMessage } from '@/lib/api-error';
 
 export type SubTaskItem = { _id: string; title: string; completed: boolean; completedAt?: string };
 export type TaskItem = ProgressTaskItem;
@@ -394,9 +395,9 @@ export function KanbanBoard({
         try {
             await updateTaskStatus({ taskId: task._id, status: newStatus, currentStatus: task.status }).unwrap();
             toast.success('Task status updated');
-        } catch (err: any) {
+        } catch (err) {
             setLocalTasks(previousTasks);
-            toast.error(err?.data?.message || 'Transition failed');
+            toast.error(apiMessage(err, 'Transition failed'));
         }
     };
 
@@ -452,9 +453,9 @@ export function KanbanBoard({
         try {
             await updateTaskStatus({ taskId, status: targetStatus, currentStatus }).unwrap();
             toast.success('Task status updated');
-        } catch (err: any) {
+        } catch (err) {
             setLocalTasks(previousTasks);
-            toast.error(err?.data?.message || 'Failed to update status');
+            toast.error(apiMessage(err, 'Failed to update status'));
         }
     };
 

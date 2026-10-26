@@ -43,6 +43,7 @@ import {
 } from '@/lib/task-progress';
 import { cn } from '@/lib/utils';
 import { ArrowLeft, CalendarClock, Send, UserRound } from 'lucide-react';
+import { apiMessage } from '@/lib/api-error';
 
 const AVAILABILITY_META: Record<WorkloadStatus, { label: string; badge: string }> = {
     available: { label: 'Available', badge: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-transparent' },
@@ -130,8 +131,8 @@ export default function TeamMemberTaskDetailsPage() {
             toast.success('Deliverables submitted for review!');
             setIsSubmitModalOpen(false);
             setDetailTaskId(null);
-        } catch (err: any) {
-            toast.error(err?.data?.message || 'Failed to submit task work.');
+        } catch (err) {
+            toast.error(apiMessage(err, 'Failed to submit task work.'));
         }
     };
 

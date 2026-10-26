@@ -13,7 +13,7 @@ import {
     BarChart3,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -76,6 +76,7 @@ import {
     NOTICE_CATEGORY_COLORS,
 } from '@/types/notice.type';
 import { usePermissions } from '@/hooks/use-permissions';
+import { apiMessage } from '@/lib/api-error';
 
 export default function NoticeManagePage() {
     const { can } = usePermissions();
@@ -100,8 +101,8 @@ export default function NoticeManagePage() {
             await createNotice(formData).unwrap();
             toast.success('Notice created successfully');
             setIsCreateOpen(false);
-        } catch (error: any) {
-            toast.error(error?.data?.message || 'Failed to create notice');
+        } catch (error) {
+            toast.error(apiMessage(error, 'Failed to create notice'));
         }
     };
 
@@ -110,8 +111,8 @@ export default function NoticeManagePage() {
             await updateNotice({ id, ...formData }).unwrap();
             toast.success('Notice updated successfully');
             setEditingNotice(null);
-        } catch (error: any) {
-            toast.error(error?.data?.message || 'Failed to update notice');
+        } catch (error) {
+            toast.error(apiMessage(error, 'Failed to update notice'));
         }
     };
 
@@ -124,9 +125,9 @@ export default function NoticeManagePage() {
                 await publishNotice(notice._id).unwrap();
                 toast.success('Notice published and notifications sent!');
             }
-        } catch (error: any) {
+        } catch (error) {
             toast.error(
-                error?.data?.message || 'Failed to update publish status',
+                apiMessage(error, 'Failed to update publish status'),
             );
         }
     };
@@ -137,8 +138,8 @@ export default function NoticeManagePage() {
             await deleteNotice(deleteNoticeId).unwrap();
             toast.success('Notice deleted');
             setDeleteNoticeId(null);
-        } catch (error: any) {
-            toast.error(error?.data?.message || 'Failed to delete notice');
+        } catch (error) {
+            toast.error(apiMessage(error, 'Failed to delete notice'));
         }
     };
 

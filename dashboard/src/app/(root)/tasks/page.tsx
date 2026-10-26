@@ -41,6 +41,7 @@ import {
     type TaskItem,
 } from '@/lib/task-progress';
 import { ClipboardList, LayoutGrid, LayoutList, Plus, Send } from 'lucide-react';
+import { apiMessage } from '@/lib/api-error';
 
 const DEFAULT_FILTERS: WorkloadFiltersState = {
     search: '',
@@ -194,8 +195,8 @@ export default function TeamWorkloadPage() {
             toast.success('Deliverables submitted for review!');
             setIsSubmitModalOpen(false);
             setDetailTaskId(null);
-        } catch (err: any) {
-            toast.error(err?.data?.message || 'Failed to submit task work.');
+        } catch (err) {
+            toast.error(apiMessage(err, 'Failed to submit task work.'));
         }
     };
 

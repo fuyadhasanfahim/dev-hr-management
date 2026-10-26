@@ -24,6 +24,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Spinner } from '@/components/ui/spinner';
 import { useCreateDepartmentMutation } from '@/redux/features/department/departmentApi';
+import { apiMessage } from '@/lib/api-error';
 
 const departmentSchema = z.object({
     name: z.string().min(2, 'Department name must be at least 2 characters'),
@@ -81,8 +82,8 @@ export default function CreateDepartmentDialog() {
                 isActive: true,
             });
             setOpen(false);
-        } catch (error: any) {
-            toast.error(error?.data?.message || (error as Error).message || 'Failed to create department');
+        } catch (error) {
+            toast.error(apiMessage(error, 'Failed to create department'));
         }
     };
 

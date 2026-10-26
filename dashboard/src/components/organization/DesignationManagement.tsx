@@ -53,6 +53,7 @@ import { useGetAllDepartmentsQuery } from '@/redux/features/department/departmen
 import type { IDesignation } from '@/types/designation.type';
 import CreateDesignationDialog from './CreateDesignationDialog';
 import EditDesignationDialog from './EditDesignationDialog';
+import { apiMessage } from '@/lib/api-error';
 
 export default function DesignationManagement() {
     const { data, isLoading } = useGetAllDesignationsQuery();
@@ -100,8 +101,8 @@ export default function DesignationManagement() {
         try {
             await toggleStatus(desig._id).unwrap();
             toast.success(`Designation "${desig.name}" ${desig.isActive ? 'deactivated' : 'activated'}`);
-        } catch (error: any) {
-            toast.error(error?.data?.message || 'Failed to toggle status');
+        } catch (error) {
+            toast.error(apiMessage(error, 'Failed to toggle status'));
         }
     };
 
@@ -112,8 +113,8 @@ export default function DesignationManagement() {
             await deleteDesignation(deletingDesignation._id).unwrap();
             toast.success(`Designation "${deletingDesignation.name}" deleted successfully`);
             setDeletingDesignation(null);
-        } catch (error: any) {
-            toast.error(error?.data?.message || (error as Error).message || 'Failed to delete designation');
+        } catch (error) {
+            toast.error(apiMessage(error, 'Failed to delete designation'));
         }
     };
 

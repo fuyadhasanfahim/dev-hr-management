@@ -52,6 +52,7 @@ import {
 import type { IBranch } from '@/types/branch.type';
 import CreateBranch from '@/components/shifting/create-branch';
 import EditBranchDialog from './EditBranchDialog';
+import { apiMessage } from '@/lib/api-error';
 
 export default function BranchManagement() {
     const { data, isLoading } = useGetAllBranchesQuery();
@@ -90,8 +91,8 @@ export default function BranchManagement() {
         try {
             await toggleStatus(branch._id).unwrap();
             toast.success(`Branch "${branch.name}" ${branch.isActive ? 'deactivated' : 'activated'}`);
-        } catch (error: any) {
-            toast.error(error?.data?.message || 'Failed to toggle status');
+        } catch (error) {
+            toast.error(apiMessage(error, 'Failed to toggle status'));
         }
     };
 
@@ -102,8 +103,8 @@ export default function BranchManagement() {
             await deleteBranch(deletingBranch._id).unwrap();
             toast.success(`Branch "${deletingBranch.name}" deleted successfully`);
             setDeletingBranch(null);
-        } catch (error: any) {
-            toast.error(error?.data?.message || (error as Error).message || 'Failed to delete branch');
+        } catch (error) {
+            toast.error(apiMessage(error, 'Failed to delete branch'));
         }
     };
 

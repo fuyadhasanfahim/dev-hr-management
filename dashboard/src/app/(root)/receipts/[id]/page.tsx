@@ -42,6 +42,7 @@ import ReceiptPuppeteerPdfBtn, {
   receiptPdfFileStem,
 } from "@/components/receipt/ReceiptPuppeteerPdfBtn";
 import { ReceiptEmailDialog } from "@/components/receipt/ReceiptEmailDialog";
+import { apiMessage } from '@/lib/api-error';
 
 const PAYMENT_TYPE_LABELS: Record<string, string> = {
   full: "Full Payment",
@@ -115,8 +116,8 @@ export default function ReceiptDetailsPage() {
         toast.error("Failed to send receipt email");
       }
       return recipients;
-    } catch (err: any) {
-      toast.error(err?.data?.message || "Failed to send receipt");
+    } catch (err) {
+      toast.error(apiMessage(err, "Failed to send receipt"));
       return [];
     }
   };
@@ -127,8 +128,8 @@ export default function ReceiptDetailsPage() {
       toast.success("Receipt voided");
       setVoidDialogOpen(false);
       setVoidReason("");
-    } catch (err: any) {
-      toast.error(err?.data?.message || "Failed to void receipt");
+    } catch (err) {
+      toast.error(apiMessage(err, "Failed to void receipt"));
     }
   };
 
@@ -143,8 +144,8 @@ export default function ReceiptDetailsPage() {
       toast.success("Payment entry voided");
       setVoidPaymentTarget(null);
       setVoidPaymentReason("");
-    } catch (err: any) {
-      toast.error(err?.data?.message || "Failed to void payment");
+    } catch (err) {
+      toast.error(apiMessage(err, "Failed to void payment"));
     }
   };
 
@@ -453,7 +454,7 @@ export default function ReceiptDetailsPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Void this payment transaction?</AlertDialogTitle>
             <AlertDialogDescription>
-              This specific payment transaction will be marked as voided. The receipt ledger's paid balance will automatically be updated.
+              This specific payment transaction will be marked as voided. The receipt ledger&apos;s paid balance will automatically be updated.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="space-y-1.5">

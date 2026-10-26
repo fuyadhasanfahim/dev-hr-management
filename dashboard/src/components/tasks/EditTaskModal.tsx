@@ -31,6 +31,7 @@ import { DateTimePicker } from "@/components/shared/DateTimePicker";
 import { toast } from "sonner";
 import { Loader2, CalendarClock, Edit3, Layers, Sparkles, CheckSquare, Square, Link2, FileText } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { apiMessage } from '@/lib/api-error';
 
 interface EditTaskModalProps {
     open: boolean;
@@ -461,8 +462,8 @@ export function EditTaskModal({
             }).unwrap();
             toast.success("Task updated successfully!");
             onOpenChange(false);
-        } catch (err: any) {
-            toast.error(err?.data?.message || "Failed to update task.");
+        } catch (err) {
+            toast.error(apiMessage(err, "Failed to update task."));
         }
     };
 

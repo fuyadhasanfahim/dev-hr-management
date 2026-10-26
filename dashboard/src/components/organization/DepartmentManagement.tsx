@@ -52,9 +52,10 @@ import {
 import type { IDepartment } from '@/types/department.type';
 import CreateDepartmentDialog from './CreateDepartmentDialog';
 import EditDepartmentDialog from './EditDepartmentDialog';
+import { apiMessage } from '@/lib/api-error';
 
 export default function DepartmentManagement() {
-    const { data, isLoading, refetch } = useGetAllDepartmentsQuery();
+    const { data, isLoading } = useGetAllDepartmentsQuery();
     const [toggleStatus, { isLoading: isToggling }] = useToggleDepartmentStatusMutation();
     const [deleteDepartment, { isLoading: isDeleting }] = useDeleteDepartmentMutation();
 
@@ -90,8 +91,8 @@ export default function DepartmentManagement() {
         try {
             await toggleStatus(dept._id).unwrap();
             toast.success(`Department "${dept.name}" ${dept.isActive ? 'deactivated' : 'activated'}`);
-        } catch (error: any) {
-            toast.error(error?.data?.message || 'Failed to toggle status');
+        } catch (error) {
+            toast.error(apiMessage(error, 'Failed to toggle status'));
         }
     };
 
@@ -102,8 +103,8 @@ export default function DepartmentManagement() {
             await deleteDepartment(deletingDepartment._id).unwrap();
             toast.success(`Department "${deletingDepartment.name}" deleted successfully`);
             setDeletingDepartment(null);
-        } catch (error: any) {
-            toast.error(error?.data?.message || (error as Error).message || 'Failed to delete department');
+        } catch (error) {
+            toast.error(apiMessage(error, 'Failed to delete department'));
         }
     };
 

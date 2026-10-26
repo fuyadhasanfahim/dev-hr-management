@@ -10,8 +10,8 @@ import {
     IconChevronDown,
     IconChevronRight,
     IconCopy,
-    IconDots,
-    IconFileText,
+    
+    
     IconGripVertical,
     IconPlus,
     IconTrash,
@@ -43,7 +43,6 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
@@ -76,6 +75,7 @@ import {
 import { Client } from "@/types/client.type";
 import { QuotationData, type QuotationCategory } from "@/types/quotation.type";
 import { publicApiUrl } from "@/lib/public-api";
+import { apiMessage } from '@/lib/api-error';
 
 // --- Types & Data Interfaces ---
 
@@ -140,9 +140,7 @@ function getCurrencySymbol(currencyName: string) {
 
 // --- Initial Preset Data ---
 
-const initialFeatures: Feature[] = [];
 
-const initialMarketingFeatures: Feature[] = [];
 
 // --- Recursive Tree Manipulations ---
 
@@ -964,7 +962,6 @@ function QuotationDatePicker({
 export default function QuotationBuilder({
     initialData,
     pageTitle,
-    pageSubtitle,
     backUrl,
 }: {
     initialData?: QuotationData;
@@ -1563,8 +1560,8 @@ Please review the details below. Should you have any questions or require custom
                 toast.success("🎉 Quotation created successfully!");
                 router.push(`/quotations/${res._id}`);
             }
-        } catch (err: any) {
-            toast.error(err?.data?.message || "Failed to save quotation.");
+        } catch (err) {
+            toast.error(apiMessage(err, "Failed to save quotation."));
         }
     };
 
@@ -1593,7 +1590,7 @@ Please review the details below. Should you have any questions or require custom
             a.remove();
             URL.revokeObjectURL(url);
             toast.success("🎉 PDF exported successfully!");
-        } catch (err) {
+        } catch {
             toast.error("Failed to export PDF.");
         } finally {
             setIsExporting(false);
@@ -2410,12 +2407,6 @@ function VideoEditingService({
             ? "Duration (in Seconds)"
             : "Quantity (10-sec blocks)";
 
-    const unitSingular =
-        videoEditingUnit === "video"
-            ? "video"
-            : videoEditingUnit === "second"
-            ? "sec"
-            : "10s";
 
     const headerSummary =
         videoEditingQty === 0
@@ -2840,7 +2831,7 @@ function FeatureItem({
         addFeature,
         updateFeature,
         deleteFeature,
-        duplicateFeature,
+        
         indentFeature,
         outdentFeature,
         makeMainFeature,
@@ -3854,7 +3845,7 @@ function IncludedSupportSection() {
             <CardContent className="space-y-3">
                 {includedSupportItems.length === 0 && !isAdding && (
                     <div className="p-6 text-center border-2 border-dashed rounded-xl bg-muted/20">
-                        <p className="text-xs text-muted-foreground font-medium">No included support specified. Click "+ Add Item" or "Bulk Paste" above.</p>
+                        <p className="text-xs text-muted-foreground font-medium">No included support specified. Click &quot;+ Add Item&quot; or &quot;Bulk Paste&quot; above.</p>
                     </div>
                 )}
 
@@ -3994,7 +3985,7 @@ function KeyTermsSection() {
             <CardContent className="space-y-3">
                 {keyTermsItems.length === 0 && !isAdding && (
                     <div className="p-6 text-center border-2 border-dashed rounded-xl bg-muted/20">
-                        <p className="text-xs text-muted-foreground font-medium">No key terms specified. Click "+ Add Item" or "Bulk Paste" above.</p>
+                        <p className="text-xs text-muted-foreground font-medium">No key terms specified. Click &quot;+ Add Item&quot; or &quot;Bulk Paste&quot; above.</p>
                     </div>
                 )}
 
@@ -4134,7 +4125,7 @@ function NotIncludedSection() {
             <CardContent className="space-y-3">
                 {notIncludedItems.length === 0 && !isAdding && (
                     <div className="p-6 text-center border-2 border-dashed rounded-xl bg-muted/20">
-                        <p className="text-xs text-muted-foreground font-medium">No excluded items specified. Click "+ Add Item" or "Bulk Paste" above.</p>
+                        <p className="text-xs text-muted-foreground font-medium">No excluded items specified. Click &quot;+ Add Item&quot; or &quot;Bulk Paste&quot; above.</p>
                     </div>
                 )}
 
@@ -4274,7 +4265,7 @@ function ClientRequirementsSection() {
             <CardContent className="space-y-3">
                 {clientRequirements.length === 0 && !isAdding && (
                     <div className="p-6 text-center border-2 border-dashed rounded-xl bg-muted/20">
-                        <p className="text-xs text-muted-foreground font-medium">No client requirements specified. Click "+ Add Requirement" or "Bulk Paste" above.</p>
+                        <p className="text-xs text-muted-foreground font-medium">No client requirements specified. Click &quot;+ Add Requirement&quot; or &quot;Bulk Paste&quot; above.</p>
                     </div>
                 )}
 

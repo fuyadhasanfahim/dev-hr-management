@@ -4,7 +4,6 @@ import { useGetMyTasksQuery } from "@/redux/features/task/taskApi";
 import {
     Card,
     CardContent,
-    CardDescription,
     CardHeader,
     CardTitle,
 } from "@/components/ui/card";
@@ -13,9 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
     ClipboardList,
-    Calendar,
     ArrowRight,
-    AlertCircle,
     CheckCircle2,
     Clock,
 } from "lucide-react";

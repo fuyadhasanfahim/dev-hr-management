@@ -31,6 +31,7 @@ import { Spinner } from '@/components/ui/spinner';
 import { useUpdateDesignationMutation } from '@/redux/features/designation/designationApi';
 import { useGetAllDepartmentsQuery } from '@/redux/features/department/departmentApi';
 import type { IDesignation } from '@/types/designation.type';
+import { apiMessage } from '@/lib/api-error';
 
 const designationSchema = z.object({
     name: z.string().min(2, 'Designation name must be at least 2 characters'),
@@ -102,8 +103,8 @@ export default function EditDesignationDialog({
 
             toast.success('Designation updated successfully');
             onOpenChange(false);
-        } catch (error: any) {
-            toast.error(error?.data?.message || (error as Error).message || 'Failed to update designation');
+        } catch (error) {
+            toast.error(apiMessage(error, 'Failed to update designation'));
         }
     };
 

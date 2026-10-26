@@ -22,6 +22,7 @@ import { Switch } from '@/components/ui/switch';
 import { Spinner } from '@/components/ui/spinner';
 import { useUpdateBranchMutation } from '@/redux/features/branch/branchApi';
 import type { IBranch } from '@/types/branch.type';
+import { apiMessage } from '@/lib/api-error';
 
 const branchSchema = z.object({
     name: z.string().min(2, 'Branch name is required'),
@@ -85,8 +86,8 @@ export default function EditBranchDialog({
 
             toast.success('Branch updated successfully');
             onOpenChange(false);
-        } catch (error: any) {
-            toast.error(error?.data?.message || (error as Error).message || 'Failed to update branch');
+        } catch (error) {
+            toast.error(apiMessage(error, 'Failed to update branch'));
         }
     };
 

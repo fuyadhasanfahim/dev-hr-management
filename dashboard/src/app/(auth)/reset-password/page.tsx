@@ -15,6 +15,7 @@ import {
 import { Loader } from 'lucide-react';
 import { toast } from 'sonner';
 import { authClient } from '@/lib/auth-client';
+import { apiMessage } from '@/lib/api-error';
 
 export default function ResetPasswordPage() {
     const router = useRouter();
@@ -38,8 +39,8 @@ export default function ResetPasswordPage() {
             });
             toast.success('Password reset successfully! Please login.');
             router.push('/sign-in');
-        } catch (error: any) {
-            toast.error(error?.message || 'Failed to reset password');
+        } catch (error) {
+            toast.error(apiMessage(error, 'Failed to reset password'));
         } finally {
             setIsLoading(false);
         }

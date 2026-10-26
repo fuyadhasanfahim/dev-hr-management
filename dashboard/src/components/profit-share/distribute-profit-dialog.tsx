@@ -27,6 +27,7 @@ import {
 import { Loader, DollarSign, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { apiMessage } from '@/lib/api-error';
 
 interface DistributeProfitDialogProps {
     shareholders: IShareholder[];
@@ -131,8 +132,8 @@ export default function DistributeProfitDialog({
             // Reset form
             setSelectedShareholders([]);
             setNotes('');
-        } catch (err: any) {
-            toast.error(err?.data?.message || 'Failed to distribute profit');
+        } catch (err) {
+            toast.error(apiMessage(err, 'Failed to distribute profit'));
         }
     };
 

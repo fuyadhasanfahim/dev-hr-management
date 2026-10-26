@@ -23,6 +23,7 @@ import { Switch } from '@/components/ui/switch';
 import { Spinner } from '@/components/ui/spinner';
 import { useUpdateDepartmentMutation } from '@/redux/features/department/departmentApi';
 import type { IDepartment } from '@/types/department.type';
+import { apiMessage } from '@/lib/api-error';
 
 const departmentSchema = z.object({
     name: z.string().min(2, 'Department name must be at least 2 characters'),
@@ -86,8 +87,8 @@ export default function EditDepartmentDialog({
 
             toast.success('Department updated successfully');
             onOpenChange(false);
-        } catch (error: any) {
-            toast.error(error?.data?.message || (error as Error).message || 'Failed to update department');
+        } catch (error) {
+            toast.error(apiMessage(error, 'Failed to update department'));
         }
     };
 

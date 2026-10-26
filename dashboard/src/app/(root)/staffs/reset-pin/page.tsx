@@ -16,6 +16,7 @@ import { Loader2 } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useState, useEffect, Suspense } from 'react';
 import { toast } from 'sonner';
+import { apiMessage } from '@/lib/api-error';
 
 function ResetPinContent() {
     const router = useRouter();
@@ -54,8 +55,8 @@ function ResetPinContent() {
             // If they are resetting PIN, they might be logged in or out.
             // If logged in, dashboard. If not, login.
             // Let's assume dashboard.
-        } catch (error: any) {
-            toast.error(error.data?.message || 'Failed to reset PIN');
+        } catch (error) {
+            toast.error(apiMessage(error, 'Failed to reset PIN'));
         }
     };
 

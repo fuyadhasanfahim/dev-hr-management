@@ -16,6 +16,7 @@ import { DropdownMenuItem } from '../ui/dropdown-menu';
 import { Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { Spinner } from '../ui/spinner';
+import { apiMessage } from '@/lib/api-error';
 
 export default function ShiftDeleteAlert({ shiftId }: { shiftId: string }) {
     const [openDelete, setOpenDelete] = useState(false);
@@ -27,9 +28,9 @@ export default function ShiftDeleteAlert({ shiftId }: { shiftId: string }) {
             await deleteShift(shiftId).unwrap();
             toast.success('Shift deleted successfully');
             setOpenDelete(false);
-        } catch (err: any) {
+        } catch (err) {
             toast.error(
-                err?.data?.message || err?.message || 'Something went wrong.',
+                apiMessage(err, 'Something went wrong.'),
             );
         }
     };

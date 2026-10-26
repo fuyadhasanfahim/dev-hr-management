@@ -27,6 +27,7 @@ import {
 import { useGetFinanceAnalyticsQuery } from '@/redux/features/analytics/analyticsApi';
 import { Loader, Share2, Wallet, TrendingUp } from 'lucide-react';
 import { toast } from 'sonner';
+import { apiMessage } from '@/lib/api-error';
 
 const months = [
     { value: '1', label: 'January' },
@@ -121,8 +122,8 @@ export default function ShareProfitDialog() {
             setSelectedPartnerId('');
             setAmount('');
             setNotes('');
-        } catch (err: any) {
-            toast.error(err?.data?.message || 'Failed to share profit');
+        } catch (err) {
+            toast.error(apiMessage(err, 'Failed to share profit'));
         }
     };
 

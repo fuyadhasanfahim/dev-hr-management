@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useGetOrdersQuery } from "@/redux/features/order/orderApi";
-import { Package, Clock, ArrowRight, AlertTriangle } from "lucide-react";
+import { Package, Clock, ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { format } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";

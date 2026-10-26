@@ -23,7 +23,7 @@ import {
     useDeleteShareholderMutation,
     type IShareholder,
 } from '@/redux/features/profitShare/profitShareApi';
-import { Loader, Plus, Trash2, Edit, Users, Percent } from 'lucide-react';
+import { Loader, Trash2, Edit, Users, Percent } from 'lucide-react';
 import { toast } from 'sonner';
 import {
     AlertDialog,
@@ -38,6 +38,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Progress } from '@/components/ui/progress';
 import AddShareholderDialog from './add-shareholder-dialog';
+import { apiMessage } from '@/lib/api-error';
 
 export default function ShareholderList() {
     const { data, isLoading, isFetching } = useGetShareholdersQuery();
@@ -50,8 +51,8 @@ export default function ShareholderList() {
         try {
             await deleteShareholder(id).unwrap();
             toast.success('Shareholder removed successfully');
-        } catch (err: any) {
-            toast.error(err?.data?.message || 'Failed to remove shareholder');
+        } catch (err) {
+            toast.error(apiMessage(err, 'Failed to remove shareholder'));
         }
     };
 

@@ -55,6 +55,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { apiMessage } from '@/lib/api-error';
 
 export default function BalancesClient() {
     // Separate pagination states for each tab
@@ -83,7 +84,7 @@ export default function BalancesClient() {
     // Staff Balances (Admin only)
     const {
         data: adminStaffData,
-        isLoading: isAdminStaffLoading,
+        
         isFetching: isAdminStaffFetching
     } = useGetStaffsQuery(
         { page: staffPage, limit, hasBalance: true },
@@ -93,7 +94,7 @@ export default function BalancesClient() {
     // All Transactions (Admin only)
     const {
         data: allTxData,
-        isLoading: isAllTxLoading,
+        
         isFetching: isAllTxFetching
     } = useGetAllTransactionsQuery(
         { page: allTxPage, limit },
@@ -114,8 +115,8 @@ export default function BalancesClient() {
         try {
             await adminWithdraw({ staffDocId, amount, description }).unwrap();
             toast.success("Withdrawal processed successfully");
-        } catch (err: any) {
-            toast.error(err.data?.message || "Failed to process withdrawal");
+        } catch (err) {
+            toast.error(apiMessage(err, "Failed to process withdrawal"));
         }
     };
 
@@ -418,7 +419,7 @@ function WithdrawDialog({ staff, onWithdraw }: { staff: any, onWithdraw: any }) 
             setOpen(false);
             setAmount("");
             setDescription("");
-        } catch (err) {
+        } catch {
             // Error handled in parent
         } finally {
             setIsSubmitting(false);

@@ -116,7 +116,6 @@ export function ClientForm({
     submitLabel,
     onCancel,
     serverErrors,
-    isEditMode = false,
 }: ClientFormProps) {
     const { data: servicesData } = useGetServicesQuery({ isActive: true });
 

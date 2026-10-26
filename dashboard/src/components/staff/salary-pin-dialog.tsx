@@ -19,6 +19,7 @@ import {
 import { Loader2, ArrowLeft } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { apiMessage } from '@/lib/api-error';
 
 interface SalaryPinDialogProps {
     open: boolean;
@@ -77,12 +78,8 @@ export function SalaryPinDialog({
                 setPin("");
                 setConfirmPin("");
                 onSuccess();
-            } catch (error: any) {
-                toast.error(
-                    error?.data?.message ||
-                    error?.message ||
-                    "Failed to set PIN"
-                );
+            } catch (error) {
+                toast.error(apiMessage(error, "Failed to set PIN"));
             }
         } else if (mode === "verify") {
             try {
@@ -90,12 +87,8 @@ export function SalaryPinDialog({
                 toast.success("Salary unlocked successfully");
                 setPin("");
                 onSuccess();
-            } catch (error: any) {
-                toast.error(
-                    error?.data?.message ||
-                    error?.message ||
-                    "Invalid PIN"
-                );
+            } catch (error) {
+                toast.error(apiMessage(error, "Invalid PIN"));
                 setPin("");
             }
         } else if (mode === "forgot") {
@@ -104,12 +97,8 @@ export function SalaryPinDialog({
                 toast.success("Reset link sent to your email");
                 setMode("verify");
                 setPin("");
-            } catch (error: any) {
-                toast.error(
-                    error?.data?.message ||
-                    error?.message ||
-                    "Failed to send reset link"
-                );
+            } catch (error) {
+                toast.error(apiMessage(error, "Failed to send reset link"));
             }
         }
     };

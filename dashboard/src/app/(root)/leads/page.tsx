@@ -29,6 +29,7 @@ import { LeadFilters } from '@/components/lead/LeadFilters';
 import { LeadTable } from '@/components/lead/LeadTable';
 import { LeadPagination } from '@/components/lead/LeadPagination';
 import { Lead } from '@/types/lead.type';
+import { apiFieldErrors, apiMessage } from '@/lib/api-error';
 
 export default function LeadsPage() {
     return (
@@ -187,9 +188,9 @@ function LeadsPageContent() {
             await createLead(data).unwrap();
             toast.success('Lead created successfully');
             setIsAddDialogOpen(false);
-        } catch (error: any) {
-            setServerErrors(error?.data?.errors || error?.errors);
-            toast.error(error?.data?.message || 'Failed to create lead');
+        } catch (error) {
+            setServerErrors(apiFieldErrors(error));
+            toast.error(apiMessage(error, 'Failed to create lead'));
         }
     };
 
@@ -200,9 +201,9 @@ function LeadsPageContent() {
             await updateLead({ id: selectedLead._id, data }).unwrap();
             toast.success('Lead updated successfully');
             setIsEditDialogOpen(false);
-        } catch (error: any) {
-            setServerErrors(error?.data?.errors || error?.errors);
-            toast.error(error?.data?.message || 'Failed to update lead');
+        } catch (error) {
+            setServerErrors(apiFieldErrors(error));
+            toast.error(apiMessage(error, 'Failed to update lead'));
         }
     };
 
@@ -387,7 +388,7 @@ function LeadsPageContent() {
                                 Edit Lead
                             </DialogTitle>
                             <DialogDescription>
-                                Update the prospect's information and pipeline status.
+                                Update the prospect&apos;s information and pipeline status.
                             </DialogDescription>
                         </DialogHeader>
                     </div>

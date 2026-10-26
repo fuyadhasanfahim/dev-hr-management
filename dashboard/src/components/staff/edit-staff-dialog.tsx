@@ -25,6 +25,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
+import { apiMessage } from '@/lib/api-error';
 
 const formSchema = z.object({
     branchId: z.string().optional(),
@@ -240,9 +241,9 @@ export function EditStaffDialog({ staff }: EditStaffDialogProps) {
 
             toast.success("Staff profile updated successfully");
             setOpen(false);
-        } catch (error: any) {
+        } catch (error) {
             toast.error(
-                error?.data?.message || "Failed to update staff profile"
+                apiMessage(error, "Failed to update staff profile")
             );
         }
     };

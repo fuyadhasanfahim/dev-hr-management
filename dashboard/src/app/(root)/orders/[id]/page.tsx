@@ -1,8 +1,8 @@
 "use client";
 
 import { currencyCode } from "@/lib/currency";
-import { useState, useMemo, useEffect } from "react";
-import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { useState, useMemo } from "react";
+import { useParams, useRouter } from "next/navigation";
 import { useSession } from "@/lib/auth-client";
 import { Role } from "@/constants/role";
 import { 
@@ -11,7 +11,7 @@ import {
     useUpdateOrderMutation,
 } from "@/redux/features/order/orderApi";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Label } from "@/components/ui/label";
@@ -53,18 +53,17 @@ import {
     LayoutDashboard,
     Loader2,
     ChevronDown,
-    Users,
-    LayoutList,
+    
+    
     Pencil,
     Flag,
     CalendarClock,
 } from "lucide-react";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { OrderTasksTab } from "@/components/tasks/OrderTasksTab";
 
 import { OrderStatus, type OrderPriority } from "@/types/order.type";
 import { ORDER_STATUS_LABELS } from "@/lib/constants";
 import { getFilteredStatusOptions } from "@/constants/orderStatusWorkflow";
+import { apiMessage } from '@/lib/api-error';
 
 const ORDER_PRIORITIES: OrderPriority[] = ["low", "medium", "high", "urgent"];
 
@@ -120,8 +119,8 @@ export default function OrderDetailsPage() {
             }).unwrap();
             toast.success("Order details updated");
             setIsOpEditOpen(false);
-        } catch (err: any) {
-            toast.error(err?.data?.message || "Failed to update order details");
+        } catch (err) {
+            toast.error(apiMessage(err, "Failed to update order details"));
         }
     };
 
@@ -133,8 +132,8 @@ export default function OrderDetailsPage() {
             }).unwrap();
 
             toast.success(`Status successfully updated to ${ORDER_STATUS_LABELS[target] || target}`);
-        } catch (err: any) {
-            toast.error(err?.data?.message || "Failed to update order status.");
+        } catch (err) {
+            toast.error(apiMessage(err, "Failed to update order status."));
         }
     };
 

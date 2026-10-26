@@ -12,19 +12,10 @@ import {
 import { useConvertQuotationToOrderMutation } from '@/redux/features/order/orderApi';
 import { QuotationEmailDialog } from '../components/QuotationEmailDialog';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Separator } from '@/components/ui/separator';
-import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
-} from '@/components/ui/table';
+import { Card, CardContent } from '@/components/ui/card';
 import {
     Loader2,
-    ArrowLeft,
+    
     FileText,
     Send,
     Edit2,
@@ -37,13 +28,13 @@ import {
     Cpu,
     Activity,
     ReceiptText,
-    Printer,
+    
     Briefcase,
     TrendingUp,
     Video,
     Camera,
     Check,
-    Sparkles,
+    
     Info,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -52,7 +43,6 @@ import { QuotationPdfButton } from '@/components/quotation/document/QuotationPdf
 import { isPdfCancelled, useQuotationPdf } from '@/components/quotation/document/use-quotation-pdf';
 import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
-import { IconReceipt } from '@tabler/icons-react';
 import { toast } from 'sonner';
 import { useSession } from '@/lib/auth-client';
 import { Role } from '@/constants/role';
@@ -60,6 +50,7 @@ import { cn } from '@/lib/utils';
 import { CATEGORY_CONFIG } from '@/constants/quotation-templates';
 import { computeQuotationTotals } from '@/lib/quotation-totals';
 import type { QuotationCategory } from '@/types/quotation.type';
+import { apiMessage } from '@/lib/api-error';
 
 const SERVICE_RANK_ORDER: Record<string, number> = {
     'web-development': 1,
@@ -266,14 +257,6 @@ export default function ViewQuotationPage() {
         return populated?._id ?? '';
     }, [data?.clientId]);
 
-    const displayPhases = useMemo(() => {
-        if (!data?.services) return [];
-        return data.services.map((s) => ({
-            title: CATEGORY_CONFIG[s.category as QuotationCategory]?.label || s.category,
-            description: s.scopeDescription,
-            items: s.scopeItems || [],
-        }));
-    }, [data?.services]);
 
     const liveTotals = useMemo(() => computeQuotationTotals(data?.services || []), [data?.services]);
 
@@ -298,7 +281,6 @@ export default function ViewQuotationPage() {
 
     const handleConfirmSend = async (
         selected: string[],
-        _includePaymentLink?: boolean,
     ) => {
         if (!id) return [];
         if (selected.length === 0) {
@@ -366,9 +348,9 @@ export default function ViewQuotationPage() {
             if (res.data?._id) {
                 router.push(`/orders/${res.data._id}`);
             }
-        } catch (err: any) {
+        } catch (err) {
             toast.error(
-                err?.data?.message || err?.message || 'Conversion failed',
+                apiMessage(err, 'Conversion failed'),
                 { id: tid },
             );
         }
@@ -456,7 +438,6 @@ export default function ViewQuotationPage() {
         .map((s) => CATEGORY_CONFIG[s.category as QuotationCategory]?.label || s.category)
         .join(' + ') || 'Agency Proposal';
     const webDevService = sortedServices.find((s) => s.category === 'web-development');
-    const showPhases = Boolean(sortedServices.length > 0);
     const showTech = Boolean(
         webDevService?.techStack &&
             ((webDevService.techStack.frontend?.length ?? 0) > 0 ||

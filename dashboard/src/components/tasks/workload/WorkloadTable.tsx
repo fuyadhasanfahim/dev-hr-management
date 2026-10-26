@@ -39,6 +39,7 @@ import {
     type WorkloadStatus,
 } from '@/lib/task-progress';
 import { Eye, ArrowRightLeft, UserRound } from 'lucide-react';
+import { apiMessage } from '@/lib/api-error';
 
 export interface MemberRow {
     staffId: string;
@@ -142,8 +143,8 @@ function MemberRowActions({ row, allMembers }: { row: MemberRow; allMembers: Mem
             
             toast.success("Task reassigned successfully");
             setOpen(false);
-        } catch (error: any) {
-            toast.error(error?.data?.message || "Failed to reassign task");
+        } catch (error) {
+            toast.error(apiMessage(error, "Failed to reassign task"));
         }
     };
 

@@ -47,6 +47,7 @@ import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
+import { apiMessage } from '@/lib/api-error';
 
 export default function LeadDetailsPage() {
   return (
@@ -143,8 +144,8 @@ function LeadDetailsContent() {
       setNewStatus("none");
       setNextActionType("none");
       setNextActionDate(undefined);
-    } catch (error: any) {
-      toast.error(error?.data?.message || "Failed to log activity");
+    } catch (error) {
+      toast.error(apiMessage(error, "Failed to log activity"));
     }
   };
 
@@ -166,8 +167,8 @@ function LeadDetailsContent() {
       toast.success("Lead converted to Client successfully!");
       setIsConvertOpen(false);
       router.push("/clients");
-    } catch (error: any) {
-      toast.error(error?.data?.message || "Failed to convert lead");
+    } catch (error) {
+      toast.error(apiMessage(error, "Failed to convert lead"));
     }
   };
 
@@ -326,7 +327,7 @@ function LeadDetailsContent() {
             </CardHeader>
             <CardContent className="pt-6">
               <div className="space-y-6 relative before:absolute before:inset-0 before:ml-5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-border before:to-transparent">
-                {activities.map((act: any, idx: number) => (
+                {activities.map((act: any) => (
                   <div
                     key={act._id}
                     className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active"
@@ -421,7 +422,7 @@ function LeadDetailsContent() {
                     <SelectValue placeholder="Current Status" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="none">Don't Change</SelectItem>
+                    <SelectItem value="none">Don&apos;t Change</SelectItem>
                     {statuses.map((s: any) => (
                       <SelectItem key={s._id} value={s._id}>
                         {s.name}

@@ -15,7 +15,7 @@ import {
   ChartTooltip,
   ChartTooltipContent,
 } from "@/components/ui/chart";
-import { CheckCircle2, ListTodo, Layers } from "lucide-react";
+import { CheckCircle2, Layers } from "lucide-react";
 import { TaskItem } from "@/redux/features/task/taskApi";
 
 interface TeamTaskStatsChartProps {

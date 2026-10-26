@@ -18,6 +18,7 @@ import { CalendarContent } from "@/components/shared/calendar-content";
 import { CheckboxContent } from "@/components/shared/checkbox-content";
 import { Textarea } from "@/components/ui/textarea";
 import { z } from "zod";
+import { apiMessage } from '@/lib/api-error';
 
 const paymentFormSchema = z.object({
   amount: z.number().positive("Amount must be greater than 0"),
@@ -175,8 +176,8 @@ export function AddPaymentDialog({
             );
           });
       }
-    } catch (err: any) {
-      toast.error(err?.data?.message || err?.message || "Failed to record payment", { id: toastId });
+    } catch (err) {
+      toast.error(apiMessage(err, "Failed to record payment"), { id: toastId });
     }
   };
 
@@ -253,7 +254,7 @@ export function AddPaymentDialog({
               </div>
               <div className="grid grid-cols-2 divide-x divide-slate-100 dark:divide-slate-800/80 bg-white/70 dark:bg-slate-900/30">
                 <div className="px-4 py-3">
-                  <p className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-600 dark:text-emerald-500 mb-0.5">Today's Payment</p>
+                  <p className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-600 dark:text-emerald-500 mb-0.5">Today&apos;s Payment</p>
                   <p className="text-base font-black text-emerald-600 dark:text-emerald-400 leading-none">
                     {todayAmt > 0 ? formatMoney(todayAmt, currency) : <span className="text-slate-300 dark:text-slate-600 text-sm font-semibold">—</span>}
                   </p>
