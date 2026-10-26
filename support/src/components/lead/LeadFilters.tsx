@@ -16,7 +16,8 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { useDebounce } from "@/hooks/use-debounce";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
+import { useSyncedState } from "@/hooks/use-synced-state";
 import { LeadSetting } from "@/types/lead.type";
 
 interface LeadFiltersProps {
@@ -128,11 +129,10 @@ export function LeadFilters({
 }: LeadFiltersProps) {
   const personLabel = (id: string) =>
     id === AUTOMATED ? "Automated" : people.find((p) => p.id === id)?.name || "Someone";
-  const [localSearch, setLocalSearch] = useState(search);
+  const [localSearch, setLocalSearch] = useSyncedState(search);
   const debouncedSearch = useDebounce(localSearch, 500);
-  const [datePreset, setDatePreset] = useState(() =>
-    detectPreset(nextActionDateFrom, nextActionDateTo)
-  );
+  // Follows the date range in the URL, but a "custom" pick stays until the range itself changes.
+  const [datePreset, setDatePreset] = useSyncedState(detectPreset(nextActionDateFrom, nextActionDateTo));
 
   useEffect(() => {
     if (debouncedSearch !== search) {
@@ -140,14 +140,6 @@ export function LeadFilters({
     }
   }, [debouncedSearch, onFilterChange, search]);
 
-  useEffect(() => {
-    setLocalSearch(search);
-  }, [search]);
-
-  // Sync datePreset when external values change
-  useEffect(() => {
-    setDatePreset(detectPreset(nextActionDateFrom, nextActionDateTo));
-  }, [nextActionDateFrom, nextActionDateTo]);
 
   const handleDatePresetChange = (preset: string) => {
     if (preset === "all") {

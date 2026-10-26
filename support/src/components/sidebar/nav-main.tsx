@@ -120,9 +120,14 @@ export function NavMain() {
 
     const [expandedItems, setExpandedItems] = React.useState<string[]>(ALL_GROUP_LABELS);
 
-    React.useEffect(() => {
+    // Searching opens the groups that still have matches; clearing the search opens them all again. A group the
+    // agent opens or closes by hand stays that way until the search or the visible groups change.
+    const expansionKey = `${searchQuery.trim()}|${filteredGroups.map((g) => g.groupLabel).join(',')}`;
+    const [seenExpansionKey, setSeenExpansionKey] = React.useState(expansionKey);
+    if (expansionKey !== seenExpansionKey) {
+        setSeenExpansionKey(expansionKey);
         setExpandedItems(searchQuery.trim() !== '' ? filteredGroups.map((g) => g.groupLabel) : ALL_GROUP_LABELS);
-    }, [searchQuery, filteredGroups]);
+    }
 
     function isActive(url: string) {
         return pathname === url || pathname.startsWith(url + '/');

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { Search, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/select";
 import { CLIENT_STATUS_OPTIONS } from "@/lib/constants";
 import { useDebounce } from "@/hooks/use-debounce";
+import { useSyncedState } from "@/hooks/use-synced-state";
 
 interface ClientFiltersProps {
   search: string;
@@ -25,7 +26,7 @@ export function ClientFilters({
   onFilterChange,
   onClearFilters,
 }: ClientFiltersProps) {
-  const [localSearch, setLocalSearch] = useState(search);
+  const [localSearch, setLocalSearch] = useSyncedState(search);
   const debouncedSearch = useDebounce(localSearch, 500);
 
   useEffect(() => {
@@ -34,10 +35,6 @@ export function ClientFilters({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedSearch]);
-
-  useEffect(() => {
-    setLocalSearch(search);
-  }, [search]);
 
   const hasActiveFilters = Boolean(search) || Boolean(status);
 

@@ -265,7 +265,6 @@ function LeadContactInfo({
 
 function LeadDetails({
   form,
-  getFieldError,
   statuses,
   sources,
 }: {

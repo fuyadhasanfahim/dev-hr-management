@@ -107,6 +107,19 @@ const currencyOptions = [
     { value: 'BDT', label: 'Bangladeshi Taka (BDT)' },
 ];
 
+// A staff row as the staff list API returns it: the person's details sit on the row itself, on `user`, or on a
+// populated `userId`, depending on the endpoint version.
+interface StaffPerson {
+    _id?: string;
+    name?: string;
+    email?: string;
+    designation?: string;
+}
+interface StaffRow extends StaffPerson {
+    user?: StaffPerson;
+    userId?: string | StaffPerson;
+}
+
 // --- MAIN COMPONENT ---
 
 export function ClientForm({
@@ -116,14 +129,12 @@ export function ClientForm({
     submitLabel,
     onCancel,
     serverErrors,
-    isEditMode = false,
 }: ClientFormProps) {
     const { data: servicesData } = useGetServicesQuery({ isActive: true });
 
-    const defaultTelemarketer =
-        typeof (defaultValues as any)?.assignedTelemarketer === 'object'
-            ? (defaultValues as any)?.assignedTelemarketer?._id || ''
-            : (defaultValues as any)?.assignedTelemarketer || '';
+    // Arrives as an id, or as the populated staff record when editing an existing client.
+    const assigned = defaultValues?.assignedTelemarketer as string | { _id?: string } | undefined;
+    const defaultTelemarketer = typeof assigned === 'object' ? assigned?._id || '' : assigned || '';
 
     const form = useForm<FormValues>({
         resolver: zodResolver(clientFormSchema),
@@ -289,18 +300,18 @@ function ClientBasicInfo({
     const assignedTelemarketer = useWatch({ control, name: 'assignedTelemarketer' });
 
     const { data: staffsData } = useGetStaffsQuery({ limit: 100 });
-    const staffs = staffsData?.staffs || staffsData?.data || [];
+    const staffs = useMemo<StaffRow[]>(() => staffsData?.staffs || staffsData?.data || [], [staffsData]);
     const telemarketers = useMemo(() => {
-        const filtered = staffs.filter((s: any) => {
-            const des = s.designation || s.user?.designation || s.userId?.designation || '';
+        const filtered = staffs.filter((s) => {
+            const des = s.designation || s.user?.designation || (typeof s.userId === 'object' ? s.userId?.designation : '') || '';
             return /telemarketer/i.test(des);
         });
         return filtered.length > 0 ? filtered : staffs;
     }, [staffs]);
 
     const telemarketerOptions = useMemo(() => {
-        const options = telemarketers.map((t: any) => {
-            const uId = t.user?._id || (typeof t.userId === 'object' ? t.userId?._id : t.userId) || t._id;
+        const options = telemarketers.map((t) => {
+            const uId = t.user?._id || (typeof t.userId === 'object' ? t.userId?._id : t.userId) || t._id || '';
             const name = t.user?.name || t.name || (typeof t.userId === 'object' ? t.userId?.name : '') || 'Unnamed Telemarketer';
             const email = t.user?.email || t.email || (typeof t.userId === 'object' ? t.userId?.email : '') || '';
             const designationStr = t.designation || t.user?.designation || '';

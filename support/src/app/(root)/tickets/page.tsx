@@ -504,6 +504,7 @@ function AttachmentChip({ url }: { url: string }) {
                 rel="noopener noreferrer"
                 className="block mt-2"
             >
+                {/* eslint-disable-next-line @next/next/no-img-element -- signed, expiring URL: next/image cannot cache it */}
                 <img
                     src={url}
                     alt="Attachment"

@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Eye, Edit, UserPlus, Loader, Phone, Calendar, Users, MessageSquarePlus } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Lead } from '@/types/lead.type';
+import { apiMessage } from '@/lib/api-error';
 import { format } from 'date-fns';
 import { usePermissions } from '@/hooks/use-permissions';
 
@@ -63,8 +64,8 @@ export function LeadTable({
             };
             await convertLead({ id: lead._id, clientData }).unwrap();
             toast.success('Lead converted to Client successfully!');
-        } catch (error: any) {
-            toast.error(error?.data?.message || 'Failed to convert lead');
+        } catch (error) {
+            toast.error(apiMessage(error, 'Failed to convert lead'));
         } finally {
             setActiveConvertingId(null);
         }

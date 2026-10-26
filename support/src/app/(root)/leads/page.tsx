@@ -1,6 +1,8 @@
 'use client';
 
-import { useState, useMemo, Suspense, useEffect } from 'react';
+import { useState, useMemo, Suspense } from 'react';
+import { apiFieldErrors, apiMessage } from '@/lib/api-error';
+import type { LeadSetting } from '@/types/lead.type';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { motion } from 'motion/react';
 import {
@@ -64,8 +66,11 @@ function LeadsPageContent() {
     const [createdBy, setCreatedBy] = useState(() => searchParams.get('createdBy') || '');
     const [updatedBy, setUpdatedBy] = useState(() => searchParams.get('updatedBy') || '');
 
-    // Synchronize URL changes (e.g. back/forward browser navigation) with local states
-    useEffect(() => {
+    // Follow the URL (back/forward, links). Done while rendering, so there is no render with stale filters.
+    const query = searchParams.toString();
+    const [seenQuery, setSeenQuery] = useState(query);
+    if (query !== seenQuery) {
+        setSeenQuery(query);
         setPage(Number(searchParams.get('page')) || 1);
         setLimit(Number(searchParams.get('limit')) || 20);
         setSearch(searchParams.get('search') || '');
@@ -77,7 +82,7 @@ function LeadsPageContent() {
         setNextActionDateTo(searchParams.get('nextActionDateTo') || '');
         setCreatedBy(searchParams.get('createdBy') || '');
         setUpdatedBy(searchParams.get('updatedBy') || '');
-    }, [searchParams]);
+    }
 
     // Helper to update local filter states and synchronize browser URL silently
     const updateFilters = (
@@ -119,15 +124,15 @@ function LeadsPageContent() {
     // Queries
     const { data: settingsData } = useGetLeadSettingsQuery(undefined);
     const statuses = useMemo(
-        () => settingsData?.data?.filter((s: any) => s.type === 'STATUS') || [],
+        () => (settingsData?.data as LeadSetting[] | undefined)?.filter((s) => s.type === 'STATUS') || [],
         [settingsData],
     );
     const sources = useMemo(
-        () => settingsData?.data?.filter((s: any) => s.type === 'SOURCE') || [],
+        () => (settingsData?.data as LeadSetting[] | undefined)?.filter((s) => s.type === 'SOURCE') || [],
         [settingsData],
     );
     const actionTypes = useMemo(
-        () => settingsData?.data?.filter((s: any) => s.type === 'ACTION_TYPE') || [],
+        () => (settingsData?.data as LeadSetting[] | undefined)?.filter((s) => s.type === 'ACTION_TYPE') || [],
         [settingsData],
     );
 
@@ -198,9 +203,9 @@ function LeadsPageContent() {
             await createLead(data).unwrap();
             toast.success('Lead created successfully');
             setIsAddDialogOpen(false);
-        } catch (error: any) {
-            setServerErrors(error?.data?.errors || error?.errors);
-            toast.error(error?.data?.message || 'Failed to create lead');
+        } catch (error) {
+            setServerErrors(apiFieldErrors(error));
+            toast.error(apiMessage(error, 'Failed to create lead'));
         }
     };
 
@@ -211,9 +216,9 @@ function LeadsPageContent() {
             await updateLead({ id: selectedLead._id, data }).unwrap();
             toast.success('Lead updated successfully');
             setIsEditDialogOpen(false);
-        } catch (error: any) {
-            setServerErrors(error?.data?.errors || error?.errors);
-            toast.error(error?.data?.message || 'Failed to update lead');
+        } catch (error) {
+            setServerErrors(apiFieldErrors(error));
+            toast.error(apiMessage(error, 'Failed to update lead'));
         }
     };
 
@@ -379,7 +384,7 @@ function LeadsPageContent() {
                                 Edit Lead
                             </DialogTitle>
                             <DialogDescription>
-                                Update the prospect's information and pipeline status.
+                                Update the prospect&apos;s information and pipeline status.
                             </DialogDescription>
                         </DialogHeader>
                     </div>

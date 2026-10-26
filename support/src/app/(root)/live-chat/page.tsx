@@ -32,7 +32,6 @@ import {
     ChevronUp,
     ChevronDown,
     Video,
-    Image as ImageIcon,
     ExternalLink,
     Building2,
     ArrowLeft,
@@ -88,7 +87,6 @@ import {
     type ChatSession,
     type ChatMessage,
     type AgentInfo,
-    type Meeting,
 } from '@/store/api/chatApi';
 import { baseApi } from '@/store/api/baseApi';
 import { connectSocket } from '@/lib/socket';
@@ -291,37 +289,27 @@ function extractS3Key(url: string): string | null {
 }
 
 function AttachmentPreview({ url }: { url: string }) {
-    const [viewUrl, setViewUrl] = useState<string | null>(null);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(false);
+    // Files in the private bucket need a short-lived signed link; anything else loads as is. The result is
+    // remembered together with the url it belongs to, so a changed url never shows the old file.
+    const fileKey = extractS3Key(url);
+    const [signed, setSigned] = useState<{ url: string; viewUrl: string | null } | null>(null);
     const [fetchViewUrl] = useLazyGetPresignedViewUrlQuery();
 
     useEffect(() => {
+        if (!fileKey) return;
         let cancelled = false;
-        const fileKey = extractS3Key(url);
-        if (!fileKey) {
-            setViewUrl(url);
-            setLoading(false);
-            return;
-        }
-
         fetchViewUrl(fileKey)
             .unwrap()
-            .then((data) => {
-                if (!cancelled) {
-                    setViewUrl(data.viewUrl);
-                    setLoading(false);
-                }
-            })
-            .catch(() => {
-                if (!cancelled) {
-                    setError(true);
-                    setLoading(false);
-                }
-            });
+            .then((data) => !cancelled && setSigned({ url, viewUrl: data.viewUrl }))
+            .catch(() => !cancelled && setSigned({ url, viewUrl: null }));
+        return () => {
+            cancelled = true;
+        };
+    }, [url, fileKey, fetchViewUrl]);
 
-        return () => { cancelled = true; };
-    }, [url, fetchViewUrl]);
+    const loading = !!fileKey && signed?.url !== url;
+    const error = !!fileKey && signed?.url === url && !signed.viewUrl;
+    const viewUrl = fileKey ? (signed?.url === url ? signed.viewUrl : null) : url;
 
     if (loading) {
         return (
@@ -348,6 +336,7 @@ function AttachmentPreview({ url }: { url: string }) {
                 rel="noopener noreferrer"
                 className="block mt-2"
             >
+                {/* eslint-disable-next-line @next/next/no-img-element -- signed, expiring URL: next/image cannot cache it */}
                 <img
                     src={viewUrl}
                     alt="Attachment"
@@ -601,7 +590,11 @@ function ScheduleMeetingDialog({
     const [description, setDescription] = useState('');
     const [calendarOpen, setCalendarOpen] = useState(false);
 
-    useEffect(() => {
+    // A fresh form every time the dialog opens (done while rendering, so it never flashes the old values).
+    const resetKey = open ? `open:${clientName}` : 'closed';
+    const [seenResetKey, setSeenResetKey] = useState(resetKey);
+    if (resetKey !== seenResetKey) {
+        setSeenResetKey(resetKey);
         if (open) {
             setTitle(`Support call with ${clientName}`);
             setSelectedDate(undefined);
@@ -612,7 +605,7 @@ function ScheduleMeetingDialog({
             setCustomDuration('');
             setDescription('');
         }
-    }, [open, clientName]);
+    }
 
     const effectiveDuration =
         duration === 'custom'
@@ -826,9 +819,11 @@ function ReassignDialog({
 }) {
     const [search, setSearch] = useState('');
 
-    useEffect(() => {
+    const [wasOpen, setWasOpen] = useState(open);
+    if (open !== wasOpen) {
+        setWasOpen(open);
         if (open) setSearch('');
-    }, [open]);
+    }
 
     const filtered = agents.filter((a) =>
         (a.userId?.name || a.name || '')
@@ -995,16 +990,14 @@ export default function LiveChatPage() {
     const unreadCounts = serverUnreadCounts;
 
     // ── URL param restore ────────────────────────────────────────────────────
-    useEffect(() => {
-        if (!chatParam) return;
-        const allSessions = [...queuedSessions, ...activeSessions];
-        const match = allSessions.find((s) => s.sessionId === chatParam);
-        if (match && selectedSession?.sessionId !== chatParam) {
-            setSelectedSession(match);
-            if (match.status === 'active') setTab('active');
-            else if (match.status === 'queued') setTab('queued');
-        }
-    }, [chatParam, queuedSessions, activeSessions, selectedSession?.sessionId]);
+    // Opens the chat named in the URL as soon as its session is loaded. Done while rendering: it stops by itself
+    // once the session is selected.
+    const chatFromUrl = chatParam ? [...queuedSessions, ...activeSessions].find((s) => s.sessionId === chatParam) : undefined;
+    if (chatFromUrl && selectedSession?.sessionId !== chatParam) {
+        setSelectedSession(chatFromUrl);
+        if (chatFromUrl.status === 'active') setTab('active');
+        else if (chatFromUrl.status === 'queued') setTab('queued');
+    }
 
     // ── socket bootstrap ──────────────────────────────────────────────────────
     useEffect(() => {
@@ -1098,10 +1091,11 @@ export default function LiveChatPage() {
         const socket = socketRef.current;
         if (!socket || !selectedSession) return;
 
+        const typingTimers = typingExpiryTimers.current;
         setMessages([]);
         setTypingNames([]);
-        typingExpiryTimers.current.forEach((t) => clearTimeout(t));
-        typingExpiryTimers.current.clear();
+        typingTimers.forEach((t) => clearTimeout(t));
+        typingTimers.clear();
         setSessionEnded(
             selectedSession.status === 'ended' ||
                 selectedSession.status === 'converted_to_ticket',
@@ -1201,9 +1195,11 @@ export default function LiveChatPage() {
             socket.off('chat:message', onMessage);
             socket.off('chat:typing', onTyping);
             socket.off('chat:closed', onClosed);
-            typingExpiryTimers.current.forEach((t) => clearTimeout(t));
-            typingExpiryTimers.current.clear();
+            typingTimers.forEach((t) => clearTimeout(t));
+            typingTimers.clear();
         };
+        // Joins again only when the chat itself changes, not each time the session object refreshes.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [selectedSession?.sessionId, dispatch, currentUserId, playSound, isPageVisible]);
 
     // ── auto-scroll ───────────────────────────────────────────────────────────
