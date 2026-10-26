@@ -45,7 +45,14 @@ export async function sendTextMessage(to: string, body: string): Promise<string>
  * Sends an approved template message (the only kind WhatsApp allows outside the 24h window).
  * `params` fill the template body's {{1}}, {{2}}… in order.
  */
-export async function sendTemplateMessage(to: string, name: string, language: string, params: string[]): Promise<string> {
+export async function sendTemplateMessage(
+    to: string,
+    name: string,
+    language: string,
+    params: string[],
+    // For templates with a dynamic URL button ("https://site/path/{{1}}"): the value that fills {{1}}.
+    urlButtonParam?: string,
+): Promise<string> {
     const data = await graphPost(
         messagesPath(),
         {
@@ -54,7 +61,10 @@ export async function sendTemplateMessage(to: string, name: string, language: st
             template: {
                 name,
                 language: { code: language },
-                components: [{ type: 'body', parameters: params.map((text) => ({ type: 'text', text })) }],
+                components: [
+                    { type: 'body', parameters: params.map((text) => ({ type: 'text', text })) },
+                    ...(urlButtonParam ? [{ type: 'button', sub_type: 'url', index: '0', parameters: [{ type: 'text', text: urlButtonParam }] }] : []),
+                ],
             },
         },
         'template send',

@@ -151,6 +151,8 @@ router.post('/guest/otp', otpLimiter, verifyTurnstile, SupportController.request
 router.post('/guest/verify', generalPublicLimiter, SupportController.verifyGuestOtp);
 // Silent session renewal via the httpOnly refresh cookie (no re-OTP).
 router.post('/guest/refresh', generalPublicLimiter, SupportController.refreshGuestSession);
+// Public, read-only: where a ticket stands, by its tracking token (the link in the WhatsApp message).
+router.get('/ticket-status/:token', generalPublicLimiter, SupportController.getPublicTicketStatus);
 router.post('/guest/logout', requireUnifiedAuth, SupportController.logoutGuest);
 
 router.post('/attachments/presigned-url', requireUnifiedAuth, SupportController.requestPresignedUrl);

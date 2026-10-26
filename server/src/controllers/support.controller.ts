@@ -9,6 +9,9 @@ import cloudinaryMigrationService from '../services/cloudinary-migration.service
 import ClientModel from '../models/client.model.js';
 import StaffModel from '../models/staff.model.js';
 import { getSupportNamespace, notifyNewSession, notifyAgents, notifyTicketReply } from '../socket/support.namespace.js';
+import whatsappSupportService, { findOrCreateConversation } from '../services/whatsapp-support.service.js';
+import { whatsappNumberOf } from '../services/ticket-notify.service.js';
+import { userCan } from '../middlewares/require-permission.js';
 
 function emitSessionStateChange(type: string, sessionId: string) {
     const ns = getSupportNamespace();
@@ -245,9 +248,62 @@ async function replyToTicket(req: Request, res: Response) {
         // with it open) regardless of who replied.
         notifyTicketReply(req.params.id || '', { senderType });
 
-        return res.status(201).json({ success: true, data: result });
+        // The conversation about a ticket happens on WhatsApp: a staff reply goes to the customer's WhatsApp chat
+        // (so it also shows in Messages) when we have their number. The reply is saved either way.
+        let whatsapp: string | undefined;
+        if (senderType === 'staff' && typeof text === 'string' && text.trim()) {
+            try {
+                const ticket: any = await TicketModel.findById(req.params.id).populate('contactId', 'whatsappPhone').lean();
+                const phone = ticket ? whatsappNumberOf(ticket) : '';
+                if (phone) {
+                    const conversation = await findOrCreateConversation(phone, ticket.visitorName);
+                    await whatsappSupportService.sendAgentMessage(
+                        conversation._id.toString(),
+                        `Re: ticket ${ticket.ticketId}\n${text.trim()}`,
+                        { id: req.user?.id ?? '', name: req.user?.name ?? 'Agent', canManage: userCan(req, 'support.manage') },
+                    );
+                    whatsapp = 'sent';
+                }
+            } catch (err: any) {
+                whatsapp = `not sent: ${err.message}`;
+            }
+        }
+
+        return res.status(201).json({ success: true, data: result, whatsapp });
     } catch (err: any) {
         return res.status(err.statusCode || 400).json({ success: false, message: err.message });
+    }
+}
+
+/**
+ * Public: the current state of a ticket, by its unguessable tracking token (the link we send on WhatsApp).
+ * Only what the customer needs to see: no internal notes, no staff details, no conversation.
+ */
+async function getPublicTicketStatus(req: Request, res: Response) {
+    try {
+        const token = String(req.params.token ?? '');
+        if (!/^[A-Za-z0-9_-]{20,64}$/.test(token)) return res.status(404).json({ success: false, message: 'Ticket not found' });
+        const ticket: any = await TicketModel.findOne({ publicToken: token })
+            .select('ticketId subject status priority category channel visitorName createdAt updatedAt whatsappPhone visitorIsWhatsapp visitorPhone')
+            .lean();
+        if (!ticket) return res.status(404).json({ success: false, message: 'Ticket not found' });
+        return res.status(200).json({
+            success: true,
+            data: {
+                ticketId: ticket.ticketId,
+                subject: ticket.subject,
+                status: ticket.status,
+                priority: ticket.priority,
+                category: ticket.category,
+                firstName: String(ticket.visitorName ?? '').trim().split(/\s+/)[0] || null,
+                // Whether the conversation about this ticket is on WhatsApp (the page says so).
+                onWhatsapp: Boolean(ticket.whatsappPhone || ticket.visitorIsWhatsapp),
+                createdAt: ticket.createdAt,
+                updatedAt: ticket.updatedAt,
+            },
+        });
+    } catch (err: any) {
+        return res.status(500).json({ success: false, message: 'Could not load the ticket' });
     }
 }
 
@@ -825,6 +881,7 @@ export default {
     createSupportTicket,
     getTicketDetails,
     replyToTicket,
+    getPublicTicketStatus,
     listSupportTickets,
     updateTicket,
     createChatSession,

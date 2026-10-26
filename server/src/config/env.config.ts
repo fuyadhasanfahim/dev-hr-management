@@ -163,6 +163,11 @@ const envConfig = {
     /** Approved templates for order-status and staff alerts. Unset → WhatsApp falls back to free text inside the 24h window, else is skipped. */
     wa_template_order_status: process.env.WA_TEMPLATE_ORDER_STATUS || '',
     wa_template_staff_alert: process.env.WA_TEMPLATE_STAFF_ALERT || '',
+    /** Approved templates that tell a customer their ticket was raised (English / Bengali), each with a "Track ticket" URL button. */
+    wa_template_ticket_en: process.env.WA_TEMPLATE_TICKET_EN || 'ticket_created_en',
+    wa_template_ticket_bn: process.env.WA_TEMPLATE_TICKET_BN || 'ticket_created_bn',
+    /** Public site that hosts the ticket status page: <base>/ticket/<token>. Must match the URL base of the approved templates. */
+    ticket_link_base: (process.env.TICKET_LINK_BASE || 'https://webbriks.com').replace(/\/+$/, ''),
 
     // Order-status / staff-alert fan-out (SMS + WhatsApp + email). 'live' sends for real; 'dry' only logs what would go out.
     // Default: live in production, dry everywhere else, so a dev database never texts real people by accident.
