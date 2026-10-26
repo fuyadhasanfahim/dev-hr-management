@@ -124,6 +124,9 @@ export async function processAIChat(userMessage: string, history: ChatHistoryMes
 
     const system = [
         SYSTEM_PROMPT,
+        turns.some((t) => t.role === 'assistant')
+            ? 'Greetings: you have already talked to this visitor, so never greet or introduce yourself again; go straight to the answer.'
+            : 'Greetings: this is your first reply, so open with one brief greeting (English: "Hello!"; Bengali: "আসসালামু আলাইকুম!", never "নমস্কার"), then answer.',
         `PRIORITY ORDER when instructions conflict: STAFF RULES > TAUGHT REPLIES > CONTEXT / CATALOG facts > the style guidance in this prompt.`,
         rules && `STAFF RULES (always follow these):\n${rules}`,
         examples.taught.length &&
