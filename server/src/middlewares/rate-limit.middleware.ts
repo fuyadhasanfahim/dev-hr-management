@@ -3,7 +3,7 @@ import type { Request, Response } from 'express';
 
 /**
  * Rate limiters for abuse-prone PUBLIC endpoints (guest OTP → SMTP/email spam,
- * AI chat → Gemini cost). Authenticated staff/agent routes are NOT limited here.
+ * AI chat → OpenAI cost). Authenticated staff/agent routes are NOT limited here.
  *
  * Store: default in-memory — fine for a single instance. For a multi-instance
  * deployment, swap in a shared store (e.g. `rate-limit-redis`) backed by the same
@@ -38,7 +38,7 @@ export const otpLimiter = rateLimit({
 });
 
 /**
- * AI chat — each call costs a Gemini request. Per-IP throttle.
+ * AI chat — each call costs an OpenAI request. Per-IP throttle.
  */
 export const aiChatLimiter = rateLimit({
     windowMs: 60 * 1000, // 1 minute

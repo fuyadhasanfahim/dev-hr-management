@@ -57,7 +57,6 @@ const FULL_VALID_ENV: Record<string, string> = {
     AWS_ACCESS_KEY_ID: 'test-aws-key',
     AWS_SECRET_ACCESS_KEY: 'test-aws-secret',
     AWS_BUCKET_NAME: 'test-bucket',
-    GEMINI_API_KEY: 'test-gemini-key',
     STRIPE_SECRET_KEY: 'test-stripe-secret',
     STRIPE_PUBLISHABLE_KEY: 'test-stripe-publishable',
     STRIPE_WEBHOOK_SECRET: 'test-stripe-webhook',
@@ -135,19 +134,17 @@ describe('env.config.ts — hard-required vars (fail-fast)', () => {
     });
 });
 
-describe('env.config.ts — soft-warn vars (AWS_*, GEMINI_API_KEY)', () => {
-    test('missing AWS/Gemini vars does NOT fail startup, but logs a warning', () => {
+describe('env.config.ts — soft-warn vars (AWS_*)', () => {
+    test('missing AWS vars does NOT fail startup, but logs a warning', () => {
         const { status, stdout, stderr } = runEnvConfigImport({
             AWS_ACCESS_KEY_ID: '',
             AWS_SECRET_ACCESS_KEY: '',
             AWS_BUCKET_NAME: '',
-            GEMINI_API_KEY: '',
         });
         assert.equal(status, 0, 'missing soft-warn vars must not block startup');
         assert.match(stdout, /ENV_CONFIG_IMPORT_OK/);
         const combined = stdout + stderr;
         assert.match(combined, /AWS_ACCESS_KEY_ID/);
-        assert.match(combined, /GEMINI_API_KEY/);
     });
 
     test('a fully valid config (all vars present) produces no soft-warn output', () => {

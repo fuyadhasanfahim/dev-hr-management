@@ -40,19 +40,19 @@ if (missing.length > 0) {
     );
 }
 
-// DECISION (E2-F2-T1): AWS_* and GEMINI_API_KEY are intentionally NOT in
+// DECISION (E2-F2-T1): AWS_* and OPENAI_API_KEY are intentionally NOT in
 // requiredVars above. Unlike ENCRYPTION_KEY (currently used to build the
 // encrypted payment token in invoice.controller.ts, via utils/crypto.ts —
 // and planned as the basis for real order-asset encryption under E2-F3-T1),
 // these gate optional features — S3 attachment upload and AI chat — that
 // already degrade gracefully without them: s3-upload.service.ts falls back
 // to dummy credentials and only fails when S3 is actually called, and
-// ai-chat.service.ts's getAI() throws its own clear, request-scoped error
+// ai-chat.service.ts throws its own clear, request-scoped error
 // only when AI chat is actually invoked. Hard-requiring them would block
 // environments that don't use those features at all. Warn at startup
 // instead, so a misconfiguration is still visible without blocking boot.
 const softWarnVars = [
-    'AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'AWS_BUCKET_NAME', 'GEMINI_API_KEY',
+    'AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'AWS_BUCKET_NAME',
     'STRIPE_SECRET_KEY', 'STRIPE_PUBLISHABLE_KEY', 'STRIPE_WEBHOOK_SECRET',
     'PAYPAL_CLIENT_ID', 'PAYPAL_CLIENT_SECRET',
     'META_APP_ID', 'META_APP_SECRET', 'META_WEBHOOK_VERIFY_TOKEN', 'META_ACCESS_TOKEN',
@@ -77,6 +77,10 @@ const envConfig = {
     better_auth_secret: process.env.BETTER_AUTH_SECRET!,
     better_auth_url: process.env.BETTER_AUTH_URL!,
     trusted_origins: process.env.TRUSTED_ORIGINS!,
+
+    // Cloudflare Turnstile (website chat bot check). Mode: off | soft (verify a token when sent) | enforce (token required).
+    turnstile_secret_key: process.env.TURNSTILE_SECRET_KEY || '',
+    turnstile_mode: process.env.TURNSTILE_MODE || (process.env.TURNSTILE_SECRET_KEY ? 'soft' : 'off'),
 
     // client
     client_url: process.env.CLIENT_URL || 'http://localhost:3000',
@@ -126,9 +130,6 @@ const envConfig = {
     aws_secret_access_key: process.env.AWS_SECRET_ACCESS_KEY || '',
     aws_region: process.env.AWS_REGION || 'us-east-1',
     aws_bucket_name: process.env.AWS_BUCKET_NAME || '',
-
-    // Gemini AI
-    gemini_api_key: process.env.GEMINI_API_KEY || '',
 
     // Payment pipeline — client invoice payment links (JWT signing) +
     // gateway credentials. The token secret is hard-required (see

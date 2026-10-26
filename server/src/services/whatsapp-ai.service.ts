@@ -74,7 +74,7 @@ Do not add anything about team members, "let me know if you need anything" or si
 const GREETING_LATER = `Greetings: you have ALREADY talked to this customer in this chat (see the chat history), so NEVER greet or introduce yourself again, not even if they say hi/hello/"?"/"hlw". If they only ping or greet, answer in one short line that picks up the last open topic or question (e.g. "জি, বলুন — আমরা Shopify প্যাকেজটা নিয়ে কথা বলছিলাম, কোনটা নিয়ে জানতে চান?"). Do not add anything about team members or filler. A greeting or small talk is never a reason to escalate.`;
 
 // Share of a text's letters that are Bengali script (brand words in English are fine in a Bengali reply).
-const bengaliShare = (text: string) => {
+export const bengaliShare = (text: string) => {
     const letters = text.match(/\p{L}/gu)?.length ?? 0;
     return letters ? (text.match(/[\u0980-\u09FF]/g)?.length ?? 0) / letters : 1;
 };
@@ -83,7 +83,7 @@ const bengaliShare = (text: string) => {
 const FALLBACK_REPLY =
     'আপনার মেসেজের জন্য ধন্যবাদ 🙏 আমাদের একজন টিম মেম্বার খুব শীঘ্রই আপনার সাথে যোগাযোগ করবেন। / Thank you for your message — a team member will get back to you shortly.';
 
-interface ChatTurn {
+export interface ChatTurn {
     role: 'user' | 'assistant';
     content: string;
     human?: boolean; // assistant turn written by a human teammate, not by the AI
@@ -96,7 +96,7 @@ const HISTORY_TURNS = 24;
 // against English chunks. Short follow-ups ("Bdt price") also lose their topic without
 // the conversation. So rewrite the latest message into a standalone English search
 // query using the recent turns — for retrieval only; the reply is unaffected.
-async function toRetrievalQuery(message: string, history: ChatTurn[]): Promise<string> {
+export async function toRetrievalQuery(message: string, history: ChatTurn[]): Promise<string> {
     const recent = history.slice(-6);
     if (!recent.length && !/[\u0980-\u09FF]/.test(message)) return message;
     try {

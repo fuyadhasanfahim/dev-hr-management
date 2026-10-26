@@ -18,6 +18,7 @@ import jwt from 'jsonwebtoken';
 import envConfig from '../config/env.config.js';
 import GuestModel from '../models/guest.model.js';
 import { otpLimiter, generalPublicLimiter } from '../middlewares/rate-limit.middleware.js';
+import { verifyTurnstile } from '../middlewares/turnstile.middleware.js';
 import type { Request, Response, NextFunction } from 'express';
 import multer from 'multer';
 
@@ -141,7 +142,7 @@ export async function optionalUnifiedAuth(req: Request, res: Response, next: Nex
 }
 
 // Public + abuse-prone: OTP sends a real email → strict per-IP+email throttle.
-router.post('/guest/otp', otpLimiter, SupportController.requestGuestOtp);
+router.post('/guest/otp', otpLimiter, verifyTurnstile, SupportController.requestGuestOtp);
 router.post('/guest/verify', generalPublicLimiter, SupportController.verifyGuestOtp);
 // Silent session renewal via the httpOnly refresh cookie (no re-OTP).
 router.post('/guest/refresh', generalPublicLimiter, SupportController.refreshGuestSession);
