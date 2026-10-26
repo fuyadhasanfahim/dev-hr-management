@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
-import { useRouter } from "next/navigation";
 import {
   Card,
   CardHeader,
@@ -29,12 +28,9 @@ import {
   FileText,
   Timer,
   LogOut,
-  Calendar,
   Briefcase,
-  PlaneTakeoff,
   ArrowRight,
-  ShieldCheck,
-} from "lucide-react";
+  } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
 import {
   useCheckInMutation,
@@ -56,7 +52,6 @@ const formatDuration = (minutes: number) => {
 const EARLY_CHECKIN_WINDOW_MINUTES = 15;
 
 export function HRTimeTrackingWidget() {
-  const router = useRouter();
   const { data: todaysData } = useGetTodayAttendanceQuery(undefined);
   const { data: myShiftData } = useGetMyShiftQuery(undefined);
   const { data: leaveBalanceData } = useGetLeaveBalanceQuery(undefined);
@@ -131,28 +126,26 @@ export function HRTimeTrackingWidget() {
     }
   };
 
-  // Live Duration
-  const [currentDuration, setCurrentDuration] = useState(0);
-
-  const calculateDuration = useCallback(() => {
-    if (!attendanceDay?.checkInAt) return 0;
-    if (attendanceDay.checkOutAt) {
-      return attendanceDay.totalMinutes || 0;
-    }
-    const start = new Date(attendanceDay.checkInAt);
-    const now = new Date();
-    return Math.floor((now.getTime() - start.getTime()) / 1000 / 60);
-  }, [attendanceDay]);
-
+  // Live duration: while checked in, a minute tick re-reads the clock; the number itself is derived.
+  const running = !!attendanceDay?.checkInAt && !attendanceDay?.checkOutAt;
+  const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
-    setCurrentDuration(calculateDuration());
-    if (attendanceDay?.checkInAt && !attendanceDay?.checkOutAt) {
-      const interval = setInterval(() => {
-        setCurrentDuration(calculateDuration());
-      }, 60000);
-      return () => clearInterval(interval);
-    }
-  }, [attendanceDay, calculateDuration]);
+    if (!running) return;
+    const tick = () => setNow(Date.now());
+    const first = setTimeout(tick, 0); // catch up right away when a check-in has just happened
+    const interval = setInterval(tick, 60000);
+    return () => {
+      clearTimeout(first);
+      clearInterval(interval);
+    };
+  }, [running]);
+
+  let currentDuration = 0;
+  if (attendanceDay?.checkInAt) {
+    currentDuration = attendanceDay.checkOutAt
+      ? attendanceDay.totalMinutes || 0
+      : Math.max(0, Math.floor((now - new Date(attendanceDay.checkInAt).getTime()) / 1000 / 60));
+  }
 
   const isCheckedIn = !!attendanceDay?.checkInAt;
   const isCheckedOut = !!attendanceDay?.checkOutAt;

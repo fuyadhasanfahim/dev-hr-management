@@ -38,6 +38,7 @@ import {
 } from "@/redux/features/receipt/receiptApi";
 import { downloadReceiptPdf, receiptPdfFileStem } from "@/lib/download-receipt-pdf";
 import type { ReceiptPaymentType } from "@/types/receipt.type";
+import { apiMessage } from '@/lib/api-error';
 
 const PAYMENT_TYPE_LABELS: Record<string, string> = {
   full: "Full Payment",
@@ -220,8 +221,8 @@ export default function NewReceiptPage() {
       }
 
       router.push(`/receipts/${result.receipt._id}`);
-    } catch (err: any) {
-      toast.error(err?.data?.message || "Failed to record receipt");
+    } catch (err) {
+      toast.error(apiMessage(err, "Failed to record receipt"));
     }
   };
 

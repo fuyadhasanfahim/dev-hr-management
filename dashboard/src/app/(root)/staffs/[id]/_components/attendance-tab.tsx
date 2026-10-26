@@ -1,5 +1,6 @@
 'use client';
 
+import type { IAttendanceDay } from '@/types/attendance.type';
 import { useState } from 'react';
 import { useGetAllAttendanceQuery } from '@/redux/features/attendance/attendanceApi';
 import {
@@ -33,7 +34,7 @@ export function StaffAttendanceTab({ staffId }: { staffId: string }) {
         limit,
     });
 
-    const attendances = data?.data?.records || [];
+    const attendances: IAttendanceDay[] = data?.data?.records || [];
     const pagination = data?.data?.pagination;
 
     const getStatusVariant = (status: string) => {
@@ -82,7 +83,7 @@ export function StaffAttendanceTab({ staffId }: { staffId: string }) {
                     </TableRow>
                 </TableHeader>
                 <TableBody>
-                    {attendances.map((rec: any) => (
+                    {attendances.map((rec) => (
                         <TableRow key={rec._id}>
                             <TableCell>
                                 {format(new Date(rec.date), 'PP')}

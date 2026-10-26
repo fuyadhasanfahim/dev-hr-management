@@ -20,6 +20,8 @@ import { Label } from "@/components/ui/label";
 import { Loader, Trash2, Plus, GripVertical } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
+import { apiMessage } from '@/lib/api-error';
+import type { LeadSetting } from "@/types/lead.type";
 
 interface LeadSettingsDialogProps {
   open: boolean;
@@ -46,8 +48,8 @@ export function LeadSettingsDialog({ open, onOpenChange }: LeadSettingsDialogPro
   const [newItemName, setNewItemName] = useState("");
   const [selectedColor, setSelectedColor] = useState(predefinedColors[0]);
 
-  const settings = settingsData?.data || [];
-  const currentItems = settings.filter((s: any) => s.type === activeTab);
+  const settings: LeadSetting[] = settingsData?.data || [];
+  const currentItems = settings.filter((s) => s.type === activeTab);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -62,8 +64,8 @@ export function LeadSettingsDialog({ open, onOpenChange }: LeadSettingsDialogPro
       await createSetting(payload).unwrap();
       setNewItemName("");
       toast.success("Added successfully");
-    } catch (error: any) {
-      toast.error(error?.data?.message || "Failed to add item");
+    } catch (error) {
+      toast.error(apiMessage(error, "Failed to add item"));
     }
   };
 
@@ -72,8 +74,8 @@ export function LeadSettingsDialog({ open, onOpenChange }: LeadSettingsDialogPro
     try {
       await deleteSetting(id).unwrap();
       toast.success("Deleted successfully");
-    } catch (error: any) {
-      toast.error(error?.data?.message || "Failed to delete item");
+    } catch (error) {
+      toast.error(apiMessage(error, "Failed to delete item"));
     }
   };
 
@@ -160,7 +162,7 @@ export function LeadSettingsDialog({ open, onOpenChange }: LeadSettingsDialogPro
                   No items added yet.
                 </div>
               ) : (
-                currentItems.map((item: any) => (
+                currentItems.map((item) => (
                   <div
                     key={item._id}
                     className="flex items-center justify-between p-3 bg-card border border-border rounded-lg shadow-sm group hover:border-border transition-colors"

@@ -37,7 +37,7 @@ const chartConfig = {
   },
 } satisfies ChartConfig;
 
-export function StaffAttendanceChart({ stats, isLoading }: StaffAttendanceChartProps) {
+export function StaffAttendanceChart({ stats }: StaffAttendanceChartProps) {
   const onTimeCount = Math.max(0, (stats?.present || 0) - (stats?.late || 0));
   const lateCount = stats?.late || 0;
 

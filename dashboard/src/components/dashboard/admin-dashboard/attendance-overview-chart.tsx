@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Label, Pie, PieChart, Cell } from "recharts";
+import { Label, Pie, PieChart } from "recharts";
 import {
   Card,
   CardContent,
@@ -19,7 +19,7 @@ import {
   ChartLegendContent,
 } from "@/components/ui/chart";
 import type { AttendanceOverview } from "@/types/dashboard.type";
-import { UserCheck, Clock, AlertTriangle, PlaneTakeoff, Users } from "lucide-react";
+import { UserCheck, Clock, AlertTriangle, PlaneTakeoff } from "lucide-react";
 
 interface AttendanceOverviewChartProps {
   data: AttendanceOverview;

@@ -23,8 +23,8 @@ import {
     DropdownMenu,
     DropdownMenuContent,
     DropdownMenuItem,
-    DropdownMenuLabel,
-    DropdownMenuSeparator,
+    
+    
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -138,14 +138,13 @@ export default function PayrollPage() {
     });
 
     const payrollData = (data?.data?.staffs || []) as IPayrollItem[];
-    const alerts = data?.data?.alerts || [];
     const suggestLock = data?.data?.suggestLock || false;
 
     // Lock status
     const { data: lockData } = useGetLockStatusQuery({
         month: formattedMonth,
     });
-    const [lockMonth, { isLoading: isLocking }] = useLockMonthMutation();
+    const [lockMonth] = useLockMonthMutation();
     const [unlockMonth, { isLoading: isUnlocking }] = useUnlockMonthMutation();
     const isLocked = lockData?.data?.isLocked ?? false;
 
@@ -175,10 +174,6 @@ export default function PayrollPage() {
         .filter((i) => i.status === "paid")
         .reduce((acc, curr) => acc + (curr.payableSalary || 0), 0);
     const salaryPending = totalSalary - salaryPaid;
-    const salaryPaidCount = payrollData.filter(
-        (i) => i.status === "paid",
-    ).length;
-    const salaryPendingCount = payrollData.length - salaryPaidCount;
 
 
 
@@ -188,13 +183,6 @@ export default function PayrollPage() {
     const displayPending = salaryPending;
     const displayTotalStaff = payrollData.length;
 
-    const formatCurrency = (amount: number) => {
-        return new Intl.NumberFormat("bn-BD", {
-            style: "currency",
-            currency: "BDT",
-            maximumFractionDigits: 0,
-        }).format(amount);
-    };
 
     // --- Export Handlers ---
     const handleExportExcel = () => {

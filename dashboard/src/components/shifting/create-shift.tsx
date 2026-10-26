@@ -35,6 +35,7 @@ import { useForm, Controller } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { IBranch } from '@/types/branch.type';
+import { apiMessage } from '@/lib/api-error';
 
 const WEEK_DAYS = [
     { label: 'Sun', value: 0 },
@@ -121,8 +122,8 @@ export default function CreateShift() {
             toast.success('Shift created successfully');
             reset();
             setOpen(false);
-        } catch (err: any) {
-            toast.error(err?.data?.message || 'Failed to create shift');
+        } catch (err) {
+            toast.error(apiMessage(err, 'Failed to create shift'));
         }
     };
 

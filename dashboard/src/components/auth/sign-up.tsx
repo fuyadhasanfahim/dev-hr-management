@@ -18,6 +18,7 @@ import { Spinner } from '../ui/spinner';
 import { signUp } from '@/lib/auth-client';
 import { useState } from 'react';
 import { toast } from 'sonner';
+import { apiMessage } from '@/lib/api-error';
 
 const signupValidationSchema = z.object({
     name: z.string().min(2, 'Name must be at least 2 characters'),
@@ -72,11 +73,8 @@ export default function SignupForm() {
 
             form.reset();
             setImagePreview(null);
-        } catch (err: any) {
-            const message =
-                err?.response?.data?.message || err?.message || 'Signup failed';
-
-            toast.error(message);
+        } catch (err) {
+            toast.error(apiMessage(err, 'Signup failed'));
         } finally {
             setShowPassword(false);
         }
@@ -168,11 +166,14 @@ export default function SignupForm() {
                         />
 
                         {imagePreview && (
-                            <img
-                                src={imagePreview}
-                                alt="Preview"
-                                className="mt-2 h-24 w-24 rounded-lg object-cover border"
-                            />
+                            <>
+                                {/* eslint-disable-next-line @next/next/no-img-element -- local blob preview: next/image cannot load it */}
+                                <img
+                                    src={imagePreview}
+                                    alt="Preview"
+                                    className="mt-2 h-24 w-24 rounded-lg object-cover border"
+                                />
+                            </>
                         )}
 
                         {form.formState.errors.image && (

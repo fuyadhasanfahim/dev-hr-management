@@ -29,6 +29,7 @@ import { DESIGNATIONS, DEPARTMENTS } from "@/constants/metadata";
 import { useSession } from "@/lib/auth-client";
 import { Loader, UserPlus } from "lucide-react";
 import { toast } from "sonner";
+import { apiMessage } from '@/lib/api-error';
 
 type RoleType =
     | "staff"
@@ -141,8 +142,8 @@ export default function InviteEmployeeDialog() {
                 shiftId: "",
                 expiryHours: "48",
             });
-        } catch (err: any) {
-            toast.error(err?.data?.message || "Failed to send invitation");
+        } catch (err) {
+            toast.error(apiMessage(err, "Failed to send invitation"));
         }
     };
 
@@ -295,7 +296,7 @@ export default function InviteEmployeeDialog() {
                                         </SelectItem>
                                     )}
                                     {branchesData?.branches?.map(
-                                        (branch: any) => (
+                                        (branch: { _id: string; name: string }) => (
                                             <SelectItem
                                                 key={branch._id}
                                                 value={branch._id}
@@ -324,7 +325,7 @@ export default function InviteEmployeeDialog() {
                                     <SelectItem value="unassigned">
                                         None
                                     </SelectItem>
-                                    {shiftsData?.shifts?.map((shift: any) => (
+                                    {shiftsData?.shifts?.map((shift: { _id: string; name: string }) => (
                                         <SelectItem
                                             key={shift._id}
                                             value={shift._id}

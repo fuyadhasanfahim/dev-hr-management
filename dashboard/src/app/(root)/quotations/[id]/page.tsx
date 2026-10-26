@@ -12,19 +12,10 @@ import {
 import { useConvertQuotationToOrderMutation } from '@/redux/features/order/orderApi';
 import { QuotationEmailDialog } from '../components/QuotationEmailDialog';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Separator } from '@/components/ui/separator';
-import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
-} from '@/components/ui/table';
+import { Card, CardContent } from '@/components/ui/card';
 import {
     Loader2,
-    ArrowLeft,
+    
     FileText,
     Send,
     Edit2,
@@ -37,13 +28,13 @@ import {
     Cpu,
     Activity,
     ReceiptText,
-    Printer,
+    
     Briefcase,
     TrendingUp,
     Video,
     Camera,
     Check,
-    Sparkles,
+    
     Info,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -52,7 +43,6 @@ import { QuotationPdfButton } from '@/components/quotation/document/QuotationPdf
 import { isPdfCancelled, useQuotationPdf } from '@/components/quotation/document/use-quotation-pdf';
 import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
-import { IconReceipt } from '@tabler/icons-react';
 import { toast } from 'sonner';
 import { useSession } from '@/lib/auth-client';
 import { Role } from '@/constants/role';
@@ -60,6 +50,7 @@ import { cn } from '@/lib/utils';
 import { CATEGORY_CONFIG } from '@/constants/quotation-templates';
 import { computeQuotationTotals } from '@/lib/quotation-totals';
 import type { QuotationCategory } from '@/types/quotation.type';
+import { apiMessage } from '@/lib/api-error';
 
 const SERVICE_RANK_ORDER: Record<string, number> = {
     'web-development': 1,
@@ -97,7 +88,31 @@ function extractNameRoutePrice(rawText: string): { name: string; route: string; 
     };
 }
 
-function convertJsonToFeature(rawObj: any, idx: number = 0): any {
+// A feature of a quotation's scope, as shown in the page: its name, route and price, and any sub-features.
+interface FeatureNode {
+    id: number;
+    name: string;
+    route: string;
+    price: string;
+    children?: FeatureNode[];
+}
+
+// What the scope text can hold when it is JSON: several spellings for each field, sub-features under one of three keys.
+interface RawFeature {
+    name?: string;
+    title?: string;
+    label?: string;
+    featureName?: string;
+    route?: string;
+    path?: string;
+    url?: string;
+    price?: string | number;
+    children?: RawFeature[];
+    subFeatures?: RawFeature[];
+    items?: RawFeature[];
+}
+
+function convertJsonToFeature(rawObj: RawFeature | null | undefined, idx: number = 0): FeatureNode | null {
     if (!rawObj || typeof rawObj !== 'object') return null;
     let name = String(rawObj.name || rawObj.title || rawObj.label || rawObj.featureName || '').trim();
     if (!name) return null;
@@ -118,8 +133,8 @@ function convertJsonToFeature(rawObj: any, idx: number = 0): any {
         : Array.isArray(rawObj.items)
         ? rawObj.items
         : [];
-    const children: any[] = [];
-    rawChildren.forEach((child: any, childIdx: number) => {
+    const children: FeatureNode[] = [];
+    rawChildren.forEach((child, childIdx: number) => {
         const converted = convertJsonToFeature(child, childIdx);
         if (converted) children.push(converted);
     });
@@ -132,7 +147,7 @@ function convertJsonToFeature(rawObj: any, idx: number = 0): any {
     };
 }
 
-function parseBulkFeatures(text: string): any[] {
+function parseBulkFeatures(text: string): FeatureNode[] {
     if (!text || text.trim() === '') return [];
     const trimmed = text.trim();
     if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
@@ -140,7 +155,7 @@ function parseBulkFeatures(text: string): any[] {
             const cleanText = trimmed.replace(/```json/g, '').replace(/```/g, '').trim();
             const parsed = JSON.parse(cleanText);
             const items = Array.isArray(parsed) ? parsed : [parsed];
-            const result: any[] = [];
+            const result: FeatureNode[] = [];
             items.forEach((rawItem, idx) => {
                 const feature = convertJsonToFeature(rawItem, idx);
                 if (feature) result.push(feature);
@@ -149,14 +164,14 @@ function parseBulkFeatures(text: string): any[] {
         } catch {}
     }
     const lines = text.split('\n').filter((line) => line.trim() !== '');
-    const result: any[] = [];
-    const stack: { level: number; feature: any }[] = [];
+    const result: FeatureNode[] = [];
+    const stack: { level: number; feature: FeatureNode }[] = [];
     lines.forEach((line, index) => {
         const match = line.match(/^(\s*)/);
         const indentStr = match ? match[0] : '';
         const level = indentStr.replace(/\t/g, '    ').length;
         const parsed = extractNameRoutePrice(line);
-        const newFeature: any = {
+        const newFeature: FeatureNode = {
             id: index + 1,
             name: parsed.name,
             route: parsed.route,
@@ -169,7 +184,7 @@ function parseBulkFeatures(text: string): any[] {
         if (stack.length === 0) {
             result.push(newFeature);
         } else {
-            stack[stack.length - 1].feature.children.push(newFeature);
+            stack[stack.length - 1].feature.children?.push(newFeature);
         }
         stack.push({ level, feature: newFeature });
     });
@@ -181,7 +196,7 @@ function DisplayFeatureNode({
     level = 0,
     currency,
 }: {
-    feature: any;
+    feature: FeatureNode;
     level?: number;
     currency: string;
 }) {
@@ -220,7 +235,7 @@ function DisplayFeatureNode({
             </div>
             {hasChildren && (
                 <div className="space-y-1">
-                    {feature.children.map((child: any, idx: number) => (
+                    {feature.children?.map((child, idx: number) => (
                         <DisplayFeatureNode
                             key={child.id || idx}
                             feature={child}
@@ -264,18 +279,10 @@ export default function ViewQuotationPage() {
         if (typeof data.clientId === 'string') return data.clientId;
         const populated = data.clientId as unknown as { _id?: string };
         return populated?._id ?? '';
-    }, [data?.clientId]);
+    }, [data]);
 
-    const displayPhases = useMemo(() => {
-        if (!data?.services) return [];
-        return data.services.map((s) => ({
-            title: CATEGORY_CONFIG[s.category as QuotationCategory]?.label || s.category,
-            description: s.scopeDescription,
-            items: s.scopeItems || [],
-        }));
-    }, [data?.services]);
 
-    const liveTotals = useMemo(() => computeQuotationTotals(data?.services || []), [data?.services]);
+    const liveTotals = useMemo(() => computeQuotationTotals(data?.services || []), [data]);
 
     const sortedServices = useMemo(() => {
         if (!data?.services) return [];
@@ -284,7 +291,7 @@ export default function ViewQuotationPage() {
             const orderB = SERVICE_RANK_ORDER[b.category] ?? 99;
             return orderA - orderB;
         });
-    }, [data?.services]);
+    }, [data]);
 
     const openSendPicker = () => {
         if (!dialogClientId) {
@@ -298,7 +305,6 @@ export default function ViewQuotationPage() {
 
     const handleConfirmSend = async (
         selected: string[],
-        _includePaymentLink?: boolean,
     ) => {
         if (!id) return [];
         if (selected.length === 0) {
@@ -366,9 +372,9 @@ export default function ViewQuotationPage() {
             if (res.data?._id) {
                 router.push(`/orders/${res.data._id}`);
             }
-        } catch (err: any) {
+        } catch (err) {
             toast.error(
-                err?.data?.message || err?.message || 'Conversion failed',
+                apiMessage(err, 'Conversion failed'),
                 { id: tid },
             );
         }
@@ -456,7 +462,6 @@ export default function ViewQuotationPage() {
         .map((s) => CATEGORY_CONFIG[s.category as QuotationCategory]?.label || s.category)
         .join(' + ') || 'Agency Proposal';
     const webDevService = sortedServices.find((s) => s.category === 'web-development');
-    const showPhases = Boolean(sortedServices.length > 0);
     const showTech = Boolean(
         webDevService?.techStack &&
             ((webDevService.techStack.frontend?.length ?? 0) > 0 ||
@@ -782,7 +787,7 @@ export default function ViewQuotationPage() {
                             </div>
 
                             <div className="space-y-5">
-                                {sortedServices.map((svc: any, idx: number) => {
+                                {sortedServices.map((svc, idx: number) => {
                                     const categoryLabel = CATEGORY_CONFIG[svc.category as QuotationCategory]?.label || svc.category;
                                     const style = getCategoryBadgeStyle(categoryLabel);
                                     const featureNodes = parseBulkFeatures((svc.scopeItems || []).join('\n'));
@@ -825,7 +830,7 @@ export default function ViewQuotationPage() {
                                                 {featureNodes.length > 0 && (
                                                     <div className="space-y-1">
                                                         <h5 className="text-xs font-extrabold uppercase tracking-wider text-slate-500 mb-2">Scope Modules & Features</h5>
-                                                        {featureNodes.map((feat: any, fIdx: number) => (
+                                                        {featureNodes.map((feat, fIdx: number) => (
                                                             <DisplayFeatureNode key={feat.id || fIdx} feature={feat} currency={currency} />
                                                         ))}
                                                     </div>
@@ -850,7 +855,7 @@ export default function ViewQuotationPage() {
                                                     <div className="pt-2 space-y-2">
                                                         <h5 className="text-xs font-extrabold uppercase tracking-wider text-slate-500">Pricing Items</h5>
                                                         <div className="space-y-2">
-                                                            {svc.lineItems.map((item: any, lIdx: number) => (
+                                                            {svc.lineItems.map((item, lIdx: number) => (
                                                                 <div key={lIdx} className="flex items-center justify-between p-3.5 rounded-2xl bg-slate-50/80 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800">
                                                                     <div className="min-w-0 flex-1 pr-3">
                                                                         <h6 className="text-sm font-bold text-slate-900 dark:text-white">{item.title}</h6>
@@ -1214,7 +1219,7 @@ export default function ViewQuotationPage() {
                                                     !canSeeFinancials && 'blur-[3px] select-none opacity-60'
                                                 )}
                                             >
-                                                {canSeeFinancials ? money(data.recurringCharges.reduce((acc: number, item: any) => acc + (item.price || 0) * (item.quantity ?? 1), 0)) : '******'}
+                                                {canSeeFinancials ? money(data.recurringCharges.reduce((acc: number, item) => acc + (item.price || 0) * (item.quantity ?? 1), 0)) : '******'}
                                             </span>
                                         </div>
                                         
@@ -1228,7 +1233,7 @@ export default function ViewQuotationPage() {
                                                     !canSeeFinancials && 'blur-[3px] select-none opacity-60'
                                                 )}
                                             >
-                                                {canSeeFinancials ? money(grandTotal + data.recurringCharges.reduce((acc: number, item: any) => acc + (item.price || 0) * (item.quantity ?? 1), 0)) : '******'}
+                                                {canSeeFinancials ? money(grandTotal + data.recurringCharges.reduce((acc: number, item) => acc + (item.price || 0) * (item.quantity ?? 1), 0)) : '******'}
                                             </span>
                                         </div>
                                     </>
@@ -1252,7 +1257,7 @@ export default function ViewQuotationPage() {
                                 </span>
                             </div>
                             <div className="p-5 space-y-3">
-                                {data.paymentMilestones.map((m: any, idx: number) => (
+                                {data.paymentMilestones.map((m, idx: number) => (
                                     <div key={idx} className="flex items-center justify-between p-3 rounded-2xl bg-white/80 dark:bg-slate-900/80 border border-slate-200/80 dark:border-slate-800 shadow-2xs">
                                         <div className="flex items-center gap-2.5">
                                             <span className="w-6 h-6 rounded-lg bg-gradient-to-br from-[#4E12D4] to-[#1E0078] text-white text-xs font-bold font-mono flex items-center justify-center shadow-xs shrink-0">

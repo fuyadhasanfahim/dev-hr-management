@@ -57,7 +57,7 @@ export default function OrganizationPage() {
             {/* Main Tabs */}
             <Tabs
                 value={activeTab}
-                onValueChange={(val: any) => setActiveTab(val)}
+                onValueChange={(val) => setActiveTab(val as typeof activeTab)}
                 className="space-y-6"
             >
                 <div className="border-b border-border pb-1">

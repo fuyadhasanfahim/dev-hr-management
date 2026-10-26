@@ -54,7 +54,6 @@ export function LeadForm({
   submitLabel,
   onCancel,
   serverErrors,
-  isEditMode = false,
   statuses,
   sources,
 }: LeadFormProps) {
@@ -241,7 +240,6 @@ function LeadContactInfo({
 
 function LeadDetails({
   form,
-  getFieldError,
   statuses,
   sources,
 }: {

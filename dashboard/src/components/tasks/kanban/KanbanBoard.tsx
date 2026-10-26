@@ -62,6 +62,8 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { apiMessage } from '@/lib/api-error';
+import type { StaffListItem } from '@/types/task.type';
 
 export type SubTaskItem = { _id: string; title: string; completed: boolean; completedAt?: string };
 export type TaskItem = ProgressTaskItem;
@@ -72,7 +74,7 @@ interface KanbanBoardProps {
     onEditTask?: (task: TaskItem) => void;
     onSubmitTask?: (task: TaskItem) => void;
     onOpenDetail?: (task: TaskItem) => void;
-    staffs?: any[];
+    staffs?: StaffListItem[];
 }
 
 const COLUMNS = [
@@ -104,7 +106,7 @@ function TaskCardContent({
     task: TaskItem;
     canManage: boolean;
     isOverdue: boolean;
-    dragHandleProps?: Record<string, any>;
+    dragHandleProps?: Record<string, unknown>;
     onOpenDetail?: (task: TaskItem) => void;
     onEditTask?: (task: TaskItem) => void;
     onSubmitTask?: (task: TaskItem) => void;
@@ -339,7 +341,7 @@ export function KanbanBoard({
 
     const roleOptions = useMemo(() => {
         const set = new Set<string>();
-        staffs.forEach((s: any) => s.designation && set.add(s.designation));
+        staffs.forEach((s) => s.designation && set.add(s.designation));
         return Array.from(set).map((d) => ({ value: d, label: DESIGNATION_LABELS[d as Designation] || d }));
     }, [staffs]);
 
@@ -390,13 +392,13 @@ export function KanbanBoard({
 
     const handleQuickStatusMove = async (task: TaskItem, newStatus: string) => {
         const previousTasks = [...localTasks];
-        setLocalTasks((prev) => prev.map((t) => (t._id === task._id ? { ...t, status: newStatus as any } : t)));
+        setLocalTasks((prev) => prev.map((t) => (t._id === task._id ? { ...t, status: newStatus as TaskItem['status'] } : t)));
         try {
             await updateTaskStatus({ taskId: task._id, status: newStatus, currentStatus: task.status }).unwrap();
             toast.success('Task status updated');
-        } catch (err: any) {
+        } catch (err) {
             setLocalTasks(previousTasks);
-            toast.error(err?.data?.message || 'Transition failed');
+            toast.error(apiMessage(err, 'Transition failed'));
         }
     };
 
@@ -447,14 +449,14 @@ export function KanbanBoard({
         }
 
         const previousTasks = [...localTasks];
-        setLocalTasks((prev) => prev.map((t) => (t._id === taskId ? { ...t, status: targetStatus as any } : t)));
+        setLocalTasks((prev) => prev.map((t) => (t._id === taskId ? { ...t, status: targetStatus as TaskItem['status'] } : t)));
 
         try {
             await updateTaskStatus({ taskId, status: targetStatus, currentStatus }).unwrap();
             toast.success('Task status updated');
-        } catch (err: any) {
+        } catch (err) {
             setLocalTasks(previousTasks);
-            toast.error(err?.data?.message || 'Failed to update status');
+            toast.error(apiMessage(err, 'Failed to update status'));
         }
     };
 
@@ -484,7 +486,7 @@ export function KanbanBoard({
                         </SelectTrigger>
                         <SelectContent>
                             <SelectItem value="all">All Assignees</SelectItem>
-                            {staffs.map((s: any) => (
+                            {staffs.map((s) => (
                                 <SelectItem key={s._id} value={s._id}>
                                     {s.user?.name || s.name || 'Staff Member'}
                                 </SelectItem>

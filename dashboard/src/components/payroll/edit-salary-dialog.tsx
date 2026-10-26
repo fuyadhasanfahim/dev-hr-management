@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import {
     Dialog,
     DialogContent,
@@ -80,7 +80,6 @@ export default function EditSalaryDialog({
     const [localBaseAmount, setLocalBaseAmount] = useState<string>(
         (baseAmount || 0).toString(),
     );
-    const [finalAmount, setFinalAmount] = useState<number>(baseAmount || 0);
     const [isBaseEditable, setIsBaseEditable] = useState(false);
 
     // E1-F2-T2: when the backend rejects an out-of-tolerance amount with a
@@ -95,27 +94,28 @@ export default function EditSalaryDialog({
 
     const [processPayment, { isLoading }] = useProcessPaymentMutation();
 
-    useEffect(() => {
+    // Start from the row's values each time the dialog opens or they change (adjusted while rendering).
+    const [seenProps, setSeenProps] = useState({ open, baseAmount, initialBonus, initialDeduction, initialNote });
+    if (
+        seenProps.open !== open ||
+        seenProps.baseAmount !== baseAmount ||
+        seenProps.initialBonus !== initialBonus ||
+        seenProps.initialDeduction !== initialDeduction ||
+        seenProps.initialNote !== initialNote
+    ) {
+        setSeenProps({ open, baseAmount, initialBonus, initialDeduction, initialNote });
         if (open) {
             setBonus(initialBonus > 0 ? initialBonus.toString() : "");
-            setDeduction(
-                initialDeduction > 0 ? initialDeduction.toString() : "",
-            );
+            setDeduction(initialDeduction > 0 ? initialDeduction.toString() : "");
             setNote(initialNote || "");
             setPaymentMethod("cash");
             setLocalBaseAmount((baseAmount || 0).toString());
-            setFinalAmount(baseAmount || 0);
             setIsBaseEditable(false);
         }
-    }, [open, baseAmount, initialBonus, initialDeduction, initialNote]);
+    }
 
-    // Recalculate final amount when bonus/deduction/base changes
-    useEffect(() => {
-        const b = parseFloat(bonus) || 0;
-        const d = parseFloat(deduction) || 0;
-        const base = parseFloat(localBaseAmount) || 0;
-        setFinalAmount(Math.max(0, base + b - d));
-    }, [localBaseAmount, bonus, deduction]);
+    // The amount to pay follows base, bonus and deduction.
+    const finalAmount = Math.max(0, (parseFloat(localBaseAmount) || 0) + (parseFloat(bonus) || 0) - (parseFloat(deduction) || 0));
 
     const handleSave = () => {
         if (onSave) {

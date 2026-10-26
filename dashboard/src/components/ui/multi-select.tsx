@@ -39,6 +39,7 @@ export function MultiSelect({
     className,
 }: MultiSelectProps) {
     const [open, setOpen] = React.useState(false);
+    const listId = React.useId();
 
     const handleUnselect = (item: string) => {
         onChange(selected.filter((i) => i !== item));
@@ -50,6 +51,9 @@ export function MultiSelect({
                 <div
                     role="combobox"
                     aria-expanded={open}
+                    aria-haspopup="listbox"
+                    aria-controls={listId}
+                    tabIndex={0}
                     className={cn(
                         "flex min-h-[40px] w-full flex-wrap items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer",
                         className
@@ -102,7 +106,7 @@ export function MultiSelect({
             <PopoverContent className="w-full min-w-(--radix-popover-trigger-width) p-0">
                 <Command className="w-full">
                     <CommandInput placeholder="Search..." />
-                    <CommandList>
+                    <CommandList id={listId}>
                         <CommandEmpty>No item found.</CommandEmpty>
                         <CommandGroup>
                             {options.map((option) => (

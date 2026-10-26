@@ -20,8 +20,9 @@ export interface IInvitation {
     role: string;
     department?: string;
     designation: string;
-    branchId: any;
-    shiftId?: any;
+    // Populated records once the invitation is listed, plain ids before.
+    branchId: string | { _id: string; name: string };
+    shiftId?: string | { _id: string; name: string };
     createdBy: string;
     createdAt: string;
     updatedAt: string;

@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import type { QuotationData } from '@/types/quotation.type';
 import { useParams, useRouter } from 'next/navigation';
 import { useGetQuotationByIdQuery } from '@/redux/features/quotation/quotationApi';
 import { useQuotationStore } from '@/store/useQuotationStore';
@@ -8,42 +9,31 @@ import QuotationBuilder from '../../components/forms/QuotationBuilder';
 import { Loader2, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
+const dateOnly = (value?: string | Date) => (value ? new Date(value).toISOString().split('T')[0] : '');
+
+function sanitize(data: QuotationData) {
+  return {
+    ...data,
+    clientId: typeof data.clientId === 'object' ? (data.clientId as { _id: string })?._id : data.clientId,
+    details: { ...data.details, date: dateOnly(data.details?.date), validUntil: dateOnly(data.details?.validUntil) },
+  };
+}
+
 export default function EditQuotationPage() {
   const { id } = useParams();
   const { data, isLoading, isError } = useGetQuotationByIdQuery(id as string);
   const { setData } = useQuotationStore();
   const router = useRouter();
-  const isLoadedRef = useRef(false);
 
-  const [sanitizedData, setSanitizedData] = useState<any>(null);
+  // The form starts from the quotation as first loaded for this id, with dates in <input type="date"> format.
+  // Later refetches don't overwrite what the user is editing.
+  const [loaded, setLoaded] = useState<{ id: string; value: ReturnType<typeof sanitize> } | null>(null);
+  if (data && loaded?.id !== id) setLoaded({ id: id as string, value: sanitize(data) });
+  const sanitizedData = loaded && loaded.id === id ? loaded.value : null;
 
   useEffect(() => {
-    isLoadedRef.current = false;
-  }, [id]);
-
-  useEffect(() => {
-    if (data && !isLoadedRef.current) {
-      isLoadedRef.current = true;
-      const sanitized = {
-        ...data,
-        clientId:
-          typeof data.clientId === 'object'
-            ? (data.clientId as { _id: string })?._id
-            : data.clientId,
-        details: {
-          ...data.details,
-          date: data.details?.date
-            ? new Date(data.details.date).toISOString().split('T')[0]
-            : '',
-          validUntil: data.details?.validUntil
-            ? new Date(data.details.validUntil).toISOString().split('T')[0]
-            : '',
-        },
-      };
-      setSanitizedData(sanitized);
-      setData(sanitized);
-    }
-  }, [data, setData]);
+    if (sanitizedData) setData(sanitizedData);
+  }, [sanitizedData, setData]);
 
   if (isLoading) {
     return (

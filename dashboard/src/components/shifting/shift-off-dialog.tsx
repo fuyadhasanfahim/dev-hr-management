@@ -26,6 +26,7 @@ import {
     useAddShiftOffDatesMutation,
     useRemoveShiftOffDatesMutation,
 } from '@/redux/features/shift/shiftApi';
+import { apiMessage } from '@/lib/api-error';
 
 interface ShiftOffDialogProps {
     shiftId: string;
@@ -71,8 +72,8 @@ export default function ShiftOffDialog({
             toast.success('Off dates added successfully');
             // Keep the dates selected so user can see what was added
             setReason('');
-        } catch (err: any) {
-            toast.error(err?.data?.message || 'Failed to add off dates');
+        } catch (err) {
+            toast.error(apiMessage(err, 'Failed to add off dates'));
         }
     };
 
@@ -83,8 +84,8 @@ export default function ShiftOffDialog({
                 dates: [date],
             }).unwrap();
             toast.success('Off date removed');
-        } catch (err: any) {
-            toast.error(err?.data?.message || 'Failed to remove off date');
+        } catch (err) {
+            toast.error(apiMessage(err, 'Failed to remove off date'));
         }
     };
 

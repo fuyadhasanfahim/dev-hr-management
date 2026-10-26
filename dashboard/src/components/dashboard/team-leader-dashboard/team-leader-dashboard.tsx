@@ -22,7 +22,6 @@ import {
   Calendar,
   Plus,
   Crown,
-  TrendingUp,
   FileText,
   DollarSign,
   LogOut,
@@ -31,7 +30,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
 import Link from "next/link";
 import { format } from "date-fns";
 import { toast } from "sonner";
@@ -50,8 +48,8 @@ export default function TeamLeaderDashboard() {
   const staff = meData?.staff;
 
   const tasks = tasksData?.data || [];
-  const activeTasks = tasks.filter((t: any) => t.status !== "completed");
-  const underReviewTasks = tasks.filter((t: any) => t.status === "under_review");
+  const activeTasks = tasks.filter((t) => t.status !== "completed");
+  const underReviewTasks = tasks.filter((t) => t.status === "under_review");
   const orders = ordersData?.data || [];
 
   // Salary pin lock state

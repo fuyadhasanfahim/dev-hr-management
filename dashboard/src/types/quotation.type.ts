@@ -62,10 +62,14 @@ export interface IQuotationService {
   scopeItems: string[];
   /** Only meaningful for the web-development category. */
   techStack?: IQuotationTechStack;
-  basePrice: number;
+  /** Absent for unit-priced services (photo / video): their price comes from the line items. */
+  basePrice?: number;
   lineItems: IQuotationLineItem[];
   discount: number; // Percentage (0-100), applies to this service's one-time portion
   taxRate: number; // Percentage
+  /** Older quantity-priced services (before line items existed) carry these two on the service itself. */
+  quantity?: number;
+  rate?: number;
 }
 
 export interface IPaymentMilestone {

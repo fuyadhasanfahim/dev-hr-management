@@ -3,28 +3,16 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { UserCheck, Calendar, Users, Clock, Activity, ArrowRight } from "lucide-react";
+import {     Activity } from "lucide-react";
 import type { RecentActivity } from "@/types/dashboard.type";
 import { formatDistanceToNow } from "date-fns";
-import Link from "next/link";
+
 
 interface RecentActivitiesProps {
   activities: RecentActivity[];
 }
 
-const activityIcons: Record<string, any> = {
-  attendance: UserCheck,
-  shift: Calendar,
-  staff: Users,
-  leave: Clock,
-};
 
-const activityColors: Record<string, string> = {
-  attendance: "text-blue-500 bg-blue-500/10",
-  shift: "text-emerald-500 bg-emerald-500/10",
-  staff: "text-primary bg-primary/10",
-  leave: "text-pink-500 bg-pink-500/10",
-};
 
 export function RecentActivities({ activities }: RecentActivitiesProps) {
   return (
@@ -49,8 +37,6 @@ export function RecentActivities({ activities }: RecentActivitiesProps) {
             </div>
           ) : (
             activities.slice(0, 6).map((activity) => {
-              const Icon = activityIcons[activity.type] || Activity;
-              const colorClass = activityColors[activity.type] || "text-primary bg-primary/10";
               const userName = activity.user?.name || "Team Member";
               const initials = userName
                 .split(" ")

@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Eye } from "lucide-react";
 import Link from 'next/link';
 import { format } from "date-fns";
-import { IOrder, OrderStatus, OrderPriority } from "@/types/order.type";
+import { IOrder } from "@/types/order.type";
 import { ORDER_STATUS_LABELS, ORDER_PRIORITY_LABELS, ORDER_STATUS_COLORS, ORDER_PRIORITY_COLORS } from "@/lib/constants";
 
 interface OrderHistoryTableProps {

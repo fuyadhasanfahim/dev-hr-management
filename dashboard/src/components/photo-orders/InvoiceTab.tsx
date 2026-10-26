@@ -36,8 +36,9 @@ export function InvoiceTab() {
     const [picked, setPicked] = useState<Set<string>>(new Set());
     const [viewing, setViewing] = useState<string | null>(null);
 
+    const thisYear = now.getFullYear();
     const { data: years } = useGetPhotoOrderYearsQuery();
-    const yearOptions = useMemo(() => [...new Set([now.getFullYear(), ...(years ?? [])])].sort((a, b) => b - a), [years]); // eslint-disable-line react-hooks/exhaustive-deps
+    const yearOptions = useMemo(() => [...new Set([thisYear, ...(years ?? [])])].sort((a, b) => b - a), [thisYear, years]);
     const { data: clients, isLoading: loadingClients } = useGetInvoiceClientsQuery({ month, year });
     const { data: orders, isFetching: loadingOrders } = useGetInvoiceOrdersQuery({ clientId, month, year }, { skip: !clientId });
     const { data: invoices } = useGetPhotoInvoicesQuery({ month, year });

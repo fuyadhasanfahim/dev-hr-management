@@ -10,8 +10,8 @@ import {
     IconChevronDown,
     IconChevronRight,
     IconCopy,
-    IconDots,
-    IconFileText,
+    
+    
     IconGripVertical,
     IconPlus,
     IconTrash,
@@ -43,7 +43,6 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
@@ -74,8 +73,9 @@ import {
     useUpdateQuotationMutation,
 } from "@/redux/features/quotation/quotationApi";
 import { Client } from "@/types/client.type";
-import { QuotationData, type QuotationCategory } from "@/types/quotation.type";
+import { QuotationData, type IPaymentMilestone, type IQuotationLineItem, type IQuotationService, type QuotationCategory } from "@/types/quotation.type";
 import { publicApiUrl } from "@/lib/public-api";
+import { apiMessage } from '@/lib/api-error';
 
 // --- Types & Data Interfaces ---
 
@@ -106,7 +106,7 @@ const servicesList = [
     "Photo Editing",
 ];
 
-const serviceMetaData: Record<string, { icon: any; description: string }> = {
+const serviceMetaData: Record<string, { icon: React.ElementType; description: string }> = {
     "Web Design & Development": {
         icon: IconLayout,
         description: "Custom web applications, responsive websites, and interactive UI/UX.",
@@ -140,9 +140,7 @@ function getCurrencySymbol(currencyName: string) {
 
 // --- Initial Preset Data ---
 
-const initialFeatures: Feature[] = [];
 
-const initialMarketingFeatures: Feature[] = [];
 
 // --- Recursive Tree Manipulations ---
 
@@ -660,7 +658,27 @@ function calculateFeatureTreeTotal(nodes: Feature[]): number {
     };
 }
 
-function convertJsonToFeature(rawObj: any): Feature | null {
+// What the scope text can hold when it is JSON: several spellings for each field, sub-features under one of three keys.
+interface RawFeature {
+    name?: string;
+    title?: string;
+    label?: string;
+    featureName?: string;
+    route?: string;
+    path?: string;
+    url?: string;
+    price?: string | number;
+    children?: RawFeature[];
+    subFeatures?: RawFeature[];
+    items?: RawFeature[];
+}
+
+/** Quotation line items use 'one-time' / unit cycles; the pricing tables here show 'fixed' / 'monthly' / 'yearly'. */
+function toPricingBillingType(cycle: IQuotationLineItem['billingCycle']): 'fixed' | 'monthly' | 'yearly' {
+    return cycle === 'monthly' || cycle === 'yearly' ? cycle : 'fixed';
+}
+
+function convertJsonToFeature(rawObj: RawFeature | null | undefined): Feature | null {
     if (!rawObj || typeof rawObj !== "object") return null;
 
     let name = String(rawObj.name || rawObj.title || rawObj.label || rawObj.featureName || "").trim();
@@ -685,7 +703,7 @@ function convertJsonToFeature(rawObj: any): Feature | null {
         : [];
 
     const children: Feature[] = [];
-    rawChildren.forEach((child: any) => {
+    rawChildren.forEach((child) => {
         const converted = convertJsonToFeature(child);
         if (converted) children.push(converted);
     });
@@ -770,7 +788,7 @@ function parseBulkFeatures(text: string): Feature[] {
 
 // Convert nested feature array to flat array of indented strings
 function flattenFeatureTree(features: Feature[], level = 0, isMarketing = false): string[] {
-    let result: string[] = [];
+    const result: string[] = [];
     for (const f of features) {
         const indent = "  ".repeat(level);
         let text = f.name;
@@ -883,8 +901,8 @@ type QuotationContextType = {
     setIncludedSupportItems: React.Dispatch<React.SetStateAction<string[]>>;
     keyTermsItems: string[];
     setKeyTermsItems: React.Dispatch<React.SetStateAction<string[]>>;
-    paymentMilestones: any[];
-    setPaymentMilestones: React.Dispatch<React.SetStateAction<any[]>>;
+    paymentMilestones: IPaymentMilestone[];
+    setPaymentMilestones: React.Dispatch<React.SetStateAction<IPaymentMilestone[]>>;
     paymentPreset: "50-50" | "30-40-30" | "100-upfront" | "custom";
     setPaymentPreset: React.Dispatch<React.SetStateAction<"50-50" | "30-40-30" | "100-upfront" | "custom">>;
 
@@ -917,12 +935,11 @@ function QuotationDatePicker({
     placeholder?: string;
 }) {
     const [open, setOpen] = useState(false);
-    const dateObj = React.useMemo(() => {
-        if (!value) return undefined;
+    let dateObj: Date | undefined;
+    if (value) {
         const [y, m, d] = value.split("-").map(Number);
-        if (y && m && d) return new Date(y, m - 1, d);
-        return new Date(value);
-    }, [value]);
+        dateObj = y && m && d ? new Date(y, m - 1, d) : new Date(value);
+    }
 
     return (
         <Popover open={open} onOpenChange={setOpen}>
@@ -964,7 +981,6 @@ function QuotationDatePicker({
 export default function QuotationBuilder({
     initialData,
     pageTitle,
-    pageSubtitle,
     backUrl,
 }: {
     initialData?: QuotationData;
@@ -979,7 +995,7 @@ export default function QuotationBuilder({
 
     const [selectedServices, setSelectedServices] = useState<string[]>([]);
     const [selectedClient, setSelectedClient] = useState("");
-    const [clientSnapshot, setClientSnapshot] = useState<any>({
+    const [clientSnapshot, setClientSnapshot] = useState<{ contactName: string; companyName?: string; address?: string; email?: string; phone?: string }>({
         contactName: "",
         companyName: "",
         address: "",
@@ -1012,7 +1028,7 @@ Please review the details below. Should you have any questions or require custom
     const [includedSupportItems, setIncludedSupportItems] = useState<string[]>([]);
     const [keyTermsItems, setKeyTermsItems] = useState<string[]>([]);
     const [paymentPreset, setPaymentPreset] = useState<"50-50" | "30-40-30" | "100-upfront" | "custom">("50-50");
-    const [paymentMilestones, setPaymentMilestones] = useState<any[]>([
+    const [paymentMilestones, setPaymentMilestones] = useState<IPaymentMilestone[]>([
         { label: "50% Upfront Deposit (Project Kickoff)", percentage: 50 },
         { label: "50% Final Delivery & Handover", percentage: 50 },
     ]);
@@ -1048,7 +1064,7 @@ Please review the details below. Should you have any questions or require custom
             setSelectedCurrency(currencyLabel(initialData.currency));
 
             const rawClientId = typeof initialData.clientId === 'object'
-                ? (initialData.clientId as any)?._id
+                ? (initialData.clientId as unknown as { _id?: string })?._id
                 : initialData.clientId;
             setSelectedClient(rawClientId || "");
 
@@ -1124,12 +1140,12 @@ Please review the details below. Should you have any questions or require custom
                         setFeatures(parseBulkFeatures(service.scopeItems.join("\n")));
                     }
                     if (service.lineItems) {
-                        setWebDevPricing(service.lineItems.map((item: any, index: number) => ({
+                        setWebDevPricing(service.lineItems.map((item, index: number) => ({
                             id: index + 1,
                             name: item.title,
                             description: item.description || "",
                             price: item.price,
-                            billingType: item.billingCycle === "one-time" ? "fixed" : item.billingCycle,
+                            billingType: toPricingBillingType(item.billingCycle),
                         })));
                     }
                 } else if (service.category === "photo-editing") {
@@ -1160,17 +1176,17 @@ Please review the details below. Should you have any questions or require custom
                         setMarketingFeatures(parseBulkFeatures(service.scopeItems.join("\n")));
                     }
                     if (service.lineItems) {
-                        const budgetItem = service.lineItems.find((item: any) => item.title === "Monthly Advertising Budget");
+                        const budgetItem = service.lineItems.find((item) => item.title === "Monthly Advertising Budget");
                         if (budgetItem) {
                             setMarketingAdBudget(budgetItem.price || 0);
                         }
-                        const regularItems = service.lineItems.filter((item: any) => item.title !== "Monthly Advertising Budget");
-                        setMarketingPricing(regularItems.map((item: any, index: number) => ({
+                        const regularItems = service.lineItems.filter((item) => item.title !== "Monthly Advertising Budget");
+                        setMarketingPricing(regularItems.map((item, index: number) => ({
                             id: index + 1,
                             name: item.title,
                             description: item.description || "",
                             price: item.price,
-                            billingType: item.billingCycle === "one-time" ? "fixed" : item.billingCycle,
+                            billingType: toPricingBillingType(item.billingCycle),
                         })));
                     }
                 }
@@ -1411,7 +1427,7 @@ Please review the details below. Should you have any questions or require custom
         const flattenedWebDev = flattenFeatureTree(features, 0, false);
         const flattenedMarketing = flattenFeatureTree(marketingFeatures, 0, true);
 
-        const services: any[] = [];
+        const services: IQuotationService[] = [];
 
         if (selectedServices.includes("Web Design & Development")) {
             const featuresTotal = calculateFeatureTreeTotal(features);
@@ -1419,7 +1435,7 @@ Please review the details below. Should you have any questions or require custom
                 title: i.name,
                 description: i.description,
                 price: i.price,
-                billingCycle: ((i.billingType as string) === "fixed" || (i.billingType as string) === "one-time") ? "one-time" : "monthly" as any,
+                billingCycle: ((i.billingType as string) === "fixed" || (i.billingType as string) === "one-time") ? ("one-time" as const) : ("monthly" as const),
             }));
 
             services.push({
@@ -1481,7 +1497,7 @@ Please review the details below. Should you have any questions or require custom
             // so the invoice grand total / balance due / Pay Now all read zero.
             const marketingFeaturesTotal = calculateFeatureTreeTotal(marketingFeatures);
 
-            const lineItems: any[] = marketingPricing.map(i => ({
+            const lineItems: IQuotationLineItem[] = marketingPricing.map(i => ({
                 title: i.name,
                 description: i.description,
                 price: i.price,
@@ -1563,8 +1579,8 @@ Please review the details below. Should you have any questions or require custom
                 toast.success("🎉 Quotation created successfully!");
                 router.push(`/quotations/${res._id}`);
             }
-        } catch (err: any) {
-            toast.error(err?.data?.message || "Failed to save quotation.");
+        } catch (err) {
+            toast.error(apiMessage(err, "Failed to save quotation."));
         }
     };
 
@@ -1593,7 +1609,7 @@ Please review the details below. Should you have any questions or require custom
             a.remove();
             URL.revokeObjectURL(url);
             toast.success("🎉 PDF exported successfully!");
-        } catch (err) {
+        } catch {
             toast.error("Failed to export PDF.");
         } finally {
             setIsExporting(false);
@@ -2410,12 +2426,6 @@ function VideoEditingService({
             ? "Duration (in Seconds)"
             : "Quantity (10-sec blocks)";
 
-    const unitSingular =
-        videoEditingUnit === "video"
-            ? "video"
-            : videoEditingUnit === "second"
-            ? "sec"
-            : "10s";
 
     const headerSummary =
         videoEditingQty === 0
@@ -2840,7 +2850,7 @@ function FeatureItem({
         addFeature,
         updateFeature,
         deleteFeature,
-        duplicateFeature,
+        
         indentFeature,
         outdentFeature,
         makeMainFeature,
@@ -3506,7 +3516,7 @@ function QuotationSummary({
     isCreating: boolean;
     isUpdating: boolean;
     isExporting: boolean;
-    initialData?: any;
+    initialData?: QuotationData;
 }) {
     const {
         features,
@@ -3854,7 +3864,7 @@ function IncludedSupportSection() {
             <CardContent className="space-y-3">
                 {includedSupportItems.length === 0 && !isAdding && (
                     <div className="p-6 text-center border-2 border-dashed rounded-xl bg-muted/20">
-                        <p className="text-xs text-muted-foreground font-medium">No included support specified. Click "+ Add Item" or "Bulk Paste" above.</p>
+                        <p className="text-xs text-muted-foreground font-medium">No included support specified. Click &quot;+ Add Item&quot; or &quot;Bulk Paste&quot; above.</p>
                     </div>
                 )}
 
@@ -3994,7 +4004,7 @@ function KeyTermsSection() {
             <CardContent className="space-y-3">
                 {keyTermsItems.length === 0 && !isAdding && (
                     <div className="p-6 text-center border-2 border-dashed rounded-xl bg-muted/20">
-                        <p className="text-xs text-muted-foreground font-medium">No key terms specified. Click "+ Add Item" or "Bulk Paste" above.</p>
+                        <p className="text-xs text-muted-foreground font-medium">No key terms specified. Click &quot;+ Add Item&quot; or &quot;Bulk Paste&quot; above.</p>
                     </div>
                 )}
 
@@ -4134,7 +4144,7 @@ function NotIncludedSection() {
             <CardContent className="space-y-3">
                 {notIncludedItems.length === 0 && !isAdding && (
                     <div className="p-6 text-center border-2 border-dashed rounded-xl bg-muted/20">
-                        <p className="text-xs text-muted-foreground font-medium">No excluded items specified. Click "+ Add Item" or "Bulk Paste" above.</p>
+                        <p className="text-xs text-muted-foreground font-medium">No excluded items specified. Click &quot;+ Add Item&quot; or &quot;Bulk Paste&quot; above.</p>
                     </div>
                 )}
 
@@ -4274,7 +4284,7 @@ function ClientRequirementsSection() {
             <CardContent className="space-y-3">
                 {clientRequirements.length === 0 && !isAdding && (
                     <div className="p-6 text-center border-2 border-dashed rounded-xl bg-muted/20">
-                        <p className="text-xs text-muted-foreground font-medium">No client requirements specified. Click "+ Add Requirement" or "Bulk Paste" above.</p>
+                        <p className="text-xs text-muted-foreground font-medium">No client requirements specified. Click &quot;+ Add Requirement&quot; or &quot;Bulk Paste&quot; above.</p>
                     </div>
                 )}
 

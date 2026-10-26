@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import {
     Dialog,
     DialogContent,
@@ -27,6 +27,7 @@ import {
 import { useGetFinanceAnalyticsQuery } from '@/redux/features/analytics/analyticsApi';
 import { Loader, Share2, Wallet, TrendingUp } from 'lucide-react';
 import { toast } from 'sonner';
+import { apiMessage } from '@/lib/api-error';
 
 const months = [
     { value: '1', label: 'January' },
@@ -121,8 +122,8 @@ export default function ShareProfitDialog() {
             setSelectedPartnerId('');
             setAmount('');
             setNotes('');
-        } catch (err: any) {
-            toast.error(err?.data?.message || 'Failed to share profit');
+        } catch (err) {
+            toast.error(apiMessage(err, 'Failed to share profit'));
         }
     };
 
@@ -134,11 +135,12 @@ export default function ShareProfitDialog() {
         setSelectedYear(String(currentYear));
     };
 
-    useEffect(() => {
-        if (!open) {
-            resetForm();
-        }
-    }, [open]);
+    // A closed dialog is reset (adjusted while rendering, not in an effect).
+    const [wasOpen, setWasOpen] = useState(open);
+    if (open !== wasOpen) {
+        setWasOpen(open);
+        if (!open) resetForm();
+    }
 
     return (
         <Dialog open={open} onOpenChange={setOpen}>

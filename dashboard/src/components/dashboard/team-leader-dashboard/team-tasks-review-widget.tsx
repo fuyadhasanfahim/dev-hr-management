@@ -16,11 +16,13 @@ import {
   TaskItem,
   useReviewTaskMutation,
 } from "@/redux/features/task/taskApi";
-import { CheckCircle2, Clock, AlertCircle, ArrowRight, Eye, RefreshCw } from "lucide-react";
+import { CheckCircle2, ArrowRight, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import Link from "next/link";
 import { Spinner } from "@/components/ui/spinner";
+import { apiMessage } from '@/lib/api-error';
+import { assigneeOf } from '@/lib/task-progress';
 
 interface TeamTasksReviewWidgetProps {
   tasks: TaskItem[];
@@ -48,8 +50,8 @@ export function TeamTasksReviewWidget({ tasks, isLoading }: TeamTasksReviewWidge
         data: { decision: "approve", note: "Approved by Team Leader" },
       }).unwrap();
       toast.success("Task approved and completed!");
-    } catch (err: any) {
-      toast.error(err?.data?.message || "Failed to approve task");
+    } catch (err) {
+      toast.error(apiMessage(err, "Failed to approve task"));
     } finally {
       setActiveTaskId(null);
     }
@@ -63,8 +65,8 @@ export function TeamTasksReviewWidget({ tasks, isLoading }: TeamTasksReviewWidge
         data: { decision: "reject", note: "Needs revision. Please check details." },
       }).unwrap();
       toast.warning("Revision requested for task");
-    } catch (err: any) {
-      toast.error(err?.data?.message || "Failed to request revision");
+    } catch (err) {
+      toast.error(apiMessage(err, "Failed to request revision"));
     } finally {
       setActiveTaskId(null);
     }
@@ -113,7 +115,7 @@ export function TeamTasksReviewWidget({ tasks, isLoading }: TeamTasksReviewWidge
         ) : (
           <div className="space-y-3">
             {reviewTasks.slice(0, 4).map((task) => {
-              const assignee = task.assignedTo as any;
+              const assignee = assigneeOf(task);
               const assigneeName = assignee?.name || assignee?.userId?.name || "Team Member";
               const initials = assigneeName
                 .split(" ")

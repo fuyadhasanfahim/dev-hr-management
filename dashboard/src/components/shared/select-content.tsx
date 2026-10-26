@@ -1,5 +1,6 @@
 'use client';
 
+import { useIsMounted } from '@/hooks/use-is-mounted';
 import * as React from 'react';
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
@@ -49,17 +50,13 @@ export function SelectContent({
   align = 'down',
 }: SelectContentProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const [mounted, setMounted] = useState(false);
+  const mounted = useIsMounted();
   const [position, setPosition] = useState<{ top?: number; bottom?: number; left: number; width: number }>({ left: 0, width: 0 });
   const containerRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
 
   useClickOutside([containerRef, popupRef], () => setIsOpen(false));
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   const selectedOption = options.find((opt) => opt.value === value);
 
@@ -86,7 +83,6 @@ export function SelectContent({
 
   useEffect(() => {
     if (!isOpen) return;
-    updatePosition();
 
     window.addEventListener('resize', updatePosition);
     window.addEventListener('scroll', updatePosition, true);
@@ -101,7 +97,10 @@ export function SelectContent({
       <button
         ref={buttonRef}
         type="button"
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={() => {
+          if (!isOpen) updatePosition();
+          setIsOpen(!isOpen);
+        }}
         className={cn(
           'flex w-full items-center justify-between gap-2 rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white/70 dark:bg-slate-900/50 px-3 h-10 text-sm font-medium text-slate-700 dark:text-slate-205 focus:outline-none focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary transition-all duration-200 shadow-2xs hover:bg-slate-50/50 dark:hover:bg-slate-900/30 cursor-pointer',
           triggerClassName,

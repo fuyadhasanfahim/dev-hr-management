@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useIsMounted } from '@/hooks/use-is-mounted';
+import { useState } from 'react';
 import DOMPurify from 'dompurify';
 import { format } from 'date-fns';
 import { Megaphone, X, ChevronLeft, ChevronRight, Pin } from 'lucide-react';
@@ -25,11 +26,7 @@ export function FloatingNoticePopup() {
     const [currentIndex, setCurrentIndex] = useState(0);
     const [isVisible, setIsVisible] = useState(false);
     const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
-    const [isMounted, setIsMounted] = useState(false);
-
-    useEffect(() => {
-        setIsMounted(true);
-    }, []);
+    const isMounted = useIsMounted();
 
     const unreadNotices = data?.data || [];
     const visibleNotices = unreadNotices.filter((n) => !dismissedIds.has(n._id));

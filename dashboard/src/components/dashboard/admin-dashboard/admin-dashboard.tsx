@@ -18,7 +18,6 @@ import {
   UserCheck,
   TrendingUp,
   DollarSign,
-  Package,
   FileText,
   AlertCircle,
   Plus,

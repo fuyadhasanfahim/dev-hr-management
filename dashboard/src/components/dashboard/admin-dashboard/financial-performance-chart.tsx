@@ -18,7 +18,7 @@ import {
   ChartTooltipContent,
 } from "@/components/ui/chart";
 import { useGetFinanceAnalyticsQuery } from "@/redux/features/analytics/analyticsApi";
-import { TrendingUp, DollarSign, ArrowUpRight, ArrowDownRight } from "lucide-react";
+import { DollarSign, ArrowUpRight, ArrowDownRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 

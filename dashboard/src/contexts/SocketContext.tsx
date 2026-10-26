@@ -59,14 +59,14 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             });
 
             // Real-time task events listener (live updates across all clients)
-            socketInstance.on("task:update", (data: { action: string; task?: any; taskId?: string }) => {
+            socketInstance.on("task:update", (data: { action: string; task?: unknown; taskId?: string }) => {
                 console.log("Real-time task update event via socket:", data);
                 // Invalidate Task & Order tags to trigger live RTK Query refetch for all open components
                 dispatch(taskApi.util.invalidateTags(["Task", "Order"]));
             });
 
             // Real-time notification events listener (live notifications for logged-in user)
-            socketInstance.on("notification:new", (notification: any) => {
+            socketInstance.on("notification:new", (notification: { title?: string; message?: string }) => {
                 console.log("Real-time notification received via socket:", notification);
                 // Invalidate Notification tags to instantly update unread badge count & bell dropdown
                 dispatch(notificationApi.util.invalidateTags(["Notification"]));
@@ -78,7 +78,8 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 }
             });
 
-            setSocket(socketInstance);
+            // Handed to React after the effect body, so the context updates once the socket exists.
+            queueMicrotask(() => setSocket(socketInstance));
 
             return () => {
                 socketInstance.disconnect();

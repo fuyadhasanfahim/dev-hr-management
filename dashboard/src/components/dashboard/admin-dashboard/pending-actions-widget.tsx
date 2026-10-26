@@ -21,6 +21,7 @@ import { toast } from "sonner";
 import { format } from "date-fns";
 import Link from "next/link";
 import { Spinner } from "@/components/ui/spinner";
+import { apiMessage } from '@/lib/api-error';
 
 export function PendingActionsWidget() {
   const { data: pendingLeavesData, isLoading: isLeavesLoading } = useGetPendingLeavesQuery(undefined, {
@@ -28,7 +29,7 @@ export function PendingActionsWidget() {
   });
 
   const [approveLeave, { isLoading: isApproving }] = useApproveLeaveMutation();
-  const [rejectLeave, { isLoading: isRejecting }] = useRejectLeaveMutation();
+  const [rejectLeave] = useRejectLeaveMutation();
   const [actionId, setActionId] = React.useState<string | null>(null);
 
   const pendingLeaves = pendingLeavesData?.data || [];
@@ -45,8 +46,8 @@ export function PendingActionsWidget() {
         },
       }).unwrap();
       toast.success("Leave approved successfully");
-    } catch (err: any) {
-      toast.error(err?.data?.message || "Failed to approve leave");
+    } catch (err) {
+      toast.error(apiMessage(err, "Failed to approve leave"));
     } finally {
       setActionId(null);
     }
@@ -57,8 +58,8 @@ export function PendingActionsWidget() {
     try {
       await rejectLeave({ id, comment: "Rejected via Dashboard Action Center" }).unwrap();
       toast.success("Leave rejected");
-    } catch (err: any) {
-      toast.error(err?.data?.message || "Failed to reject leave");
+    } catch (err) {
+      toast.error(apiMessage(err, "Failed to reject leave"));
     } finally {
       setActionId(null);
     }
@@ -107,7 +108,7 @@ export function PendingActionsWidget() {
         ) : (
           <div className="space-y-3">
             {pendingLeaves.slice(0, 4).map((leave) => {
-              const staff = leave.staffId as any;
+              const staff = leave.staffId as unknown as { userId?: { name?: string }; name?: string } | null;
               const staffName = staff?.userId?.name || staff?.name || "Staff Member";
               const initials = staffName
                 .split(" ")

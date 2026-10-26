@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import {  useMemo, useState } from "react";
 import { format } from "date-fns";
 import { Loader2, Plus, X } from "lucide-react";
 import { toast } from "sonner";
@@ -70,10 +70,8 @@ export function OrderForm({ formId, defaultValues: d, canManageMetadata, onSubmi
     const members = client?.teamMembers ?? [];
     const visibleServices = services.filter((s) => s.name.toLowerCase().includes(serviceSearch.trim().toLowerCase()));
 
-    // drop a contact person that doesn't belong to the newly chosen client
-    useEffect(() => {
-        if (contactPersonId && client && !members.some((m) => m._id === contactPersonId)) setContactPersonId("");
-    }, [client, members, contactPersonId]);
+    // drop a contact person that doesn't belong to the newly chosen client (adjusted while rendering)
+    if (contactPersonId && client && !members.some((m) => m._id === contactPersonId)) setContactPersonId("");
 
     const clear = (k: string) => setErrors((e) => (e[k] ? Object.fromEntries(Object.entries(e).filter(([key]) => key !== k)) : e));
 
