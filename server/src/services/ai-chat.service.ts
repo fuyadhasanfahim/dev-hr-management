@@ -1,7 +1,7 @@
 import ServiceModel from '../models/service.model.js';
 import envConfig from '../config/env.config.js';
 import { logger } from '../lib/logger.js';
-import { openaiFetch } from '../lib/openai-chat.js';
+import { openaiFetch, parseJsonReply } from '../lib/openai-chat.js';
 import { embed } from '../lib/openai-embeddings.js';
 import { asksPrice, leaksPrice } from '../lib/sales-flow.js';
 import knowledgeBaseService, { type KnowledgeMatch } from './knowledge-base.service.js';
@@ -209,7 +209,7 @@ export async function processAIChat(
             messages: [...base, ...extra],
             response_format: { type: 'json_schema', json_schema: REPLY_SCHEMA },
         });
-        return JSON.parse(data.choices[0].message.content);
+        return parseJsonReply(data);
     };
 
     // A draft that states a price too early, or answers a Bengali visitor in English letters, is regenerated once or twice.

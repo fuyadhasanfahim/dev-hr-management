@@ -14,6 +14,7 @@ import guestAuthService from '../services/guest-auth.service.js';
 import { notifyNewSession, notifyAgents } from '../socket/support.namespace.js';
 import { isAiActive } from '../services/ai-settings.service.js';
 import { logger } from '../lib/logger.js';
+import { runInOrder } from '../lib/keyed-queue.js';
 
 async function chat(req: Request, res: Response) {
     try {
@@ -165,11 +166,12 @@ async function chat(req: Request, res: Response) {
                 { role: 'assistant' as const, content: result.reply },
             ];
             const conversationKey = savedConversationId;
-            void updateMemory(memory, turns)
-                .then(async (text) => {
-                    await aiConversationService.saveMemory(conversationKey, text);
-                    if (knownContactId) await ContactModel.updateOne({ _id: knownContactId }, { $set: { aiMemory: text } });
-                })
+            void runInOrder(`webmemory:${conversationKey}`, async () => {
+                const latest = ((await AiConversationModel.findOne({ conversationId: conversationKey }).select('aiMemory').lean()) as any)?.aiMemory ?? memory;
+                const text = await updateMemory(latest, turns);
+                await aiConversationService.saveMemory(conversationKey, text);
+                if (knownContactId) await ContactModel.updateOne({ _id: knownContactId }, { $set: { aiMemory: text } });
+            })
                 .catch((err: any) => logger.error(`Could not update the website AI memory: ${err.message}`));
         }
 

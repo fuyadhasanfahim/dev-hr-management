@@ -10,6 +10,8 @@
         "start": "node dist/server.js",
         "dev": "nodemon --exec tsx src/server.ts",
         "build": "npx tsc",
+        "test:ai": "node --import tsx --test src/lib/__tests__/ai-reply-checks.test.ts src/lib/__tests__/whatsapp-reply-guard.test.ts src/lib/__tests__/openai-chat.test.ts src/lib/__tests__/keyed-queue.test.ts src/lib/__tests__/sales-flow.test.ts src/lib/__tests__/knowledge-base-utils.test.ts",
+        "ai:regression": "tsx src/scripts/ai-regression.ts",
         "sync:org": "tsx src/scripts/sync-organization-staff.ts",
         "seed:roles": "tsx src/scripts/seed-roles.ts",
         "seed:blueprints": "tsx src/scripts/seed-blueprints.ts",

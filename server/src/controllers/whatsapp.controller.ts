@@ -7,6 +7,8 @@ import { agentReplyPolicy, isAiActive } from '../services/ai-settings.service.js
 import aiLearning from '../services/ai-learning.service.js';
 import WhatsAppConversationModel, { WhatsAppConversationStatus, type IWhatsAppConversation } from '../models/whatsapp-conversation.model.js';
 import { isAckOnly } from '../lib/sales-flow.js';
+import { decideSend } from '../lib/whatsapp-reply-guard.js';
+import { runInOrder, waitForKey } from '../lib/keyed-queue.js';
 import { readMedia } from '../lib/media-reader.js';
 import WhatsAppCustomerMemoryModel from '../models/whatsapp-customer-memory.model.js';
 import WhatsAppNoteModel from '../models/whatsapp-note.model.js';
@@ -248,6 +250,11 @@ async function handleIncomingMessage(fromPhone: string, content: InboundContent,
 const ANSWER_DELAY_MS = 8_000;
 const answerTimers = new Map<string, NodeJS.Timeout>();
 const answering = new Set<string>();
+// Drafts thrown away because the customer wrote again while the AI was thinking (per chat, reset after a reply is sent).
+const redos = new Map<string, number>();
+
+/** True while a customer's burst of messages is still waiting out the short delay, so a sweep must not jump the queue. */
+export const hasPendingAnswer = (conversationId: string) => answerTimers.has(conversationId) || answering.has(conversationId);
 
 function scheduleAnswer(conversationId: string, delay = ANSWER_DELAY_MS) {
     clearTimeout(answerTimers.get(conversationId));
@@ -350,6 +357,7 @@ async function answerWithAi(
     });
 
     // Per-customer memory (keyed by phone, so it survives a resolved chat starting again) and the team's internal notes.
+    await waitForKey(`memory:${conversation.customerPhone}`, 4_000);
     const [memoryDoc, noteDocs] = await Promise.all([
         WhatsAppCustomerMemoryModel.findOne({ customerPhone: conversation.customerPhone }).lean(),
         WhatsAppNoteModel.find({ customerPhone: conversation.customerPhone }).sort({ createdAt: -1 }).limit(5).lean(),
@@ -363,6 +371,34 @@ async function answerWithAi(
         notes: noteDocs.map((n) => `- ${n.body.replace(/\s+/g, ' ').slice(0, 400)} (${n.author.name}, ${n.createdAt.toISOString().slice(0, 10)})`).join('\n') || undefined,
     });
 
+    // The reply took a few seconds. Look again before anything is sent: a teammate may have answered, the AI may
+    // have been switched off, or the customer may have written more (then one combined reply beats two).
+    const conversationId = conversation._id.toString();
+    const [fresh, aiActive, lastHuman, newestCustomer] = await Promise.all([
+        WhatsAppConversationModel.findById(conversation._id).select('aiEnabled status').lean(),
+        isAiActive('whatsapp'),
+        WhatsAppMessageModel.findOne({ conversationId: conversation._id, sender: WhatsAppMessageSender.AGENT }).sort({ createdAt: -1 }).select('createdAt').lean(),
+        WhatsAppMessageModel.findOne({ conversationId: conversation._id, sender: WhatsAppMessageSender.CUSTOMER, deletedAt: { $exists: false } }).sort({ createdAt: -1 }).select('createdAt').lean(),
+    ]);
+    const verdict = decideSend({
+        botActive: Boolean(fresh && fresh.aiEnabled && fresh.status === WhatsAppConversationStatus.BOT),
+        aiActive,
+        humanRepliedAt: lastHuman?.createdAt,
+        newestCustomerAt: newestCustomer?.createdAt,
+        answeredUpTo,
+        redos: redos.get(conversationId) ?? 0,
+    });
+    if (verdict.action !== 'send') {
+        logger.info(`WhatsApp AI reply for ${conversationId} not sent: ${verdict.why}`);
+        if (verdict.action === 'redo') {
+            redos.set(conversationId, (redos.get(conversationId) ?? 0) + 1);
+            // The new message already started its own short delay; make sure one exists so it is never forgotten.
+            if (!answerTimers.has(conversationId)) scheduleAnswer(conversationId, 1_500);
+        }
+        return;
+    }
+    redos.delete(conversationId);
+
     // A hand-off raises the support ticket first, so the customer is told its number in the same message.
     let ticket: any = null;
     let reply = ai.reply;
@@ -375,7 +411,15 @@ async function answerWithAi(
         }
     }
 
-    const sentId = await whatsappService.sendTextMessage(fromPhone, reply);
+    let sentId: string;
+    try {
+        sentId = await whatsappService.sendTextMessage(fromPhone, reply);
+    } catch (err) {
+        if (ticket) {
+            await WhatsAppConversationModel.updateOne({ _id: conversation._id }, { $set: { status: WhatsAppConversationStatus.ESCALATED, linkedTicketId: ticket._id } }).catch(() => {});
+        }
+        throw err;
+    }
     await WhatsAppMessageModel.create({
         conversationId: conversation._id,
         direction: WhatsAppMessageDirection.OUTBOUND,
@@ -386,18 +430,18 @@ async function answerWithAi(
     });
     notifyAgents('whatsapp:new_message', { conversationId: conversation._id.toString() });
 
-    // Remember where the sales flow stands (and why) — a new history entry only when the stage actually changes.
-    // Never lets a bookkeeping failure break the reply that was already sent.
+    // Remember what was answered and where the sales flow stands (and why). Atomic updates, not a save of the copy loaded
+    // before the AI started thinking: a customer message arriving meanwhile used to make that save fail, and the
+    // next cycle then answered the same messages again (a double reply). Never lets a bookkeeping failure break the reply that was already sent.
     try {
-        conversation.aiAnsweredUpTo = answeredUpTo;
-        conversation.salesStageReason = ai.stageReason;
+        const update: any = { $max: { aiAnsweredUpTo: answeredUpTo }, $set: { salesStageReason: ai.stageReason } };
         if (conversation.salesStage !== ai.stage) {
-            conversation.salesStage = ai.stage;
-            conversation.salesStageHistory = [...(conversation.salesStageHistory ?? []), { stage: ai.stage, reason: ai.stageReason, at: new Date() }].slice(-30);
+            update.$set.salesStage = ai.stage;
+            update.$push = { salesStageHistory: { $each: [{ stage: ai.stage, reason: ai.stageReason, at: new Date() }], $slice: -30 } };
         }
-        await conversation.save();
+        await WhatsAppConversationModel.updateOne({ _id: conversation._id }, update);
     } catch (err: any) {
-        logger.error(`Could not save sales stage: ${err.message}`);
+        logger.error(`Could not save the answered marker / sales stage for ${conversation._id}: ${err.message}`);
     }
 
     // Kept for review: staff can read every AI reply and correct the ones that missed.
@@ -415,16 +459,20 @@ async function answerWithAi(
         sources: ai.matches.map((m) => (m.source ? `[${m.source}] ` : '') + m.text.slice(0, 120)),
     });
 
-    // Fold this exchange (and any human colleague turns before it) into the customer's running profile.
-    void whatsappAiService
-        .updateMemory(memory, [...history.slice(-8), { role: 'user', content: body }, { role: 'assistant', content: ai.reply }])
-        .then((text) => WhatsAppCustomerMemoryModel.updateOne({ customerPhone: conversation.customerPhone }, { $set: { text, updatedBy: 'AI' } }, { upsert: true }))
-        .catch((err: any) => logger.error(`Could not update AI memory: ${err.message}`));
+    // Fold this exchange (and any human colleague turns before it) into the customer's running profile. Updates of one
+    // customer run in order and start from the latest saved profile, so a slow update can never overwrite a newer one.
+    if (!isAckOnly(body)) {
+        const phone = conversation.customerPhone;
+        const turns = [...history.slice(-4), { role: 'user' as const, content: body }, { role: 'assistant' as const, content: ai.reply }];
+        void runInOrder(`memory:${phone}`, async () => {
+            const latest = (await WhatsAppCustomerMemoryModel.findOne({ customerPhone: phone }).select('text').lean())?.text ?? memory;
+            const text = await whatsappAiService.updateMemory(latest, turns);
+            await WhatsAppCustomerMemoryModel.updateOne({ customerPhone: phone }, { $set: { text, updatedBy: 'AI' } }, { upsert: true });
+        }).catch((err: any) => logger.error(`Could not update AI memory: ${err.message}`));
+    }
 
     if (ai.escalate && ticket) {
-        conversation.status = WhatsAppConversationStatus.ESCALATED;
-        conversation.linkedTicketId = ticket._id;
-        await conversation.save();
+        await WhatsAppConversationModel.updateOne({ _id: conversation._id }, { $set: { status: WhatsAppConversationStatus.ESCALATED, linkedTicketId: ticket._id } });
 
         notifyAgents('ticket:created', {
             ticketId: ticket._id?.toString?.() ?? '',

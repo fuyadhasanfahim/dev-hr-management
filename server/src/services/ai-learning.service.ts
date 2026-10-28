@@ -13,6 +13,7 @@ import {
 } from '../constants/knowledge-base.js';
 import WhatsAppMessageModel, { WhatsAppMessageDirection, WhatsAppMessageType } from '../models/whatsapp-message.model.js';
 import { KnowledgeBaseError } from './knowledge-base.service.js';
+import { newestEditLast } from '../lib/knowledge-base-utils.js';
 
 // What the AI learns from beyond the knowledge base:
 //   qa         — a reply staff wrote for a question the AI couldn't answer
@@ -31,6 +32,7 @@ export interface AiExample {
     agentName: string | null;
     createdByName: string | null;
     createdAt: Date;
+    updatedAt?: Date;
 }
 
 export interface AiReplyLog {
@@ -315,7 +317,7 @@ async function retrieve(queryEmbedding: number[]): Promise<ExamplesForPrompt> {
     const lit = literal(queryEmbedding);
     const find = (kinds: string[], k: number) =>
         prisma.$queryRawUnsafe<(AiExample & { score: number })[]>(
-            `SELECT kind, question, context, answer, "createdAt", 1 - (embedding <=> $1::vector) AS score
+            `SELECT kind, question, context, answer, "createdAt", "updatedAt", 1 - (embedding <=> $1::vector) AS score
              FROM ai_examples WHERE (approved OR kind = 'agent') AND embedding IS NOT NULL AND kind = ANY($2::text[])
              ORDER BY embedding <=> $1::vector LIMIT ${k}`,
             lit,
@@ -324,9 +326,8 @@ async function retrieve(queryEmbedding: number[]): Promise<ExamplesForPrompt> {
     const [taught, style] = await Promise.all([find(['qa', 'correction'], EXAMPLE_TAUGHT_K), find(['agent'], EXAMPLE_STYLE_K)]);
     return {
         // Oldest first, so when two taught replies disagree the newest (last) one is the one the model sees as final.
-        taught: taught
-            .filter((r) => Number(r.score) >= EXAMPLE_TAUGHT_MIN_SCORE)
-            .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime()),
+        // A reply staff just edited counts as newest (sorted by last edit, not by when it was first written).
+        taught: newestEditLast(taught.filter((r) => Number(r.score) >= EXAMPLE_TAUGHT_MIN_SCORE)),
         style: style.filter((r) => Number(r.score) >= EXAMPLE_STYLE_MIN_SCORE),
     };
 }

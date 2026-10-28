@@ -2,7 +2,7 @@ import envConfig from '../config/env.config.js';
 import knowledgeBaseService, { type KnowledgeMatch } from './knowledge-base.service.js';
 import { embed } from '../lib/openai-embeddings.js';
 import { logger } from '../lib/logger.js';
-import { openaiFetch } from '../lib/openai-chat.js';
+import { openaiFetch, parseJsonReply } from '../lib/openai-chat.js';
 import aiLearning, { formatExamples, type ExamplesForPrompt } from './ai-learning.service.js';
 import { getCatalogContext } from './ai-catalog-context.js';
 import { asksPrice, leaksPrice, priceGate, stageBrief, isSalesStage, SALES_STAGES, type SalesStage } from '../lib/sales-flow.js';
@@ -217,7 +217,7 @@ export async function processWhatsAppMessage(
             logger.error(`WhatsApp AI model ${envConfig.openai_chat_model} failed, using ${envConfig.openai_light_model}: ${err.message}`);
             return askModel(envConfig.openai_light_model, extra);
         });
-        return JSON.parse(data.choices[0].message.content);
+        return parseJsonReply(data);
     };
     const askModel = async (model: string, extra: { role: string; content: string }[]) => {
         const data = await openaiFetch('chat/completions', {

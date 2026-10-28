@@ -23,3 +23,12 @@ export const formatContext = (matches: Pick<ScoredEntry, 'text' | 'source'>[]) =
 
 /** True when the knowledge base probably can't answer: no match, or only weak ones. */
 export const isLowConfidence = (matches: Pick<ScoredEntry, 'score'>[]) => (matches[0]?.score ?? 0) < KB_LOW_CONFIDENCE;
+
+/**
+ * Taught replies, oldest first, so the LAST one is what the model treats as final when two disagree. "Oldest" means
+ * last touched: a reply staff just edited is their newest word on the subject, even if it was first written long ago.
+ */
+export function newestEditLast<T extends { createdAt: Date; updatedAt?: Date | null }>(rows: T[]): T[] {
+    const touched = (r: T) => (r.updatedAt ?? r.createdAt).getTime();
+    return [...rows].sort((a, b) => touched(a) - touched(b));
+}
