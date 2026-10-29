@@ -2,6 +2,7 @@ import NoticeModel from '../models/notice.model.js';
 import NotificationModel from '../models/notification.model.js';
 import StaffModel from '../models/staff.model.js';
 import { sendBulkSMS } from '../utils/sms.util.js';
+import UserModel from '../models/user.model.js';
 import { Types } from 'mongoose';
 
 interface CreateNoticeInput {
@@ -301,9 +302,23 @@ const getNoticeStats = async (noticeId: string) => {
         return null;
     }
 
+    // viewedBy holds raw user ids; the UI needs name/email to show who viewed
+    const ids = notice.viewedBy.map((id) => new Types.ObjectId(String(id)));
+    const users = ids.length
+        ? await UserModel.find({ _id: { $in: ids } } as never).toArray()
+        : [];
+    const byId = new Map(users.map((u) => [String(u._id), u]));
+
     return {
         totalViews: notice.viewedBy.length,
-        viewedBy: notice.viewedBy,
+        viewedBy: notice.viewedBy.map((id) => {
+            const u = byId.get(String(id));
+            return {
+                _id: String(id),
+                name: (u?.name as string | undefined) || 'Unknown user',
+                email: (u?.email as string | undefined) || '',
+            };
+        }),
     };
 };
 
