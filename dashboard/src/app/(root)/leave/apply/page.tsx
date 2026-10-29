@@ -18,7 +18,8 @@ import {
     ThermometerSun,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { useSession } from '@/lib/auth-client';
+import { usePermissions } from '@/hooks/use-permissions';
+import { Combobox } from '@/components/ui/combobox';
 import {
     Card,
     CardContent,
@@ -36,13 +37,6 @@ import {
     PopoverContent,
     PopoverTrigger,
 } from '@/components/ui/popover';
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
@@ -71,11 +65,10 @@ interface FormData {
     reason: string;
 }
 
-const ADMIN_ROLES = ['admin', 'super_admin', 'hr_admin'];
-
 export default function LeaveApplyPage() {
-    const { data: session } = useSession();
-    const isAdmin = !!session?.user?.role && ADMIN_ROLES.includes(session.user.role);
+    const { can } = usePermissions();
+    // Managers (admin, super admin, HR manager…) apply on behalf of staff
+    const isAdmin = can('leave.manage');
 
     const [startDate, setStartDate] = useState<Date | undefined>();
     const [endDate, setEndDate] = useState<Date | undefined>();
@@ -101,10 +94,23 @@ export default function LeaveApplyPage() {
 
     // Fetch staff list for admin
     const { data: staffsData } = useGetStaffsQuery(
-        { limit: 200 },
+        { page: 1, limit: 500, status: 'active' },
         { skip: !isAdmin },
     );
-    const staffs = staffsData?.data || [];
+    const staffs: IStaff[] = (staffsData?.staffs || staffsData?.data || []).filter(
+        (s: IStaff) => Boolean(s?._id),
+    );
+    const staffOptions = staffs.map((staff) => ({
+        value: staff._id,
+        label: staff.user?.name || staff.staffId,
+        avatar: {
+            src: staff.user?.image,
+            fallback: (staff.user?.name || staff.staffId || '?')
+                .trim()
+                .charAt(0)
+                .toUpperCase(),
+        },
+    }));
 
     const { data: balanceData, isLoading: isLoadingBalance } =
         useGetLeaveBalanceQuery();
@@ -129,10 +135,18 @@ export default function LeaveApplyPage() {
                     const result = await calculateWorkingDays({
                         startDate: format(startDate, 'yyyy-MM-dd'),
                         endDate: format(endDate, 'yyyy-MM-dd'),
+                        ...(isAdmin && selectedStaffId
+                            ? { staffId: selectedStaffId }
+                            : {}),
                     }).unwrap();
                     setWorkingDaysCount(result.data.count);
                 } catch (error) {
                     console.error('Error calculating working days:', error);
+                    setWorkingDaysCount(0);
+                    toast.error(
+                        (error as ApiError).data?.message ||
+                            'Could not calculate working days',
+                    );
                 }
             } else {
                 setWorkingDaysCount(0);
@@ -140,7 +154,7 @@ export default function LeaveApplyPage() {
         };
 
         fetchWorkingDays();
-    }, [startDate, endDate, calculateWorkingDays]);
+    }, [startDate, endDate, calculateWorkingDays, isAdmin, selectedStaffId]);
 
     // Handlers for dates
     const handleStartDateSelect = (date: Date | undefined) => {
@@ -460,25 +474,15 @@ export default function LeaveApplyPage() {
                                         <Label className="text-base">
                                             Staff Member
                                         </Label>
-                                        <Select
+                                        <Combobox
+                                            options={staffOptions}
                                             value={selectedStaffId}
-                                            onValueChange={setSelectedStaffId}
-                                        >
-                                            <SelectTrigger className="h-12">
-                                                <SelectValue placeholder="Select a staff member" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {staffs.map((staff: IStaff) => (
-                                                    <SelectItem
-                                                        key={staff._id}
-                                                        value={staff._id}
-                                                    >
-                                                        {staff.user?.name} (
-                                                        {staff.staffId})
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
+                                            onChange={setSelectedStaffId}
+                                            placeholder="Select a staff member"
+                                            searchPlaceholder="Search staff…"
+                                            emptyText="No staff found."
+                                            className="h-12"
+                                        />
                                     </div>
                                 )}
 

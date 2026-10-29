@@ -117,7 +117,7 @@ export const leaveApi = apiSlice.injectEndpoints({
         // Calculate working days
         calculateWorkingDays: builder.query<
             WorkingDaysResponse,
-            { startDate: string; endDate: string }
+            { startDate: string; endDate: string; staffId?: string }
         >({
             query: (params) => ({
                 url: '/leave/calculate-days',

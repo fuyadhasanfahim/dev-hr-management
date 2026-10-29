@@ -5,6 +5,7 @@ import { Check, ChevronsUpDown, Loader2 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   Command,
   CommandEmpty,
@@ -20,6 +21,17 @@ export interface ComboboxOption {
   label: string;
   /** Secondary line shown under the label (e.g. an email, category, or note). */
   description?: string;
+  /** When set, an avatar is shown before the label (in the list and on the trigger). */
+  avatar?: { src?: string | null; fallback: string };
+}
+
+function OptionAvatar({ avatar }: { avatar: NonNullable<ComboboxOption["avatar"]> }) {
+  return (
+    <Avatar className="size-6 shrink-0">
+      {avatar.src ? <AvatarImage src={avatar.src} alt="" /> : null}
+      <AvatarFallback className="text-[10px]">{avatar.fallback}</AvatarFallback>
+    </Avatar>
+  );
 }
 
 export interface ComboboxProps {
@@ -72,8 +84,11 @@ export function Combobox({
             className,
           )}
         >
-          <span className="truncate">
+          <span className="flex min-w-0 items-center gap-2">
+            {selected?.avatar && <OptionAvatar avatar={selected.avatar} />}
+            <span className="truncate">
             {isLoading && !selected && !selectedLabel ? "Loading…" : selected ? selected.label : selectedLabel || placeholder}
+            </span>
           </span>
           {isLoading ? (
             <Loader2 className="ml-2 h-4 w-4 shrink-0 animate-spin opacity-50" />
@@ -105,6 +120,11 @@ export function Combobox({
                       value === option.value ? "opacity-100" : "opacity-0",
                     )}
                   />
+                  {option.avatar && (
+                    <span className="mr-2">
+                      <OptionAvatar avatar={option.avatar} />
+                    </span>
+                  )}
                   <div className="min-w-0 flex-1">
                     <div className="truncate">{option.label}</div>
                     {option.description && (

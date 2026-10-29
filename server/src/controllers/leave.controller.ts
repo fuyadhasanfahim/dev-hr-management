@@ -1,3 +1,4 @@
+import { userCan } from '../middlewares/require-permission.js';
 import type { Request, Response } from 'express';
 import leaveService from '../services/leave.service.js';
 import StaffModel from '../models/staff.model.js';
@@ -23,6 +24,13 @@ async function applyForLeave(req: Request, res: Response) {
         }
 
         let staffIdToUse: string;
+
+        // Only leave managers may apply on behalf of someone else
+        if (targetStaffId && !userCan(req, 'leave.manage')) {
+            return res.status(403).json({
+                message: 'You can only apply for leave for yourself',
+            });
+        }
 
         // If admin provides staffId, use that (applying on behalf of staff)
         if (targetStaffId) {
@@ -359,7 +367,7 @@ async function cancelLeaveApplication(req: Request, res: Response) {
 // Calculate working days preview (for frontend)
 async function calculateWorkingDays(req: Request, res: Response) {
     try {
-        const { startDate, endDate } = req.query;
+        const { startDate, endDate, staffId: targetStaffId } = req.query;
         const userId = req.user?.id;
 
         if (!userId) {
@@ -372,13 +380,22 @@ async function calculateWorkingDays(req: Request, res: Response) {
                 .json({ message: 'Start date and end date are required' });
         }
 
-        const staff = await StaffModel.findOne({ userId });
-        if (!staff) {
-            return res.status(404).json({ message: 'Staff record not found' });
+        // Leave managers can calculate for another staff (apply on behalf)
+        let staffIdToUse: string;
+        if (targetStaffId && userCan(req, 'leave.manage')) {
+            staffIdToUse = targetStaffId as string;
+        } else {
+            const staff = await StaffModel.findOne({ userId });
+            if (!staff) {
+                return res
+                    .status(404)
+                    .json({ message: 'Staff record not found' });
+            }
+            staffIdToUse = staff._id.toString();
         }
 
         const workingDays = await leaveService.calculateWorkingDays(
-            staff._id.toString(),
+            staffIdToUse,
             new Date(startDate as string),
             new Date(endDate as string)
         );
