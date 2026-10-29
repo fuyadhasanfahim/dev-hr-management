@@ -165,6 +165,7 @@ router.post('/tickets', requireUnifiedAuth, validateRequest(CreateTicketValidati
 router.get('/tickets', requireUnifiedAuth, SupportController.listSupportTickets);
 // Must be registered before /tickets/:id to avoid 'admin' being captured as :id
 router.get('/tickets/admin', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), SupportController.listSupportTickets);
+router.get('/tickets/unread-summary', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), SupportController.getTicketUnreadSummary);
 router.get('/tickets/:id', requireUnifiedAuth, SupportController.getTicketDetails);
 router.post('/tickets/:id/replies', requireUnifiedAuth, SupportController.replyToTicket);
 // Alias for clients that call the singular form

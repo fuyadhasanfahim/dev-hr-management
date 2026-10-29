@@ -5,11 +5,12 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useDispatch } from 'react-redux';
 import { AnimatePresence, motion } from 'motion/react';
-import { ArrowLeft, ChevronDown, Globe, Info, Loader2, Lock, MessageCircle, Send, Smile, Ticket, UserCheck, XCircle } from 'lucide-react';
+import { AlertCircle, ArrowLeft, Ban, ChevronDown, Globe, Info, Loader2, Lock, MessageCircle, Pencil, RotateCcw, Send, Smile, Ticket, Trash2, UserCheck, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { EmojiPicker, EmojiPickerContent, EmojiPickerFooter, EmojiPickerSearch } from '@/components/ui/emoji-picker';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
@@ -20,6 +21,7 @@ import { AttachmentPreview } from '@/components/messages/chat-attachment';
 import { CustomerAvatar } from '@/components/messages/customer-avatar';
 import { GROUP_WINDOW_MS, bubbleCorners, bubbleSpring, dateLabel, formatTime } from '@/components/messages/thread-utils';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { usePermissions } from '@/hooks/use-permissions';
 import { useSupportAgent } from '@/hooks/use-support-agent';
 import { baseApi } from '@/store/api/baseApi';
 import {
@@ -100,6 +102,12 @@ export function WebChatThread({
     const [sending, setSending] = useState(false);
     const [joining, setJoining] = useState(false);
     const [confirmEnd, setConfirmEnd] = useState(false);
+    const [editing, setEditing] = useState<{ id: string; text: string } | null>(null);
+    const [deleting, setDeleting] = useState<ChatMessage | null>(null);
+    // Messages the server could not save after its retries: shown with "Resend".
+    const [failed, setFailed] = useState<Set<string>>(new Set());
+    const { role } = usePermissions();
+    const isAdmin = role === 'admin' || role === 'super_admin';
     const [claimSession] = useClaimSessionMutation();
     const [closeSession] = useCloseSessionMutation();
     const [requestPresign] = useRequestPresignedUrlMutation();
@@ -151,6 +159,14 @@ export function WebChatThread({
             onSocketEvent('chat:visitor_presence', (p: { sessionId: string; online: boolean }) => {
                 if (p.sessionId === sessionId) setAway(!p.online);
             }),
+            onSocketEvent('chat:message:updated', (msg: ChatMessage) => {
+                if (!objectIdRef.current || msg.sessionId !== objectIdRef.current) return;
+                setMessages((prev) => prev.map((m) => (m._id === msg._id ? msg : m)));
+                dispatch(baseApi.util.invalidateTags(['WebInbox']));
+            }),
+            onSocketEvent('chat:message:failed', ({ _id }: { _id: string }) => setFailed((prev) => new Set(prev).add(_id))),
+            onSocketEvent('chat:message:rejected', ({ reason }: { reason?: string }) => toast.error(reason ?? 'That didn’t go through')),
+            onSocketEvent('chat:locked', () => dispatch(baseApi.util.invalidateTags(['WebInbox']))),
             onSocketEvent('chat:closed', () => dispatch(baseApi.util.invalidateTags(['WebInbox']))),
             onSocketEvent('chat:handoff', () => dispatch(baseApi.util.invalidateTags(['WebInbox']))),
         ];
@@ -189,6 +205,8 @@ export function WebChatThread({
     const mine = !!assignee && assignee._id === agent.id;
     const lockedByOther = !!assignee && !mine;
     const ended = chat?.status === 'ended';
+    // A ticket was opened from this chat: the conversation continues there, the chat is read-only.
+    const ticketOpened = chat?.status === 'converted_to_ticket';
     const onWhatsApp = !!chat?.whatsappConversationId;
     const days = useMemo(() => buildDays(messages), [messages]);
 
@@ -244,7 +262,7 @@ export function WebChatThread({
                 if (url) urls.push(url);
             }
             releasePending(files);
-            if (text || urls.length) getSocket().emit('chat:message', { sessionId, text, attachments: urls });
+            if (text || urls.length) getSocket().emit('chat:message', { sessionId, text, attachments: urls, clientId: crypto.randomUUID() });
             getSocket().emit('chat:typing', { sessionId, isTyping: false });
         } finally {
             setSending(false);
@@ -295,6 +313,26 @@ export function WebChatThread({
         } catch (err) {
             toast.error('Couldn’t end the chat', { description: (err as { data?: { message?: string } }).data?.message });
         }
+    };
+
+    const saveEdit = () => {
+        const text = editing?.text.trim();
+        if (!editing || !text) return;
+        getSocket().emit('chat:message:edit', { sessionId, messageId: editing.id, text });
+        setEditing(null);
+    };
+    const confirmDelete = () => {
+        if (deleting) getSocket().emit('chat:message:delete', { sessionId, messageId: deleting._id });
+        setDeleting(null);
+    };
+    const resend = (m: ChatMessage) => {
+        setMessages((prev) => prev.filter((x) => x._id !== m._id));
+        setFailed((prev) => {
+            const next = new Set(prev);
+            next.delete(m._id);
+            return next;
+        });
+        getSocket().emit('chat:message', { sessionId, text: m.content, attachments: m.attachments, clientId: crypto.randomUUID() });
     };
 
     const name = chat?.visitor.name ?? 'Website visitor';
@@ -417,21 +455,100 @@ export function WebChatThread({
                                                     {first && isMe && m.sender !== agent.id && (
                                                         <span className="mb-1 px-1 text-[10px] font-medium text-muted-foreground">{m.senderName}</span>
                                                     )}
-                                                    <div
-                                                        className={cn(
-                                                            'relative max-w-[85%] md:max-w-[70%] text-sm leading-relaxed break-words shadow-sm px-3 py-1.5',
-                                                            bubbleCorners(isMe, first, lastInRun),
-                                                            isMe ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground',
-                                                        )}
-                                                    >
-                                                        {m.content && <span className="whitespace-pre-wrap">{m.content}</span>}
-                                                        {m.attachments?.map((url, k) => (
-                                                            <AttachmentPreview key={k} url={url} />
-                                                        ))}
-                                                        <span className={cn('float-right ml-2 mt-1.5 flex items-center gap-1 text-[10px] leading-none', isMe ? 'text-primary-foreground/70' : 'text-muted-foreground')}>
-                                                            {formatTime(m.createdAt)}
-                                                        </span>
-                                                    </div>
+                                                    {(() => {
+                                                        const deleted = !!m.deletedAt;
+                                                        const own = m.sender === agent.id && isMe;
+                                                        const canAct = joined && !ended && !ticketOpened && !onWhatsApp && !deleted && !failed.has(m._id);
+                                                        const canEdit = canAct && own && !!m.content;
+                                                        const canDelete = canAct && (own || isAdmin);
+                                                        const isEditing = editing?.id === m._id;
+                                                        return (
+                                                            <>
+                                                                <div
+                                                                    className={cn(
+                                                                        'group relative max-w-[85%] md:max-w-[70%] text-sm leading-relaxed break-words shadow-sm px-3 py-1.5',
+                                                                        bubbleCorners(isMe, first, lastInRun),
+                                                                        isMe ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground',
+                                                                        failed.has(m._id) && 'ring-1 ring-destructive',
+                                                                    )}
+                                                                >
+                                                                    {(canEdit || canDelete) && !isEditing && (
+                                                                        <DropdownMenu>
+                                                                            <DropdownMenuTrigger asChild>
+                                                                                <button
+                                                                                    type="button"
+                                                                                    aria-label="Message options"
+                                                                                    className={cn(
+                                                                                        'absolute right-1 top-1 flex size-6 items-center justify-center rounded-full opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100',
+                                                                                        isMe ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground',
+                                                                                    )}
+                                                                                >
+                                                                                    <ChevronDown className="size-4" />
+                                                                                </button>
+                                                                            </DropdownMenuTrigger>
+                                                                            <DropdownMenuContent align="end">
+                                                                                {canEdit && (
+                                                                                    <DropdownMenuItem onSelect={() => setEditing({ id: m._id, text: m.content })}>
+                                                                                        <Pencil className="size-4" /> Edit
+                                                                                    </DropdownMenuItem>
+                                                                                )}
+                                                                                {canDelete && (
+                                                                                    <DropdownMenuItem variant="destructive" onSelect={() => setDeleting(m)}>
+                                                                                        <Trash2 className="size-4" /> Delete
+                                                                                    </DropdownMenuItem>
+                                                                                )}
+                                                                            </DropdownMenuContent>
+                                                                        </DropdownMenu>
+                                                                    )}
+                                                                    {deleted ? (
+                                                                        <span className="flex items-center gap-1.5 italic opacity-70">
+                                                                            <Ban className="size-3.5" /> This message was deleted
+                                                                        </span>
+                                                                    ) : isEditing ? (
+                                                                        <div className="min-w-56 space-y-2">
+                                                                            <Textarea
+                                                                                autoFocus
+                                                                                value={editing.text}
+                                                                                onChange={(e) => setEditing({ id: m._id, text: e.target.value })}
+                                                                                onKeyDown={(e) => {
+                                                                                    if (e.key === 'Enter' && !e.shiftKey) {
+                                                                                        e.preventDefault();
+                                                                                        saveEdit();
+                                                                                    }
+                                                                                    if (e.key === 'Escape') setEditing(null);
+                                                                                }}
+                                                                                rows={2}
+                                                                                className="min-h-16 bg-background text-foreground"
+                                                                            />
+                                                                            <div className="flex justify-end gap-2">
+                                                                                <Button type="button" size="sm" variant="secondary" className="h-7" onClick={() => setEditing(null)}>
+                                                                                    Cancel
+                                                                                </Button>
+                                                                                <Button type="button" size="sm" variant="secondary" className="h-7" disabled={!editing.text.trim()} onClick={saveEdit}>
+                                                                                    Save
+                                                                                </Button>
+                                                                            </div>
+                                                                        </div>
+                                                                    ) : (
+                                                                        <>
+                                                                            {m.content && <span className="whitespace-pre-wrap">{m.content}</span>}
+                                                                            {m.attachments?.map((url, k) => (
+                                                                                <AttachmentPreview key={k} url={url} />
+                                                                            ))}
+                                                                        </>
+                                                                    )}
+                                                                    <span className={cn('float-right ml-2 mt-1.5 flex items-center gap-1 text-[10px] leading-none', isMe ? 'text-primary-foreground/70' : 'text-muted-foreground')}>
+                                                                        {m.editedAt && !deleted && 'Edited ·'} {formatTime(m.createdAt)}
+                                                                    </span>
+                                                                </div>
+                                                                {failed.has(m._id) && (
+                                                                    <button type="button" onClick={() => resend(m)} className="mt-1 flex items-center gap-1 px-1 text-[11px] font-medium text-destructive hover:underline">
+                                                                        <AlertCircle className="size-3" /> Didn’t send · <RotateCcw className="size-3" /> Resend
+                                                                    </button>
+                                                                )}
+                                                            </>
+                                                        );
+                                                    })()}
                                                 </motion.div>
                                             );
                                         }),
@@ -470,6 +587,23 @@ export function WebChatThread({
             <Separator />
             {ended ? (
                 <p className="shrink-0 bg-muted/40 px-4 py-3 text-center text-sm text-muted-foreground">This chat has ended.</p>
+            ) : ticketOpened ? (
+                <div className="flex shrink-0 items-center justify-between gap-3 bg-muted/40 px-4 py-3">
+                    <div className="flex min-w-0 items-center gap-2.5 text-sm">
+                        <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/15 text-primary">
+                            <Ticket className="size-4" />
+                        </span>
+                        <span className="min-w-0">
+                            <span className="block truncate font-medium">A ticket was opened{chat?.ticket ? ` (${chat.ticket.ticketId})` : ''}</span>
+                            <span className="block text-xs text-muted-foreground">This chat is read-only now. Continue the conversation in the ticket.</span>
+                        </span>
+                    </div>
+                    {chat?.ticket && (
+                        <Button asChild size="sm" variant="outline">
+                            <Link href={`/tickets?ticket=${chat.ticket.id}`}>Open ticket</Link>
+                        </Button>
+                    )}
+                </div>
             ) : onWhatsApp ? (
                 <div className="flex shrink-0 items-center justify-between gap-3 bg-muted/40 px-4 py-3">
                     <div className="flex min-w-0 items-center gap-2.5 text-sm">
@@ -561,11 +695,26 @@ export function WebChatThread({
                 <AlertDialogContent>
                     <AlertDialogHeader>
                         <AlertDialogTitle>End this chat?</AlertDialogTitle>
-                        <AlertDialogDescription>The visitor is told it was resolved and can’t reply any more. The chat’s ticket is marked resolved too.</AlertDialogDescription>
+                        <AlertDialogDescription>The visitor is told it was resolved and can’t reply any more. Tickets opened from this chat are not changed.</AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                         <AlertDialogCancel>Keep chatting</AlertDialogCancel>
                         <AlertDialogAction onClick={() => void endChat()}>End chat</AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            <AlertDialog open={!!deleting} onOpenChange={(o) => !o && setDeleting(null)}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Delete this message?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            It is removed for everyone in the chat, including its files. The thread keeps a “This message was deleted” line.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={confirmDelete}>Delete</AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>

@@ -58,6 +58,9 @@ export interface ChatMessage {
     content: string;
     attachments: string[];
     readBy: string[];
+    clientId?: string;
+    editedAt?: string;
+    deletedAt?: string;
     createdAt: string;
 }
 
@@ -183,6 +186,11 @@ export const chatApi = baseApi.injectEndpoints({
             query: (fileKey) => `/support/attachments/view-url?fileKey=${encodeURIComponent(fileKey)}`,
             transformResponse: (res: { data: { viewUrl: string } }) => res.data,
         }),
+        // The same private file as a download: S3 sends it as an attachment under the sender's file name.
+        getPresignedDownloadUrl: builder.query<{ viewUrl: string }, string>({
+            query: (fileKey) => `/support/attachments/view-url?fileKey=${encodeURIComponent(fileKey)}&download=1`,
+            transformResponse: (res: { data: { viewUrl: string } }) => res.data,
+        }),
         getAvailableAgents: builder.query<AgentInfo[], void>({
             query: () => '/support/chat/agents',
             transformResponse: (res: { data: AgentInfo[] }) => res.data ?? [],
@@ -228,6 +236,7 @@ export const chatApi = baseApi.injectEndpoints({
 export const {
     useGetWebInboxQuery,
     useGetChatVisitorTicketsQuery,
+    useLazyGetPresignedDownloadUrlQuery,
     useGetQueuedSessionsQuery,
     useGetActiveSessionsQuery,
     useGetResolvedSessionsQuery,

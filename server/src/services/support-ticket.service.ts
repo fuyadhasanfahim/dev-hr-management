@@ -5,6 +5,10 @@ import TicketMessageModel, { MessageSenderModel } from '../models/ticket-message
 import { AppError } from '../utils/AppError.js';
 import { Types } from 'mongoose';
 
+/** A resolved or closed ticket is finished: customers can't write on it, and only an admin can touch it again. */
+export const isLockedStatus = (status?: string) => status === 'resolved' || status === 'closed';
+export const canTouchLocked = (role?: string) => role === 'admin' || role === 'super_admin';
+
 interface CreateTicketData {
     subject: string;
     text: string;
@@ -45,6 +49,7 @@ export async function createTicket(data: CreateTicketData): Promise<any> {
         category: data.category || TicketCategory.SUPPORT,
         source: data.source,
         status: 'open',
+        staffUnread: 1, // new for the team until someone opens it
         // The private link's key is made with the ticket, so the email and every later read agree on it.
         publicToken: randomBytes(18).toString('base64url'),
         attachments: data.attachments || [],
@@ -172,8 +177,13 @@ export async function getTicketDetails(ticketId: string, user: { id: string; rol
 
     const [firstMessage, ...replyMessages] = messages;
 
+    // The team opening a ticket is what marks it read.
+    const byStaff = user.role !== 'client' && user.role !== 'Guest';
+    if (byStaff && (ticket.staffUnread ?? 0) > 0) await TicketModel.updateOne({ _id: ticket._id }, { $set: { staffUnread: 0 } });
+
     return {
         ...ticket.toObject(),
+        ...(byStaff ? { staffUnread: 0 } : {}),
         text: firstMessage?.content ?? '',
         replies: replyMessages.map(m => ({
             ...m.toObject(),
@@ -194,11 +204,15 @@ export async function updateTicket(
         category?: any;
         assignedTo?: string;
         tags?: string[];
-    }
+    },
+    actorRole?: string,
 ): Promise<any> {
     const ticket = await TicketModel.findById(ticketId) as any;
     if (!ticket) {
         throw new AppError('Ticket not found', 404);
+    }
+    if (isLockedStatus(ticket.status) && !canTouchLocked(actorRole)) {
+        throw new AppError(`This ticket is ${ticket.status}. Only an admin can change it.`, 403);
     }
 
     if (updates.status) ticket.status = updates.status;
@@ -220,20 +234,24 @@ export async function addTicketReply({
     senderType,
     text,
     attachments,
+    actorRole,
 }: {
     ticketId: string;
     senderId: string;
     senderType: 'client' | 'guest' | 'staff';
     text: string;
     attachments?: string[];
+    actorRole?: string;
 }) {
     const ticket = await TicketModel.findById(ticketId) as any;
     if (!ticket) {
         throw new AppError('Ticket not found', 404);
     }
 
-    if (ticket.status === 'closed') {
-        throw new AppError('Cannot reply to a closed ticket', 400);
+    // Finished tickets are locked: a customer can't write on them, and only an admin can reply or reopen one.
+    if (isLockedStatus(ticket.status)) {
+        if (senderType !== 'staff') throw new AppError(`This ticket is ${ticket.status}.`, 409);
+        if (!canTouchLocked(actorRole)) throw new AppError(`This ticket is ${ticket.status}. Only an admin can reply or change it.`, 403);
     }
 
     let senderModel = MessageSenderModel.STAFF;
@@ -255,6 +273,7 @@ export async function addTicketReply({
         ticket.status = 'pending_client';
     } else {
         ticket.status = 'in_progress';
+        ticket.staffUnread = (ticket.staffUnread ?? 0) + 1;
     }
     await ticket.save();
 

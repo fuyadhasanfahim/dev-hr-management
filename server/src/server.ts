@@ -12,6 +12,7 @@ import { createGracefulShutdown } from "./lib/gracefulShutdown.js";
 import { initPermissionCacheSync } from "./lib/permissions.js";
 import { startWhatsAppAiResume } from "./services/whatsapp-ai-resume.js";
 import { startWhatsAppSendWorker } from "./services/whatsapp-send.queue.js";
+import { startChatMessageWorker } from "./services/chat-message.queue.js";
 
 import { cleanupDuplicateOverviewInDB } from './utils/cleanupDuplicateOverview.js';
 
@@ -44,6 +45,7 @@ async function Server() {
         schedulerService.startAllSchedulers();
 
         const whatsappSendWorker = startWhatsAppSendWorker();
+        const chatMessageWorker = startChatMessageWorker();
         const aiResume = startWhatsAppAiResume();
 
         // Graceful shutdown: stop accepting new connections, let in-flight
@@ -59,6 +61,7 @@ async function Server() {
                 await schedulerService.stopAllSchedulers();
                 aiResume.stop();
                 await whatsappSendWorker.close();
+                await chatMessageWorker.close();
                 await mongoose.connection.close();
             },
             onLog: (level, event, meta) => logger[level](meta, event),

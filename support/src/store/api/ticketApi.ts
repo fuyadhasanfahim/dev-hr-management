@@ -57,6 +57,8 @@ export interface TicketUser {
 
 export interface Ticket {
     _id: string;
+    /** Customer activity (new ticket, customer message) nobody on the team has opened yet. */
+    staffUnread?: number;
     ticketId: string;
     subject: string;
     status: TicketStatus;
@@ -106,6 +108,12 @@ interface ListTicketsArgs {
 
 export const ticketApi = baseApi.injectEndpoints({
     endpoints: (builder) => ({
+        // How many tickets have customer activity nobody has opened yet (the sidebar badge).
+        getTicketUnreadSummary: builder.query<{ tickets: number }, void>({
+            query: () => '/support/tickets/unread-summary',
+            transformResponse: (res: { data: { tickets: number } }) => res.data,
+            providesTags: ['Tickets'],
+        }),
         getTickets: builder.query<Ticket[], ListTicketsArgs | void>({
             query: (args) => {
                 const params = new URLSearchParams();
@@ -200,4 +208,5 @@ export const {
     useUpdateTicketMutation,
     useAssignTicketToSelfMutation,
     useGetContactQuery,
+    useGetTicketUnreadSummaryQuery,
 } = ticketApi;

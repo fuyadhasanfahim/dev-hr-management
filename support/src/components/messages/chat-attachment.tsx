@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react';
 import { Download, FileText } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useLazyGetPresignedViewUrlQuery } from '@/store/api/chatApi';
+import { toast } from 'sonner';
+import { useLazyGetPresignedDownloadUrlQuery, useLazyGetPresignedViewUrlQuery } from '@/store/api/chatApi';
 
 export function isImageUrl(url: string): boolean {
     return /\.(png|jpe?g|gif|webp|svg)(\?|$)/i.test(url);
@@ -73,6 +74,24 @@ export function AttachmentPreview({ url }: { url: string }) {
     const fileKey = extractS3Key(url);
     const [signed, setSigned] = useState<{ url: string; viewUrl: string | null } | null>(null);
     const [fetchViewUrl] = useLazyGetPresignedViewUrlQuery();
+    const [fetchDownloadUrl] = useLazyGetPresignedDownloadUrlQuery();
+
+    // Save the file: private files come with a link that S3 sends as an attachment under its real name.
+    const download = async (e: React.MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        try {
+            const href = fileKey ? (await fetchDownloadUrl(fileKey).unwrap()).viewUrl : url;
+            const a = document.createElement('a');
+            a.href = href;
+            a.download = getFileName(url);
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+        } catch {
+            toast.error('Couldn’t download the file');
+        }
+    };
 
     useEffect(() => {
         if (!fileKey) return;
@@ -109,20 +128,26 @@ export function AttachmentPreview({ url }: { url: string }) {
 
     if (isImageUrl(url)) {
         return (
-            <a
-                href={viewUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="block mt-2"
-            >
-                {/* eslint-disable-next-line @next/next/no-img-element -- signed, expiring URL: next/image cannot cache it */}
-                <img
-                    src={viewUrl}
-                    alt="Attachment"
-                    className="max-w-[220px] max-h-[160px] rounded-lg object-cover border border-border/40 shadow-sm"
-                    loading="lazy"
-                />
-            </a>
+            <div className="group/att relative mt-2 w-fit">
+                <a href={viewUrl} target="_blank" rel="noopener noreferrer" className="block">
+                    {/* eslint-disable-next-line @next/next/no-img-element -- signed, expiring URL: next/image cannot cache it */}
+                    <img
+                        src={viewUrl}
+                        alt={getFileName(url)}
+                        className="max-w-[220px] max-h-[160px] rounded-lg object-cover border border-border/40 shadow-sm"
+                        loading="lazy"
+                    />
+                </a>
+                <button
+                    type="button"
+                    onClick={download}
+                    aria-label="Download image"
+                    title="Download"
+                    className="absolute right-1.5 top-1.5 flex size-7 items-center justify-center rounded-full bg-black/55 text-white opacity-0 transition-opacity hover:bg-black/75 group-hover/att:opacity-100 focus-visible:opacity-100"
+                >
+                    <Download className="size-3.5" />
+                </button>
+            </div>
         );
     }
 
@@ -135,7 +160,9 @@ export function AttachmentPreview({ url }: { url: string }) {
         >
             <FileText className="size-4 shrink-0 text-muted-foreground" />
             <span className="text-xs truncate flex-1">{getFileName(url)}</span>
-            <Download className="size-3 shrink-0 text-muted-foreground" />
+            <button type="button" onClick={download} aria-label="Download file" title="Download" className="flex size-6 shrink-0 items-center justify-center rounded-full hover:bg-accent">
+                <Download className="size-3.5 text-muted-foreground" />
+            </button>
         </a>
     );
 }

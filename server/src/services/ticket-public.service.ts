@@ -3,6 +3,7 @@ import TicketMessageModel, { MessageSenderModel } from '../models/ticket-message
 import { AppError } from '../utils/AppError.js';
 import attachmentService from './attachment.service.js';
 import { generatePresignedViewUrl } from './s3-upload.service.js';
+import { isLockedStatus } from './support-ticket.service.js';
 
 // The customer's side of a ticket, reached with the private link emailed to them. The token is 144 random bits and is
 // the only key, so what comes back is limited to what the customer should see: no internal notes, no staff identities,
@@ -31,6 +32,28 @@ async function findByToken(token: string, select = '') {
     return ticket;
 }
 
+const CHAT_HEADER = /^\[System: Converted from Support Live Chat\]/;
+const CHAT_LINE = /^\[(\d{4}-\d{2}-\d{2}T[^\]]+)\]\s+(Client|Guest|Agent)\s+\(([^)]*)\):\s?(.*)$/;
+
+/**
+ * A ticket opened from a live chat starts with a system header, the agent's internal reason and the chat as plain
+ * lines. The customer sees the chat as the messages it was; the header and the internal reason never leave the server.
+ */
+function chatMessages(content: string): { id: string; from: 'you' | 'team'; text: string; attachments: string[]; createdAt: string }[] {
+    const lines = content.slice(content.indexOf('Chat Transcript:') + 'Chat Transcript:'.length).split('\n');
+    const out: { id: string; from: 'you' | 'team'; text: string; attachments: string[]; createdAt: string; name: string }[] = [];
+    for (const line of lines) {
+        const m = line.match(CHAT_LINE);
+        if (m) {
+            out.push({ id: `chat-${out.length}`, from: m[2] === 'Agent' ? 'team' : 'you', text: m[4]!, attachments: [], createdAt: new Date(m[1]!).toISOString(), name: m[3]! });
+        } else if (out.length && line.trim()) {
+            out[out.length - 1]!.text += `\n${line}`; // a message that had line breaks
+        }
+    }
+    // Notes the system wrote into the chat (joined, resolved, ticket opened) are not conversation.
+    return out.filter((m) => m.name !== 'System' && m.text.trim()).map(({ name: _name, ...rest }) => rest);
+}
+
 export async function getThread(token: string) {
     const ticket = await findByToken(token);
     const messages: any[] = await TicketMessageModel.find({ ticketId: ticket._id, isInternalNote: { $ne: true } })
@@ -38,6 +61,10 @@ export async function getThread(token: string) {
         .limit(300)
         .select('senderModel content attachments createdAt')
         .lean();
+    const first = messages[0];
+    const fromChat = !!first && CHAT_HEADER.test(first.content ?? '');
+    const chatLines = fromChat ? chatMessages(first.content) : [];
+
     return {
         ticket: {
             ticketId: ticket.ticketId,
@@ -48,15 +75,19 @@ export async function getThread(token: string) {
             createdAt: ticket.createdAt,
             updatedAt: ticket.updatedAt,
         },
-        messages: messages
+        messages: [
+            ...chatLines,
+            ...messages
+            .filter((_m, i) => !(fromChat && i === 0))
             .map((m, i) => ({
                 id: String(m._id),
                 from: m.senderModel === MessageSenderModel.STAFF ? ('team' as const) : ('you' as const),
-                text: m.content === PLACEHOLDER ? '' : i === 0 ? publicBody(m.content) : m.content,
+                text: m.content === PLACEHOLDER ? '' : i === 0 && !fromChat ? publicBody(m.content) : m.content,
                 attachments: (m.attachments ?? []) as string[],
                 createdAt: m.createdAt,
             }))
             .filter((m) => m.text || m.attachments.length > 0),
+        ],
     };
 }
 
@@ -69,7 +100,7 @@ export async function postCustomerMessage(token: string, rawText: unknown, rawAt
     if (text.length > MAX_CUSTOMER_MESSAGE) throw new AppError(`Messages can be up to ${MAX_CUSTOMER_MESSAGE} characters.`, 400);
 
     const ticket = await findByToken(token);
-    if (ticket.status === 'closed') throw new AppError('This ticket is closed. Please start a new one if you still need help.', 409);
+    if (isLockedStatus(ticket.status)) throw new AppError(`This ticket is ${ticket.status}, so new messages can't be added. If you still need help, please start a new ticket.`, 409);
 
     // Only files uploaded to this very ticket can be attached to it.
     const prefix = `tickets/${ticket._id}/`;
@@ -90,8 +121,8 @@ export async function postCustomerMessage(token: string, rawText: unknown, rawAt
     });
 
     // Nobody has picked an open ticket up yet, so a customer message doesn't make it "in progress".
-    if (ticket.status === 'resolved') ticket.status = 'open';
-    else if (ticket.status === 'pending_client') ticket.status = 'in_progress';
+    if (ticket.status === 'pending_client') ticket.status = 'in_progress';
+    ticket.staffUnread = (ticket.staffUnread ?? 0) + 1;
     await ticket.save();
     return { ticketMongoId: String(ticket._id), message: { id: String(message._id), from: 'you' as const, text, attachments, createdAt: message.createdAt } };
 }
@@ -112,7 +143,7 @@ function keyOf(value: string): string | null {
 /** A presigned upload URL for a file the customer wants to attach. Same type and size rules as everywhere else. */
 export async function requestCustomerUpload(token: string, file: { fileName?: unknown; fileType?: unknown; fileSize?: unknown }) {
     const ticket = await findByToken(token);
-    if (ticket.status === 'closed') throw new AppError('This ticket is closed.', 409);
+    if (isLockedStatus(ticket.status)) throw new AppError(`This ticket is ${ticket.status}.`, 409);
     const fileName = typeof file.fileName === 'string' ? file.fileName.slice(0, 200) : '';
     const fileType = typeof file.fileType === 'string' ? file.fileType : '';
     const fileSize = Number(file.fileSize);
@@ -121,11 +152,11 @@ export async function requestCustomerUpload(token: string, file: { fileName?: un
 }
 
 /** A short-lived link to view one file of this ticket (the bucket is private). */
-export async function getCustomerViewUrl(token: string, fileKey: unknown) {
+export async function getCustomerViewUrl(token: string, fileKey: unknown, download = false) {
     const ticket = await findByToken(token);
     const key = typeof fileKey === 'string' ? keyOf(fileKey) : null;
     if (!key || !key.startsWith(`tickets/${ticket._id}/`) || key.includes('..')) throw new AppError('File not found.', 404);
-    return { viewUrl: await generatePresignedViewUrl(key) };
+    return { viewUrl: await generatePresignedViewUrl(key, download ? { download: true } : undefined) };
 }
 
 export default { getThread, postCustomerMessage, requestCustomerUpload, getCustomerViewUrl };

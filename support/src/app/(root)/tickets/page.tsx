@@ -21,7 +21,7 @@ import {
     Clock,
     CheckCircle2,
     Circle,
-    AlertCircle,
+    Lock,
     Inbox,
     UserCheck,
     Mail,
@@ -35,6 +35,10 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
+import { useDispatch } from 'react-redux';
+import { baseApi } from '@/store/api/baseApi';
+import type { AppDispatch } from '@/store';
+import { usePermissions } from '@/hooks/use-permissions';
 import { cn } from '@/lib/utils';
 import { AttachmentPreview } from '@/components/messages/chat-attachment';
 import { AttachMenu, AttachmentTray, releasePending, toPending, type PendingAttachment } from '@/components/messages/composer-attachments';
@@ -359,13 +363,23 @@ function TicketListItem({ ticket, isSelected, onSelect }: { ticket: Ticket; isSe
             <div className="min-w-0 flex-1 space-y-1">
                 <div className="flex items-center justify-between gap-2">
                     <span className="truncate text-sm font-medium">{user.name}</span>
-                    <span className="shrink-0 text-[10px] text-muted-foreground">{formatRelative(ticket.updatedAt)}</span>
+                    <span className="flex shrink-0 items-center gap-1.5">
+                        <span className="text-[10px] text-muted-foreground">{formatRelative(ticket.updatedAt)}</span>
+                    </span>
                 </div>
                 <p className="truncate text-xs text-muted-foreground">{ticket.subject}</p>
                 <div className="flex items-center gap-1.5">
                     <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">{ticket.ticketId}</span>
                     <StatusBadge status={ticket.status} />
                     {urgent && <PriorityBadge priority={ticket.priority} />}
+                    {(ticket.staffUnread ?? 0) > 0 && (
+                        <span
+                            className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-600 px-1.5 text-[11px] font-semibold leading-none text-white tabular-nums"
+                            aria-label={`${ticket.staffUnread} unread`}
+                        >
+                            {(ticket.staffUnread ?? 0) > 99 ? '99+' : ticket.staffUnread}
+                        </span>
+                    )}
                 </div>
             </div>
         </button>
@@ -543,6 +557,9 @@ function TicketBubble({ m, first, last }: { m: ThreadMessage; first: boolean; la
 
 export default function TicketsPage() {
     const router = useRouter();
+    const dispatch = useDispatch<AppDispatch>();
+    const { role } = usePermissions();
+    const isAdmin = role === 'admin' || role === 'super_admin';
     const searchParams = useSearchParams();
     const selectedId = searchParams.get('ticket');
 
@@ -570,6 +587,12 @@ export default function TicketsPage() {
     const [updateTicket, { isLoading: isUpdating }] = useUpdateTicketMutation();
     const [assignToSelf, { isLoading: isAssigning }] = useAssignTicketToSelfMutation();
     const [requestPresignedUrl] = useRequestPresignedUrlMutation();
+
+    // Opening a ticket marks it read on the server: refresh the list and the sidebar badge to show that.
+    const openedId = ticket?._id;
+    useEffect(() => {
+        if (openedId) dispatch(baseApi.util.invalidateTags(['Tickets']));
+    }, [openedId, dispatch]);
 
     useEffect(() => {
         threadEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -699,7 +722,9 @@ export default function TicketsPage() {
             : [],
     );
     const ticketPhone = ticket ? getTicketPhone(ticket) : null;
-    const isClosed = ticket?.status === 'closed';
+    // A resolved or closed ticket is finished: only an admin can reply to it, reopen it or change it.
+    const finished = ticket?.status === 'resolved' || ticket?.status === 'closed';
+    const locked = finished && !isAdmin;
 
     return (
         <div className="flex h-[calc(100dvh-1rem)] overflow-hidden rounded-2xl border bg-sidebar">
@@ -713,9 +738,6 @@ export default function TicketsPage() {
                 <div className="px-4 pt-4 pb-3 space-y-3">
                     <div className="flex items-center justify-between pl-10 md:pl-0">
                         <h1 className="text-lg font-semibold">Tickets</h1>
-                        <Badge variant="secondary" className="text-xs tabular-nums">
-                            {tickets.length}
-                        </Badge>
                     </div>
                     <div className="relative">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
@@ -813,7 +835,7 @@ export default function TicketsPage() {
                             <Select
                                 value={ticket.status}
                                 onValueChange={(v) => updateStatus({ id: ticket._id, status: v as TicketStatus })}
-                                disabled={isUpdatingStatus}
+                                disabled={isUpdatingStatus || locked}
                             >
                                 <SelectTrigger className="h-8 w-[140px] text-xs" aria-label="Ticket status">
                                     <SelectValue />
@@ -866,15 +888,21 @@ export default function TicketsPage() {
                                 </ScrollArea>
 
                                 {/* Reply box */}
-                                {isClosed ? (
+                                {locked ? (
                                     <div className="shrink-0 border-t bg-muted/40 px-4 py-3 text-center">
                                         <p className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
-                                            <AlertCircle className="size-4" />
-                                            This ticket is closed. Change its status to reply.
+                                            <Lock className="size-4" />
+                                            This ticket is {ticket?.status}. Only an admin can reply to it or change its status.
                                         </p>
                                     </div>
                                 ) : (
                                     <div className="shrink-0 border-t">
+                                        {finished && (
+                                            <p className="flex items-center gap-2 border-b bg-muted/40 px-4 py-2 text-xs text-muted-foreground">
+                                                <Lock className="size-3.5 shrink-0" />
+                                                This ticket is {ticket?.status}. As an admin you can still reply, which reopens it.
+                                            </p>
+                                        )}
                                         <AttachmentTray items={pending} onRemove={removeAttachment} />
                                         <form onSubmit={sendReply} className="flex items-end gap-1.5 px-2 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] md:gap-2 md:px-3 md:py-3">
                                             <AttachMenu onPick={addAttachments} />
@@ -920,7 +948,7 @@ export default function TicketsPage() {
                                             <Select
                                                 value={ticket.priority}
                                                 onValueChange={(v) => updateTicket({ id: ticket._id, priority: v as TicketPriority })}
-                                                disabled={isUpdating}
+                                                disabled={isUpdating || locked}
                                             >
                                                 <SelectTrigger className="h-9 w-full text-sm">
                                                     <SelectValue />
@@ -938,7 +966,7 @@ export default function TicketsPage() {
                                             <Select
                                                 value={ticket.category || 'support'}
                                                 onValueChange={(v) => updateTicket({ id: ticket._id, category: v as TicketCategory })}
-                                                disabled={isUpdating}
+                                                disabled={isUpdating || locked}
                                             >
                                                 <SelectTrigger className="h-9 w-full text-sm">
                                                     <SelectValue />
@@ -956,7 +984,7 @@ export default function TicketsPage() {
                                             <Select
                                                 value={ticket.assignedTo?._id ?? ''}
                                                 onValueChange={(v) => updateTicket({ id: ticket._id, assignedTo: v })}
-                                                disabled={isUpdating}
+                                                disabled={isUpdating || locked}
                                             >
                                                 <SelectTrigger className="h-9 w-full text-sm">
                                                     <SelectValue placeholder="Unassigned" />
@@ -975,7 +1003,7 @@ export default function TicketsPage() {
                                             variant="outline"
                                             className="h-9 w-full gap-1.5"
                                             onClick={() => assignToSelf(ticket._id)}
-                                            disabled={isAssigning}
+                                            disabled={isAssigning || locked}
                                         >
                                             {isAssigning ? <Loader2 className="size-3.5 animate-spin" /> : <UserCheck className="size-3.5" />}
                                             Assign to me

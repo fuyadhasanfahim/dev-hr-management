@@ -41,6 +41,12 @@ export async function createChatSession({
         const prior: any = await ChatSessionModel.findOne({ ...owner, handedOffToWhatsApp: { $ne: true } }).sort({ updatedAt: -1 });
         if (prior) {
             if (prior.status === 'queued' || prior.status === 'active') return prior;
+            // A ticket opened from this chat that is still being handled keeps the chat read-only: the conversation
+            // lives in the ticket until it is resolved.
+            if (prior.status === 'converted_to_ticket' && prior.linkedTicketId) {
+                const linked: any = await TicketModel.findById(prior.linkedTicketId).select('status').lean();
+                if (linked && !['resolved', 'closed'].includes(linked.status)) return prior;
+            }
             prior.status = prior.assignedAgent ? 'active' : 'queued';
             await prior.save();
             if (prior.status === 'queued') await addToChatQueue(prior.sessionId);
@@ -180,8 +186,8 @@ export async function convertChatToTicket(
         ticketFields.assignedTo = session.assignedAgent;
     }
 
-    // Chats opened before tickets became on-demand already have one: reuse it instead of making a second.
-    let ticket: any = await TicketModel.findOne({ chatSessionId: session._id });
+    // A chat that still has an unfinished ticket reuses it instead of making a second; after it is resolved a new one starts.
+    let ticket: any = await TicketModel.findOne({ chatSessionId: session._id, status: { $nin: ['resolved', 'closed'] } }).sort({ createdAt: -1 });
     if (ticket) {
         ticket.subject = ticketSubject;
         ticket.category = ticketFields.category;

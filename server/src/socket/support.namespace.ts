@@ -3,8 +3,10 @@ import { socketAuthMiddleware } from './socket-auth.middleware.js';
 import ChatSessionModel, { ChatSessionStatus } from '../models/chat-session.model.js';
 import ChatMessageModel, { ChatSenderModel } from '../models/chat-message.model.js';
 import TicketModel from '../models/ticket.model.js';
-import { addToChatQueue, removeFromChatQueue } from '../services/redis-queue.service.js';
+import { removeFromChatQueue } from '../services/redis-queue.service.js';
 import { logger } from '../lib/logger.js';
+import { getRedisClient } from '../lib/redis.js';
+import { enqueueChatMessage } from '../services/chat-message.queue.js';
 import { Types } from 'mongoose';
 import { hasPermission } from '../lib/permissions.js';
 
@@ -171,15 +173,31 @@ export function registerSupportNamespace(io: Server) {
             }
         });
 
-        socket.on('chat:message', async ({ sessionId, text, content, attachments }: { sessionId: string; text?: string; content?: string; attachments?: string[] }) => {
+        // A visitor/agent may only act in a chat that is theirs to use, and only while it is open for messages.
+        const guardSession = async (sessionId: string): Promise<{ session: any; reason?: undefined } | { session?: undefined; reason: string }> => {
+            const session: any = await ChatSessionModel.findOne({ sessionId }).select('_id status handedOffToWhatsApp guestId clientId assignedAgent');
+            if (!session) return { reason: 'Chat session not found' };
+            if (user.role === 'Guest' && session.guestId?.toString() !== user.id) return { reason: 'Access denied to this support session' };
+            if (user.role === 'client' && session.clientId?.toString() !== user.id) return { reason: 'Access denied to this support session' };
+            if (session.status === ChatSessionStatus.ENDED) return { reason: 'This chat session has ended' };
+            if (session.handedOffToWhatsApp) return { reason: 'This chat continues on WhatsApp' };
+            // A ticket was opened from this chat: the conversation continues in the ticket, the chat is read-only.
+            if (session.status === 'converted_to_ticket') return { reason: 'A ticket was opened for this chat. The conversation continues in the ticket.' };
+            return { session };
+        };
+
+        // Sent messages are echoed to the room at once and saved behind Redis (see chat-message.queue): that is what
+        // makes sending, with or without files, feel instant.
+        socket.on('chat:message', async (payload: { sessionId?: string; text?: string; content?: string; attachments?: string[]; clientId?: string }) => {
+            const { sessionId, text, content, attachments, clientId } = payload ?? {};
             try {
                 if (!sessionId) {
                     socket.emit('error', { message: 'Session ID is required' });
                     return;
                 }
 
-                const messageContent = (text || content || '').trim();
-                const safeAttachments = Array.isArray(attachments) ? attachments.filter(Boolean) : [];
+                const messageContent = String(text || content || '').trim().slice(0, 4000);
+                const safeAttachments = (Array.isArray(attachments) ? attachments : []).filter((a) => typeof a === 'string' && a).slice(0, 10);
 
                 // Reject messages with no text AND no attachments.
                 if (!messageContent && safeAttachments.length === 0) {
@@ -187,19 +205,21 @@ export function registerSupportNamespace(io: Server) {
                     return;
                 }
 
-                const session = await ChatSessionModel.findOne({ sessionId });
-                if (!session) {
-                    socket.emit('error', { message: 'Chat session not found' });
+                const guard = await guardSession(sessionId);
+                if (!guard.session) {
+                    socket.emit('chat:message:rejected', { clientId, reason: guard.reason });
+                    socket.emit('error', { message: guard.reason });
                     return;
                 }
+                const session = guard.session;
 
-                if (session.status === ChatSessionStatus.ENDED) {
-                    socket.emit('error', { message: 'This chat session has ended' });
-                    return;
-                }
-                if (session.handedOffToWhatsApp) {
-                    socket.emit('error', { message: 'This chat continues on WhatsApp' });
-                    return;
+                // The same re-sent message is only ever queued once.
+                if (clientId) {
+                    const first = await getRedisClient().set(`chatmsg:${clientId}`, '1', 'EX', 300, 'NX').catch(() => 'OK');
+                    if (!first) {
+                        socket.emit('chat:message:ack', { clientId, duplicate: true });
+                        return;
+                    }
                 }
 
                 let senderModel = ChatSenderModel.CLIENT;
@@ -208,47 +228,98 @@ export function registerSupportNamespace(io: Server) {
                 } else if (user.role === 'Guest') {
                     senderModel = ChatSenderModel.GUEST;
                 }
+                const fromClient = senderModel === ChatSenderModel.CLIENT || senderModel === ChatSenderModel.GUEST;
 
-                const message = await ChatMessageModel.create({
-                    sessionId: session._id,
-                    sender: new Types.ObjectId(user.id),
+                const now = new Date().toISOString();
+                const message = {
+                    _id: String(new Types.ObjectId()),
+                    sessionId: String(session._id),
+                    sender: user.id as string,
                     senderModel,
-                    senderName: user.name,
+                    senderName: user.name as string,
                     content: messageContent,
                     attachments: safeAttachments,
-                });
-
-                // Touch the session so list ordering + "last active" time stay fresh.
-                session.updatedAt = new Date();
-                await session.save();
+                    clientId,
+                    readBy: [] as string[],
+                    createdAt: now,
+                    updatedAt: now,
+                };
 
                 supportNamespace.to(sessionId).emit('chat:message', message);
+                socket.emit('chat:message:ack', { clientId, _id: message._id });
 
-                const fromClient =
-                    senderModel === ChatSenderModel.CLIENT || senderModel === ChatSenderModel.GUEST;
-
-                // Notify every agent's sidebar so unread counts, last-message preview
-                // and timestamps update live (not just on the slow polling interval).
-                supportNamespace.to('agents_presence').emit('session:new_message', {
-                    sessionId,
-                    status: session.status,
+                await enqueueChatMessage({
+                    message: { ...message, clientId },
+                    room: sessionId,
                     fromClient,
-                    senderName: user.name,
-                    assignedAgentId: session.assignedAgent?.toString() ?? null,
-                    lastMessage: {
-                        content: message.content,
-                        attachments: message.attachments,
-                        createdAt: message.createdAt,
-                    },
                 });
-
-                if (fromClient && session.status === ChatSessionStatus.QUEUED) {
-                    await addToChatQueue(sessionId);
-                    supportNamespace.to('agents_presence').emit('queue:new_message', { sessionId });
-                }
             } catch (err: any) {
                 logger.error(`[Support Socket] Error in chat:message: ${err.message}`);
+                socket.emit('chat:message:rejected', { clientId, reason: 'Failed to send message' });
                 socket.emit('error', { message: 'Failed to send message' });
+            }
+        });
+
+        // Edit the text of a message you sent. Everyone in the chat sees it change, with an "Edited" mark.
+        socket.on('chat:message:edit', async ({ sessionId, messageId, text }: { sessionId?: string; messageId?: string; text?: string }) => {
+            try {
+                const content = String(text ?? '').trim().slice(0, 4000);
+                if (!sessionId || !messageId || !Types.ObjectId.isValid(messageId) || !content) {
+                    socket.emit('chat:message:rejected', { messageId, reason: 'Write the new text first.' });
+                    return;
+                }
+                const guard = await guardSession(sessionId);
+                if (!guard.session) {
+                    socket.emit('chat:message:rejected', { messageId, reason: guard.reason });
+                    return;
+                }
+                const msg = await ChatMessageModel.findOne({ _id: messageId, sessionId: guard.session._id });
+                if (!msg || msg.deletedAt) {
+                    socket.emit('chat:message:rejected', { messageId, reason: 'This message can no longer be edited.' });
+                    return;
+                }
+                if (String(msg.sender) !== user.id || msg.senderModel === ChatSenderModel.SYSTEM) {
+                    socket.emit('chat:message:rejected', { messageId, reason: 'You can only edit your own messages.' });
+                    return;
+                }
+                msg.content = content;
+                msg.editedAt = new Date();
+                await msg.save();
+                supportNamespace.to(sessionId).emit('chat:message:updated', msg.toJSON());
+                supportNamespace.to('agents_presence').emit('session:state_change', { type: 'message_updated', sessionId });
+            } catch (err: any) {
+                logger.error(`[Support Socket] Error in chat:message:edit: ${err.message}`);
+                socket.emit('chat:message:rejected', { messageId: undefined, reason: 'Could not edit the message.' });
+            }
+        });
+
+        // Delete a message you sent (a manager or admin may delete any). The text and files are wiped; the thread keeps
+        // a "This message was deleted" line.
+        socket.on('chat:message:delete', async ({ sessionId, messageId }: { sessionId?: string; messageId?: string }) => {
+            try {
+                if (!sessionId || !messageId || !Types.ObjectId.isValid(messageId)) return;
+                const guard = await guardSession(sessionId);
+                if (!guard.session) {
+                    socket.emit('chat:message:rejected', { messageId, reason: guard.reason });
+                    return;
+                }
+                const msg = await ChatMessageModel.findOne({ _id: messageId, sessionId: guard.session._id });
+                if (!msg || msg.deletedAt) return;
+                const mine = String(msg.sender) === user.id;
+                const admin = user.role === 'admin' || user.role === 'super_admin';
+                if (msg.senderModel === ChatSenderModel.SYSTEM || (!mine && !admin)) {
+                    socket.emit('chat:message:rejected', { messageId, reason: 'You can only delete your own messages.' });
+                    return;
+                }
+                msg.content = '';
+                msg.attachments = [];
+                msg.deletedAt = new Date();
+                await msg.save();
+                supportNamespace.to(sessionId).emit('chat:message:updated', msg.toJSON());
+                supportNamespace.to('agents_presence').emit('session:state_change', { type: 'message_updated', sessionId });
+            } catch (err: any) {
+                logger.error(`[Support Socket] Error in chat:message:delete: ${err.message}`);
+                socket.emit('chat:message:rejected', { messageId: undefined, reason: 'Could not delete the message.' });
             }
         });
 

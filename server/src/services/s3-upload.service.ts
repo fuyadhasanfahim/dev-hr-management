@@ -59,10 +59,13 @@ export async function generatePresignedUploadUrl({
 /**
  * Generates a pre-signed GET URL so the browser can view/download a private S3 object.
  */
-export async function generatePresignedViewUrl(fileKey: string): Promise<string> {
+export async function generatePresignedViewUrl(fileKey: string, opts?: { download?: boolean }): Promise<string> {
+    // For "Download": ask S3 to send the file as an attachment under the sender's file name.
+    const named = fileKey.split('/').pop()?.replace(/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}__/i, '') || 'file';
     const command = new GetObjectCommand({
         Bucket: envConfig.aws_bucket_name || 'dummy-bucket',
         Key: fileKey,
+        ...(opts?.download ? { ResponseContentDisposition: `attachment; filename="${named.replace(/[^A-Za-z0-9._-]/g, '_')}"` } : {}),
     });
 
     return await getSignedUrl(s3Client, command, { expiresIn: 900 });

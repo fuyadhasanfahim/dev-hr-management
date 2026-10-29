@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useDispatch } from 'react-redux';
 import { useGetQueuedSessionsQuery, useGetWebInboxQuery } from '@/store/api/chatApi';
+import { useGetTicketUnreadSummaryQuery } from '@/store/api/ticketApi';
 import { useGetWhatsAppConversationsQuery, whatsappApi, type WhatsAppMessageStatus } from '@/store/api/whatsappApi';
 import { baseApi } from '@/store/api/baseApi';
 import { connectSocket, disconnectSocket } from '@/lib/socket';
@@ -26,7 +27,9 @@ export function useLiveCounts() {
     }, [agent]);
     const socketRef = useRef<Socket | null>(null);
     const pathnameRef = useRef(pathname);
-    const [ticketCount, setTicketCount] = useState(0);
+    // Tickets the team has not opened yet: kept by the server, so it survives reloads and clears only when opened.
+    const { data: ticketUnread } = useGetTicketUnreadSummaryQuery(undefined, { pollingInterval: 60_000 });
+    const ticketCount = ticketUnread?.tickets ?? 0;
     const { playSound } = useNotificationSound();
 
     const { data: queuedSessions = [] } = useGetQueuedSessionsQuery(undefined, {
@@ -44,13 +47,8 @@ export function useLiveCounts() {
     const websiteUnreadCount = webChats.reduce((sum, c) => sum + c.unreadCount, 0);
     const messagesUnreadCount = whatsappUnreadCount + websiteUnreadCount;
 
-    // Clear the unread-ticket badge once the agent is looking at the tickets view.
     useEffect(() => {
         pathnameRef.current = pathname;
-        if (pathname.startsWith('/tickets')) {
-            const id = setTimeout(() => setTicketCount(0), 0);
-            return () => clearTimeout(id);
-        }
     }, [pathname]);
 
     useEffect(() => {
@@ -68,10 +66,7 @@ export function useLiveCounts() {
         // agent (sound + badge) unless they're already on the tickets page.
         const onTicketActivity = () => {
             dispatch(baseApi.util.invalidateTags(['Tickets', 'TicketDetail', 'DashboardStats']));
-            if (!pathnameRef.current.startsWith('/tickets')) {
-                setTicketCount((c) => c + 1);
-                playSound();
-            }
+            if (!pathnameRef.current.startsWith('/tickets')) playSound();
         };
         const onWhatsAppMessage = (event: IncomingMessageEvent) => {
             const { conversationId } = event;

@@ -154,7 +154,7 @@ async function getPresignedViewUrl(req: Request, res: Response) {
             return res.status(403).json({ success: false, message: 'Access denied: invalid file key.' });
         }
 
-        const viewUrl = await generatePresignedViewUrl(fileKey);
+        const viewUrl = await generatePresignedViewUrl(fileKey, req.query.download === '1' ? { download: true } : undefined);
         return res.status(200).json({ success: true, data: { viewUrl } });
     } catch (err: any) {
         return res.status(err.statusCode || 500).json({ success: false, message: err.message });
@@ -234,6 +234,7 @@ async function replyToTicket(req: Request, res: Response) {
             senderType,
             text,
             attachments,
+            actorRole: req.user?.role,
         });
 
         // A client/guest reply needs the support team's attention — alert the
@@ -358,7 +359,7 @@ async function requestPublicTicketUpload(req: Request, res: Response) {
 async function getPublicTicketViewUrl(req: Request, res: Response) {
     try {
         res.setHeader('Cache-Control', 'no-store');
-        const data = await ticketPublicService.getCustomerViewUrl(String(req.params.token ?? ''), req.query.fileKey);
+        const data = await ticketPublicService.getCustomerViewUrl(String(req.params.token ?? ''), req.query.fileKey, req.query.download === '1');
         return res.status(200).json({ success: true, data });
     } catch (err: any) {
         return res.status(err.statusCode || 500).json({ success: false, message: err.statusCode ? err.message : 'Could not open the file' });
@@ -402,7 +403,7 @@ async function updateTicket(req: Request, res: Response) {
         if (assignedTo) updates.assignedTo = assignedTo;
         if (tags) updates.tags = tags;
 
-        const result = await supportTicketService.updateTicket(req.params.id || '', updates);
+        const result = await supportTicketService.updateTicket(req.params.id || '', updates, req.user?.role);
         return res.status(200).json({ success: true, data: result });
     } catch (err: any) {
         return res.status(err.statusCode || 400).json({ success: false, message: err.message });
@@ -927,6 +928,7 @@ async function convertChatToTicketParam(req: Request, res: Response) {
                         attachments: [],
                     });
                     ns.to(sessionId).emit('chat:message', note);
+                    ns.to(sessionId).emit('chat:locked', { sessionId, ticketId: ticket.ticketId });
                 }
                 if (ticket) notifyAgents('ticket:created', { ticketId: String(ticket._id), ticketRef: ticket.ticketId, subject: ticket.subject ?? '' });
             } catch (err: any) {
@@ -936,6 +938,16 @@ async function convertChatToTicketParam(req: Request, res: Response) {
         return res.status(200).json({ success: true, data: result });
     } catch (err: any) {
         return res.status(err.statusCode || 400).json({ success: false, message: err.message });
+    }
+}
+
+/** Staff: how many tickets have customer activity nobody on the team has opened yet (the sidebar badge). */
+async function getTicketUnreadSummary(_req: Request, res: Response) {
+    try {
+        const tickets = await TicketModel.countDocuments({ staffUnread: { $gt: 0 } });
+        return res.status(200).json({ success: true, data: { tickets } });
+    } catch (err: any) {
+        return res.status(500).json({ success: false, message: err.message });
     }
 }
 
@@ -970,7 +982,7 @@ async function updateTicketStatus(req: Request, res: Response) {
         if (!status) {
             return res.status(400).json({ success: false, message: 'Status is required' });
         }
-        const result = await supportTicketService.updateTicket(req.params.id || '', { status });
+        const result = await supportTicketService.updateTicket(req.params.id || '', { status }, req.user?.role);
         return res.status(200).json({ success: true, data: result });
     } catch (err: any) {
         return res.status(err.statusCode || 400).json({ success: false, message: err.message });
@@ -988,7 +1000,7 @@ async function assignTicketToSelf(req: Request, res: Response) {
         }
         const result = await supportTicketService.updateTicket(req.params.id || '', {
             assignedTo: staff._id.toString(),
-        });
+        }, req.user?.role);
         return res.status(200).json({ success: true, data: result });
     } catch (err: any) {
         return res.status(err.statusCode || 400).json({ success: false, message: err.message });
@@ -1116,6 +1128,7 @@ export default {
     handOffChatToWhatsApp,
     convertChatToTicketParam,
     listChatVisitorTickets,
+    getTicketUnreadSummary,
     updateTicketStatus,
     assignTicketToSelf,
     reassignChatSession,

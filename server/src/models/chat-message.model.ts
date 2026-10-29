@@ -14,6 +14,9 @@ export interface IChatMessage extends Document {
     senderName?: string; // For guests or system
     content: string;
     attachments: string[];
+    clientId?: string; // Id the sender's browser gave it, so a re-send never makes a second message
+    editedAt?: Date;
+    deletedAt?: Date; // Content and files are wiped when this is set; the row stays so the thread shows "deleted"
     readBy: Types.ObjectId[]; // Refs to users/clients who read it
     createdAt: Date;
     updatedAt: Date;
@@ -49,6 +52,9 @@ const chatMessageSchema = new Schema<IChatMessage>(
         readBy: [{
             type: Schema.Types.ObjectId,
         }],
+        clientId: { type: String, index: true, sparse: true },
+        editedAt: { type: Date },
+        deletedAt: { type: Date },
     },
     {
         timestamps: true,

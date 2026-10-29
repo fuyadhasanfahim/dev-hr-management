@@ -55,6 +55,7 @@ export interface ITicket extends Document {
     contactId?: Types.ObjectId; // Ref: Contact — the person, across WhatsApp and the website
     channel?: TicketChannel; // Where the conversation happens: WhatsApp or the website
     chatSessionId?: Types.ObjectId; // Ref: ChatSession — set for tickets that are a website live chat
+    staffUnread?: number; // Customer activity the team has not opened yet (a new ticket, a customer message)
     publicToken?: string; // Unguessable id in the customer's tracking link (the ticket number alone is guessable)
     whatsappNotifiedAt?: Date; // When we told the customer their ticket number on WhatsApp
     subject: string;
@@ -121,6 +122,11 @@ const ticketSchema = new Schema<ITicket>(
             type: Schema.Types.ObjectId,
             ref: 'ChatSession',
             index: true,
+        },
+        staffUnread: {
+            type: Number,
+            default: 0,
+            min: 0,
         },
         publicToken: {
             type: String,
