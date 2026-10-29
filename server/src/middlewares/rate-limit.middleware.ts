@@ -65,6 +65,38 @@ export const generalPublicLimiter = rateLimit({
 });
 
 /**
+ * Ticket lookup by number + email/phone. Ticket numbers are 6 digits, so this is tight per IP
+ * to make guessing a number together with a matching email/phone impractical.
+ */
+export const ticketLookupLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 15,
+    standardHeaders: true,
+    legacyHeaders: false,
+    handler: jsonHandler('Too many attempts. Please try again in a few minutes.'),
+});
+
+/**
+ * Customer thread behind a ticket link: reading is cheap, writing is limited per link and IP so a leaked link
+ * can't be used to flood the support team.
+ */
+export const ticketThreadReadLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 90,
+    standardHeaders: true,
+    legacyHeaders: false,
+    handler: jsonHandler('Too many requests. Please slow down.'),
+});
+export const ticketThreadWriteLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 8,
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: (req: Request) => `${ipKeyGenerator(req.ip ?? '')}:${String(req.params.token ?? '').slice(0, 12)}`,
+    handler: jsonHandler('You are sending messages too quickly. Please wait a moment.'),
+});
+
+/**
  * Public payment routes (invoice lookup, gateway intent/order creation,
  * capture) — per-IP throttle against link-guessing / brute-force attempts.
  * Deliberately looser than otpLimiter (no email to key on here) but tighter

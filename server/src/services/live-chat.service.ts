@@ -9,7 +9,7 @@ import ClientModel from '../models/client.model.js';
 import { createTicket } from './support-ticket.service.js';
 import { normalizePhone } from './contact.service.js';
 import { findOrCreateConversation } from './whatsapp-support.service.js';
-import { insideFreeTextWindow } from './ticket-notify.service.js';
+import { insideFreeTextWindow, emailTicketCreated } from './ticket-notify.service.js';
 import * as whatsappService from './whatsapp.service.js';
 import WhatsAppConversationModel from '../models/whatsapp-conversation.model.js';
 import WhatsAppMessageModel, {
@@ -237,6 +237,9 @@ export async function convertChatToTicket(
     }
 
     await TicketMessageModel.create(msgFields);
+
+    // A chat that becomes a ticket gets the ticket number and private link by email, like any other ticket.
+    void emailTicketCreated(ticket._id);
 
     session.status = 'converted_to_ticket';
     session.linkedTicketId = ticket._id;

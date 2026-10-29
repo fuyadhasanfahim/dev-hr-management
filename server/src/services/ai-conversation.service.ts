@@ -93,59 +93,6 @@ export async function getConversation(conversationId: string): Promise<any> {
     return conversation;
 }
 
-/** Staff inbox: the newest website chats, optionally filtered by name / email / phone. */
-export async function listConversations(opts: { q?: string; limit?: number } = {}): Promise<any[]> {
-    const filter: any = {};
-    const q = opts.q?.trim();
-    if (q) {
-        const rx = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
-        filter.$or = [{ visitorName: rx }, { visitorEmail: rx }, { visitorPhone: rx }, { 'messages.content': rx }];
-    }
-    const rows = await AiConversationModel.find(filter)
-        .sort({ updatedAt: -1 })
-        .limit(Math.min(opts.limit ?? 50, 100))
-        .populate('linkedTicketId', 'ticketId status')
-        .lean();
-    return rows.map((c: any) => {
-        const last = c.messages?.[c.messages.length - 1];
-        return {
-            conversationId: c.conversationId,
-            visitorName: c.visitorName ?? null,
-            visitorEmail: c.visitorEmail ?? null,
-            visitorPhone: c.visitorPhone ?? null,
-            contactId: c.contactId ?? null,
-            messageCount: c.messageCount,
-            lastAction: c.lastAction ?? null,
-            lastMessage: last ? { role: last.role, content: String(last.content).slice(0, 140) } : null,
-            ticket: c.linkedTicketId ? { _id: c.linkedTicketId._id, ticketId: c.linkedTicketId.ticketId, status: c.linkedTicketId.status } : null,
-            createdAt: c.createdAt,
-            updatedAt: c.updatedAt,
-        };
-    });
-}
-
-/** One website chat for the inbox: the whole thread plus what the AI remembers and who it is. */
-export async function getConversationDetail(conversationId: string): Promise<any> {
-    const c: any = await AiConversationModel.findOne({ conversationId })
-        .populate('linkedTicketId', 'ticketId status subject')
-        .populate('contactId', 'name phones emails whatsappPhone clientId leadId aiMemory')
-        .lean();
-    if (!c) throw new AppError('AI conversation not found', 404);
-    return {
-        conversationId: c.conversationId,
-        visitorName: c.visitorName ?? null,
-        visitorEmail: c.visitorEmail ?? null,
-        visitorPhone: c.visitorPhone ?? null,
-        messages: c.messages,
-        aiMemory: c.aiMemory || c.contactId?.aiMemory || '',
-        contact: c.contactId ?? null,
-        ticket: c.linkedTicketId ?? null,
-        lastAction: c.lastAction ?? null,
-        createdAt: c.createdAt,
-        updatedAt: c.updatedAt,
-    };
-}
-
 export async function saveMemory(conversationId: string, memory: string): Promise<void> {
     await AiConversationModel.updateOne({ conversationId }, { $set: { aiMemory: memory } });
 }
@@ -153,7 +100,5 @@ export async function saveMemory(conversationId: string, memory: string): Promis
 export default {
     appendTurn,
     getConversation,
-    listConversations,
-    getConversationDetail,
     saveMemory,
 };

@@ -235,13 +235,17 @@ function KnowledgeBase() {
     const { page, limit } = readPaging(url.get);
     const view = url.get('view');
     const urlQ = url.get('q');
+    // Which AI's questions and replies to show. Entries are shared by both, so they don't change.
+    const channelParam = url.get('channel');
+    const channel: 'whatsapp' | 'website' | undefined = channelParam === 'whatsapp' || channelParam === 'website' ? channelParam : undefined;
 
     const setTab = (next: string) => url.set({ tab: next, q: null, page: null, view: null });
     const setPage = (n: number) => url.set({ page: n });
     const setLimit = (n: number) => url.set({ limit: n, page: null });
     const setView = (v: string) => url.set({ view: v, page: null });
+    const setChannel = (c: string) => url.set({ channel: c === 'all' ? null : c, page: null });
 
-    const { data: stats } = useGetKnowledgeStatsQuery();
+    const { data: stats } = useGetKnowledgeStatsQuery({ channel });
     const { data, isLoading, isFetching } = useGetKnowledgeChunksQuery({ page, limit, q: urlQ }, { skip: tab !== 'entries' });
     const [deleteChunk, { isLoading: isDeleting }] = useDeleteKnowledgeChunkMutation();
 
@@ -282,7 +286,7 @@ function KnowledgeBase() {
                 <div>
                     <h1 className="text-xl font-semibold tracking-tight">Knowledge Base</h1>
                     <p className="text-sm text-muted-foreground mt-0.5">
-                        Facts and FAQs the WhatsApp AI grounds its replies on.
+                        Facts and FAQs the WhatsApp and website AI ground their replies on.
                     </p>
                 </div>
                 <Button onClick={() => openAddDialog()} className="gap-2 shrink-0">
@@ -291,12 +295,20 @@ function KnowledgeBase() {
                 </Button>
             </div>
 
+            <Tabs value={channel ?? 'all'} onValueChange={setChannel}>
+                <TabsList>
+                    <TabsTrigger value="all">All</TabsTrigger>
+                    <TabsTrigger value="whatsapp">WhatsApp</TabsTrigger>
+                    <TabsTrigger value="website">Website</TabsTrigger>
+                </TabsList>
+            </Tabs>
+
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                 {[
-                    { label: 'Entries', value: stats?.total ?? '—', hint: `${stats?.rules ?? 0}/${KB_MAX_INSTRUCTIONS} AI rules` },
+                    { label: 'Entries', value: stats?.total ?? '—', hint: `${stats?.rules ?? 0}/${KB_MAX_INSTRUCTIONS} AI rules${(stats?.over ?? 0) > 0 ? ` · ${stats?.over} over the limit` : ''}`, warn: (stats?.over ?? 0) > 0 },
                     { label: 'Total characters', value: stats ? stats.chars.toLocaleString() : '—', hint: `the AI reads the ${KB_RETRIEVE_K} best matches per message` },
-                    { label: 'Over the limit', value: stats?.over ?? '—', hint: `entries above ${KB_MAX_CHARS} characters`, warn: (stats?.over ?? 0) > 0 },
-                    { label: 'Unanswered questions', value: stats?.gaps ?? '—', hint: 'waiting for an answer', warn: gapCount > 0 },
+                    { label: 'Unanswered questions', value: stats?.gaps ?? '—', hint: channel ? `from the ${channel} AI` : 'waiting for an answer', warn: gapCount > 0 },
+                    { label: 'AI replies', value: stats?.replies ?? '—', hint: `${stats?.repliesCorrected ?? 0} corrected${channel ? ` · ${channel}` : ''}` },
                 ].map((c) => (
                     <div key={c.label} className="rounded-lg border bg-sidebar p-3">
                         <p className="text-xs text-muted-foreground">{c.label}</p>
@@ -461,11 +473,11 @@ function KnowledgeBase() {
                 </TabsContent>
 
                 <TabsContent value="gaps">
-                    <GapsPanel q={urlQ} page={page} limit={limit} onPage={setPage} onLimit={setLimit} onAnswer={(question) => openAddDialog(question)} />
+                    <GapsPanel q={urlQ} page={page} limit={limit} channel={channel} onPage={setPage} onLimit={setLimit} onAnswer={(question) => openAddDialog(question)} />
                 </TabsContent>
 
                 <TabsContent value="replies">
-                    <RepliesPanel q={urlQ} page={page} limit={limit} view={view} onPage={setPage} onLimit={setLimit} onView={setView} />
+                    <RepliesPanel q={urlQ} page={page} limit={limit} view={view} channel={channel} onPage={setPage} onLimit={setLimit} onView={setView} />
                 </TabsContent>
 
                 <TabsContent value="taught">

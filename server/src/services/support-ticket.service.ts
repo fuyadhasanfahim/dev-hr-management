@@ -1,8 +1,9 @@
+import { randomBytes } from 'node:crypto';
+import { emailTicketCreated } from './ticket-notify.service.js';
 import TicketModel, { TicketCategory } from '../models/ticket.model.js';
 import TicketMessageModel, { MessageSenderModel } from '../models/ticket-message.model.js';
 import { AppError } from '../utils/AppError.js';
 import { Types } from 'mongoose';
-import { notifyTicketCreated } from './ticket-notify.service.js';
 
 interface CreateTicketData {
     subject: string;
@@ -44,6 +45,8 @@ export async function createTicket(data: CreateTicketData): Promise<any> {
         category: data.category || TicketCategory.SUPPORT,
         source: data.source,
         status: 'open',
+        // The private link's key is made with the ticket, so the email and every later read agree on it.
+        publicToken: randomBytes(18).toString('base64url'),
         attachments: data.attachments || [],
         tags: [],
     };
@@ -95,8 +98,9 @@ export async function createTicket(data: CreateTicketData): Promise<any> {
 
     await TicketMessageModel.create(msgFields);
 
-    // Tell the customer the ticket number on WhatsApp, with a link to follow it. Not awaited.
-    void notifyTicketCreated(ticket._id);
+    // Email the ticket number with a private link to follow it and reply. Not awaited. A live chat is already a
+    // conversation: it only gets the email if it is later turned into a ticket.
+    if (data.source !== 'live_chat') void emailTicketCreated(ticket._id);
 
     return ticket;
 }

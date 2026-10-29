@@ -15,6 +15,7 @@ export interface KnowledgeGap {
     topScore: number | null;
     count: number;
     lastAskedAt: string;
+    channel?: 'whatsapp' | 'website';
 }
 
 export interface KnowledgeTestMatch {
@@ -39,6 +40,7 @@ export interface KnowledgeTestResult {
 export interface AiReply {
     id: string;
     conversationId: string | null;
+    channel?: 'whatsapp' | 'website';
     customerName: string | null;
     customerMessage: string;
     context: string | null;
@@ -77,6 +79,7 @@ export interface PageArgs {
     page: number;
     limit: number;
     q?: string;
+    channel?: 'whatsapp' | 'website'; // omitted = all
 }
 export interface KnowledgeStats {
     total: number; // knowledge entries
@@ -101,8 +104,9 @@ const qs = (args: Record<string, string | number | boolean | undefined>) => {
 
 export const knowledgeBaseApi = baseApi.injectEndpoints({
     endpoints: (builder) => ({
-        getKnowledgeStats: builder.query<KnowledgeStats, void>({
-            query: () => '/support/knowledge-base/stats',
+        // channel narrows the counts that come from the AI's traffic (unanswered questions, replies).
+        getKnowledgeStats: builder.query<KnowledgeStats, { channel?: 'whatsapp' | 'website' } | void>({
+            query: (args) => `/support/knowledge-base/stats?${qs({ channel: args?.channel })}`,
             transformResponse: (res: { data: KnowledgeStats }) => res.data,
             providesTags: ['KnowledgeBase', 'AiLearning'],
         }),

@@ -35,6 +35,7 @@ function ReplyCard({ r }: { r: AiReply }) {
             <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                 <span className="font-medium text-foreground">{r.customerName || 'Customer'}</span>
                 <span>{ago(r.createdAt)}</span>
+                {r.channel && <Badge variant="secondary" className="capitalize">{r.channel}</Badge>}
                 {r.escalated && <Badge variant="outline">Handed off</Badge>}
                 {r.status === 'corrected' && (
                     <Badge variant="outline" className="gap-1 border-emerald-500/30 text-emerald-700 dark:text-emerald-400">
@@ -104,10 +105,10 @@ function ReplyCard({ r }: { r: AiReply }) {
     );
 }
 
-// Every reply the AI sent on WhatsApp, newest first. Correcting one teaches the AI the better reply.
-export function RepliesPanel({ q, page, limit, view, onPage, onLimit, onView }: ListProps) {
+// Every reply the AI sent (WhatsApp and website), newest first. Correcting one teaches the AI the better reply.
+export function RepliesPanel({ q, page, limit, view, channel, onPage, onLimit, onView }: ListProps) {
     const status = view === 'ok' || view === 'corrected' ? view : 'all';
-    const { data, isLoading, isFetching } = useGetAiRepliesQuery({ page, limit, q, status: status === 'all' ? undefined : status });
+    const { data, isLoading, isFetching } = useGetAiRepliesQuery({ page, limit, q, channel, status: status === 'all' ? undefined : status });
     const replies = data?.items ?? [];
     const meta = data?.meta;
     useClampPage(page, meta?.totalPages, onPage);

@@ -34,11 +34,13 @@ model KnowledgeGap {
   question    String
   questionKey String   @unique
   reason      String
+  channel     String   @default("whatsapp")
   topScore    Float?
   count       Int      @default(1)
   createdAt   DateTime @default(now())
   lastAskedAt DateTime @default(now())
 
+  @@index([channel])
   @@map("knowledge_gaps")
 }
 

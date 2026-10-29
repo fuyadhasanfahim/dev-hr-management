@@ -9,7 +9,6 @@ import {
     Inbox,
     LayoutDashboard,
     Bot,
-    Globe,
     Library,
     MessageCircle,
     Search,
@@ -60,8 +59,6 @@ const NAV_GROUPS: NavGroup[] = [
         items: [
             // WhatsApp and website live chats, with channel tabs.
             { title: 'Messages', url: '/messages', icon: MessageCircle, permission: 'support.access' },
-            // What the website AI assistant talked about with visitors (not live chats with the team).
-            { title: 'Website AI Chats', url: '/website-chats', icon: Globe, permission: 'support.access' },
         ],
     },
     {

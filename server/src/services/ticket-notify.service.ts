@@ -1,24 +1,15 @@
 import { randomBytes } from 'node:crypto';
 import type { Types } from 'mongoose';
 import envConfig from '../config/env.config.js';
-import { logger } from '../lib/logger.js';
-import TicketModel, { TicketSource } from '../models/ticket.model.js';
-import WhatsAppConversationModel from '../models/whatsapp-conversation.model.js';
-import WhatsAppMessageModel, {
-    WhatsAppMessageDirection,
-    WhatsAppMessageSender,
-    WhatsAppMessageStatus,
-    WhatsAppMessageType,
-} from '../models/whatsapp-message.model.js';
+import TicketModel from '../models/ticket.model.js';
+import WhatsAppMessageModel, { WhatsAppMessageDirection } from '../models/whatsapp-message.model.js';
 import { normalizePhone } from './contact.service.js';
-import { findOrCreateConversation } from './whatsapp-support.service.js';
-import * as whatsappService from './whatsapp.service.js';
-
-// When a ticket is raised for someone who can be reached on WhatsApp, tell them its number with a link to a page
-// that shows its current state. The conversation about the ticket then carries on in the same WhatsApp chat.
+import emailService from './email.service.js';
+import { logger } from '../lib/logger.js';
 
 const WINDOW_MS = 24 * 60 * 60 * 1000;
-const BENGALI = /[ঀ-৿]/;
+
+// Tracking links for tickets. Tickets live on the website chat only: nothing is sent to WhatsApp about them.
 
 export const trackingUrl = (token: string) => `${envConfig.ticket_link_base}/ticket/${token}`;
 
@@ -40,69 +31,71 @@ export async function insideFreeTextWindow(conversationId: Types.ObjectId): Prom
     return !!last && Date.now() - new Date(last.createdAt).getTime() < WINDOW_MS;
 }
 
-/** Tickets that predate tracking links get a token the first time one is needed. */
+/**
+ * Tickets that predate tracking links get a token the first time one is needed. Atomic: two callers at once end up
+ * with the same token, never two different ones.
+ */
 export async function ensurePublicToken(ticketId: Types.ObjectId | string): Promise<string> {
-    const doc: any = await TicketModel.findById(ticketId).select('publicToken');
-    if (doc?.publicToken) return doc.publicToken;
+    const existing: any = await TicketModel.findById(ticketId).select('publicToken').lean();
+    if (existing?.publicToken) return existing.publicToken;
     const token = randomBytes(18).toString('base64url');
-    await TicketModel.updateOne({ _id: ticketId }, { $set: { publicToken: token } });
-    return token;
+    await TicketModel.updateOne({ _id: ticketId, publicToken: { $exists: false } }, { $set: { publicToken: token } });
+    const after: any = await TicketModel.findById(ticketId).select('publicToken').lean();
+    return after?.publicToken ?? token;
 }
 
-/**
- * Sends the "your ticket is created" message. Free text with the link when the customer wrote to us in the last
- * 24 hours (always true for tickets raised from a WhatsApp chat), otherwise the approved template with a
- * "Track ticket" button. Best effort: never throws, because the ticket already exists.
- */
-export async function notifyTicketCreated(ticketId: Types.ObjectId | string): Promise<void> {
+/** Where to email the customer: what they gave on the ticket, else the guest or client record behind it. */
+async function emailOf(ticketId: Types.ObjectId | string): Promise<{ ticket: any; to: string } | null> {
+    const ticket: any = await TicketModel.findById(ticketId)
+        .select('ticketId subject visitorName visitorEmail guestId clientId')
+        .populate('guestId', 'email name')
+        .populate('clientId', 'email emails name')
+        .lean();
+    if (!ticket) return null;
+    const to = String(ticket.visitorEmail || ticket.guestId?.email || ticket.clientId?.emails?.[0] || ticket.clientId?.email || '').trim();
+    if (!to) return null;
+    return { ticket: { ...ticket, visitorName: ticket.visitorName || ticket.guestId?.name || ticket.clientId?.name || '' }, to };
+}
+
+/** Emails the customer their ticket number and private link. Best effort: the ticket already exists. */
+export async function emailTicketCreated(ticketId: Types.ObjectId | string): Promise<void> {
     try {
-        if (!envConfig.meta_access_token || !envConfig.whatsapp_phone_number_id) return;
-        const ticket: any = await TicketModel.findById(ticketId).populate('contactId', 'whatsappPhone name').lean();
-        if (!ticket || ticket.whatsappNotifiedAt) return;
-        // A live chat has its own conversation going: it doesn't need a "ticket raised" message.
-        if (ticket.source === TicketSource.LIVE_CHAT) return;
-        const phone = whatsappNumberOf(ticket);
-        if (!phone) return;
-
-        const token = await ensurePublicToken(ticket._id);
-        const name: string = ticket.visitorName || ticket.contactId?.name || '';
-        const first = name.trim().split(/\s+/)[0] || 'there';
-        const bengali = BENGALI.test(`${ticket.subject} ${name}`);
-        const link = trackingUrl(token);
-
-        const conversation = await findOrCreateConversation(phone, name || undefined);
-        let body: string;
-        let messageId: string;
-        if (await insideFreeTextWindow(conversation._id)) {
-            body = bengali
-                ? `${first}, আপনার টিকেট ${ticket.ticketId} খোলা হয়েছে।\nবর্তমান অবস্থা দেখুন: ${link}\n\nটিকেট নিয়ে আমরা এই WhatsApp-এই কথা বলব। কিছু যোগ করার থাকলে এখানেই লিখুন।`
-                : `Hi ${first}, your ticket ${ticket.ticketId} has been created.\nSee its current status: ${link}\n\nWe'll keep talking about it right here on WhatsApp. Just reply here if you have anything to add.`;
-            messageId = await whatsappService.sendTextMessage(phone, body);
-        } else {
-            const template = bengali ? envConfig.wa_template_ticket_bn : envConfig.wa_template_ticket_en;
-            body = bengali
-                ? `${first}, আপনার টিকেট ${ticket.ticketId} খোলা হয়েছে। (টিকেট দেখুন: ${link})`
-                : `Hi ${first}, your ticket ${ticket.ticketId} has been created. (Track ticket: ${link})`;
-            messageId = await whatsappService.sendTemplateMessage(phone, template, bengali ? 'bn' : 'en', [first, ticket.ticketId], token);
-        }
-
-        // Show it in the WhatsApp inbox so agents see exactly what the customer was told.
-        await WhatsAppMessageModel.create({
-            conversationId: conversation._id,
-            direction: WhatsAppMessageDirection.OUTBOUND,
-            sender: WhatsAppMessageSender.AI,
-            type: WhatsAppMessageType.TEXT,
-            body,
-            whatsappMsgId: messageId || `ticket:${ticket._id}`,
-            status: WhatsAppMessageStatus.SENT,
+        const found = await emailOf(ticketId);
+        if (!found) return;
+        const token = await ensurePublicToken(found.ticket._id);
+        await emailService.sendTicketEmail({
+            to: found.to,
+            name: found.ticket.visitorName,
+            ticketId: found.ticket.ticketId,
+            subject: found.ticket.subject,
+            trackUrl: trackingUrl(token),
+            kind: 'created',
         });
-        await WhatsAppConversationModel.updateOne({ _id: conversation._id }, { $set: { lastMessageAt: new Date() } });
-        await TicketModel.updateOne({ _id: ticket._id }, { $set: { whatsappNotifiedAt: new Date() } });
-        logger.info(`[ticket] WhatsApp notice sent for ${ticket.ticketId}`);
     } catch (err: any) {
-        // Most common before the templates are approved: "template does not exist". The ticket itself is fine.
-        logger.warn(`[ticket] could not send the WhatsApp notice: ${err.message}`);
+        logger.warn(`[ticket] could not email the ticket link: ${err.message}`);
     }
 }
 
-export default { notifyTicketCreated, ensurePublicToken, whatsappNumberOf, trackingUrl };
+/** Emails the customer that the team replied, with the same private link. False when there is nobody to email. */
+export async function emailTicketReply(ticketId: Types.ObjectId | string, text: string): Promise<boolean> {
+    try {
+        const found = await emailOf(ticketId);
+        if (!found) return false;
+        const token = await ensurePublicToken(found.ticket._id);
+        await emailService.sendTicketEmail({
+            to: found.to,
+            name: found.ticket.visitorName,
+            ticketId: found.ticket.ticketId,
+            subject: found.ticket.subject,
+            trackUrl: trackingUrl(token),
+            kind: 'reply',
+            preview: text.trim().slice(0, 300),
+        });
+        return true;
+    } catch (err: any) {
+        logger.warn(`[ticket] could not email the reply: ${err.message}`);
+        return false;
+    }
+}
+
+export default { emailTicketCreated, emailTicketReply, ensurePublicToken, whatsappNumberOf, trackingUrl };

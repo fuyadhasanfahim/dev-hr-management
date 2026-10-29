@@ -2,6 +2,7 @@ import type { Request, Response } from 'express';
 import aiLearning from '../services/ai-learning.service.js';
 import { KnowledgeBaseError } from '../services/knowledge-base.service.js';
 import { likePattern, pageMeta, parsePage } from '../utils/pagination.js';
+import { parseKbChannel } from '../constants/knowledge-base.js';
 
 const fail = (res: Response, err: any) =>
     res.status(err instanceof KnowledgeBaseError ? 400 : 500).json({ success: false, message: err.message });
@@ -13,6 +14,7 @@ async function listReplies(req: Request, res: Response) {
         const p = parsePage(req.query);
         const { items, total } = await aiLearning.listReplies({
             status: str(req.query.status),
+            channel: parseKbChannel(req.query.channel),
             like: likePattern(req.query.q),
             limit: p.limit,
             offset: p.offset,

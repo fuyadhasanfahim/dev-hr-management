@@ -41,6 +41,7 @@ export type KnowledgeGapMinAggregateOutputType = {
   question: string | null
   questionKey: string | null
   reason: string | null
+  channel: string | null
   topScore: number | null
   count: number | null
   createdAt: Date | null
@@ -52,6 +53,7 @@ export type KnowledgeGapMaxAggregateOutputType = {
   question: string | null
   questionKey: string | null
   reason: string | null
+  channel: string | null
   topScore: number | null
   count: number | null
   createdAt: Date | null
@@ -63,6 +65,7 @@ export type KnowledgeGapCountAggregateOutputType = {
   question: number
   questionKey: number
   reason: number
+  channel: number
   topScore: number
   count: number
   createdAt: number
@@ -86,6 +89,7 @@ export type KnowledgeGapMinAggregateInputType = {
   question?: true
   questionKey?: true
   reason?: true
+  channel?: true
   topScore?: true
   count?: true
   createdAt?: true
@@ -97,6 +101,7 @@ export type KnowledgeGapMaxAggregateInputType = {
   question?: true
   questionKey?: true
   reason?: true
+  channel?: true
   topScore?: true
   count?: true
   createdAt?: true
@@ -108,6 +113,7 @@ export type KnowledgeGapCountAggregateInputType = {
   question?: true
   questionKey?: true
   reason?: true
+  channel?: true
   topScore?: true
   count?: true
   createdAt?: true
@@ -206,6 +212,7 @@ export type KnowledgeGapGroupByOutputType = {
   question: string
   questionKey: string
   reason: string
+  channel: string
   topScore: number | null
   count: number
   createdAt: Date
@@ -240,6 +247,7 @@ export type KnowledgeGapWhereInput = {
   question?: Prisma.StringFilter<"KnowledgeGap"> | string
   questionKey?: Prisma.StringFilter<"KnowledgeGap"> | string
   reason?: Prisma.StringFilter<"KnowledgeGap"> | string
+  channel?: Prisma.StringFilter<"KnowledgeGap"> | string
   topScore?: Prisma.FloatNullableFilter<"KnowledgeGap"> | number | null
   count?: Prisma.IntFilter<"KnowledgeGap"> | number
   createdAt?: Prisma.DateTimeFilter<"KnowledgeGap"> | Date | string
@@ -251,6 +259,7 @@ export type KnowledgeGapOrderByWithRelationInput = {
   question?: Prisma.SortOrder
   questionKey?: Prisma.SortOrder
   reason?: Prisma.SortOrder
+  channel?: Prisma.SortOrder
   topScore?: Prisma.SortOrderInput | Prisma.SortOrder
   count?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
@@ -265,6 +274,7 @@ export type KnowledgeGapWhereUniqueInput = Prisma.AtLeast<{
   NOT?: Prisma.KnowledgeGapWhereInput | Prisma.KnowledgeGapWhereInput[]
   question?: Prisma.StringFilter<"KnowledgeGap"> | string
   reason?: Prisma.StringFilter<"KnowledgeGap"> | string
+  channel?: Prisma.StringFilter<"KnowledgeGap"> | string
   topScore?: Prisma.FloatNullableFilter<"KnowledgeGap"> | number | null
   count?: Prisma.IntFilter<"KnowledgeGap"> | number
   createdAt?: Prisma.DateTimeFilter<"KnowledgeGap"> | Date | string
@@ -276,6 +286,7 @@ export type KnowledgeGapOrderByWithAggregationInput = {
   question?: Prisma.SortOrder
   questionKey?: Prisma.SortOrder
   reason?: Prisma.SortOrder
+  channel?: Prisma.SortOrder
   topScore?: Prisma.SortOrderInput | Prisma.SortOrder
   count?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
@@ -295,6 +306,7 @@ export type KnowledgeGapScalarWhereWithAggregatesInput = {
   question?: Prisma.StringWithAggregatesFilter<"KnowledgeGap"> | string
   questionKey?: Prisma.StringWithAggregatesFilter<"KnowledgeGap"> | string
   reason?: Prisma.StringWithAggregatesFilter<"KnowledgeGap"> | string
+  channel?: Prisma.StringWithAggregatesFilter<"KnowledgeGap"> | string
   topScore?: Prisma.FloatNullableWithAggregatesFilter<"KnowledgeGap"> | number | null
   count?: Prisma.IntWithAggregatesFilter<"KnowledgeGap"> | number
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"KnowledgeGap"> | Date | string
@@ -306,6 +318,7 @@ export type KnowledgeGapCreateInput = {
   question: string
   questionKey: string
   reason: string
+  channel?: string
   topScore?: number | null
   count?: number
   createdAt?: Date | string
@@ -317,6 +330,7 @@ export type KnowledgeGapUncheckedCreateInput = {
   question: string
   questionKey: string
   reason: string
+  channel?: string
   topScore?: number | null
   count?: number
   createdAt?: Date | string
@@ -328,6 +342,7 @@ export type KnowledgeGapUpdateInput = {
   question?: Prisma.StringFieldUpdateOperationsInput | string
   questionKey?: Prisma.StringFieldUpdateOperationsInput | string
   reason?: Prisma.StringFieldUpdateOperationsInput | string
+  channel?: Prisma.StringFieldUpdateOperationsInput | string
   topScore?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   count?: Prisma.IntFieldUpdateOperationsInput | number
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -339,6 +354,7 @@ export type KnowledgeGapUncheckedUpdateInput = {
   question?: Prisma.StringFieldUpdateOperationsInput | string
   questionKey?: Prisma.StringFieldUpdateOperationsInput | string
   reason?: Prisma.StringFieldUpdateOperationsInput | string
+  channel?: Prisma.StringFieldUpdateOperationsInput | string
   topScore?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   count?: Prisma.IntFieldUpdateOperationsInput | number
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -350,6 +366,7 @@ export type KnowledgeGapCreateManyInput = {
   question: string
   questionKey: string
   reason: string
+  channel?: string
   topScore?: number | null
   count?: number
   createdAt?: Date | string
@@ -361,6 +378,7 @@ export type KnowledgeGapUpdateManyMutationInput = {
   question?: Prisma.StringFieldUpdateOperationsInput | string
   questionKey?: Prisma.StringFieldUpdateOperationsInput | string
   reason?: Prisma.StringFieldUpdateOperationsInput | string
+  channel?: Prisma.StringFieldUpdateOperationsInput | string
   topScore?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   count?: Prisma.IntFieldUpdateOperationsInput | number
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -372,6 +390,7 @@ export type KnowledgeGapUncheckedUpdateManyInput = {
   question?: Prisma.StringFieldUpdateOperationsInput | string
   questionKey?: Prisma.StringFieldUpdateOperationsInput | string
   reason?: Prisma.StringFieldUpdateOperationsInput | string
+  channel?: Prisma.StringFieldUpdateOperationsInput | string
   topScore?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   count?: Prisma.IntFieldUpdateOperationsInput | number
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -383,6 +402,7 @@ export type KnowledgeGapCountOrderByAggregateInput = {
   question?: Prisma.SortOrder
   questionKey?: Prisma.SortOrder
   reason?: Prisma.SortOrder
+  channel?: Prisma.SortOrder
   topScore?: Prisma.SortOrder
   count?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
@@ -399,6 +419,7 @@ export type KnowledgeGapMaxOrderByAggregateInput = {
   question?: Prisma.SortOrder
   questionKey?: Prisma.SortOrder
   reason?: Prisma.SortOrder
+  channel?: Prisma.SortOrder
   topScore?: Prisma.SortOrder
   count?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
@@ -410,6 +431,7 @@ export type KnowledgeGapMinOrderByAggregateInput = {
   question?: Prisma.SortOrder
   questionKey?: Prisma.SortOrder
   reason?: Prisma.SortOrder
+  channel?: Prisma.SortOrder
   topScore?: Prisma.SortOrder
   count?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
@@ -444,6 +466,7 @@ export type KnowledgeGapSelect<ExtArgs extends runtime.Types.Extensions.Internal
   question?: boolean
   questionKey?: boolean
   reason?: boolean
+  channel?: boolean
   topScore?: boolean
   count?: boolean
   createdAt?: boolean
@@ -455,6 +478,7 @@ export type KnowledgeGapSelectCreateManyAndReturn<ExtArgs extends runtime.Types.
   question?: boolean
   questionKey?: boolean
   reason?: boolean
+  channel?: boolean
   topScore?: boolean
   count?: boolean
   createdAt?: boolean
@@ -466,6 +490,7 @@ export type KnowledgeGapSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.
   question?: boolean
   questionKey?: boolean
   reason?: boolean
+  channel?: boolean
   topScore?: boolean
   count?: boolean
   createdAt?: boolean
@@ -477,13 +502,14 @@ export type KnowledgeGapSelectScalar = {
   question?: boolean
   questionKey?: boolean
   reason?: boolean
+  channel?: boolean
   topScore?: boolean
   count?: boolean
   createdAt?: boolean
   lastAskedAt?: boolean
 }
 
-export type KnowledgeGapOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "question" | "questionKey" | "reason" | "topScore" | "count" | "createdAt" | "lastAskedAt", ExtArgs["result"]["knowledgeGap"]>
+export type KnowledgeGapOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "question" | "questionKey" | "reason" | "channel" | "topScore" | "count" | "createdAt" | "lastAskedAt", ExtArgs["result"]["knowledgeGap"]>
 
 export type $KnowledgeGapPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   name: "KnowledgeGap"
@@ -493,6 +519,7 @@ export type $KnowledgeGapPayload<ExtArgs extends runtime.Types.Extensions.Intern
     question: string
     questionKey: string
     reason: string
+    channel: string
     topScore: number | null
     count: number
     createdAt: Date
@@ -924,6 +951,7 @@ export interface KnowledgeGapFieldRefs {
   readonly question: Prisma.FieldRef<"KnowledgeGap", 'String'>
   readonly questionKey: Prisma.FieldRef<"KnowledgeGap", 'String'>
   readonly reason: Prisma.FieldRef<"KnowledgeGap", 'String'>
+  readonly channel: Prisma.FieldRef<"KnowledgeGap", 'String'>
   readonly topScore: Prisma.FieldRef<"KnowledgeGap", 'Float'>
   readonly count: Prisma.FieldRef<"KnowledgeGap", 'Int'>
   readonly createdAt: Prisma.FieldRef<"KnowledgeGap", 'DateTime'>

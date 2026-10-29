@@ -27,3 +27,7 @@ export const EXAMPLE_TAUGHT_MIN_SCORE = 0.55;
 export const EXAMPLE_STYLE_K = 3;
 export const EXAMPLE_STYLE_MIN_SCORE = 0.4;
 export const EXAMPLE_MAX_CHARS = 1500;
+
+/** Which AI a question or reply came from. "all" in the UI means no filter. */
+export type KbChannel = 'whatsapp' | 'website';
+export const parseKbChannel = (v: unknown): KbChannel | null => (v === 'whatsapp' || v === 'website' ? v : null);

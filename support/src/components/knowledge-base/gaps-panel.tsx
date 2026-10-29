@@ -25,8 +25,8 @@ const REASON: Record<KnowledgeGap['reason'], string> = {
 
 // Real customer questions the AI struggled with, most-asked first. "Write reply" teaches the AI the exact
 // answer to give next time; "Add to knowledge" turns it into a general knowledge entry instead.
-export function GapsPanel({ onAnswer, q, page, limit, onPage, onLimit }: Pick<ListProps, 'q' | 'page' | 'limit' | 'onPage' | 'onLimit'> & { onAnswer: (question: string) => void }) {
-    const { data, isLoading, isFetching } = useGetKnowledgeGapsQuery({ page, limit, q });
+export function GapsPanel({ onAnswer, q, page, limit, channel, onPage, onLimit }: Pick<ListProps, 'q' | 'page' | 'limit' | 'channel' | 'onPage' | 'onLimit'> & { onAnswer: (question: string) => void }) {
+    const { data, isLoading, isFetching } = useGetKnowledgeGapsQuery({ page, limit, q, channel });
     const gaps = data?.items ?? [];
     const meta = data?.meta;
     useClampPage(page, meta?.totalPages, onPage);
@@ -69,6 +69,7 @@ export function GapsPanel({ onAnswer, q, page, limit, onPage, onLimit }: Pick<Li
                         <div className="min-w-0 space-y-1">
                             <p className="break-words text-sm">{g.question}</p>
                             <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                                {!channel && g.channel && <Badge variant="secondary" className="capitalize">{g.channel}</Badge>}
                                 <Badge variant="outline">{REASON[g.reason]}</Badge>
                                 <span>Asked {g.count}×</span>
                                 <span>last {ago(g.lastAskedAt)}</span>

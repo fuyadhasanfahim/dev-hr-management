@@ -87,7 +87,7 @@ const TICKET_PRIORITIES = ['low', 'medium', 'high', 'urgent'] as const;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
 const TICKET_RULE_ON =
-    '- "create_ticket": the visitor reports a problem, bug, billing issue or complaint, or needs the team to follow up in writing. YOU raise the ticket yourself. First make sure you hold their name, email and phone number, and whether that number is on WhatsApp: ask for one missing detail at a time, naturally, and never ask again for anything listed under "Visitor details already known". Only when you hold name, email and phone, set action to create_ticket and fill the ticket and visitor fields, and tell them the ticket is raised and the team will reply by email or WhatsApp. Until then keep action "continue" and ask for the next detail.';
+    '- "create_ticket": raise a ticket ONLY when the visitor asks for one, or reports a real problem, bug, billing issue or complaint that you cannot resolve in this chat and they agree to a written follow-up. The word "ticket" alone is never a reason: if they only ask what a ticket is, how to check or track one, or mention a ticket number they already have, answer in a line and point them to the Tickets icon at the top of this chat (it lets them look up an existing ticket); do NOT raise a new one. If the need is clear but they did not ask for a ticket, offer it first ("Shall I raise a ticket for the team?") and wait for a yes. YOU raise the ticket yourself. First make sure you hold their name, email and phone number, and whether that number is on WhatsApp: ask for one missing detail at a time, naturally, and never ask again for anything listed under "Visitor details already known". Only when you hold name, email and phone, set action to create_ticket and fill the ticket and visitor fields, and tell them the ticket is raised and the team will reply by email or WhatsApp. Until then keep action "continue" and ask for the next detail.';
 const TICKET_RULE_OFF =
     '- Do NOT use "create_ticket" (ticket raising is switched off). For a problem, offer "connect_live_support" or answer as well as you can.';
 const FALLBACK_REPLY = "I'm sorry, could you try rephrasing that?";
@@ -275,10 +275,20 @@ export async function processAIChat(
 
     // Feed the "unanswered questions" list that staff turn into knowledge-base entries.
     if (action === 'connect_live_support' || action === 'create_ticket') {
-        void knowledgeBaseService.logGap(userMessage, 'escalated', matches[0]?.score);
+        void knowledgeBaseService.logGap(userMessage, 'escalated', matches[0]?.score, 'website');
     } else if (knowledgeBaseService.isLowConfidence(matches)) {
-        void knowledgeBaseService.logGap(userMessage, 'low_confidence', matches[0]?.score);
+        void knowledgeBaseService.logGap(userMessage, 'low_confidence', matches[0]?.score, 'website');
     }
+
+    // Kept for review next to the WhatsApp ones: staff can read the website assistant's replies and correct them.
+    void aiLearning.logReply({
+        channel: 'website',
+        customerMessage: userMessage,
+        aiReply: parsed.reply?.trim() || FALLBACK_REPLY,
+        escalated: action === 'connect_live_support' || action === 'create_ticket',
+        topScore: matches[0]?.score,
+        sources: matches.map((m) => (m.source ? `[${m.source}] ` : '') + m.text.slice(0, 120)),
+    });
 
     return {
         reply: parsed.reply?.trim() || FALLBACK_REPLY,

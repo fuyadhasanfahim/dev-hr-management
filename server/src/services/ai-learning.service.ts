@@ -10,6 +10,7 @@ import {
     EXAMPLE_STYLE_MIN_SCORE,
     EXAMPLE_TAUGHT_K,
     EXAMPLE_TAUGHT_MIN_SCORE,
+    type KbChannel,
 } from '../constants/knowledge-base.js';
 import WhatsAppMessageModel, { WhatsAppMessageDirection, WhatsAppMessageType } from '../models/whatsapp-message.model.js';
 import { KnowledgeBaseError } from './knowledge-base.service.js';
@@ -37,6 +38,7 @@ export interface AiExample {
 
 export interface AiReplyLog {
     id: string;
+    channel: string;
     conversationId: string | null;
     customerName: string | null;
     customerMessage: string;
@@ -61,6 +63,7 @@ function checkText(label: string, text: string) {
 
 /** Records an AI reply for review. Never throws: it must not break a reply. */
 async function logReply(entry: {
+    channel?: KbChannel;
     conversationId?: string;
     customerName?: string;
     customerMessage: string;
@@ -73,7 +76,7 @@ async function logReply(entry: {
     try {
         await prisma.$executeRaw`
             INSERT INTO ai_reply_logs (id, channel, "conversationId", "customerName", "customerMessage", context, "aiReply", escalated, "topScore", sources, "createdAt")
-            VALUES (gen_random_uuid()::text, 'whatsapp', ${entry.conversationId ?? null}, ${entry.customerName ?? null}, ${entry.customerMessage.slice(0, 2000)},
+            VALUES (gen_random_uuid()::text, ${entry.channel ?? 'whatsapp'}, ${entry.conversationId ?? null}, ${entry.customerName ?? null}, ${entry.customerMessage.slice(0, 2000)},
                     ${entry.context?.slice(0, 3000) ?? null}, ${entry.aiReply.slice(0, 4000)}, ${entry.escalated}, ${entry.topScore ?? null},
                     ${JSON.stringify(entry.sources.map((s) => s.slice(0, 200)))}, now())
         `;
@@ -82,21 +85,24 @@ async function logReply(entry: {
     }
 }
 
-async function listReplies(opts: { status?: string; like: string | null; limit: number; offset: number }): Promise<{ items: AiReplyLog[]; total: number }> {
+async function listReplies(opts: { status?: string; like: string | null; limit: number; offset: number; channel?: KbChannel | null }): Promise<{ items: AiReplyLog[]; total: number }> {
     const { like, limit, offset } = opts;
+    const channel = opts.channel ?? null;
     const status = opts.status === 'corrected' || opts.status === 'ok' ? opts.status : null;
     const [rows, count] = await Promise.all([
         prisma.$queryRaw<(Omit<AiReplyLog, 'sources'> & { sources: string | null })[]>`
-            SELECT id, "conversationId", "customerName", "customerMessage", context, "aiReply", escalated, "topScore", sources, status, "createdAt"
+            SELECT id, channel, "conversationId", "customerName", "customerMessage", context, "aiReply", escalated, "topScore", sources, status, "createdAt"
             FROM ai_reply_logs
-            WHERE (${status}::text IS NULL OR status = ${status})
+            WHERE (${channel}::text IS NULL OR channel = ${channel})
+              AND (${status}::text IS NULL OR status = ${status})
               AND (${like}::text IS NULL OR "customerMessage" ILIKE ${like} OR "aiReply" ILIKE ${like} OR coalesce("customerName", '') ILIKE ${like})
             ORDER BY "createdAt" DESC
             LIMIT ${limit} OFFSET ${offset}
         `,
         prisma.$queryRaw<{ n: bigint }[]>`
             SELECT count(*) AS n FROM ai_reply_logs
-            WHERE (${status}::text IS NULL OR status = ${status})
+            WHERE (${channel}::text IS NULL OR channel = ${channel})
+              AND (${status}::text IS NULL OR status = ${status})
               AND (${like}::text IS NULL OR "customerMessage" ILIKE ${like} OR "aiReply" ILIKE ${like} OR coalesce("customerName", '') ILIKE ${like})
         `,
     ]);
@@ -104,10 +110,11 @@ async function listReplies(opts: { status?: string; like: string | null; limit: 
 }
 
 /** Counts behind the AI-learning tabs: reply log by review state, staff-taught replies, human replies by approval. */
-async function learningStats() {
+async function learningStats(channel: KbChannel | null = null) {
     const [replies, examples] = await Promise.all([
         prisma.$queryRaw<{ total: bigint; corrected: bigint }[]>`
             SELECT count(*) AS total, count(*) FILTER (WHERE status = 'corrected') AS corrected FROM ai_reply_logs
+            WHERE (${channel}::text IS NULL OR channel = ${channel})
         `,
         prisma.$queryRaw<{ taught: bigint; humanNew: bigint; humanTaught: bigint }[]>`
             SELECT count(*) FILTER (WHERE kind <> 'agent') AS "taught",

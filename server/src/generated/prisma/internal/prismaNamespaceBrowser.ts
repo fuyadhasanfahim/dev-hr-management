@@ -90,6 +90,7 @@ export const KnowledgeGapScalarFieldEnum = {
   question: 'question',
   questionKey: 'questionKey',
   reason: 'reason',
+  channel: 'channel',
   topScore: 'topScore',
   count: 'count',
   createdAt: 'createdAt',

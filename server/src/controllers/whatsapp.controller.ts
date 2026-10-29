@@ -12,7 +12,6 @@ import { runInOrder, waitForKey } from '../lib/keyed-queue.js';
 import { readMedia } from '../lib/media-reader.js';
 import WhatsAppCustomerMemoryModel from '../models/whatsapp-customer-memory.model.js';
 import WhatsAppNoteModel from '../models/whatsapp-note.model.js';
-import ClientModel from '../models/client.model.js';
 import WhatsAppMessageModel, {
     WhatsAppMessageDirection,
     WhatsAppMessageSender,
@@ -21,10 +20,8 @@ import WhatsAppMessageModel, {
 } from '../models/whatsapp-message.model.js';
 import { isValidMetaSignature } from '../lib/whatsapp-signature.js';
 import { parseEcho, parseIncoming, senderId, type EchoMessage, type HistoryThread, type IncomingMessage, type InboundContent } from '../lib/whatsapp-inbound.js';
-import whatsappSupportService, { findByPhone, findOrCreateConversation, previewText } from '../services/whatsapp-support.service.js';
+import whatsappSupportService, { findOrCreateConversation, previewText } from '../services/whatsapp-support.service.js';
 import { notifyMessageStatus } from '../services/whatsapp-send.queue.js';
-import { createTicket } from '../services/support-ticket.service.js';
-import { TicketSource } from '../models/ticket.model.js';
 import { notifyAgents } from '../socket/support.namespace.js';
 
 // GET — Meta's one-time webhook verification handshake.
@@ -399,24 +396,15 @@ async function answerWithAi(
     }
     redos.delete(conversationId);
 
-    // A hand-off raises the support ticket first, so the customer is told its number in the same message.
-    let ticket: any = null;
-    let reply = ai.reply;
-    if (ai.escalate) {
-        try {
-            ticket = await raiseHandoffTicket(conversation, fromPhone, body, history, ai, memory);
-            reply += /[\u0980-\u09FF]/.test(reply) ? `\n\n🎫 আপনার টিকেট নম্বর: ${ticket.ticketId}` : `\n\n🎫 Your ticket reference: ${ticket.ticketId}`;
-        } catch (err: any) {
-            logger.error(`Could not raise the hand-off ticket for ${conversation._id}: ${err.message}`);
-        }
-    }
+    // A hand-off just closes the chat to the bot and leaves it for the team: WhatsApp has no tickets (website chat only).
+    const reply = ai.reply;
 
     let sentId: string;
     try {
         sentId = await whatsappService.sendTextMessage(fromPhone, reply);
     } catch (err) {
-        if (ticket) {
-            await WhatsAppConversationModel.updateOne({ _id: conversation._id }, { $set: { status: WhatsAppConversationStatus.ESCALATED, linkedTicketId: ticket._id } }).catch(() => {});
+        if (ai.escalate) {
+            await WhatsAppConversationModel.updateOne({ _id: conversation._id }, { $set: { status: WhatsAppConversationStatus.ESCALATED } }).catch(() => {});
         }
         throw err;
     }
@@ -471,54 +459,9 @@ async function answerWithAi(
         }).catch((err: any) => logger.error(`Could not update AI memory: ${err.message}`));
     }
 
-    if (ai.escalate && ticket) {
-        await WhatsAppConversationModel.updateOne({ _id: conversation._id }, { $set: { status: WhatsAppConversationStatus.ESCALATED, linkedTicketId: ticket._id } });
-
-        notifyAgents('ticket:created', {
-            ticketId: ticket._id?.toString?.() ?? '',
-            ticketRef: ticket.ticketId ?? '',
-            subject: ticket.subject ?? '',
-        });
+    if (ai.escalate) {
+        await WhatsAppConversationModel.updateOne({ _id: conversation._id }, { $set: { status: WhatsAppConversationStatus.ESCALATED } });
     }
-}
-
-const TICKET_CATEGORIES = ['support', 'service', 'development', 'billing', 'bug'];
-const TICKET_PRIORITIES = ['low', 'medium', 'high', 'urgent'];
-
-// The ticket the team works from: a specific subject, a short brief, what the AI knows about the customer, and the
-// chat. Linked to the customer's client record when the number belongs to one, so it shows up under that client.
-async function raiseHandoffTicket(
-    conversation: IWhatsAppConversation,
-    fromPhone: string,
-    body: string,
-    history: { role: 'user' | 'assistant'; content: string; human?: boolean }[],
-    ai: Awaited<ReturnType<typeof whatsappAiService.processWhatsAppMessage>>,
-    memory: string,
-) {
-    const transcript = [...history, { role: 'user' as const, content: body }]
-        .map((m) => `[${m.role === 'user' ? 'Customer' : m.human ? 'Team' : 'AI'}]: ${m.content}`)
-        .join('\n');
-    const client = await findByPhone<any>(ClientModel, fromPhone, 'name').catch(() => null);
-    const name = conversation.customerName || fromPhone;
-    const text = [
-        ai.ticket.summary || ai.escalateReason || 'AI handed off to a human agent.',
-        ai.escalateReason && `Hand-off reason: ${ai.escalateReason}`,
-        memory && `What the AI knows about the customer:\n${memory}`,
-        conversation.salesStage && `Sales stage: ${conversation.salesStage}`,
-        `--- Chat Transcript ---\n${transcript}`,
-    ]
-        .filter(Boolean)
-        .join('\n\n');
-    return createTicket({
-        subject: ai.ticket.subject || `WhatsApp: ${name}`,
-        text,
-        source: TicketSource.WHATSAPP,
-        category: TICKET_CATEGORIES.includes(ai.ticket.category) ? ai.ticket.category : 'support',
-        priority: TICKET_PRIORITIES.includes(ai.ticket.priority) ? ai.ticket.priority : 'medium',
-        visitorName: name,
-        whatsappPhone: fromPhone,
-        ...(client ? { clientId: client._id.toString() } : {}),
-    });
 }
 
 export default { verifyWebhook, receiveWebhook };

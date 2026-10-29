@@ -73,7 +73,6 @@ import { WebChatThread } from '@/components/messages/web-chat-thread';
 import { WebChatInfoPanel } from '@/components/messages/web-chat-info-panel';
 import { WhatsAppHandoffDialog } from '@/components/messages/whatsapp-handoff-dialog';
 import { GROUP_WINDOW_MS, bubbleCorners, bubbleSpring, dateLabel, formatTime } from '@/components/messages/thread-utils';
-import { CreateTicketDialog } from '@/components/messages/create-ticket-dialog';
 import { useGetWebInboxQuery, type WebInboxChat } from '@/store/api/chatApi';
 import { DeleteMessageDialog, EditMessageDialog, MessageMenu } from '@/components/messages/message-actions';
 import { useSupportAgent } from '@/hooks/use-support-agent';
@@ -656,36 +655,12 @@ function WebChatRow({ chat, selected, agentId, onOpen }: { chat: WebInboxChat; s
     );
 }
 
-// "Ticket" opens the ticket this chat already has (the AI makes one when it hands a chat over); otherwise it offers to
-// create one. A person can always raise another one once the old one is resolved.
-function WhatsAppTicketButton({ conversationId, onCreate }: { conversationId: string; onCreate: () => void }) {
-    const { data } = useGetWhatsAppDetailsQuery(conversationId);
-    const linked = data?.linkedTicketId ?? null;
-    return (
-        <>
-            {linked && (
-                <Button asChild variant="outline" size="sm" className="h-8 gap-1.5 px-2 text-xs sm:px-3" title="Open this chat's ticket">
-                    <Link href={`/tickets?ticket=${linked}`}>
-                        <Ticket className="size-3.5" />
-                        <span className="hidden sm:inline">Ticket</span>
-                    </Link>
-                </Button>
-            )}
-            <Button variant="ghost" size="sm" className="h-8 gap-1.5 px-2 text-xs sm:px-3" onClick={onCreate} title="Create a support ticket from this chat">
-                <Ticket className="size-3.5" />
-                <span className="hidden sm:inline">{linked ? 'New ticket' : 'Create ticket'}</span>
-            </Button>
-        </>
-    );
-}
-
 export function MessagesView({ conversationId, webSessionId }: { conversationId?: string; webSessionId?: string }) {
     const router = useRouter();
     const dispatch = useDispatch<AppDispatch>();
     const [search, setSearch] = useState('');
     const [filter, setFilter] = useState<Filter>('all');
     const [channel, setChannel] = useState<Channel>('all');
-    const [ticketOpen, setTicketOpen] = useState(false);
     const [handoffOpen, setHandoffOpen] = useState(false);
     const [draft, setDraft] = useState('');
     const [emojiOpen, setEmojiOpen] = useState(false);
@@ -1212,7 +1187,6 @@ export function MessagesView({ conversationId, webSessionId }: { conversationId?
                                             <span className="hidden sm:inline">Assign to me</span>
                                         </Button>
                                     ) : null}
-                                    {selected && <WhatsAppTicketButton conversationId={selected.id} onCreate={() => setTicketOpen(true)} />}
                                     <Button
                                         variant={infoOpen ? 'secondary' : 'ghost'}
                                         size="icon"
@@ -1381,10 +1355,6 @@ export function MessagesView({ conversationId, webSessionId }: { conversationId?
             </div>
 
             <WhatsAppHandoffDialog chat={webChat} open={handoffOpen} onOpenChange={setHandoffOpen} />
-
-            {selected && (
-                <CreateTicketDialog conversationId={selected.id} customerName={selected.name} open={ticketOpen} onOpenChange={setTicketOpen} />
-            )}
 
             {lightbox && (
                 <MediaLightbox key={lightbox.key} items={lightbox.items} index={lightbox.index} onClose={() => setLightbox(null)} />

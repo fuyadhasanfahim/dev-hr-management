@@ -1,7 +1,7 @@
 import { prisma } from '../lib/prisma.js';
 import { embed } from '../lib/openai-embeddings.js';
 import { entryProblem, formatContext, isLowConfidence } from '../lib/knowledge-base-utils.js';
-import { KB_INSTRUCTIONS_CATEGORY, KB_MAX_CHARS, KB_MAX_INSTRUCTIONS, KB_MIN_SCORE, KB_RETRIEVE_K } from '../constants/knowledge-base.js';
+import { KB_INSTRUCTIONS_CATEGORY, KB_MAX_CHARS, KB_MAX_INSTRUCTIONS, KB_MIN_SCORE, KB_RETRIEVE_K, type KbChannel } from '../constants/knowledge-base.js';
 
 export interface KnowledgeChunkSummary {
     id: string;
@@ -22,6 +22,7 @@ export interface KnowledgeGapSummary {
     id: string;
     question: string;
     reason: string;
+    channel: string;
     topScore: number | null;
     count: number;
     lastAskedAt: Date;
@@ -58,7 +59,7 @@ async function listChunks(opts: { like: string | null; limit: number; offset: nu
 }
 
 /** Numbers for the page header and tab badges — computed in the database, not from the loaded page. */
-async function chunkStats(): Promise<{ total: number; chars: number; over: number; rules: number; gaps: number }> {
+async function chunkStats(channel: KbChannel | null = null): Promise<{ total: number; chars: number; over: number; rules: number; gaps: number }> {
     const [c, g] = await Promise.all([
         prisma.$queryRaw<{ total: bigint; chars: bigint; over: bigint; rules: bigint }[]>`
             SELECT count(*) AS total,
@@ -67,7 +68,7 @@ async function chunkStats(): Promise<{ total: number; chars: number; over: numbe
                    count(*) FILTER (WHERE lower(coalesce(source, '')) = ${KB_INSTRUCTIONS_CATEGORY.toLowerCase()}) AS rules
             FROM knowledge_chunks
         `,
-        prisma.$queryRaw<{ n: bigint }[]>`SELECT count(*) AS n FROM knowledge_gaps`,
+        prisma.$queryRaw<{ n: bigint }[]>`SELECT count(*) AS n FROM knowledge_gaps WHERE (${channel}::text IS NULL OR channel = ${channel})`,
     ]);
     const r = c[0];
     return { total: Number(r?.total ?? 0), chars: Number(r?.chars ?? 0), over: Number(r?.over ?? 0), rules: Number(r?.rules ?? 0), gaps: Number(g[0]?.n ?? 0) };
@@ -160,13 +161,15 @@ async function getInstructions(): Promise<string> {
 // ─── Unanswered questions ───────────────────────────────────────────────────
 
 /** Remembers a question the AI couldn't answer (counts repeats). Never throws: it must not break a reply. */
-async function logGap(question: string, reason: 'escalated' | 'low_confidence', topScore?: number): Promise<void> {
+async function logGap(question: string, reason: 'escalated' | 'low_confidence', topScore?: number, channel: KbChannel = 'whatsapp'): Promise<void> {
     const q = question.trim().slice(0, 500);
     if (!q) return;
+    // WhatsApp keeps the old key so earlier rows still dedupe; website questions are counted on their own.
+    const key = channel === 'website' ? `website:${q.toLowerCase()}` : q.toLowerCase();
     try {
         await prisma.$executeRaw`
-            INSERT INTO knowledge_gaps (id, question, "questionKey", reason, "topScore", count, "createdAt", "lastAskedAt")
-            VALUES (gen_random_uuid()::text, ${q}, ${q.toLowerCase()}, ${reason}, ${topScore ?? null}, 1, now(), now())
+            INSERT INTO knowledge_gaps (id, question, "questionKey", reason, channel, "topScore", count, "createdAt", "lastAskedAt")
+            VALUES (gen_random_uuid()::text, ${q}, ${key}, ${reason}, ${channel}, ${topScore ?? null}, 1, now(), now())
             ON CONFLICT ("questionKey")
             DO UPDATE SET count = knowledge_gaps.count + 1, "lastAskedAt" = now(), reason = EXCLUDED.reason, "topScore" = EXCLUDED."topScore"
         `;
@@ -175,18 +178,21 @@ async function logGap(question: string, reason: 'escalated' | 'low_confidence', 
     }
 }
 
-async function listGaps(opts: { like: string | null; limit: number; offset: number }): Promise<{ items: KnowledgeGapSummary[]; total: number }> {
+async function listGaps(opts: { like: string | null; limit: number; offset: number; channel?: KbChannel | null }): Promise<{ items: KnowledgeGapSummary[]; total: number }> {
     const { like, limit, offset } = opts;
+    const channel = opts.channel ?? null;
     const [items, count] = await Promise.all([
         prisma.$queryRaw<KnowledgeGapSummary[]>`
-            SELECT id, question, reason, "topScore", count, "lastAskedAt"
+            SELECT id, question, reason, channel, "topScore", count, "lastAskedAt"
             FROM knowledge_gaps
-            WHERE (${like}::text IS NULL OR question ILIKE ${like})
+            WHERE (${channel}::text IS NULL OR channel = ${channel})
+              AND (${like}::text IS NULL OR question ILIKE ${like})
             ORDER BY count DESC, "lastAskedAt" DESC
             LIMIT ${limit} OFFSET ${offset}
         `,
         prisma.$queryRaw<{ n: bigint }[]>`
-            SELECT count(*) AS n FROM knowledge_gaps WHERE (${like}::text IS NULL OR question ILIKE ${like})
+            SELECT count(*) AS n FROM knowledge_gaps
+            WHERE (${channel}::text IS NULL OR channel = ${channel}) AND (${like}::text IS NULL OR question ILIKE ${like})
         `,
     ]);
     return { items, total: Number(count[0]?.n ?? 0) };

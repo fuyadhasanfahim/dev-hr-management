@@ -10,9 +10,9 @@ import ClientModel from '../models/client.model.js';
 import StaffModel from '../models/staff.model.js';
 import { getSupportNamespace, notifyNewSession, notifyAgents, notifyTicketReply, announceAgentJoined, forgetAnnouncedAgent } from '../socket/support.namespace.js';
 import mongoose from 'mongoose';
-import whatsappSupportService, { findOrCreateConversation } from '../services/whatsapp-support.service.js';
-import { whatsappNumberOf } from '../services/ticket-notify.service.js';
-import { userCan } from '../middlewares/require-permission.js';
+import { ensurePublicToken, emailTicketReply } from '../services/ticket-notify.service.js';
+import ticketPublicService from '../services/ticket-public.service.js';
+import { normalizePhone, normalizeEmail } from '../services/contact.service.js';
 
 function emitSessionStateChange(type: string, sessionId: string) {
     const ns = getSupportNamespace();
@@ -249,28 +249,13 @@ async function replyToTicket(req: Request, res: Response) {
         // with it open) regardless of who replied.
         notifyTicketReply(req.params.id || '', { senderType });
 
-        // The conversation about a ticket happens on WhatsApp: a staff reply goes to the customer's WhatsApp chat
-        // (so it also shows in Messages) when we have their number. The reply is saved either way.
-        let whatsapp: string | undefined;
+        // Tickets are followed on the website: a staff reply is emailed to the customer with their private link.
+        let emailed = false;
         if (senderType === 'staff' && typeof text === 'string' && text.trim()) {
-            try {
-                const ticket: any = await TicketModel.findById(req.params.id).populate('contactId', 'whatsappPhone').lean();
-                const phone = ticket ? whatsappNumberOf(ticket) : '';
-                if (phone) {
-                    const conversation = await findOrCreateConversation(phone, ticket.visitorName);
-                    await whatsappSupportService.sendAgentMessage(
-                        conversation._id.toString(),
-                        `Re: ticket ${ticket.ticketId}\n${text.trim()}`,
-                        { id: req.user?.id ?? '', name: req.user?.name ?? 'Agent', canManage: userCan(req, 'support.manage') },
-                    );
-                    whatsapp = 'sent';
-                }
-            } catch (err: any) {
-                whatsapp = `not sent: ${err.message}`;
-            }
+            emailed = await emailTicketReply(req.params.id || '', text);
         }
 
-        return res.status(201).json({ success: true, data: result, whatsapp });
+        return res.status(201).json({ success: true, data: result, emailed });
     } catch (err: any) {
         return res.status(err.statusCode || 400).json({ success: false, message: err.message });
     }
@@ -285,7 +270,7 @@ async function getPublicTicketStatus(req: Request, res: Response) {
         const token = String(req.params.token ?? '');
         if (!/^[A-Za-z0-9_-]{20,64}$/.test(token)) return res.status(404).json({ success: false, message: 'Ticket not found' });
         const ticket: any = await TicketModel.findOne({ publicToken: token })
-            .select('ticketId subject status priority category channel visitorName createdAt updatedAt whatsappPhone visitorIsWhatsapp visitorPhone')
+            .select('ticketId subject status priority category visitorName createdAt updatedAt')
             .lean();
         if (!ticket) return res.status(404).json({ success: false, message: 'Ticket not found' });
         return res.status(200).json({
@@ -297,14 +282,86 @@ async function getPublicTicketStatus(req: Request, res: Response) {
                 priority: ticket.priority,
                 category: ticket.category,
                 firstName: String(ticket.visitorName ?? '').trim().split(/\s+/)[0] || null,
-                // Whether the conversation about this ticket is on WhatsApp (the page says so).
-                onWhatsapp: Boolean(ticket.whatsappPhone || ticket.visitorIsWhatsapp),
                 createdAt: ticket.createdAt,
                 updatedAt: ticket.updatedAt,
             },
         });
     } catch (err: any) {
         return res.status(500).json({ success: false, message: 'Could not load the ticket' });
+    }
+}
+
+/**
+ * Public: find an existing ticket from its number plus the email or phone it was raised with, and hand back the
+ * tracking token for it. The number alone is guessable, so a matching email/phone is required, and every miss
+ * (unknown number or wrong contact) returns the same 404.
+ */
+async function lookupPublicTicket(req: Request, res: Response) {
+    try {
+        const ticketId = String(req.body?.ticketId ?? '').trim().toUpperCase();
+        const email = normalizeEmail(req.body?.email);
+        const phone = normalizePhone(req.body?.phone);
+        if (!/^TKT-\d{4,10}$/.test(ticketId) || (!email && !phone)) {
+            return res.status(400).json({ success: false, message: 'Enter your ticket number (like TKT-123456) and the email or phone you used.' });
+        }
+        const ticket: any = await TicketModel.findOne({ ticketId })
+            .select('ticketId visitorEmail visitorPhone whatsappPhone')
+            .lean();
+        const emailOk = !!email && normalizeEmail(ticket?.visitorEmail) === email;
+        const phoneOk = !!phone && [ticket?.visitorPhone, ticket?.whatsappPhone].some((p) => normalizePhone(p) === phone);
+        if (!ticket || (!emailOk && !phoneOk)) {
+            return res.status(404).json({ success: false, message: "We couldn't find a ticket matching those details." });
+        }
+        const token = await ensurePublicToken(ticket._id);
+        return res.status(200).json({ success: true, data: { ticketId: ticket.ticketId, token } });
+    } catch {
+        return res.status(500).json({ success: false, message: 'Could not look up the ticket' });
+    }
+}
+
+/** Public: the customer's view of one ticket and its conversation, by the private token in their email link. */
+async function getPublicTicketThread(req: Request, res: Response) {
+    try {
+        res.setHeader('Cache-Control', 'no-store');
+        const data = await ticketPublicService.getThread(String(req.params.token ?? ''));
+        return res.status(200).json({ success: true, data });
+    } catch (err: any) {
+        return res.status(err.statusCode || 500).json({ success: false, message: err.statusCode ? err.message : 'Could not load the ticket' });
+    }
+}
+
+/** Public: the customer writes on their ticket from the link. The team is alerted like for any customer reply. */
+async function postPublicTicketMessage(req: Request, res: Response) {
+    try {
+        res.setHeader('Cache-Control', 'no-store');
+        const { ticketMongoId, message } = await ticketPublicService.postCustomerMessage(String(req.params.token ?? ''), req.body?.text, req.body?.attachments);
+        notifyAgents('ticket:new_reply', { ticketId: ticketMongoId, preview: message.text.slice(0, 120) || '(attachment)' });
+        notifyTicketReply(ticketMongoId, { senderType: 'guest' });
+        return res.status(201).json({ success: true, data: message });
+    } catch (err: any) {
+        return res.status(err.statusCode || 500).json({ success: false, message: err.statusCode ? err.message : 'Could not send your message' });
+    }
+}
+
+/** Public: a presigned upload URL for a file the customer attaches to their ticket. */
+async function requestPublicTicketUpload(req: Request, res: Response) {
+    try {
+        res.setHeader('Cache-Control', 'no-store');
+        const data = await ticketPublicService.requestCustomerUpload(String(req.params.token ?? ''), req.body ?? {});
+        return res.status(200).json({ success: true, data });
+    } catch (err: any) {
+        return res.status(err.statusCode || 500).json({ success: false, message: err.statusCode ? err.message : 'Could not start the upload' });
+    }
+}
+
+/** Public: a short-lived link to open one attachment of this ticket. */
+async function getPublicTicketViewUrl(req: Request, res: Response) {
+    try {
+        res.setHeader('Cache-Control', 'no-store');
+        const data = await ticketPublicService.getCustomerViewUrl(String(req.params.token ?? ''), req.query.fileKey);
+        return res.status(200).json({ success: true, data });
+    } catch (err: any) {
+        return res.status(err.statusCode || 500).json({ success: false, message: err.statusCode ? err.message : 'Could not open the file' });
     }
 }
 
@@ -986,6 +1043,11 @@ export default {
     getTicketDetails,
     replyToTicket,
     getPublicTicketStatus,
+    lookupPublicTicket,
+    getPublicTicketThread,
+    postPublicTicketMessage,
+    requestPublicTicketUpload,
+    getPublicTicketViewUrl,
     listSupportTickets,
     updateTicket,
     createChatSession,

@@ -5,7 +5,6 @@ import KnowledgeBaseController from '../controllers/knowledge-base.controller.js
 import AiLearningController from '../controllers/ai-learning.controller.js';
 import WhatsAppSupportController from '../controllers/whatsapp-support.controller.js';
 import ContactController from '../controllers/contact.controller.js';
-import WebChatController from '../controllers/web-chat.controller.js';
 import { requireAuth, restrictTo } from '../middlewares/auth.middleware.js';
 import { requirePermission } from '../middlewares/require-permission.js';
 import { validateRequest } from '../middlewares/validateRequest.js';
@@ -19,7 +18,7 @@ import {
 import jwt from 'jsonwebtoken';
 import envConfig from '../config/env.config.js';
 import GuestModel from '../models/guest.model.js';
-import { otpLimiter, generalPublicLimiter } from '../middlewares/rate-limit.middleware.js';
+import { otpLimiter, generalPublicLimiter, ticketLookupLimiter, ticketThreadReadLimiter, ticketThreadWriteLimiter } from '../middlewares/rate-limit.middleware.js';
 import { verifyTurnstile } from '../middlewares/turnstile.middleware.js';
 import type { Request, Response, NextFunction } from 'express';
 import multer from 'multer';
@@ -153,6 +152,11 @@ router.post('/guest/verify', generalPublicLimiter, SupportController.verifyGuest
 router.post('/guest/refresh', generalPublicLimiter, SupportController.refreshGuestSession);
 // Public, read-only: where a ticket stands, by its tracking token (the link in the WhatsApp message).
 router.get('/ticket-status/:token', generalPublicLimiter, SupportController.getPublicTicketStatus);
+router.post('/ticket-lookup', ticketLookupLimiter, SupportController.lookupPublicTicket);
+router.get('/ticket-thread/:token', ticketThreadReadLimiter, SupportController.getPublicTicketThread);
+router.post('/ticket-thread/:token', ticketThreadWriteLimiter, SupportController.postPublicTicketMessage);
+router.post('/ticket-thread/:token/upload-url', ticketThreadWriteLimiter, SupportController.requestPublicTicketUpload);
+router.get('/ticket-thread/:token/view-url', ticketThreadReadLimiter, SupportController.getPublicTicketViewUrl);
 router.post('/guest/logout', requireUnifiedAuth, SupportController.logoutGuest);
 
 router.post('/attachments/presigned-url', requireUnifiedAuth, SupportController.requestPresignedUrl);
@@ -169,9 +173,6 @@ router.post('/chats/session', generalPublicLimiter, requireUnifiedAuth, SupportC
 
 // Live Support Chat Console Endpoints (for staff dashboard)
 // Static routes must come before :sessionId param routes
-// Website AI chats in the staff inbox, next to WhatsApp (same support.access permission as the WhatsApp inbox).
-router.get('/web-chats', requireUnifiedAuth, supportAccess, WebChatController.list);
-router.get('/web-chats/:conversationId', requireUnifiedAuth, supportAccess, WebChatController.detail);
 router.get('/contacts', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), ContactController.searchContacts);
 router.get('/contacts/:id', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), ContactController.getContact);
 router.get('/chat/sessions/queued', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), SupportController.listQueuedChatSessions);
@@ -230,7 +231,6 @@ router.post('/whatsapp/conversations/:id/read', requireUnifiedAuth, supportAcces
 router.post('/whatsapp/conversations/:id/media', requireUnifiedAuth, supportAccess, whatsappUpload.single('file'), WhatsAppSupportController.sendMedia);
 router.get('/whatsapp/media/:mediaId', requireUnifiedAuth, supportAccess, WhatsAppSupportController.getMedia);
 // Assignment (one agent per chat), internal notes and the customer info panel.
-router.post('/whatsapp/conversations/:id/ticket', requireUnifiedAuth, supportAccess, WhatsAppSupportController.createTicket);
 router.post('/whatsapp/conversations/:id/assignment', requireUnifiedAuth, supportAccess, WhatsAppSupportController.setAssignment);
 router.get('/whatsapp/conversations/:id/details', requireUnifiedAuth, supportAccess, WhatsAppSupportController.getDetails);
 router.get('/whatsapp/conversations/:id/notes', requireUnifiedAuth, supportAccess, WhatsAppSupportController.listNotes);

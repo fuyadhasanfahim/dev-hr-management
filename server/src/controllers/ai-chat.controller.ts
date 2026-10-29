@@ -14,6 +14,7 @@ import guestAuthService from '../services/guest-auth.service.js';
 import { notifyNewSession, notifyAgents } from '../socket/support.namespace.js';
 import { isAiActive } from '../services/ai-settings.service.js';
 import { logger } from '../lib/logger.js';
+import { ensurePublicToken } from '../services/ticket-notify.service.js';
 import { runInOrder } from '../lib/keyed-queue.js';
 
 async function chat(req: Request, res: Response) {
@@ -267,7 +268,8 @@ async function createTicketFromAI(req: Request, res: Response) {
             subject: (result as any)?.subject ?? subject ?? '',
         });
 
-        return res.status(201).json({ success: true, data: result });
+        const publicToken = await ensurePublicToken((result as any)._id);
+        return res.status(201).json({ success: true, data: { ...((result as any).toObject?.() ?? result), publicToken } });
     } catch (err: any) {
         logger.error(`AI ticket creation error: ${err.message}`);
         return res.status(err.statusCode || 500).json({ success: false, message: err.message });

@@ -4,6 +4,8 @@ export interface ListProps {
     page: number;
     limit: number;
     view: string;
+    /** Which AI's traffic to show; undefined = both. Entries are shared, so only questions and replies use it. */
+    channel?: 'whatsapp' | 'website';
     onPage: (page: number) => void;
     onLimit: (limit: number) => void;
     onView: (view: string) => void;

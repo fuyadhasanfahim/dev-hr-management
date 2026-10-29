@@ -11,13 +11,12 @@ import {
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 import {
+    ArrowLeft,
     Ticket as TicketIcon,
     Search,
     Loader2,
     Send,
     Paperclip,
-    Download,
-    FileText,
     Clock,
     CheckCircle2,
     Circle,
@@ -25,20 +24,18 @@ import {
     Inbox,
     UserCheck,
     Mail,
-    Tag,
-    CornerUpLeft,
-    Bot,
     MessageSquare,
-    Globe,
-    Layers,
     ChevronDown,
     ExternalLink,
-    MessageCircle,
+    Info,
     Phone,
-    User as UserIcon,
+    PanelRightClose,
+    PanelRightOpen,
 } from 'lucide-react';
 import { format } from 'date-fns';
+import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { AttachmentPreview } from '@/components/messages/chat-attachment';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -64,12 +61,10 @@ import {
     useAssignTicketToSelfMutation,
     useGetContactQuery,
     type Ticket,
-    type TicketChannel,
     type TicketReply,
     type TicketStatus,
     type TicketPriority,
     type TicketCategory,
-    type TicketSource,
 } from '@/store/api/ticketApi';
 import {
     useGetAvailableAgentsQuery,
@@ -169,36 +164,6 @@ const CATEGORY_CONFIG: Record<
             'bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/20',
     },
 };
-
-const SOURCE_CONFIG: Record<
-    TicketSource,
-    { label: string; icon: React.ElementType }
-> = {
-    direct: { label: 'Direct', icon: Globe },
-    ai_chat: { label: 'AI Chat', icon: Bot },
-    live_chat: { label: 'Live Chat', icon: MessageSquare },
-    whatsapp: { label: 'WhatsApp', icon: MessageCircle },
-};
-
-const CHANNEL_FILTERS: { value: TicketChannel | 'all'; label: string }[] = [
-    { value: 'all', label: 'All' },
-    { value: 'whatsapp', label: 'WhatsApp' },
-    { value: 'web', label: 'Website' },
-];
-
-/** Older tickets have no channel yet: WhatsApp ones are 'whatsapp', everything else came through the website. */
-function channelOf(t: Ticket): TicketChannel {
-    return t.channel ?? (t.source === 'whatsapp' ? 'whatsapp' : 'web');
-}
-
-/** The number to reach the customer on, and whether it is a WhatsApp number. */
-function getTicketPhone(t: Ticket): { phone: string; isWhatsapp: boolean } | null {
-    const contact = t.contactId;
-    const phone = t.whatsappPhone || t.visitorPhone || contact?.whatsappPhone || contact?.phones?.[0];
-    if (!phone) return null;
-    return { phone, isWhatsapp: !!(t.whatsappPhone || t.visitorIsWhatsapp || contact?.whatsappPhone) };
-}
-
 const STATUS_FILTERS: { value: TicketStatus | 'all'; label: string }[] = [
     { value: 'all', label: 'All' },
     { value: 'open', label: 'Open' },
@@ -207,17 +172,22 @@ const STATUS_FILTERS: { value: TicketStatus | 'all'; label: string }[] = [
     { value: 'resolved', label: 'Resolved' },
 ];
 
+// Tickets come from the website chat only, so there is no channel filter. Development is not a ticket topic any more.
 const CATEGORY_FILTERS: { value: TicketCategory | 'all'; label: string }[] = [
     { value: 'all', label: 'All' },
     { value: 'support', label: 'Support' },
     { value: 'service', label: 'Service' },
-    { value: 'development', label: 'Dev' },
     { value: 'billing', label: 'Billing' },
     { value: 'bug', label: 'Bug' },
 ];
 
-// ─── helpers ──────────────────────────────────────────────────────────────────
+/** The number to reach the customer on. */
+function getTicketPhone(t: Ticket): string | null {
+    const contact = t.contactId;
+    return t.visitorPhone || t.whatsappPhone || contact?.whatsappPhone || contact?.phones?.[0] || null;
+}
 
+// ─── helpers ──────────────────────────────────────────────────────────────────
 function getTicketUser(t: Ticket): { name: string; email: string; isGuest: boolean } {
     const client = t.clientId;
     const guest = t.guestId;
@@ -276,21 +246,7 @@ function formatRelative(iso: string): string {
     return d.toLocaleDateString();
 }
 
-function isImageUrl(url: string): boolean {
-    return /\.(png|jpe?g|gif|webp|svg)(\?|$)/i.test(url);
-}
-
-function getFileName(url: string): string {
-    try {
-        const pathname = new URL(url).pathname;
-        return decodeURIComponent(pathname.split('/').pop() || 'file');
-    } catch {
-        return 'file';
-    }
-}
-
 // ─── sub-components ────────────────────────────────────────────────────────────
-
 function StatusBadge({ status }: { status: TicketStatus }) {
     const cfg = STATUS_CONFIG[status];
     const Icon = cfg.icon;
@@ -301,9 +257,112 @@ function StatusBadge({ status }: { status: TicketStatus }) {
                 cfg.className,
             )}
         >
-            <Icon className="size-2.5" />
+            <Icon className={cn('size-2.5', status === 'in_progress' && 'animate-spin motion-reduce:animate-none')} />
             {cfg.label}
         </span>
+    );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+    return (
+        <div className="space-y-1.5">
+            <Label className="text-xs text-muted-foreground">{label}</Label>
+            {children}
+        </div>
+    );
+}
+
+// The same person's other tickets, live chat and client / lead record, as small links.
+function ContactLinks({ ticket, onOpenTicket }: { ticket: Ticket; onOpenTicket: (id: string) => void }) {
+    const contactId = ticket.contactId?._id;
+    const { data } = useGetContactQuery(contactId!, { skip: !contactId });
+    const sessionId = ticket.chatSessionId?.sessionId;
+    const liveOpen = !!sessionId && ['queued', 'active', 'converted_to_ticket'].includes(ticket.chatSessionId?.status ?? '');
+    const others = (data?.tickets ?? []).filter((t) => t._id !== ticket._id).slice(0, 5);
+
+    if (!liveOpen && !data?.client && !data?.lead && others.length === 0) return null;
+    return (
+        <div className="space-y-2">
+            <p className="text-xs font-medium text-muted-foreground">Related</p>
+            <div className="flex flex-col gap-1.5 text-xs">
+                {liveOpen && (
+                    <Button asChild size="sm" variant="outline" className="h-8 justify-start gap-2">
+                        <Link href={`/messages/web/${sessionId}`}>
+                            <MessageSquare className="size-3.5" />
+                            Open live chat
+                        </Link>
+                    </Button>
+                )}
+                {data?.client && (
+                    <Link href={`/clients/${data.client._id}`} className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 hover:bg-accent">
+                        <UserCheck className="size-3.5 text-violet-600" />
+                        Client: {data.client.name}
+                    </Link>
+                )}
+                {data?.lead && (
+                    <Link href="/leads" className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 hover:bg-accent">
+                        <ExternalLink className="size-3.5 text-amber-600" />
+                        Lead: {data.lead.name} ({data.lead.status})
+                    </Link>
+                )}
+                {others.map((t) => (
+                    <button
+                        key={t._id}
+                        onClick={() => onOpenTicket(t._id)}
+                        className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-left hover:bg-accent"
+                        title={t.subject}
+                    >
+                        <TicketIcon className="size-3.5 text-muted-foreground" />
+                        <span className="font-mono">{t.ticketId}</span>
+                        <span className="truncate text-muted-foreground">{t.subject}</span>
+                    </button>
+                ))}
+            </div>
+        </div>
+    );
+}
+
+function TicketSkeleton() {
+    return (
+        <div className="flex flex-col gap-2 rounded-lg px-3 py-3">
+            <div className="flex items-center justify-between">
+                <Skeleton className="h-3.5 w-2/3" />
+                <Skeleton className="h-3 w-10" />
+            </div>
+            <Skeleton className="h-3 w-1/2" />
+        </div>
+    );
+}
+
+function TicketListItem({ ticket, isSelected, onSelect }: { ticket: Ticket; isSelected: boolean; onSelect: () => void }) {
+    const user = getTicketUser(ticket);
+    const urgent = ticket.priority === 'urgent' || ticket.priority === 'high';
+    return (
+        <button
+            onClick={onSelect}
+            className={cn(
+                'w-full flex items-start gap-3 rounded-lg px-2.5 py-2.5 text-left transition-colors hover:bg-sidebar-accent',
+                isSelected && 'bg-sidebar-accent',
+            )}
+        >
+            <Avatar className="size-10 shrink-0">
+                <AvatarFallback className={cn('text-sm font-semibold', avatarColor(user.name))}>
+                    {user.name.charAt(0).toUpperCase()}
+                </AvatarFallback>
+            </Avatar>
+            <div className="min-w-0 flex-1 space-y-1">
+                <div className="flex items-center justify-between gap-2">
+                    <span className="truncate text-sm font-medium">{user.name}</span>
+                    <span className="shrink-0 text-[10px] text-muted-foreground">{formatRelative(ticket.updatedAt)}</span>
+                </div>
+                <p className="truncate text-xs text-muted-foreground">{ticket.subject}</p>
+                <div className="flex items-center gap-1.5">
+                    <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">{ticket.ticketId}</span>
+                    <StatusBadge status={ticket.status} />
+                    {urgent && <PriorityBadge priority={ticket.priority} />}
+                </div>
+            </div>
+        </button>
     );
 }
 
@@ -321,210 +380,35 @@ function PriorityBadge({ priority }: { priority: TicketPriority }) {
     );
 }
 
-function CategoryBadge({ category }: { category?: TicketCategory }) {
-    if (!category) return null;
-    const cfg = CATEGORY_CONFIG[category];
-    if (!cfg) return null;
-    return (
-        <span
-            className={cn(
-                'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium',
-                cfg.className,
-            )}
-        >
-            <Layers className="size-2.5" />
-            {cfg.label}
-        </span>
-    );
-}
-
-function SourceLabel({ source }: { source?: TicketSource }) {
-    if (!source) return null;
-    const cfg = SOURCE_CONFIG[source];
-    if (!cfg) return null;
-    const Icon = cfg.icon;
-    return (
-        <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground">
-            <Icon className="size-3" />
-            {cfg.label}
-        </span>
-    );
-}
-
-function ChannelBadge({ channel }: { channel: TicketChannel }) {
-    const whatsapp = channel === 'whatsapp';
-    return (
-        <span
-            className={cn(
-                'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium',
-                whatsapp
-                    ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
-                    : 'bg-sky-500/15 text-sky-600 dark:text-sky-400 border-sky-500/20',
-            )}
-        >
-            {whatsapp ? <MessageCircle className="size-2.5" /> : <Globe className="size-2.5" />}
-            {whatsapp ? 'WhatsApp' : 'Website'}
-        </span>
-    );
-}
-
-// The same person's other tickets and chats (WhatsApp and website), plus their client / lead record.
-function ContactStrip({ ticket, onOpenTicket }: { ticket: Ticket; onOpenTicket: (id: string) => void }) {
-    const contactId = ticket.contactId?._id;
-    const { data } = useGetContactQuery(contactId!, { skip: !contactId });
-    const sessionId = ticket.chatSessionId?.sessionId;
-    const liveOpen = !!sessionId && ['queued', 'active', 'converted_to_ticket'].includes(ticket.chatSessionId?.status ?? '');
-    const whatsappChat = data?.whatsappChats.find((c) => c.linkedTicketId === ticket._id) ?? (ticket.source === 'whatsapp' ? data?.whatsappChats[0] : undefined);
-    const others = (data?.tickets ?? []).filter((t) => t._id !== ticket._id).slice(0, 4);
-
-    if (!liveOpen && !whatsappChat && !data?.client && !data?.lead && others.length === 0) return null;
-    return (
-        <div className="flex items-center gap-2 px-5 py-2 border-t border-border/50 flex-wrap text-xs">
-            {liveOpen && (
-                <Button asChild size="sm" className="h-7 gap-1.5">
-                    <Link href={`/messages/web/${sessionId}`}>
-                        <MessageSquare className="size-3.5" />
-                        Open live chat
-                    </Link>
-                </Button>
-            )}
-            {whatsappChat && (
-                <Button asChild size="sm" variant="outline" className="h-7 gap-1.5">
-                    <Link href={`/messages/${whatsappChat._id}`}>
-                        <MessageCircle className="size-3.5 text-emerald-600" />
-                        Open WhatsApp chat
-                    </Link>
-                </Button>
-            )}
-            {data?.client && (
-                <Link href={`/clients/${data.client._id}`} className="inline-flex items-center gap-1 rounded-full bg-violet-500/15 text-violet-600 dark:text-violet-400 px-2 py-0.5 font-medium hover:underline">
-                    <UserCheck className="size-3" />
-                    Client: {data.client.name}
-                </Link>
-            )}
-            {data?.lead && (
-                <Link href="/leads" className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 px-2 py-0.5 font-medium hover:underline">
-                    <ExternalLink className="size-3" />
-                    Lead: {data.lead.name} ({data.lead.status})
-                </Link>
-            )}
-            {others.length > 0 && (
-                <div className="flex items-center gap-1.5 flex-wrap ml-auto text-muted-foreground">
-                    <span>Same person:</span>
-                    {others.map((t) => (
-                        <button
-                            key={t._id}
-                            onClick={() => onOpenTicket(t._id)}
-                            className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 hover:bg-accent hover:text-foreground"
-                            title={t.subject}
-                        >
-                            {t.channel === 'whatsapp' ? <MessageCircle className="size-3 text-emerald-600" /> : <Globe className="size-3" />}
-                            <span className="font-mono">{t.ticketId}</span>
-                        </button>
-                    ))}
-                </div>
-            )}
-        </div>
-    );
-}
-
-function TicketSkeleton() {
-    return (
-        <div className="flex flex-col gap-2 px-4 py-3.5">
-            <div className="flex items-center justify-between">
-                <Skeleton className="h-3.5 w-2/3" />
-                <Skeleton className="h-3 w-10" />
-            </div>
-            <Skeleton className="h-3 w-1/2" />
-            <div className="flex gap-2">
-                <Skeleton className="h-4 w-16 rounded-full" />
-                <Skeleton className="h-4 w-12 rounded-full" />
-            </div>
-        </div>
-    );
-}
-
-function TicketListItem({
-    ticket,
-    isSelected,
-    onSelect,
-}: {
-    ticket: Ticket;
-    isSelected: boolean;
-    onSelect: () => void;
-}) {
-    const user = getTicketUser(ticket);
-    const phone = getTicketPhone(ticket);
-    return (
-        <button
-            onClick={onSelect}
-            className={cn(
-                'w-full flex flex-col gap-1.5 px-4 py-3.5 text-left transition-all border-l-2',
-                isSelected
-                    ? 'bg-accent border-l-primary'
-                    : 'border-l-transparent hover:bg-accent/50',
-            )}
-        >
-            <div className="flex items-center justify-between gap-2">
-                <span className="text-sm font-medium truncate">
-                    {ticket.subject}
-                </span>
-                <span className="text-[10px] text-muted-foreground shrink-0">
-                    {formatRelative(ticket.updatedAt)}
-                </span>
-            </div>
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <span className="font-mono text-[10px] bg-muted px-1.5 py-0.5 rounded">
-                    {ticket.ticketId}
-                </span>
-                <span className="truncate">{user.name}</span>
-                {phone && (
-                    <span className="inline-flex items-center gap-0.5 shrink-0">
-                        {phone.isWhatsapp ? <MessageCircle className="size-3 text-emerald-600" /> : <Phone className="size-3" />}
-                        {phone.phone}
-                    </span>
-                )}
-            </div>
-            <div className="flex items-center gap-1.5 flex-wrap">
-                <ChannelBadge channel={channelOf(ticket)} />
-                <StatusBadge status={ticket.status} />
-                <PriorityBadge priority={ticket.priority} />
-                <CategoryBadge category={ticket.category} />
-            </div>
-        </button>
-    );
-}
-
 function AttachmentChip({ url }: { url: string }) {
-    if (isImageUrl(url)) {
-        return (
-            <a
-                href={url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="block mt-2"
-            >
-                {/* eslint-disable-next-line @next/next/no-img-element -- signed, expiring URL: next/image cannot cache it */}
-                <img
-                    src={url}
-                    alt="Attachment"
-                    className="max-w-[220px] max-h-[160px] rounded-lg object-cover border border-border/40 shadow-sm"
-                    loading="lazy"
-                />
-            </a>
-        );
-    }
+    // Files live in a private bucket: the shared preview signs the link and shows images or a file card.
     return (
-        <a
-            href={url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-2 mt-2 px-3 py-2 rounded-lg bg-background/60 border border-border/40 hover:bg-accent/50 transition-colors max-w-[220px]"
-        >
-            <FileText className="size-4 shrink-0 text-muted-foreground" />
-            <span className="text-xs truncate flex-1">{getFileName(url)}</span>
-            <Download className="size-3 shrink-0 text-muted-foreground" />
-        </a>
+        <div className="mt-2">
+            <AttachmentPreview url={url} />
+        </div>
+    );
+}
+
+// Long messages stay short in the thread: the first lines, then "Show more".
+function ClampedText({ text, tone }: { text: string; tone: 'staff' | 'customer' }) {
+    const [open, setOpen] = useState(false);
+    const long = text.length > 480 || text.split('\n').length > 8;
+    return (
+        <>
+            <span className={cn('block', long && !open && 'line-clamp-6')}>{text}</span>
+            {long && (
+                <button
+                    type="button"
+                    onClick={() => setOpen((o) => !o)}
+                    className={cn(
+                        'mt-1.5 text-xs font-medium underline-offset-2 hover:underline',
+                        tone === 'staff' ? 'text-primary-foreground/80' : 'text-primary',
+                    )}
+                >
+                    {open ? 'Show less' : 'Show more'}
+                </button>
+            )}
+        </>
     );
 }
 
@@ -634,7 +518,9 @@ function MessageBubble({
                             : 'bg-muted text-foreground rounded-2xl rounded-bl-md',
                     )}
                 >
-                    {content}
+                    {content && content !== '(attachment)' && (
+                        <ClampedText text={content} tone={isStaff ? 'staff' : 'customer'} />
+                    )}
                     {attachments?.length > 0 && (
                         <div className="space-y-1.5">
                             {attachments.map((url, i) => (
@@ -663,16 +549,12 @@ export default function TicketsPage() {
     const searchParams = useSearchParams();
     const selectedId = searchParams.get('ticket');
 
-    const [statusFilter, setStatusFilter] = useState<TicketStatus | 'all'>(
-        'all',
-    );
-    const [categoryFilter, setCategoryFilter] = useState<TicketCategory | 'all'>(
-        'all',
-    );
-    const [channelFilter, setChannelFilter] = useState<TicketChannel | 'all'>('all');
+    const [statusFilter, setStatusFilter] = useState<TicketStatus | 'all'>('all');
+    const [categoryFilter, setCategoryFilter] = useState<TicketCategory | 'all'>('all');
     const [searchQuery, setSearchQuery] = useState('');
     const [replyValue, setReplyValue] = useState('');
     const [uploading, setUploading] = useState(false);
+    const [infoOpen, setInfoOpen] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const threadEndRef = useRef<HTMLDivElement>(null);
 
@@ -682,24 +564,15 @@ export default function TicketsPage() {
         if (categoryFilter !== 'all') args.category = categoryFilter;
         return Object.keys(args).length > 0 ? args : undefined;
     })();
-    const { data: tickets = [], isLoading: ticketsLoading } = useGetTicketsQuery(
-        ticketQueryArgs,
-        { pollingInterval: 30_000 },
-    );
-    const { data: ticket, isFetching: detailLoading } = useGetTicketDetailQuery(
-        selectedId!,
-        { skip: !selectedId },
-    );
+    const { data: tickets = [], isLoading: ticketsLoading } = useGetTicketsQuery(ticketQueryArgs, { pollingInterval: 30_000 });
+    const { data: ticket, isFetching: detailLoading } = useGetTicketDetailQuery(selectedId!, { skip: !selectedId });
     const { data: agents = [] } = useGetAvailableAgentsQuery();
     const [replyToTicket, { isLoading: isSending }] = useReplyToTicketMutation();
-    const [updateStatus, { isLoading: isUpdatingStatus }] =
-        useUpdateTicketStatusMutation();
+    const [updateStatus, { isLoading: isUpdatingStatus }] = useUpdateTicketStatusMutation();
     const [updateTicket, { isLoading: isUpdating }] = useUpdateTicketMutation();
-    const [assignToSelf, { isLoading: isAssigning }] =
-        useAssignTicketToSelfMutation();
+    const [assignToSelf, { isLoading: isAssigning }] = useAssignTicketToSelfMutation();
     const [requestPresignedUrl] = useRequestPresignedUrlMutation();
 
-    // auto-scroll thread to bottom
     useEffect(() => {
         threadEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [ticket?.replies?.length, selectedId]);
@@ -714,17 +587,27 @@ export default function TicketsPage() {
         [router, searchParams],
     );
 
+    const handleBack = useCallback(() => {
+        const params = new URLSearchParams(searchParams.toString());
+        params.delete('ticket');
+        router.replace(params.size ? `?${params.toString()}` : '?', { scroll: false });
+    }, [router, searchParams]);
+
     const sendReply = useCallback(
         async (text?: string, attachments?: string[]) => {
             if (!ticket) return;
             const body = text ?? replyValue.trim();
             if (!body && (!attachments || attachments.length === 0)) return;
-            await replyToTicket({
-                id: ticket._id,
-                text: body || '(attachment)',
-                attachments,
-            });
+            const result = await replyToTicket({ id: ticket._id, text: body || '(attachment)', attachments });
+            if ('error' in result) {
+                toast.error('Could not send the reply. Try again.');
+                return;
+            }
             if (!text) setReplyValue('');
+            // Replies reach the customer by email: say so when there is nobody to email.
+            if ((result.data as { emailed?: boolean } | undefined)?.emailed === false) {
+                toast.warning('Reply saved, but this ticket has no email on file, so the customer was not notified.');
+            }
         },
         [ticket, replyValue, replyToTicket],
     );
@@ -754,11 +637,7 @@ export default function TicketsPage() {
                         folder: 'tickets',
                         referenceId: ticket._id,
                     }).unwrap();
-                    await fetch(result.uploadUrl, {
-                        method: 'PUT',
-                        headers: { 'Content-Type': file.type },
-                        body: file,
-                    });
+                    await fetch(result.uploadUrl, { method: 'PUT', headers: { 'Content-Type': file.type }, body: file });
                     urls.push(result.fileUrl);
                 } catch {
                     // skip failed uploads
@@ -771,16 +650,10 @@ export default function TicketsPage() {
         [ticket, requestPresignedUrl, sendReply],
     );
 
-    const byChannel = channelFilter === 'all' ? tickets : tickets.filter((t) => channelOf(t) === channelFilter);
-    const channelCounts = {
-        all: tickets.length,
-        whatsapp: tickets.filter((t) => channelOf(t) === 'whatsapp').length,
-        web: tickets.filter((t) => channelOf(t) === 'web').length,
-    };
     const filteredTickets = searchQuery
-        ? byChannel.filter((t) => {
+        ? tickets.filter((t) => {
               const user = getTicketUser(t);
-              const phone = getTicketPhone(t)?.phone ?? '';
+              const phone = getTicketPhone(t) ?? '';
               const q = searchQuery.toLowerCase();
               return (
                   t.subject.toLowerCase().includes(q) ||
@@ -790,91 +663,50 @@ export default function TicketsPage() {
                   phone.replace(/\D/g, '').includes(q.replace(/\D/g, '') || '\u0000')
               );
           })
-        : byChannel;
+        : tickets;
 
     const ticketUser = ticket ? getTicketUser(ticket) : null;
     const ticketPhone = ticket ? getTicketPhone(ticket) : null;
     const isClosed = ticket?.status === 'closed';
 
     return (
-        <div className="flex h-full overflow-hidden bg-background">
+        <div className="flex h-[calc(100dvh-1rem)] overflow-hidden rounded-2xl border bg-sidebar">
             {/* ── Ticket list ──────────────────────────────────────────────── */}
-            <aside className="w-[360px] shrink-0 flex flex-col border-r overflow-hidden">
+            <aside
+                className={cn(
+                    'w-full md:w-[340px] shrink-0 flex-col border-r overflow-hidden',
+                    selectedId ? 'hidden md:flex' : 'flex',
+                )}
+            >
                 <div className="px-4 pt-4 pb-3 space-y-3">
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between pl-10 md:pl-0">
                         <h1 className="text-lg font-semibold">Tickets</h1>
-                        <Badge variant="secondary" className="text-xs">
+                        <Badge variant="secondary" className="text-xs tabular-nums">
                             {tickets.length}
                         </Badge>
                     </div>
                     <div className="relative">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
                         <Input
-                            placeholder="Search tickets..."
+                            placeholder="Search tickets"
                             value={searchQuery}
-                            onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                                setSearchQuery(e.target.value)
-                            }
+                            onChange={(e: ChangeEvent<HTMLInputElement>) => setSearchQuery(e.target.value)}
                             className="pl-9 h-9"
                         />
                     </div>
-                </div>
-
-                <div className="px-4 pb-1.5">
-                    <Tabs
-                        value={channelFilter}
-                        onValueChange={(v) => setChannelFilter(v as TicketChannel | 'all')}
-                    >
-                        <TabsList className="w-full h-auto gap-1 bg-transparent p-0">
-                            {CHANNEL_FILTERS.map((f) => (
-                                <TabsTrigger
-                                    key={f.value}
-                                    value={f.value}
-                                    className="flex-1 gap-1 text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground border rounded-md"
-                                >
-                                    {f.label}
-                                    <span className="tabular-nums opacity-70">{channelCounts[f.value]}</span>
-                                </TabsTrigger>
-                            ))}
-                        </TabsList>
-                    </Tabs>
-                </div>
-
-                <div className="px-4 pb-1.5">
-                    <Tabs
-                        value={statusFilter}
-                        onValueChange={(v) =>
-                            setStatusFilter(v as TicketStatus | 'all')
-                        }
-                    >
-                        <TabsList className="w-full h-auto flex-wrap gap-1 bg-transparent p-0">
+                    <Tabs value={statusFilter} onValueChange={(v) => setStatusFilter(v as TicketStatus | 'all')}>
+                        <TabsList className="w-full">
                             {STATUS_FILTERS.map((f) => (
-                                <TabsTrigger
-                                    key={f.value}
-                                    value={f.value}
-                                    className="flex-1 text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground border rounded-md"
-                                >
+                                <TabsTrigger key={f.value} value={f.value} className="px-1.5 text-xs">
                                     {f.label}
                                 </TabsTrigger>
                             ))}
                         </TabsList>
                     </Tabs>
-                </div>
-
-                <div className="px-4 pb-2">
-                    <Tabs
-                        value={categoryFilter}
-                        onValueChange={(v) =>
-                            setCategoryFilter(v as TicketCategory | 'all')
-                        }
-                    >
-                        <TabsList className="w-full h-auto flex-wrap gap-1 bg-transparent p-0">
+                    <Tabs value={categoryFilter} onValueChange={(v) => setCategoryFilter(v as TicketCategory | 'all')}>
+                        <TabsList className="w-full">
                             {CATEGORY_FILTERS.map((f) => (
-                                <TabsTrigger
-                                    key={f.value}
-                                    value={f.value}
-                                    className="flex-1 text-xs data-[state=active]:bg-primary/80 data-[state=active]:text-primary-foreground border rounded-md"
-                                >
+                                <TabsTrigger key={f.value} value={f.value} className="px-1.5 text-xs">
                                     {f.label}
                                 </TabsTrigger>
                             ))}
@@ -883,52 +715,38 @@ export default function TicketsPage() {
                 </div>
 
                 <ScrollArea className="flex-1 min-h-0">
-                    {ticketsLoading ? (
-                        Array.from({ length: 5 }).map((_, i) => (
-                            <TicketSkeleton key={i} />
-                        ))
-                    ) : filteredTickets.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
-                            <div className="size-12 rounded-2xl bg-muted flex items-center justify-center mb-3">
-                                <Inbox className="size-5 text-muted-foreground" />
+                    <div className="px-2 pb-2">
+                        {ticketsLoading ? (
+                            Array.from({ length: 5 }).map((_, i) => <TicketSkeleton key={i} />)
+                        ) : filteredTickets.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
+                                <div className="size-12 rounded-2xl bg-muted flex items-center justify-center mb-3">
+                                    <Inbox className="size-5 text-muted-foreground" />
+                                </div>
+                                <p className="text-sm font-medium">No tickets</p>
+                                <p className="text-xs text-muted-foreground mt-1">
+                                    {searchQuery ? 'No tickets match your search.' : 'No tickets in this view.'}
+                                </p>
                             </div>
-                            <p className="text-sm font-medium">No tickets</p>
-                            <p className="text-xs text-muted-foreground mt-1">
-                                {searchQuery
-                                    ? 'No tickets match your search.'
-                                    : 'No tickets in this view.'}
-                            </p>
-                        </div>
-                    ) : (
-                        <div className="divide-y divide-border/40">
-                            {filteredTickets.map((t) => (
-                                <TicketListItem
-                                    key={t._id}
-                                    ticket={t}
-                                    isSelected={selectedId === t._id}
-                                    onSelect={() => handleSelect(t._id)}
-                                />
-                            ))}
-                        </div>
-                    )}
+                        ) : (
+                            filteredTickets.map((t) => (
+                                <TicketListItem key={t._id} ticket={t} isSelected={selectedId === t._id} onSelect={() => handleSelect(t._id)} />
+                            ))
+                        )}
+                    </div>
                 </ScrollArea>
             </aside>
 
             {/* ── Ticket detail ────────────────────────────────────────────── */}
-            <div className="flex flex-1 flex-col overflow-hidden min-h-0">
+            <section className={cn('relative min-w-0 flex-1 flex-col bg-background', selectedId ? 'flex' : 'hidden md:flex')}>
                 {!selectedId ? (
                     <div className="flex flex-1 flex-col items-center justify-center gap-4 text-center px-6">
                         <div className="size-16 rounded-2xl bg-muted flex items-center justify-center">
                             <TicketIcon className="size-7 text-muted-foreground" />
                         </div>
                         <div>
-                            <p className="text-base font-medium">
-                                Select a ticket
-                            </p>
-                            <p className="text-sm text-muted-foreground mt-1">
-                                Choose a ticket from the list to view its
-                                conversation.
-                            </p>
+                            <p className="text-base font-medium">Select a ticket</p>
+                            <p className="text-sm text-muted-foreground mt-1">Choose a ticket from the list to see the conversation.</p>
                         </div>
                     </div>
                 ) : detailLoading && !ticket ? (
@@ -938,379 +756,273 @@ export default function TicketsPage() {
                 ) : ticket ? (
                     <>
                         {/* Header */}
-                        <div className="shrink-0 border-b bg-background">
-                            <div className="flex items-start justify-between px-5 py-3 gap-3">
-                                <div className="min-w-0 space-y-1">
-                                    <div className="flex items-center gap-2 flex-wrap">
-                                        <span className="font-mono text-[11px] bg-muted px-1.5 py-0.5 rounded text-muted-foreground">
-                                            {ticket.ticketId}
-                                        </span>
-                                        <StatusBadge status={ticket.status} />
-                                        <PriorityBadge
-                                            priority={ticket.priority}
-                                        />
-                                        <CategoryBadge
-                                            category={ticket.category}
-                                        />
-                                        <ChannelBadge channel={channelOf(ticket)} />
-                                        <SourceLabel
-                                            source={ticket.source}
-                                        />
-                                    </div>
-                                    <h2 className="text-base font-semibold truncate">
-                                        {ticket.subject}
-                                    </h2>
-                                    {/* Customer identity */}
-                                    <div className="flex items-center gap-2.5 pt-0.5">
-                                        <Avatar className="size-8 shrink-0">
-                                            <AvatarFallback
-                                                className={cn(
-                                                    'text-xs font-semibold',
-                                                    avatarColor(ticketUser?.name ?? 'Guest'),
-                                                )}
-                                            >
-                                                {(ticketUser?.name ?? 'G')
-                                                    .charAt(0)
-                                                    .toUpperCase()}
-                                            </AvatarFallback>
-                                        </Avatar>
-                                        <div className="min-w-0">
-                                            <div className="flex items-center gap-1.5">
-                                                <span className="text-sm font-medium text-foreground truncate">
-                                                    {ticketUser?.name ?? 'Guest'}
-                                                </span>
-                                                {ticketUser?.isGuest && (
-                                                    <span className="inline-flex items-center gap-0.5 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-                                                        <UserIcon className="size-2.5" />
-                                                        Guest
-                                                    </span>
-                                                )}
-                                            </div>
-                                            <div className="flex items-center gap-2.5 text-xs text-muted-foreground">
-                                                {ticketUser?.email ? (
-                                                    <a
-                                                        href={`mailto:${ticketUser.email}`}
-                                                        className="flex items-center gap-1 hover:text-foreground transition-colors truncate"
-                                                    >
-                                                        <Mail className="size-3 shrink-0" />
-                                                        {ticketUser.email}
-                                                    </a>
-                                                ) : (
-                                                    <span className="flex items-center gap-1 italic">
-                                                        <Mail className="size-3 shrink-0" />
-                                                        no email on file
-                                                    </span>
-                                                )}
-                                                {ticketPhone && (
-                                                    <a
-                                                        href={`tel:+${ticketPhone.phone.replace(/\D/g, '')}`}
-                                                        className="flex items-center gap-1 shrink-0 hover:text-foreground transition-colors"
-                                                    >
-                                                        {ticketPhone.isWhatsapp ? (
-                                                            <MessageCircle className="size-3 text-emerald-600" />
-                                                        ) : (
-                                                            <Phone className="size-3" />
-                                                        )}
-                                                        {ticketPhone.phone}
-                                                        {ticketPhone.isWhatsapp && <span className="text-emerald-600">WhatsApp</span>}
-                                                    </a>
-                                                )}
-                                                <span className="flex items-center gap-1 shrink-0">
-                                                    <Clock className="size-3" />
-                                                    {formatRelative(ticket.createdAt)}
-                                                </span>
-                                            </div>
-                                        </div>
-                                    </div>
+                        <header className="flex shrink-0 items-center gap-3 border-b px-4 py-3">
+                            <Button variant="ghost" size="icon" className="size-8 md:hidden" onClick={handleBack} aria-label="Back to tickets">
+                                <ArrowLeft className="size-4" />
+                            </Button>
+                            <Avatar className="size-10 shrink-0">
+                                <AvatarFallback className={cn('text-sm font-semibold', avatarColor(ticketUser?.name ?? 'Guest'))}>
+                                    {(ticketUser?.name ?? 'G').charAt(0).toUpperCase()}
+                                </AvatarFallback>
+                            </Avatar>
+                            <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-2">
+                                    <h2 className="truncate text-sm font-semibold">{ticket.subject}</h2>
+                                    <span className="hidden shrink-0 rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground sm:inline">
+                                        {ticket.ticketId}
+                                    </span>
                                 </div>
+                                <p className="truncate text-xs text-muted-foreground">
+                                    {ticketUser?.name}
+                                    {ticketUser?.email ? ` · ${ticketUser.email}` : ''}
+                                    {ticketPhone ? ` · ${ticketPhone}` : ''} · {formatRelative(ticket.createdAt)}
+                                </p>
                             </div>
+                            <Select
+                                value={ticket.status}
+                                onValueChange={(v) => updateStatus({ id: ticket._id, status: v as TicketStatus })}
+                                disabled={isUpdatingStatus}
+                            >
+                                <SelectTrigger className="h-8 w-[140px] text-xs" aria-label="Ticket status">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {(Object.keys(STATUS_CONFIG) as TicketStatus[]).map((s) => (
+                                        <SelectItem key={s} value={s}>
+                                            {STATUS_CONFIG[s].label}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                            <Button
+                                variant={infoOpen ? 'secondary' : 'ghost'}
+                                size="icon"
+                                className="size-8"
+                                aria-label="Ticket details"
+                                aria-pressed={infoOpen}
+                                title="Ticket details"
+                                onClick={() => setInfoOpen((o) => !o)}
+                            >
+                                {infoOpen ? <PanelRightClose className="size-4" /> : <PanelRightOpen className="size-4" />}
+                            </Button>
+                        </header>
 
-                            {/* Controls */}
-                            <div className="flex items-center gap-2 px-5 py-2.5 border-t border-border/50 bg-muted/30 flex-wrap">
-                                <div className="flex items-center gap-1.5">
-                                    <Label className="text-xs text-muted-foreground">
-                                        Status
-                                    </Label>
-                                    <Select
-                                        value={ticket.status}
-                                        onValueChange={(v) =>
-                                            updateStatus({
-                                                id: ticket._id,
-                                                status: v as TicketStatus,
-                                            })
-                                        }
-                                        disabled={isUpdatingStatus}
-                                    >
-                                        <SelectTrigger className="h-8 w-[150px] text-xs">
-                                            <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {(
-                                                Object.keys(
-                                                    STATUS_CONFIG,
-                                                ) as TicketStatus[]
-                                            ).map((s) => (
-                                                <SelectItem key={s} value={s}>
-                                                    {STATUS_CONFIG[s].label}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
+                        <div className="flex min-h-0 flex-1">
+                            <div className="flex min-w-0 flex-1 flex-col">
+                                {/* Conversation thread */}
+                                <div className="flex-1 min-h-0 overflow-y-auto">
+                                    <div className="px-4 py-5 space-y-4 max-w-3xl mx-auto">
+                                        {(() => {
+                                            const { description, transcript } = splitTicketBody(ticket.text || ticket.subject);
+                                            return (
+                                                <>
+                                                    <MessageBubble
+                                                        senderName={ticketUser?.name ?? 'Guest'}
+                                                        content={description || ticket.subject}
+                                                        attachments={ticket.attachments ?? []}
+                                                        createdAt={ticket.createdAt}
+                                                        isStaff={false}
+                                                    />
+                                                    {transcript && (
+                                                        <div className="pl-[38px] pr-2">
+                                                            <ChatTranscript raw={transcript} />
+                                                        </div>
+                                                    )}
+                                                </>
+                                            );
+                                        })()}
+
+                                        {ticket.replies.map((reply: TicketReply) => {
+                                            const isStaff = reply.senderType === 'staff';
+                                            const name = reply.senderId?.name || reply.senderName || (isStaff ? 'Support' : 'Client');
+                                            return (
+                                                <MessageBubble
+                                                    key={reply._id}
+                                                    senderName={name}
+                                                    content={reply.text || reply.content}
+                                                    attachments={reply.attachments ?? []}
+                                                    createdAt={reply.createdAt}
+                                                    isStaff={isStaff}
+                                                />
+                                            );
+                                        })}
+                                        <div ref={threadEndRef} />
+                                    </div>
                                 </div>
 
-                                <div className="flex items-center gap-1.5">
-                                    <Label className="text-xs text-muted-foreground">
-                                        Priority
-                                    </Label>
-                                    <Select
-                                        value={ticket.priority}
-                                        onValueChange={(v) =>
-                                            updateTicket({
-                                                id: ticket._id,
-                                                priority: v as TicketPriority,
-                                            })
-                                        }
-                                        disabled={isUpdating}
-                                    >
-                                        <SelectTrigger className="h-8 w-[110px] text-xs">
-                                            <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {(
-                                                Object.keys(
-                                                    PRIORITY_CONFIG,
-                                                ) as TicketPriority[]
-                                            ).map((p) => (
-                                                <SelectItem key={p} value={p}>
-                                                    {PRIORITY_CONFIG[p].label}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-
-                                <div className="flex items-center gap-1.5">
-                                    <Label className="text-xs text-muted-foreground">
-                                        Category
-                                    </Label>
-                                    <Select
-                                        value={ticket.category || 'support'}
-                                        onValueChange={(v) =>
-                                            updateTicket({
-                                                id: ticket._id,
-                                                category: v as TicketCategory,
-                                            })
-                                        }
-                                        disabled={isUpdating}
-                                    >
-                                        <SelectTrigger className="h-8 w-[130px] text-xs">
-                                            <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {(
-                                                Object.keys(
-                                                    CATEGORY_CONFIG,
-                                                ) as TicketCategory[]
-                                            ).map((c) => (
-                                                <SelectItem key={c} value={c}>
-                                                    {CATEGORY_CONFIG[c].label}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-
-                                <div className="flex items-center gap-1.5">
-                                    <Label className="text-xs text-muted-foreground">
-                                        Assignee
-                                    </Label>
-                                    <Select
-                                        value={ticket.assignedTo?._id ?? ''}
-                                        onValueChange={(v) =>
-                                            updateTicket({
-                                                id: ticket._id,
-                                                assignedTo: v,
-                                            })
-                                        }
-                                        disabled={isUpdating}
-                                    >
-                                        <SelectTrigger className="h-8 w-[150px] text-xs">
-                                            <SelectValue placeholder="Unassigned" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {agents.map((a) => (
-                                                <SelectItem
-                                                    key={a._id}
-                                                    value={a._id}
-                                                >
-                                                    {a.userId?.name || a.name}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-
-                                <Separator
-                                    orientation="vertical"
-                                    className="h-6"
-                                />
-                                <Button
-                                    size="sm"
-                                    variant="outline"
-                                    className="h-8 gap-1.5"
-                                    onClick={() => assignToSelf(ticket._id)}
-                                    disabled={isAssigning}
-                                >
-                                    {isAssigning ? (
-                                        <Loader2 className="size-3.5 animate-spin" />
-                                    ) : (
-                                        <UserCheck className="size-3.5" />
-                                    )}
-                                    Assign to me
-                                </Button>
-
-                                {ticket.tags?.length > 0 && (
-                                    <div className="flex items-center gap-1.5 ml-auto">
-                                        <Tag className="size-3 text-muted-foreground" />
-                                        {ticket.tags.map((tag) => (
-                                            <Badge
-                                                key={tag}
-                                                variant="outline"
-                                                className="text-[10px]"
+                                {/* Reply box */}
+                                {isClosed ? (
+                                    <div className="shrink-0 border-t bg-muted/40 px-4 py-3 text-center">
+                                        <p className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+                                            <AlertCircle className="size-4" />
+                                            This ticket is closed. Change its status to reply.
+                                        </p>
+                                    </div>
+                                ) : (
+                                    <div className="shrink-0 border-t p-3">
+                                        <div className="flex items-center gap-2">
+                                            <input
+                                                ref={fileInputRef}
+                                                type="file"
+                                                multiple
+                                                accept="image/png,image/jpeg,image/gif,image/webp,application/pdf,.docx,.xlsx,.txt"
+                                                className="hidden"
+                                                onChange={handleFileUpload}
+                                            />
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="size-10 shrink-0 rounded-full"
+                                                onClick={() => fileInputRef.current?.click()}
+                                                disabled={uploading}
+                                                aria-label="Attach a file"
                                             >
-                                                {tag}
-                                            </Badge>
-                                        ))}
+                                                {uploading ? <Loader2 className="size-4 animate-spin" /> : <Paperclip className="size-4" />}
+                                            </Button>
+                                            <Input
+                                                type="text"
+                                                value={replyValue}
+                                                onChange={(e: ChangeEvent<HTMLInputElement>) => setReplyValue(e.target.value)}
+                                                onKeyDown={handleKeyDown}
+                                                placeholder="Reply to the customer"
+                                                className="h-10 flex-1 rounded-full px-4"
+                                            />
+                                            <Button
+                                                size="icon"
+                                                onClick={() => sendReply()}
+                                                disabled={!replyValue.trim() || isSending}
+                                                className="size-10 shrink-0 rounded-full"
+                                                aria-label="Send reply"
+                                            >
+                                                {isSending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
+                                            </Button>
+                                        </div>
                                     </div>
                                 )}
                             </div>
-                            <ContactStrip ticket={ticket} onOpenTicket={handleSelect} />
-                        </div>
 
-                        {/* Conversation thread */}
-                        <div className="flex-1 min-h-0 overflow-y-auto bg-gradient-to-b from-muted/20 to-transparent">
-                            <div className="px-5 py-5 space-y-4 max-w-3xl mx-auto">
-                                {/* Original ticket body — description first, then an
-                                    optional collapsible chat transcript. */}
-                                {(() => {
-                                    const { description, transcript } = splitTicketBody(
-                                        ticket.text || ticket.subject,
-                                    );
-                                    return (
-                                        <>
-                                            <MessageBubble
-                                                senderName={ticketUser?.name ?? 'Guest'}
-                                                content={description || ticket.subject}
-                                                attachments={ticket.attachments ?? []}
-                                                createdAt={ticket.createdAt}
-                                                isStaff={false}
-                                            />
-                                            {transcript && (
-                                                <div className="pl-[38px] pr-2">
-                                                    <ChatTranscript raw={transcript} />
-                                                </div>
-                                            )}
-                                        </>
-                                    );
-                                })()}
+                            {/* Details: a side panel on large screens, a sheet over the thread on small ones */}
+                            {infoOpen && (
+                                <aside className="absolute inset-y-0 right-0 z-10 w-[300px] max-w-full space-y-5 overflow-y-auto border-l bg-background p-4 shadow-xl lg:static lg:shadow-none">
+                                    <div className="flex items-center gap-2 text-sm font-semibold">
+                                        <Info className="size-4" /> Details
+                                    </div>
 
-                                {ticket.replies.map((reply: TicketReply) => {
-                                    const isStaff =
-                                        reply.senderType === 'staff';
-                                    const name =
-                                        reply.senderId?.name ||
-                                        reply.senderName ||
-                                        (isStaff ? 'Support' : 'Client');
-                                    return (
-                                        <MessageBubble
-                                            key={reply._id}
-                                            senderName={name}
-                                            content={reply.text || reply.content}
-                                            attachments={reply.attachments ?? []}
-                                            createdAt={reply.createdAt}
-                                            isStaff={isStaff}
-                                        />
-                                    );
-                                })}
-                                <div ref={threadEndRef} />
-                            </div>
-                        </div>
+                                    <div className="space-y-3">
+                                        <Field label="Priority">
+                                            <Select
+                                                value={ticket.priority}
+                                                onValueChange={(v) => updateTicket({ id: ticket._id, priority: v as TicketPriority })}
+                                                disabled={isUpdating}
+                                            >
+                                                <SelectTrigger className="h-9 w-full text-sm">
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {(Object.keys(PRIORITY_CONFIG) as TicketPriority[]).map((p) => (
+                                                        <SelectItem key={p} value={p}>
+                                                            {PRIORITY_CONFIG[p].label}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        </Field>
+                                        <Field label="Category">
+                                            <Select
+                                                value={ticket.category || 'support'}
+                                                onValueChange={(v) => updateTicket({ id: ticket._id, category: v as TicketCategory })}
+                                                disabled={isUpdating}
+                                            >
+                                                <SelectTrigger className="h-9 w-full text-sm">
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {(Object.keys(CATEGORY_CONFIG) as TicketCategory[]).map((c) => (
+                                                        <SelectItem key={c} value={c}>
+                                                            {CATEGORY_CONFIG[c].label}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        </Field>
+                                        <Field label="Assignee">
+                                            <Select
+                                                value={ticket.assignedTo?._id ?? ''}
+                                                onValueChange={(v) => updateTicket({ id: ticket._id, assignedTo: v })}
+                                                disabled={isUpdating}
+                                            >
+                                                <SelectTrigger className="h-9 w-full text-sm">
+                                                    <SelectValue placeholder="Unassigned" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {agents.map((a) => (
+                                                        <SelectItem key={a._id} value={a._id}>
+                                                            {a.userId?.name || a.name}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        </Field>
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            className="h-9 w-full gap-1.5"
+                                            onClick={() => assignToSelf(ticket._id)}
+                                            disabled={isAssigning}
+                                        >
+                                            {isAssigning ? <Loader2 className="size-3.5 animate-spin" /> : <UserCheck className="size-3.5" />}
+                                            Assign to me
+                                        </Button>
+                                    </div>
 
-                        {/* Reply box */}
-                        {isClosed ? (
-                            <div className="px-5 py-3 bg-muted/50 border-t text-center">
-                                <p className="text-sm text-muted-foreground flex items-center justify-center gap-2">
-                                    <AlertCircle className="size-4" />
-                                    This ticket is closed. Reopen it to reply.
-                                </p>
-                            </div>
-                        ) : (
-                            <div className="px-5 py-4 border-t shrink-0 bg-background">
-                                <div className="flex items-center gap-2">
-                                    <input
-                                        ref={fileInputRef}
-                                        type="file"
-                                        multiple
-                                        accept="image/png,image/jpeg,image/gif,image/webp,application/pdf,.docx,.xlsx,.txt"
-                                        className="hidden"
-                                        onChange={handleFileUpload}
-                                    />
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className="size-10 shrink-0 rounded-full"
-                                        onClick={() =>
-                                            fileInputRef.current?.click()
-                                        }
-                                        disabled={uploading}
-                                    >
-                                        {uploading ? (
-                                            <Loader2 className="size-4 animate-spin" />
+                                    <Separator />
+
+                                    <div className="space-y-2 text-sm">
+                                        <p className="text-xs font-medium text-muted-foreground">Customer</p>
+                                        <p className="font-medium">{ticketUser?.name}</p>
+                                        {ticketUser?.email ? (
+                                            <a href={`mailto:${ticketUser.email}`} className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground">
+                                                <Mail className="size-3.5 shrink-0" />
+                                                <span className="truncate">{ticketUser.email}</span>
+                                            </a>
                                         ) : (
-                                            <Paperclip className="size-4" />
+                                            <p className="flex items-center gap-2 text-xs italic text-muted-foreground">
+                                                <Mail className="size-3.5 shrink-0" /> no email on file
+                                            </p>
                                         )}
-                                    </Button>
-                                    <Input
-                                        type="text"
-                                        value={replyValue}
-                                        onChange={(
-                                            e: ChangeEvent<HTMLInputElement>,
-                                        ) => setReplyValue(e.target.value)}
-                                        onKeyDown={handleKeyDown}
-                                        placeholder="Type your reply..."
-                                        className="flex-1"
-                                    />
-                                    <Button
-                                        size="icon"
-                                        onClick={() => sendReply()}
-                                        disabled={
-                                            !replyValue.trim() || isSending
-                                        }
-                                        className="size-10 shrink-0 rounded-full"
-                                    >
-                                        {isSending ? (
-                                            <Loader2 className="size-4 animate-spin" />
-                                        ) : (
-                                            <Send className="size-4" />
+                                        {ticketPhone && (
+                                            <a href={`tel:+${ticketPhone.replace(/\D/g, '')}`} className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground">
+                                                <Phone className="size-3.5 shrink-0" />
+                                                {ticketPhone}
+                                            </a>
                                         )}
-                                    </Button>
-                                </div>
-                                <p className="text-[10px] text-muted-foreground mt-2 flex items-center gap-1 px-1">
-                                    <CornerUpLeft className="size-3" />
-                                    Replying marks the ticket as “Pending
-                                    Client”.
-                                </p>
-                            </div>
-                        )}
+                                        <p className="flex items-center gap-2 text-xs text-muted-foreground">
+                                            <Clock className="size-3.5 shrink-0" />
+                                            Opened {format(new Date(ticket.createdAt), 'MMM d, h:mm a')}
+                                        </p>
+                                    </div>
+
+                                    {ticket.tags?.length > 0 && (
+                                        <div className="flex flex-wrap gap-1.5">
+                                            {ticket.tags.map((tag) => (
+                                                <Badge key={tag} variant="outline" className="text-[10px]">
+                                                    {tag}
+                                                </Badge>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    <ContactLinks ticket={ticket} onOpenTicket={handleSelect} />
+                                </aside>
+                            )}
+                        </div>
                     </>
                 ) : (
                     <div className="flex flex-1 items-center justify-center">
-                        <p className="text-sm text-muted-foreground">
-                            Ticket not found.
-                        </p>
+                        <p className="text-sm text-muted-foreground">Ticket not found.</p>
                     </div>
                 )}
-            </div>
+            </section>
         </div>
     );
 }

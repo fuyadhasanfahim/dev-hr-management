@@ -171,21 +171,6 @@ async function getDetails(req: Request, res: Response) {
     }
 }
 
-async function createTicket(req: Request, res: Response) {
-    try {
-        const { subject, category, priority, note } = req.body ?? {};
-        const ticket = await whatsappSupportService.createTicketFromConversation(req.params.id!, {
-            subject: typeof subject === 'string' ? subject.trim().slice(0, 120) : undefined,
-            category: typeof category === 'string' ? category : undefined,
-            priority: typeof priority === 'string' ? priority : undefined,
-            note: typeof note === 'string' ? note.trim().slice(0, 2000) : undefined,
-        });
-        return res.status(ticket.existing ? 200 : 201).json({ success: true, data: ticket });
-    } catch (err: any) {
-        return sendError(res, err);
-    }
-}
-
 async function listNotes(req: Request, res: Response) {
     try {
         return res.status(200).json({ success: true, data: await whatsappSupportService.listNotes(req.params.id!) });
@@ -228,7 +213,6 @@ async function deleteNote(req: Request, res: Response) {
 }
 
 export default {
-    createTicket,
     setAssignment,
     getDetails,
     listNotes,

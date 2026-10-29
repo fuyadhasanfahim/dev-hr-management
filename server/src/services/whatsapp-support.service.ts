@@ -28,8 +28,6 @@ import aiLearning from './ai-learning.service.js';
 import { enqueueWhatsAppSend } from './whatsapp-send.queue.js';
 import whatsappService from './whatsapp.service.js';
 import { notifyAgents } from '../socket/support.namespace.js';
-import TicketModel from '../models/ticket.model.js';
-import { createTicket } from './support-ticket.service.js';
 import type { IWhatsAppMessage } from '../models/whatsapp-message.model.js';
 
 const run = promisify(execFile);
@@ -563,59 +561,6 @@ export async function findByPhone<T extends { phone?: string }>(model: any, phon
     return candidates.find((c) => c.phone && lastDigits(c.phone) === tail) ?? null;
 }
 
-const TICKET_CATEGORIES = ['support', 'service', 'development', 'billing', 'bug'];
-const TICKET_PRIORITIES = ['low', 'medium', 'high', 'urgent'];
-
-/**
- * An agent raises a ticket from a WhatsApp chat (the AI does the same when it escalates). If the chat already has a
- * ticket that is still open, that one is returned instead of making a duplicate.
- */
-async function createTicketFromConversation(
-    conversationId: string,
-    input: { subject?: string; category?: string; priority?: string; note?: string },
-) {
-    const conversation = await WhatsAppConversationModel.findById(conversationId).lean();
-    if (!conversation) throw new InboxError('Conversation not found', 404);
-
-    if (conversation.linkedTicketId) {
-        const open: any = await TicketModel.findOne({ _id: conversation.linkedTicketId, status: { $nin: ['resolved', 'closed'] } })
-            .select('ticketId subject')
-            .lean();
-        if (open) return { id: String(open._id), ticketId: open.ticketId as string, subject: open.subject as string, existing: true };
-    }
-
-    const recent = await WhatsAppMessageModel.find({ conversationId, deletedAt: { $exists: false }, type: { $ne: WhatsAppMessageType.CALL } })
-        .sort({ createdAt: -1 })
-        .limit(60)
-        .select('sender body type createdAt')
-        .lean();
-    const transcript = recent
-        .reverse()
-        .map((m: any) => {
-            const who = m.sender === WhatsAppMessageSender.CUSTOMER ? 'Customer' : m.sender === WhatsAppMessageSender.AI ? 'AI' : 'Team';
-            return `[${who}]: ${m.body || `(${m.type})`}`;
-        })
-        .join('\n');
-
-    const phone = conversation.customerPhone;
-    const name = conversation.customerName || phone;
-    const client = await findByPhone<any>(ClientModel, phone, 'name').catch(() => null);
-    const ticket: any = await createTicket({
-        subject: input.subject || `WhatsApp: ${name}`,
-        text: [input.note, `--- Chat Transcript ---\n${transcript || '(no messages yet)'}`].filter(Boolean).join('\n\n'),
-        source: 'whatsapp',
-        category: input.category && TICKET_CATEGORIES.includes(input.category) ? input.category : 'support',
-        priority: input.priority && TICKET_PRIORITIES.includes(input.priority) ? input.priority : 'medium',
-        visitorName: name,
-        whatsappPhone: phone,
-        ...(client ? { clientId: client._id.toString() } : {}),
-    });
-
-    await WhatsAppConversationModel.updateOne({ _id: conversationId }, { $set: { linkedTicketId: ticket._id } });
-    notifyAgents('whatsapp:conversation_updated', { conversationId });
-    return { id: String(ticket._id), ticketId: ticket.ticketId as string, subject: ticket.subject as string, existing: false };
-}
-
 async function getCustomerDetails(conversationId: string) {
     const conversation = await WhatsAppConversationModel.findById(conversationId).lean();
     if (!conversation) throw new InboxError('Conversation not found', 404);
@@ -697,5 +642,4 @@ export default {
     setMemory,
     deleteNote,
     getCustomerDetails,
-    createTicketFromConversation,
 };

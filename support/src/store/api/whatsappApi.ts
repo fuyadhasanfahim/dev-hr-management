@@ -316,19 +316,6 @@ export const whatsappApi = baseApi.injectEndpoints({
             }),
             invalidatesTags: (_r, _e, { conversationId }) => ['WhatsAppConversations', { type: 'WhatsAppDetails', id: conversationId }],
         }),
-        // A person raises a ticket from the chat. An open ticket for the chat is returned instead of a second one.
-        createWhatsAppTicket: builder.mutation<
-            { id: string; ticketId: string; subject: string; existing: boolean },
-            { conversationId: string; subject?: string; category?: string; priority?: string; note?: string }
-        >({
-            query: ({ conversationId, ...body }) => ({
-                url: `/support/whatsapp/conversations/${conversationId}/ticket`,
-                method: 'POST',
-                body,
-            }),
-            transformResponse: (res: { data: { id: string; ticketId: string; subject: string; existing: boolean } }) => res.data,
-            invalidatesTags: (_r, _e, { conversationId }) => ['WhatsAppConversations', 'Tickets', { type: 'WhatsAppDetails', id: conversationId }],
-        }),
         getWhatsAppDetails: builder.query<WhatsAppCustomerDetails, string>({
             query: (conversationId) => `/support/whatsapp/conversations/${conversationId}/details`,
             transformResponse: (res: { data: WhatsAppCustomerDetails }) => res.data,
@@ -391,7 +378,6 @@ export const {
     useSetWhatsAppAiMutation,
     useMarkWhatsAppConversationReadMutation,
     useSetWhatsAppAssignmentMutation,
-    useCreateWhatsAppTicketMutation,
     useGetWhatsAppDetailsQuery,
     useSetWhatsAppMemoryMutation,
     useGetWhatsAppNotesQuery,

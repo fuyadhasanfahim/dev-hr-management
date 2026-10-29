@@ -3,7 +3,7 @@ import knowledgeBaseService, { KnowledgeBaseError } from '../services/knowledge-
 import whatsappAiService from '../services/whatsapp-ai.service.js';
 import { isSalesStage } from '../lib/sales-flow.js';
 import aiLearning from '../services/ai-learning.service.js';
-import { KB_LOW_CONFIDENCE } from '../constants/knowledge-base.js';
+import { KB_LOW_CONFIDENCE, parseKbChannel } from '../constants/knowledge-base.js';
 import { likePattern, pageMeta, parsePage } from '../utils/pagination.js';
 
 // Staff-fixable validation problems (too long, too many rules) are 400s with a message for the form.
@@ -87,7 +87,7 @@ async function testAnswer(req: Request, res: Response) {
 async function listGaps(req: Request, res: Response) {
     try {
         const p = parsePage(req.query);
-        const { items, total } = await knowledgeBaseService.listGaps({ like: likePattern(req.query.q), limit: p.limit, offset: p.offset });
+        const { items, total } = await knowledgeBaseService.listGaps({ like: likePattern(req.query.q), limit: p.limit, offset: p.offset, channel: parseKbChannel(req.query.channel) });
         return res.status(200).json({ success: true, data: items, meta: pageMeta(p, total) });
     } catch (err: any) {
         return fail(res, err);
@@ -104,9 +104,10 @@ async function deleteGap(req: Request, res: Response) {
 }
 
 // One cheap call for the header cards and every tab badge, so the page never has to load a full list to count it.
-async function stats(_req: Request, res: Response) {
+async function stats(req: Request, res: Response) {
     try {
-        const [kb, learning] = await Promise.all([knowledgeBaseService.chunkStats(), aiLearning.learningStats()]);
+        const channel = parseKbChannel(req.query.channel);
+        const [kb, learning] = await Promise.all([knowledgeBaseService.chunkStats(channel), aiLearning.learningStats(channel)]);
         return res.status(200).json({ success: true, data: { ...kb, ...learning } });
     } catch (err: any) {
         return fail(res, err);

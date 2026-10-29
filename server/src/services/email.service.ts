@@ -658,6 +658,52 @@ const sendSupportOtpEmail = async (data: SendSupportOtpData) => {
     }
 };
 
+interface SendTicketEmailData {
+    to: string;
+    name: string;
+    ticketId: string;
+    subject: string;
+    trackUrl: string;
+    kind: 'created' | 'reply';
+    preview?: string;
+}
+
+const escapeHtml = (v: string) =>
+    v.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+/** "Your ticket is open" / "We replied" with a private link to follow it and talk to us. The link is the only key. */
+const sendTicketEmail = async (data: SendTicketEmailData) => {
+    const first = escapeHtml(data.name.trim().split(/\s+/)[0] || 'there');
+    const created = data.kind === 'created';
+    const emailHtml = `
+        <div style="font-family: sans-serif; max-width: 560px; margin: 0 auto; padding: 24px; border: 1px solid #e5e5ea; border-radius: 16px;">
+            <h2 style="color: #5314d6; margin: 0 0 12px;">${created ? 'We\'ve received your ticket' : 'We replied to your ticket'}</h2>
+            <p>Hi ${first},</p>
+            <p>${created ? 'Your ticket is open. Keep this number for reference:' : 'There is a new reply on your ticket:'}</p>
+            <p style="font-family: monospace; font-size: 20px; font-weight: bold; margin: 12px 0;">${escapeHtml(data.ticketId)}</p>
+            <p style="color: #444; margin: 0 0 8px;">${escapeHtml(data.subject)}</p>
+            ${data.preview ? `<blockquote style="margin: 12px 0; padding: 10px 14px; background: #f5f2ff; border-radius: 8px; color: #333;">${escapeHtml(data.preview)}</blockquote>` : ''}
+            <p style="margin: 20px 0;">
+                <a href="${data.trackUrl}" style="background: #5314d6; color: #ffffff; text-decoration: none; padding: 12px 22px; border-radius: 999px; font-weight: bold; display: inline-block;">Track your ticket and reply</a>
+            </p>
+            <p style="color: #8e8e93; font-size: 12px;">This link is private to you: anyone who has it can read this ticket and reply as you, so please don't forward this email.</p>
+            <hr style="border: 0; border-top: 1px solid #e5e5ea; margin: 20px 0;" />
+            <p style="font-size: 12px; color: #8e8e93; margin: 0;">Web Briks LLC</p>
+        </div>
+    `;
+    try {
+        return await transporter.sendMail({
+            from: 'Support | WebBriks',
+            to: data.to,
+            subject: `${created ? 'Ticket received' : 'New reply'} [${data.ticketId}] - WebBriks`,
+            html: emailHtml,
+        });
+    } catch (error) {
+        console.error('Error sending ticket email:', error);
+        throw error;
+    }
+};
+
 interface SendConsultationScheduledData {
     to: string;
     clientName: string;
@@ -749,6 +795,7 @@ export default {
     sendMeetingReminderEmail,
     sendMeetingCancellationEmail,
     sendSupportOtpEmail,
+    sendTicketEmail,
     sendConsultationScheduledEmail,
     sendTaskNotificationEmail,
     sendPaymentReminderEmail,
