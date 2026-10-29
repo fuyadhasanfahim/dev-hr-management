@@ -189,6 +189,7 @@ router.post('/chat/sessions/:sessionId/claim', requireUnifiedAuth, restrictTo('a
 router.post('/chat/sessions/:sessionId/handoff-whatsapp', requireUnifiedAuth, supportAccess, SupportController.handOffChatToWhatsApp);
 router.post('/chat/sessions/:sessionId/close', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), SupportController.closeChatSessionParam);
 router.post('/chat/sessions/:sessionId/convert', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), validateRequest(ConvertChatToTicketValidation), SupportController.convertChatToTicketParam);
+router.get('/chat/sessions/:sessionId/tickets', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), SupportController.listChatVisitorTickets);
 router.post('/chat/sessions/:sessionId/reassign', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), SupportController.reassignChatSession);
 
 router.patch('/tickets/:id', requireUnifiedAuth, restrictTo('admin', 'super_admin', 'manager', 'staff'), validateRequest(UpdateTicketValidation), SupportController.updateTicket);

@@ -9,10 +9,13 @@ export function isImageUrl(url: string): boolean {
     return /\.(png|jpe?g|gif|webp|svg)(\?|$)/i.test(url);
 }
 
+const UUID_PREFIX = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}__/i;
+
+/** The name the sender gave the file: new uploads keep it after the id ("<uuid>__Invoice.pdf"). */
 export function getFileName(url: string): string {
     try {
         const pathname = new URL(url).pathname;
-        return decodeURIComponent(pathname.split('/').pop() || 'file');
+        return decodeURIComponent(pathname.split('/').pop() || 'file').replace(UUID_PREFIX, '');
     } catch {
         return 'file';
     }

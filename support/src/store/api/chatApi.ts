@@ -39,6 +39,16 @@ export interface WebInboxChat {
     whatsappConversationId: string | null;
 }
 
+export interface ChatVisitorTicket {
+    id: string;
+    ticketId: string;
+    subject: string;
+    status: string;
+    category?: string;
+    source?: string;
+    createdAt: string;
+}
+
 export interface ChatMessage {
     _id: string;
     sessionId: string;
@@ -134,23 +144,24 @@ export const chatApi = baseApi.injectEndpoints({
             }),
             invalidatesTags: ['ActiveSessions', 'QueuedSessions', 'WebInbox'],
         }),
+        // Opens a ticket from a website chat: the visitor is emailed their private link and gets a ticket card in the chat.
         convertToTicket: builder.mutation<
             { ticketId: string },
-            { sessionId: string; reason?: string }
+            { sessionId: string; reason?: string; subject?: string; category?: string }
         >({
-            query: ({ sessionId, reason }) => ({
+            query: ({ sessionId, ...body }) => ({
                 url: `/support/chat/sessions/${sessionId}/convert`,
                 method: 'POST',
-                body: reason ? { reason } : {},
+                body: Object.fromEntries(Object.entries(body).filter(([, v]) => typeof v === 'string' && v.trim())),
             }),
             transformResponse: (res: { data: { ticketId: string } }) => res.data,
-            invalidatesTags: ['ActiveSessions'],
+            invalidatesTags: ['ActiveSessions', 'WebInbox', 'Tickets'],
         }),
-        // Moves a website chat to WhatsApp: the visitor is messaged there, the chat becomes a WhatsApp conversation.
-        handOffToWhatsApp: builder.mutation<{ conversationId: string }, string>({
-            query: (sessionId) => ({ url: `/support/chat/sessions/${sessionId}/handoff-whatsapp`, method: 'POST' }),
-            transformResponse: (res: { data: { conversationId: string } }) => res.data,
-            invalidatesTags: ['WebInbox', 'WhatsAppConversations', 'Tickets'],
+        // The person behind a website chat: their tickets, newest first.
+        getChatVisitorTickets: builder.query<ChatVisitorTicket[], string>({
+            query: (sessionId) => `/support/chat/sessions/${sessionId}/tickets`,
+            transformResponse: (res: { data: ChatVisitorTicket[] }) => res.data ?? [],
+            providesTags: ['Tickets'],
         }),
         getUnreadCounts: builder.query<Record<string, number>, void>({
             query: () => '/support/chat/sessions/unread-counts',
@@ -216,7 +227,7 @@ export const chatApi = baseApi.injectEndpoints({
 
 export const {
     useGetWebInboxQuery,
-    useHandOffToWhatsAppMutation,
+    useGetChatVisitorTicketsQuery,
     useGetQueuedSessionsQuery,
     useGetActiveSessionsQuery,
     useGetResolvedSessionsQuery,

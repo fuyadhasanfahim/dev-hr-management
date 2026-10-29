@@ -11,7 +11,6 @@ import {
     type FormEvent,
     type KeyboardEvent,
 } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useGetAiStatusQuery } from '@/store/api/aiSettingsApi';
@@ -39,7 +38,6 @@ import {
     Search,
     Send,
     Smile,
-    Ticket,
     Trash2,
     Upload,
     UserCheck,
@@ -71,7 +69,7 @@ import { ConversationInfoPanel } from '@/components/messages/conversation-info-p
 import { MediaLightbox } from '@/components/messages/media-lightbox';
 import { WebChatThread } from '@/components/messages/web-chat-thread';
 import { WebChatInfoPanel } from '@/components/messages/web-chat-info-panel';
-import { WhatsAppHandoffDialog } from '@/components/messages/whatsapp-handoff-dialog';
+import { OpenTicketDialog } from '@/components/messages/open-ticket-dialog';
 import { GROUP_WINDOW_MS, bubbleCorners, bubbleSpring, dateLabel, formatTime } from '@/components/messages/thread-utils';
 import { useGetWebInboxQuery, type WebInboxChat } from '@/store/api/chatApi';
 import { DeleteMessageDialog, EditMessageDialog, MessageMenu } from '@/components/messages/message-actions';
@@ -85,7 +83,6 @@ import {
     useDeleteWhatsAppMessageMutation,
     useEditWhatsAppMessageMutation,
     useGetWhatsAppConversationsQuery,
-    useGetWhatsAppDetailsQuery,
     useGetWhatsAppMessagesQuery,
     useMarkWhatsAppConversationReadMutation,
     useRetryWhatsAppMessageMutation,
@@ -661,7 +658,7 @@ export function MessagesView({ conversationId, webSessionId }: { conversationId?
     const [search, setSearch] = useState('');
     const [filter, setFilter] = useState<Filter>('all');
     const [channel, setChannel] = useState<Channel>('all');
-    const [handoffOpen, setHandoffOpen] = useState(false);
+    const [ticketOpen, setTicketOpen] = useState(false);
     const [draft, setDraft] = useState('');
     const [emojiOpen, setEmojiOpen] = useState(false);
     const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -1088,7 +1085,7 @@ export function MessagesView({ conversationId, webSessionId }: { conversationId?
                             sessionId={webSessionId}
                             infoOpen={infoOpen}
                             onToggleInfo={() => setInfoOpen((o) => !o)}
-                            onOpenWhatsApp={() => setHandoffOpen(true)}
+                            onOpenTicket={() => setTicketOpen(true)}
                         />
                     ) : !selected ? (
                         <div className="flex-1 flex flex-col items-center justify-center text-center gap-2">
@@ -1335,7 +1332,7 @@ export function MessagesView({ conversationId, webSessionId }: { conversationId?
                             chat={webChat}
                             onClose={() => setInfoOpen(false)}
                             fullScreen={isMobile}
-                            onOpenWhatsApp={() => setHandoffOpen(true)}
+                            onOpenTicket={() => setTicketOpen(true)}
                         />
                     )}
                     {infoOpen && !webSessionId && selected && (
@@ -1354,7 +1351,7 @@ export function MessagesView({ conversationId, webSessionId }: { conversationId?
                 </AnimatePresence>
             </div>
 
-            <WhatsAppHandoffDialog chat={webChat} open={handoffOpen} onOpenChange={setHandoffOpen} />
+            <OpenTicketDialog chat={webChat} open={ticketOpen} onOpenChange={setTicketOpen} />
 
             {lightbox && (
                 <MediaLightbox key={lightbox.key} items={lightbox.items} index={lightbox.index} onClose={() => setLightbox(null)} />

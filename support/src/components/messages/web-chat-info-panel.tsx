@@ -9,7 +9,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { CustomerAvatar } from '@/components/messages/customer-avatar';
 import { cn } from '@/lib/utils';
-import type { WebInboxChat } from '@/store/api/chatApi';
+import { useGetChatVisitorTicketsQuery, type WebInboxChat } from '@/store/api/chatApi';
 
 function Row({ icon: Icon, label, children }: { icon: React.ElementType; label: string; children: React.ReactNode }) {
     return (
@@ -35,14 +35,16 @@ export function WebChatInfoPanel({
     chat,
     onClose,
     fullScreen = false,
-    onOpenWhatsApp,
+    onOpenTicket,
 }: {
     chat: WebInboxChat;
     onClose: () => void;
     fullScreen?: boolean;
-    onOpenWhatsApp: () => void;
+    onOpenTicket: () => void;
 }) {
     const v = chat.visitor;
+    const { data: tickets = [] } = useGetChatVisitorTicketsQuery(chat.sessionId);
+    const canOpenTicket = chat.status !== 'ended' && chat.status !== 'converted_to_ticket';
     return (
         <motion.aside
             initial={fullScreen ? { x: '100%' } : { width: 0, opacity: 0 }}
@@ -90,16 +92,10 @@ export function WebChatInfoPanel({
                                 {v.phone}
                             </Row>
                         )}
-                        {chat.ticket && (
-                            <Row icon={Ticket} label="Ticket">
-                                <Link href={`/tickets?ticket=${chat.ticket.id}`} className="font-medium text-primary hover:underline">
-                                    {chat.ticket.ticketId}
-                                </Link>{' '}
-                                <span className="text-muted-foreground capitalize">· {chat.ticket.status.replace('_', ' ')}</span>
-                            </Row>
-                        )}
                     </div>
-                    <Separator />
+                    {canOpenTicket || chat.whatsappConversationId ? (
+                        <>
+                            <Separator />
                     <div className="space-y-2 px-4 py-4">
                         {chat.whatsappConversationId ? (
                             <Button asChild variant="outline" className="w-full gap-2">
@@ -109,13 +105,38 @@ export function WebChatInfoPanel({
                                 </Link>
                             </Button>
                         ) : (
-                            <Button variant="outline" className="w-full gap-2" disabled={!v.phone} onClick={onOpenWhatsApp}>
-                                <MessageCircle className="size-4 text-emerald-600" />
-                                Open in WhatsApp
-                            </Button>
+                            canOpenTicket && (
+                                <Button className="w-full gap-2" onClick={onOpenTicket}>
+                                    <Ticket className="size-4" />
+                                    Open a ticket
+                                </Button>
+                            )
                         )}
-                        {!v.phone && !chat.whatsappConversationId && (
-                            <p className="text-xs text-muted-foreground">This visitor did not leave a phone number.</p>
+                    </div>
+                        </>
+                    ) : null}
+                    <Separator />
+                    <div className="px-4 py-4">
+                        <p className="mb-2 flex items-center justify-between text-xs font-medium text-muted-foreground">
+                            Tickets
+                            <span className="tabular-nums">{tickets.length}</span>
+                        </p>
+                        {tickets.length === 0 ? (
+                            <p className="text-sm text-muted-foreground">No tickets for this visitor yet.</p>
+                        ) : (
+                            <ul className="space-y-1.5">
+                                {tickets.map((t) => (
+                                    <li key={t.id}>
+                                        <Link href={`/tickets?ticket=${t.id}`} className="block rounded-lg border px-3 py-2 transition-colors hover:bg-sidebar-accent">
+                                            <span className="flex items-center justify-between gap-2">
+                                                <span className="font-mono text-xs font-medium">{t.ticketId}</span>
+                                                <span className="text-[11px] capitalize text-muted-foreground">{t.status.replace('_', ' ')}</span>
+                                            </span>
+                                            <span className="mt-0.5 block truncate text-xs text-muted-foreground">{t.subject}</span>
+                                        </Link>
+                                    </li>
+                                ))}
+                            </ul>
                         )}
                     </div>
                 </ScrollArea>

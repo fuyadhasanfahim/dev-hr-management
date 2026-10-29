@@ -7,6 +7,7 @@ import {
     useEffect,
     type ChangeEvent,
     type KeyboardEvent,
+    type FormEvent,
 } from 'react';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
@@ -16,7 +17,7 @@ import {
     Search,
     Loader2,
     Send,
-    Paperclip,
+    Smile,
     Clock,
     CheckCircle2,
     Circle,
@@ -36,6 +37,11 @@ import { format } from 'date-fns';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { AttachmentPreview } from '@/components/messages/chat-attachment';
+import { AttachMenu, AttachmentTray, releasePending, toPending, type PendingAttachment } from '@/components/messages/composer-attachments';
+import { bubbleCorners, dateLabel, formatTime, GROUP_WINDOW_MS } from '@/components/messages/thread-utils';
+import { EmojiPicker, EmojiPickerContent, EmojiPickerFooter, EmojiPickerSearch } from '@/components/ui/emoji-picker';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -221,7 +227,7 @@ function avatarColor(name: string): string {
 // Split it out so the customer's actual message reads cleanly and the transcript
 // can be tucked into a collapsible block.
 function splitTicketBody(text: string): { description: string; transcript: string | null } {
-    const markers = ['--- Chat Transcript ---', '--- Prior AI Chat ---'];
+    const markers = ['--- Chat Transcript ---', '--- Prior AI Chat ---', 'Chat Transcript:'];
     let idx = -1;
     for (const m of markers) {
         const i = text.indexOf(m);
@@ -439,10 +445,11 @@ function ChatTranscript({ raw }: { raw: string }) {
             {open && (
                 <div className="px-3.5 pb-3 pt-2 space-y-2 border-t border-border/40">
                     {lines.map((line, i) => {
-                        const m = line.match(/^\[([^\]]+)\]:\s*(.*)$/);
-                        const role = m ? m[1] : '';
-                        const text = m ? m[2] : line;
-                        const isCustomer = /customer|client/i.test(role);
+                        const live = line.match(/^\[[^\]]+\]\s+(\w+)\s+\(([^)]*)\):\s*(.*)$/);
+                        const m = live ? null : line.match(/^\[([^\]]+)\]:\s*(.*)$/);
+                        const role = live ? live[2] || live[1] : m ? m[1] : '';
+                        const text = live ? live[3] : m ? m[2] : line;
+                        const isCustomer = /customer|client|guest/i.test(live ? live[1] : role);
                         return (
                             <div key={i} className="text-xs leading-relaxed">
                                 {role && (
@@ -467,76 +474,66 @@ function ChatTranscript({ raw }: { raw: string }) {
     );
 }
 
-function MessageBubble({
-    senderName,
-    content,
-    attachments,
-    createdAt,
-    isStaff,
-}: {
-    senderName: string;
-    content: string;
+interface ThreadMessage {
+    id: string;
+    isStaff: boolean;
+    sender: string;
+    name: string;
+    text: string;
     attachments: string[];
     createdAt: string;
-    isStaff: boolean;
-}) {
+}
+interface Run {
+    key: string;
+    messages: ThreadMessage[];
+}
+interface Day {
+    label: string;
+    runs: Run[];
+}
+
+// Same grouping as the Messages thread: day pills, then runs of one sender within a few minutes.
+function buildDays(messages: ThreadMessage[]): Day[] {
+    const days: Day[] = [];
+    for (const m of messages) {
+        const label = dateLabel(m.createdAt);
+        let day = days[days.length - 1];
+        if (!day || day.label !== label) {
+            day = { label, runs: [] };
+            days.push(day);
+        }
+        const run = day.runs[day.runs.length - 1];
+        const prev = run?.messages[run.messages.length - 1];
+        const joins = run && prev && prev.sender === m.sender && new Date(m.createdAt).getTime() - new Date(prev.createdAt).getTime() < GROUP_WINDOW_MS;
+        if (joins) run.messages.push(m);
+        else day.runs.push({ key: m.id, messages: [m] });
+    }
+    return days;
+}
+
+function TicketBubble({ m, first, last }: { m: ThreadMessage; first: boolean; last: boolean }) {
+    const text = m.text && m.text !== '(attachment)' ? m.text : '';
     return (
-        <div
-            className={cn(
-                'flex items-end gap-2.5 group',
-                isStaff ? 'flex-row-reverse' : 'flex-row',
-            )}
-        >
-            {!isStaff && (
-                <Avatar className="size-7 shrink-0 mb-5">
-                    <AvatarFallback
-                        className={cn('text-[10px] font-semibold', avatarColor(senderName))}
-                    >
-                        {senderName.charAt(0).toUpperCase()}
-                    </AvatarFallback>
-                </Avatar>
-            )}
+        <div className={cn('flex flex-col', m.isStaff ? 'items-end' : 'items-start', first ? 'mt-3' : 'mt-0.5')}>
+            {first && <span className="mb-1 px-1 text-[10px] font-medium text-muted-foreground">{m.name}</span>}
             <div
                 className={cn(
-                    'max-w-[70%] space-y-1',
-                    isStaff ? 'items-end' : 'items-start',
+                    'relative max-w-[85%] md:max-w-[70%] break-words px-3 py-1.5 text-sm leading-relaxed shadow-sm',
+                    bubbleCorners(m.isStaff, first, last),
+                    m.isStaff ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground',
                 )}
             >
-                <p
-                    className={cn(
-                        'text-[11px] text-muted-foreground px-1 font-medium',
-                        isStaff && 'text-right',
-                    )}
-                >
-                    {senderName}
-                </p>
-                <div
-                    className={cn(
-                        'px-3.5 py-2.5 text-sm leading-relaxed break-words shadow-sm whitespace-pre-wrap',
-                        isStaff
-                            ? 'bg-primary text-primary-foreground rounded-2xl rounded-br-md'
-                            : 'bg-muted text-foreground rounded-2xl rounded-bl-md',
-                    )}
-                >
-                    {content && content !== '(attachment)' && (
-                        <ClampedText text={content} tone={isStaff ? 'staff' : 'customer'} />
-                    )}
-                    {attachments?.length > 0 && (
-                        <div className="space-y-1.5">
-                            {attachments.map((url, i) => (
-                                <AttachmentChip key={i} url={url} />
-                            ))}
-                        </div>
-                    )}
-                </div>
-                <p
-                    className={cn(
-                        'text-[10px] text-muted-foreground px-1 opacity-0 group-hover:opacity-100 transition-opacity',
-                        isStaff && 'text-right',
-                    )}
-                >
-                    {format(new Date(createdAt), 'MMM d, h:mm a')}
-                </p>
+                {text && <ClampedText text={text} tone={m.isStaff ? 'staff' : 'customer'} />}
+                {m.attachments.length > 0 && (
+                    <div className="space-y-1.5 py-0.5">
+                        {m.attachments.map((url) => (
+                            <AttachmentChip key={url} url={url} />
+                        ))}
+                    </div>
+                )}
+                <span className={cn('float-right ml-2 mt-1.5 text-[10px] leading-none', m.isStaff ? 'text-primary-foreground/70' : 'text-muted-foreground')}>
+                    {formatTime(m.createdAt)}
+                </span>
             </div>
         </div>
     );
@@ -553,9 +550,10 @@ export default function TicketsPage() {
     const [categoryFilter, setCategoryFilter] = useState<TicketCategory | 'all'>('all');
     const [searchQuery, setSearchQuery] = useState('');
     const [replyValue, setReplyValue] = useState('');
-    const [uploading, setUploading] = useState(false);
+    const [pending, setPending] = useState<PendingAttachment[]>([]);
+    const [sending, setSending] = useState(false);
+    const [emojiOpen, setEmojiOpen] = useState(false);
     const [infoOpen, setInfoOpen] = useState(false);
-    const fileInputRef = useRef<HTMLInputElement>(null);
     const threadEndRef = useRef<HTMLDivElement>(null);
 
     const ticketQueryArgs = (() => {
@@ -567,7 +565,7 @@ export default function TicketsPage() {
     const { data: tickets = [], isLoading: ticketsLoading } = useGetTicketsQuery(ticketQueryArgs, { pollingInterval: 30_000 });
     const { data: ticket, isFetching: detailLoading } = useGetTicketDetailQuery(selectedId!, { skip: !selectedId });
     const { data: agents = [] } = useGetAvailableAgentsQuery();
-    const [replyToTicket, { isLoading: isSending }] = useReplyToTicketMutation();
+    const [replyToTicket] = useReplyToTicketMutation();
     const [updateStatus, { isLoading: isUpdatingStatus }] = useUpdateTicketStatusMutation();
     const [updateTicket, { isLoading: isUpdating }] = useUpdateTicketMutation();
     const [assignToSelf, { isLoading: isAssigning }] = useAssignTicketToSelfMutation();
@@ -593,62 +591,65 @@ export default function TicketsPage() {
         router.replace(params.size ? `?${params.toString()}` : '?', { scroll: false });
     }, [router, searchParams]);
 
+    // What goes out is the caption and the picked files together, as one message.
     const sendReply = useCallback(
-        async (text?: string, attachments?: string[]) => {
-            if (!ticket) return;
-            const body = text ?? replyValue.trim();
-            if (!body && (!attachments || attachments.length === 0)) return;
-            const result = await replyToTicket({ id: ticket._id, text: body || '(attachment)', attachments });
-            if ('error' in result) {
-                toast.error('Could not send the reply. Try again.');
-                return;
-            }
-            if (!text) setReplyValue('');
-            // Replies reach the customer by email: say so when there is nobody to email.
-            if ((result.data as { emailed?: boolean } | undefined)?.emailed === false) {
-                toast.warning('Reply saved, but this ticket has no email on file, so the customer was not notified.');
+        async (e?: FormEvent) => {
+            e?.preventDefault();
+            if (!ticket || sending) return;
+            const body = replyValue.trim();
+            if (!body && pending.length === 0) return;
+            setSending(true);
+            try {
+                const urls: string[] = [];
+                for (const p of pending) {
+                    const result = await requestPresignedUrl({
+                        fileName: p.file.name,
+                        fileType: p.file.type,
+                        fileSize: p.file.size,
+                        folder: 'tickets',
+                        referenceId: ticket._id,
+                    }).unwrap();
+                    const put = await fetch(result.uploadUrl, { method: 'PUT', headers: { 'Content-Type': p.file.type }, body: p.file });
+                    if (!put.ok) throw new Error(`Upload failed (${put.status})`);
+                    urls.push(result.fileUrl);
+                }
+                const result = await replyToTicket({ id: ticket._id, text: body || '(attachment)', attachments: urls });
+                if ('error' in result) {
+                    toast.error('Could not send the reply. Try again.');
+                    return;
+                }
+                releasePending(pending);
+                setPending([]);
+                setReplyValue('');
+                // Replies reach the customer by email: say so when there is nobody to email.
+                if ((result.data as { emailed?: boolean } | undefined)?.emailed === false) {
+                    toast.warning('Reply saved, but this ticket has no email on file, so the customer was not notified.');
+                }
+            } catch (err) {
+                toast.error(err instanceof Error ? err.message : 'Could not send the reply. Try again.');
+            } finally {
+                setSending(false);
             }
         },
-        [ticket, replyValue, replyToTicket],
+        [ticket, sending, replyValue, pending, requestPresignedUrl, replyToTicket],
     );
 
     const handleKeyDown = useCallback(
-        (e: KeyboardEvent<HTMLInputElement>) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
+        (e: KeyboardEvent<HTMLTextAreaElement>) => {
+            if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
                 e.preventDefault();
-                sendReply();
+                void sendReply();
             }
         },
         [sendReply],
     );
 
-    const handleFileUpload = useCallback(
-        async (e: ChangeEvent<HTMLInputElement>) => {
-            const files = e.target.files;
-            if (!files?.length || !ticket) return;
-            setUploading(true);
-            const urls: string[] = [];
-            for (const file of Array.from(files)) {
-                try {
-                    const result = await requestPresignedUrl({
-                        fileName: file.name,
-                        fileType: file.type,
-                        fileSize: file.size,
-                        folder: 'tickets',
-                        referenceId: ticket._id,
-                    }).unwrap();
-                    await fetch(result.uploadUrl, { method: 'PUT', headers: { 'Content-Type': file.type }, body: file });
-                    urls.push(result.fileUrl);
-                } catch {
-                    // skip failed uploads
-                }
-            }
-            if (urls.length > 0) await sendReply('(attachment)', urls);
-            setUploading(false);
-            if (fileInputRef.current) fileInputRef.current.value = '';
-        },
-        [ticket, requestPresignedUrl, sendReply],
-    );
+    const addAttachments = (files: File[]) => setPending((prev) => [...prev, ...toPending(files)]);
+    const removeAttachment = (id: string) =>
+        setPending((prev) => {
+            releasePending(prev.filter((p) => p.id === id));
+            return prev.filter((p) => p.id !== id);
+        });
 
     const filteredTickets = searchQuery
         ? tickets.filter((t) => {
@@ -666,6 +667,37 @@ export default function TicketsPage() {
         : tickets;
 
     const ticketUser = ticket ? getTicketUser(ticket) : null;
+    const split = ticket ? splitTicketBody(ticket.text || ticket.subject) : { description: '', transcript: null };
+    // A ticket opened from a live chat starts with a system header: say that in a line, the chat is in the transcript.
+    const fromChat = /^\[System: Converted from Support Live Chat\]/.test(split.description);
+    const description = fromChat
+        ? `Opened from the website live chat.${split.description.match(/Reason: (.+)/)?.[1] ? ` ${split.description.match(/Reason: (.+)/)?.[1]}` : ' The conversation is below.'}`
+        : split.description;
+    const transcript = split.transcript;
+    const days = buildDays(
+        ticket
+            ? [
+                  {
+                      id: 'first',
+                      isStaff: false,
+                      sender: 'customer',
+                      name: ticketUser?.name ?? 'Guest',
+                      text: description || ticket.subject,
+                      attachments: ticket.attachments ?? [],
+                      createdAt: ticket.createdAt,
+                  },
+                  ...ticket.replies.map((r: TicketReply) => ({
+                      id: r._id,
+                      isStaff: r.senderType === 'staff',
+                      sender: r.senderId?._id ?? r.senderType,
+                      name: r.senderId?.name || r.senderName || (r.senderType === 'staff' ? 'Support' : ticketUser?.name ?? 'Customer'),
+                      text: r.text || r.content,
+                      attachments: r.attachments ?? [],
+                      createdAt: r.createdAt,
+                  })),
+              ]
+            : [],
+    );
     const ticketPhone = ticket ? getTicketPhone(ticket) : null;
     const isClosed = ticket?.status === 'closed';
 
@@ -810,45 +842,28 @@ export default function TicketsPage() {
                         <div className="flex min-h-0 flex-1">
                             <div className="flex min-w-0 flex-1 flex-col">
                                 {/* Conversation thread */}
-                                <div className="flex-1 min-h-0 overflow-y-auto">
-                                    <div className="px-4 py-5 space-y-4 max-w-3xl mx-auto">
-                                        {(() => {
-                                            const { description, transcript } = splitTicketBody(ticket.text || ticket.subject);
-                                            return (
-                                                <>
-                                                    <MessageBubble
-                                                        senderName={ticketUser?.name ?? 'Guest'}
-                                                        content={description || ticket.subject}
-                                                        attachments={ticket.attachments ?? []}
-                                                        createdAt={ticket.createdAt}
-                                                        isStaff={false}
-                                                    />
-                                                    {transcript && (
-                                                        <div className="pl-[38px] pr-2">
-                                                            <ChatTranscript raw={transcript} />
-                                                        </div>
-                                                    )}
-                                                </>
-                                            );
-                                        })()}
-
-                                        {ticket.replies.map((reply: TicketReply) => {
-                                            const isStaff = reply.senderType === 'staff';
-                                            const name = reply.senderId?.name || reply.senderName || (isStaff ? 'Support' : 'Client');
-                                            return (
-                                                <MessageBubble
-                                                    key={reply._id}
-                                                    senderName={name}
-                                                    content={reply.text || reply.content}
-                                                    attachments={reply.attachments ?? []}
-                                                    createdAt={reply.createdAt}
-                                                    isStaff={isStaff}
-                                                />
-                                            );
-                                        })}
-                                        <div ref={threadEndRef} />
+                                <ScrollArea className="min-h-0 flex-1">
+                                    <div className="mx-auto max-w-3xl px-4 py-2">
+                                        {days.map((day) => (
+                                            <div key={day.label}>
+                                                <div className="sticky top-0 z-10 flex items-center justify-center py-2">
+                                                    <span className="rounded-full bg-muted px-3 py-1 text-[11px] text-muted-foreground shadow-sm">{day.label}</span>
+                                                </div>
+                                                {day.runs.map((run) =>
+                                                    run.messages.map((m, i) => (
+                                                        <TicketBubble key={m.id} m={m} first={i === 0} last={i === run.messages.length - 1} />
+                                                    )),
+                                                )}
+                                            </div>
+                                        ))}
+                                        {transcript && (
+                                            <div className="mt-4">
+                                                <ChatTranscript raw={transcript} />
+                                            </div>
+                                        )}
+                                        <div ref={threadEndRef} className="h-3" />
                                     </div>
-                                </div>
+                                </ScrollArea>
 
                                 {/* Reply box */}
                                 {isClosed ? (
@@ -859,44 +874,36 @@ export default function TicketsPage() {
                                         </p>
                                     </div>
                                 ) : (
-                                    <div className="shrink-0 border-t p-3">
-                                        <div className="flex items-center gap-2">
-                                            <input
-                                                ref={fileInputRef}
-                                                type="file"
-                                                multiple
-                                                accept="image/png,image/jpeg,image/gif,image/webp,application/pdf,.docx,.xlsx,.txt"
-                                                className="hidden"
-                                                onChange={handleFileUpload}
-                                            />
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                className="size-10 shrink-0 rounded-full"
-                                                onClick={() => fileInputRef.current?.click()}
-                                                disabled={uploading}
-                                                aria-label="Attach a file"
-                                            >
-                                                {uploading ? <Loader2 className="size-4 animate-spin" /> : <Paperclip className="size-4" />}
-                                            </Button>
-                                            <Input
-                                                type="text"
+                                    <div className="shrink-0 border-t">
+                                        <AttachmentTray items={pending} onRemove={removeAttachment} />
+                                        <form onSubmit={sendReply} className="flex items-end gap-1.5 px-2 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] md:gap-2 md:px-3 md:py-3">
+                                            <AttachMenu onPick={addAttachments} />
+                                            <Popover open={emojiOpen} onOpenChange={setEmojiOpen}>
+                                                <PopoverTrigger asChild>
+                                                    <Button type="button" variant="ghost" size="icon" className="size-10 shrink-0" aria-label="Emoji">
+                                                        <Smile className="size-4" />
+                                                    </Button>
+                                                </PopoverTrigger>
+                                                <PopoverContent side="top" align="start" className="w-fit p-0">
+                                                    <EmojiPicker className="h-[342px]" onEmojiSelect={({ emoji }) => setReplyValue((v) => v + emoji)}>
+                                                        <EmojiPickerSearch />
+                                                        <EmojiPickerContent />
+                                                        <EmojiPickerFooter />
+                                                    </EmojiPicker>
+                                                </PopoverContent>
+                                            </Popover>
+                                            <Textarea
+                                                rows={1}
                                                 value={replyValue}
-                                                onChange={(e: ChangeEvent<HTMLInputElement>) => setReplyValue(e.target.value)}
+                                                onChange={(e) => setReplyValue(e.target.value)}
                                                 onKeyDown={handleKeyDown}
-                                                placeholder="Reply to the customer"
-                                                className="h-10 flex-1 rounded-full px-4"
+                                                placeholder={pending.length ? 'Add a caption' : 'Reply to the customer'}
+                                                className="max-h-36 min-h-10 overflow-y-auto py-2.5 leading-5"
                                             />
-                                            <Button
-                                                size="icon"
-                                                onClick={() => sendReply()}
-                                                disabled={!replyValue.trim() || isSending}
-                                                className="size-10 shrink-0 rounded-full"
-                                                aria-label="Send reply"
-                                            >
-                                                {isSending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
+                                            <Button type="submit" size="icon" className="size-10 shrink-0 rounded-full" aria-label="Send reply" disabled={(!replyValue.trim() && !pending.length) || sending}>
+                                                {sending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
                                             </Button>
-                                        </div>
+                                        </form>
                                     </div>
                                 )}
                             </div>

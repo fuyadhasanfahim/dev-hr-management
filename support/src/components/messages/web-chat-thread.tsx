@@ -77,12 +77,12 @@ export function WebChatThread({
     sessionId,
     infoOpen,
     onToggleInfo,
-    onOpenWhatsApp,
+    onOpenTicket,
 }: {
     sessionId: string;
     infoOpen: boolean;
     onToggleInfo: () => void;
-    onOpenWhatsApp: () => void;
+    onOpenTicket: () => void;
 }) {
     const router = useRouter();
     const dispatch = useDispatch<AppDispatch>();
@@ -345,10 +345,10 @@ export function WebChatThread({
                             </Link>
                         </Button>
                     )}
-                    {chat && !onWhatsApp && !ended && (
-                        <Button variant="ghost" size="sm" className="h-8 gap-1.5 px-2 text-xs sm:px-3" disabled={!chat.visitor.phone} onClick={onOpenWhatsApp} title={chat.visitor.phone ? 'Continue this chat on WhatsApp' : 'No phone number'}>
-                            <MessageCircle className="size-3.5 text-emerald-600" />
-                            <span className="hidden sm:inline">Open in WhatsApp</span>
+                    {chat && !onWhatsApp && !ended && chat.status !== 'converted_to_ticket' && (
+                        <Button variant="ghost" size="sm" className="h-8 gap-1.5 px-2 text-xs sm:px-3" onClick={onOpenTicket} title="Open a ticket for this visitor">
+                            <Ticket className="size-3.5" />
+                            <span className="hidden sm:inline">Open a ticket</span>
                         </Button>
                     )}
                     {onWhatsApp && chat?.whatsappConversationId && (
@@ -386,6 +386,16 @@ export function WebChatThread({
                                     {day.runs.map((run) =>
                                         run.messages.map((m, i) => {
                                             if (m.senderModel === 'System') {
+                                                // The ticket link posted in the chat: agents see a short line, not the long URL.
+                                                const opened = m.content.match(/^Ticket (TKT-\d+) has been opened/);
+                                                if (opened) {
+                                                    return (
+                                                        <p key={m._id} className="my-2 mx-auto flex w-fit max-w-[85%] items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-center text-xs text-primary">
+                                                            <Ticket className="size-3" />
+                                                            Ticket {opened[1]} opened · link emailed and shown to the visitor
+                                                        </p>
+                                                    );
+                                                }
                                                 return (
                                                     <p key={m._id} className="my-2 mx-auto w-fit max-w-[85%] rounded-full bg-muted px-3 py-1 text-center text-xs text-muted-foreground">
                                                         {m.content}

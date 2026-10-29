@@ -10,7 +10,7 @@ import ClientModel from '../models/client.model.js';
 import StaffModel from '../models/staff.model.js';
 import { getSupportNamespace, notifyNewSession, notifyAgents, notifyTicketReply, announceAgentJoined, forgetAnnouncedAgent } from '../socket/support.namespace.js';
 import mongoose from 'mongoose';
-import { ensurePublicToken, emailTicketReply } from '../services/ticket-notify.service.js';
+import { ensurePublicToken, emailTicketReply, trackingUrl } from '../services/ticket-notify.service.js';
 import ticketPublicService from '../services/ticket-public.service.js';
 import { normalizePhone, normalizeEmail } from '../services/contact.service.js';
 
@@ -471,6 +471,8 @@ import ChatSessionModel from '../models/chat-session.model.js';
 import ChatMessageModel, { ChatSenderModel } from '../models/chat-message.model.js';
 import TicketModel from '../models/ticket.model.js';
 import { Types } from 'mongoose';
+import GuestModel from '../models/guest.model.js';
+import { logger } from '../lib/logger.js';
 
 /**
  * Staff: List all queued support chat sessions.
@@ -902,11 +904,60 @@ async function convertChatToTicketParam(req: Request, res: Response) {
         }
 
         const { reason, subject, category } = req.body;
+        const before = await ChatSessionModel.findOne({ sessionId }).select('status').lean();
+        const alreadyOpened = (before as any)?.status === 'converted_to_ticket';
         const result = await liveChatService.convertChatToTicket(sessionId, { reason, subject, category });
         emitSessionStateChange('converted', sessionId);
+
+        // The first time: tell the visitor in the chat (a ticket card with their private link; the same link is
+        // emailed) and make the ticket show up live in the support Tickets list.
+        if (!alreadyOpened) {
+            try {
+                const ticket: any = await TicketModel.findOne({ ticketId: result.ticketId }).select('_id ticketId subject').lean();
+                const session: any = await ChatSessionModel.findOne({ sessionId }).select('_id').lean();
+                const ns = getSupportNamespace();
+                if (ticket && session && ns) {
+                    const token = await ensurePublicToken(ticket._id);
+                    const note = await ChatMessageModel.create({
+                        sessionId: session._id,
+                        sender: new Types.ObjectId(req.user?.id),
+                        senderModel: ChatSenderModel.SYSTEM,
+                        senderName: 'System',
+                        content: `Ticket ${ticket.ticketId} has been opened for you. Track it and reply here: ${trackingUrl(token)}`,
+                        attachments: [],
+                    });
+                    ns.to(sessionId).emit('chat:message', note);
+                }
+                if (ticket) notifyAgents('ticket:created', { ticketId: String(ticket._id), ticketRef: ticket.ticketId, subject: ticket.subject ?? '' });
+            } catch (err: any) {
+                logger.warn(`[ticket] opened ${result.ticketId} but could not post the link in the chat: ${err.message}`);
+            }
+        }
         return res.status(200).json({ success: true, data: result });
     } catch (err: any) {
         return res.status(err.statusCode || 400).json({ success: false, message: err.message });
+    }
+}
+
+/** Staff: the tickets of the person behind a website chat (by their guest or client record, or their email). */
+async function listChatVisitorTickets(req: Request, res: Response) {
+    try {
+        const session: any = await ChatSessionModel.findOne({ sessionId: req.params.sessionId }).select('guestId clientId').lean();
+        if (!session) return res.status(404).json({ success: false, message: 'Chat session not found' });
+        const guest: any = session.guestId ? await GuestModel.findById(session.guestId).select('email').lean() : null;
+        const or: any[] = [];
+        if (session.guestId) or.push({ guestId: session.guestId });
+        if (session.clientId) or.push({ clientId: session.clientId });
+        if (guest?.email) or.push({ visitorEmail: String(guest.email).toLowerCase() });
+        const tickets = or.length
+            ? await TicketModel.find({ $or: or }).sort({ createdAt: -1 }).limit(25).select('ticketId subject status category source createdAt').lean()
+            : [];
+        return res.status(200).json({
+            success: true,
+            data: tickets.map((t: any) => ({ id: String(t._id), ticketId: t.ticketId, subject: t.subject, status: t.status, category: t.category, source: t.source, createdAt: t.createdAt })),
+        });
+    } catch (err: any) {
+        return res.status(500).json({ success: false, message: err.message });
     }
 }
 
@@ -1064,6 +1115,7 @@ export default {
     closeChatSessionParam,
     handOffChatToWhatsApp,
     convertChatToTicketParam,
+    listChatVisitorTickets,
     updateTicketStatus,
     assignTicketToSelf,
     reassignChatSession,

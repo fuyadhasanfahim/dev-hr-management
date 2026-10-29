@@ -27,8 +27,17 @@ export async function generatePresignedUploadUrl({
     folder,
     referenceId,
 }: GeneratePresignedUrlParams): Promise<{ uploadUrl: string; fileUrl: string; fileKey: string }> {
-    const fileExtension = fileName.split('.').pop() || 'bin';
-    const uniqueFileName = `${crypto.randomUUID()}.${fileExtension}`;
+    // The sender's file name stays in the key after the id ("<uuid>__Invoice-March.pdf"), so chats and tickets can show
+    // it; the id keeps keys unique and unguessable. Only safe ASCII goes into a key.
+    const dot = fileName.lastIndexOf('.');
+    const fileExtension = (dot > 0 ? fileName.slice(dot + 1) : 'bin').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 8) || 'bin';
+    const base = (dot > 0 ? fileName.slice(0, dot) : fileName)
+        .replace(/[^A-Za-z0-9._ -]/g, '')
+        .trim()
+        .replace(/\s+/g, '-')
+        .replace(/\.{2,}/g, '.')
+        .slice(0, 60);
+    const uniqueFileName = `${crypto.randomUUID()}__${base || 'file'}.${fileExtension}`;
     const fileKey = `${folder}/${referenceId}/${uniqueFileName}`;
 
     const command = new PutObjectCommand({
