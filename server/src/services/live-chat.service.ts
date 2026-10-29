@@ -6,7 +6,6 @@ import { addToChatQueue, removeFromChatQueue } from './redis-queue.service.js';
 import { AppError } from '../utils/AppError.js';
 import GuestModel from '../models/guest.model.js';
 import ClientModel from '../models/client.model.js';
-import { createTicket } from './support-ticket.service.js';
 import { normalizePhone } from './contact.service.js';
 import { findOrCreateConversation } from './whatsapp-support.service.js';
 import { insideFreeTextWindow, emailTicketCreated } from './ticket-notify.service.js';
@@ -45,7 +44,6 @@ export async function createChatSession({
             prior.status = prior.assignedAgent ? 'active' : 'queued';
             await prior.save();
             if (prior.status === 'queued') await addToChatQueue(prior.sessionId);
-            await TicketModel.updateOne({ chatSessionId: prior._id, status: { $in: ['resolved', 'closed'] } }, { $set: { status: 'open' } });
             return prior;
         }
     }
@@ -68,34 +66,9 @@ export async function createChatSession({
 
     await addToChatQueue(sessionId);
 
-    // Every live chat is a ticket too, so it shows up in Tickets next to WhatsApp ones. Best effort.
-    try {
-        await createChatTicket(session);
-    } catch (err: any) {
-        logger.error(`[live chat] could not create the ticket for session ${sessionId}: ${err.message}`);
-    }
+    // A chat is not a ticket: the team opens one from the chat when it is needed (see convertChatToTicket).
 
     return session;
-}
-
-/** The ticket that stands for a live chat: who started it, their number, and a link back to the session. */
-async function createChatTicket(session: any): Promise<void> {
-    const guest: any = session.guestId ? await GuestModel.findById(session.guestId).select('name email phone isWhatsapp').lean() : null;
-    const client: any = session.clientId ? await ClientModel.findById(session.clientId).select('name emails phone').lean() : null;
-    const name = guest?.name ?? client?.name ?? 'a visitor';
-    await createTicket({
-        subject: `Live chat with ${name}`,
-        text: 'Started a live chat from the website.',
-        source: 'live_chat',
-        category: 'support',
-        clientId: session.clientId?.toString(),
-        guestId: session.guestId?.toString(),
-        visitorName: guest?.name ?? client?.name,
-        visitorEmail: guest?.email ?? client?.emails?.[0],
-        visitorPhone: guest?.phone ?? client?.phone,
-        visitorIsWhatsapp: guest?.isWhatsapp,
-        chatSessionId: session._id.toString(),
-    });
 }
 
 /**
@@ -207,8 +180,7 @@ export async function convertChatToTicket(
         ticketFields.assignedTo = session.assignedAgent;
     }
 
-    // The chat already has its own ticket (created when the chat started): turn that one into the conversion
-    // ticket instead of making a second. Older chats have none, so those still create a fresh ticket.
+    // Chats opened before tickets became on-demand already have one: reuse it instead of making a second.
     let ticket: any = await TicketModel.findOne({ chatSessionId: session._id });
     if (ticket) {
         ticket.subject = ticketSubject;
@@ -219,7 +191,17 @@ export async function convertChatToTicket(
         if (ticket.status === 'resolved' || ticket.status === 'closed') ticket.status = 'open';
         await ticket.save();
     } else {
-        ticket = await TicketModel.create({ ...ticketFields, chatSessionId: session._id });
+        const guest: any = session.guestId ? await GuestModel.findById(session.guestId).select('name email phone isWhatsapp').lean() : null;
+        const client: any = session.clientId ? await ClientModel.findById(session.clientId).select('name emails phone').lean() : null;
+        ticket = await TicketModel.create({
+            ...ticketFields,
+            chatSessionId: session._id,
+            publicToken: crypto.randomBytes(18).toString('base64url'),
+            visitorName: guest?.name ?? client?.name,
+            visitorEmail: guest?.email ?? client?.emails?.[0],
+            visitorPhone: guest?.phone ?? client?.phone,
+            visitorIsWhatsapp: guest?.isWhatsapp,
+        });
     }
 
     const senderModel = session.clientId ? MessageSenderModel.CLIENT : MessageSenderModel.GUEST;

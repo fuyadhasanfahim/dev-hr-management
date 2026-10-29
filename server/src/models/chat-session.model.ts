@@ -70,11 +70,10 @@ const chatSessionSchema = new Schema<IChatSession>(
 
 chatSessionSchema.index({ status: 1, createdAt: 1 });
 
-// A live chat is also a ticket (see live-chat.service). Keep the ticket in step with the chat: an agent taking it
-// assigns the ticket, ending the chat resolves it. Never blocks saving the session.
+// A ticket opened from a live chat (see live-chat.service) follows the agent who took the chat. Ending the chat does
+// not touch it: the ticket carries on by email. Never blocks saving the session.
 chatSessionSchema.pre('save', function () {
     this.$locals.assignedChanged = !this.isNew && this.isModified('assignedAgent');
-    this.$locals.endedNow = !this.isNew && this.isModified('status') && this.status === ChatSessionStatus.ENDED;
 });
 
 chatSessionSchema.post('save', async function (doc) {
@@ -82,12 +81,6 @@ chatSessionSchema.post('save', async function (doc) {
         if (doc.$locals.assignedChanged && doc.assignedAgent) {
             await TicketModel.updateOne({ chatSessionId: doc._id }, { $set: { assignedTo: doc.assignedAgent } });
             await TicketModel.updateOne({ chatSessionId: doc._id, status: TicketStatus.OPEN }, { $set: { status: TicketStatus.IN_PROGRESS } });
-        }
-        if (doc.$locals.endedNow) {
-            await TicketModel.updateOne(
-                { chatSessionId: doc._id, status: { $in: [TicketStatus.OPEN, TicketStatus.IN_PROGRESS, TicketStatus.PENDING_CLIENT] } },
-                { $set: { status: TicketStatus.RESOLVED } },
-            );
         }
     } catch {
         // the ticket sync is best effort
